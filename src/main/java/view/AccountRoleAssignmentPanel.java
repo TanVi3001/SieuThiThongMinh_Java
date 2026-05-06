@@ -12,10 +12,6 @@ import java.util.HashMap;
 import java.util.Map;
 import common.realtime.*;
 
-/**
- *
- * @author nguye (Cập nhật bởi Tấn Vĩ & Gemini)
- */
 public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private final Color bgLight = new Color(244, 246, 250);
@@ -31,7 +27,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     private JPanel pnlCurrRole;
     private String selectedAccountId = "";
 
-    // --- FIX BUG 1: Đưa các component lọc lên làm biến toàn cục để initTableData dùng được ---
     private JPanel listItems;
     private JTextField txtSearch;
     private JComboBox<String> cbDept;
@@ -48,7 +43,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     @SuppressWarnings("unchecked")
     private void initComponents() {
-
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
@@ -327,44 +321,24 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         gbcInfo.fill = GridBagConstraints.HORIZONTAL;
         gbcInfo.anchor = GridBagConstraints.WEST;
 
-        gbcInfo.gridy = 0;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 0; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Người dùng đã chọn", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedUser, gbcInfo);
 
-        gbcInfo.gridy = 1;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 1; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Email", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedEmail, gbcInfo);
 
-        gbcInfo.gridy = 2;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Phòng ban", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedDept, gbcInfo);
 
-        gbcInfo.gridy = 3;
-        gbcInfo.insets = new Insets(0, 0, 0, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 3; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 0, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 0, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(pnlCurrRole, gbcInfo);
 
         centerPanel.add(infoGrid);
@@ -443,17 +417,16 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 // =========================================================
                 AppDataChangedEvent securityEvent = new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED");
 
-                // Nòng 1: Gửi qua WebSocket (nếu 2 App chạy ở 2 cửa sổ/máy riêng biệt kết nối server)
+                // Nòng 1: Gửi qua WebSocket
                 try {
-                    // Gọi thẳng static method và truyền đúng chuỗi String mà Server đang chờ
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                    common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED"); // Update luôn cả bảng nhân viên
                     System.out.println("Đã bắn tín hiệu bảo mật qua WebSocket.");
                 } catch (Exception ex) {
                     System.err.println("Cảnh báo: Không thể gửi qua WebSocket - " + ex.getMessage());
                 }
 
-                // Nòng 2: Gửi qua EventBus (Dành cho việc mở 2 Frame chạy chung 1 Project NetBeans)
-                // Lưu ý: Nếu báo lỗi '.publish' thì ông sửa thành '.post' hoặc tùy cấu trúc class EventBus của ông.
+                // Nòng 2: Gửi qua EventBus (Cục bộ)
                 try {
                     EventBus.publish(securityEvent);
                     System.out.println("Đã bắn tín hiệu bảo mật qua EventBus cục bộ.");

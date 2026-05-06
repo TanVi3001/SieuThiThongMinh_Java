@@ -125,9 +125,13 @@ public class Account {
     }
 
     // =========================================================
-    // FIX LỖI: Trả về trực tiếp biến role thay vì ném Exception
+    // ĐÃ FIX: Trả về trực tiếp biến role, KHÔNG dùng Exception nữa
     // =========================================================
     public String getRoleValue() {
+        return this.role;
+    }
+
+    public String getRoleId() {
         return this.role;
     }
 

@@ -56,26 +56,23 @@ public class Sidebar extends JPanel {
         menuPanel.setBackground(Color.WHITE);
         menuPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
 
-        // --- ĐÃ GẮN NÃO PHÂN QUYỀN VÀ ICON VÀO ĐÂY ---
+        // =========================================================
+        // SỬA LẠI: DÙNG TRỰC TIẾP BIẾN userRole ĐỂ QUYẾT ĐỊNH MENU
+        // =========================================================
         addMenuItem("Tổng quan", IconHelper.dashboard(20)); // Ai cũng thấy
 
-        if (AuthorizationService.canAccessProductsAndInventory()) {
+        // Nếu KHÔNG PHẢI là Nhân viên bán hàng thì mới hiển thị các tab Quản lý
+        if (!"R_STAFF_SALE".equals(userRole)) {
             addMenuItem("Quản lý sản phẩm", IconHelper.product(20));
-        }
-
-        if (AuthorizationService.canAccessStatisticsAndEmployees()) {
             addMenuItem("Quản lý nhân viên", IconHelper.employee(20));
         }
 
-        if (AuthorizationService.canAccessPOS()) {
-            addMenuItem("Khách hàng", IconHelper.customer(20));
-        }
+        // Ai cũng thấy Khách hàng và Hóa đơn (POS)
+        addMenuItem("Khách hàng", IconHelper.customer(20));
+        addMenuItem("Hóa đơn", IconHelper.bill(20));
 
-        if (AuthorizationService.canAccessInvoices()) {
-            addMenuItem("Hóa đơn", IconHelper.bill(20));
-        }
-
-        if (AuthorizationService.canAccessStatisticsAndEmployees()) {
+        // Thống kê cũng chỉ dành cho Quản lý / Admin
+        if (!"R_STAFF_SALE".equals(userRole)) {
             addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(20));
         }
 

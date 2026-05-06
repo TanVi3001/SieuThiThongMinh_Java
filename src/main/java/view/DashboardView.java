@@ -20,7 +20,6 @@ public class DashboardView extends JFrame {
     private boolean isLoggingOut = false;
     private JPanel mainContentPanel;
 
-    // Biến lưu trữ tab hiện tại đang mở để Real-time biết đường mà refresh
     private String currentMenu = "Tổng quan";
 
     public DashboardView() {
@@ -28,16 +27,12 @@ public class DashboardView extends JFrame {
         startSessionCheck();
 
         common.security.SecurityGuard.attach(mainContentPanel);
-        // ==========================================
-        // GẮN "MÁY NGHE LÉN" REAL-TIME CHO TOÀN BỘ DASHBOARD
-        // ==========================================
+
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             SwingUtilities.invokeLater(() -> {
-                // Nếu có bất kỳ thay đổi data nào, và user đang xem Tổng quan hoặc Thống kê thì tự động load lại
                 if ("Tổng quan".equals(currentMenu)) {
                     showPanel(new TongQuanPanel());
                 } else if ("Báo cáo & Thống kê".equals(currentMenu)) {
-                    // Nếu user có quyền vô thống kê thì mới refresh
                     if (business.service.AuthorizationService.canAccessStatisticsAndEmployees()) {
                         showPanel(new StatisticView());
                     }
@@ -47,21 +42,17 @@ public class DashboardView extends JFrame {
     }
 
     private void setupUI() {
-        // 1. LẤY THÔNG TIN USER ĐỂ HIỂN THỊ TRÊN TIÊU ĐỀ CỬA SỔ
         model.account.Account u = business.service.LoginService.getCurrentUser();
         String tk = business.service.LoginService.getToken();
         String username = "";
 
         if (u != null) {
             username = u.getUsername().trim();
-            System.out.println("SESSION USER = " + username);
-            System.out.println("SESSION TOKEN = " + tk);
             this.setTitle("SMART SUPERMARKET - STORE PORTAL | Chào, " + username);
         } else {
             this.setTitle("SMART SUPERMARKET - STORE PORTAL");
         }
 
-        // 2. CẤU HÌNH CỬA SỔ CHÍNH
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         this.setMinimumSize(new Dimension(1024, 768));
         this.setLocationRelativeTo(null);
@@ -71,26 +62,27 @@ public class DashboardView extends JFrame {
         mainContentPanel = new JPanel(new BorderLayout());
         mainContentPanel.setBackground(new java.awt.Color(245, 245, 247));
 
-        // 3. KIỂM TRA PHÂN QUYỀN TRƯỚC KHI GẮN VÀO SIDEBAR
-        boolean canAccessEmployee = business.service.AuthorizationService.canAccessStatisticsAndEmployees();
-        boolean canAccessStatistics = business.service.AuthorizationService.canAccessStatisticsAndEmployees();
-        String roleForSidebar = business.service.AuthorizationService.currentRoleForUi();
+        String roleForSidebar = common.auth.UserSession.getInstance().getUserRole();
+        boolean isStaff = "R_STAFF_SALE".equals(roleForSidebar);
 
-        // 4. KHỞI TẠO SIDEBAR BÊN TRÁI
         Sidebar newSidebar = new Sidebar(roleForSidebar);
         newSidebar.setMenuClickListener(title -> {
-            currentMenu = title; // Cập nhật tab đang mở
+            currentMenu = title;
 
             switch (title) {
                 case "Tổng quan":
                     showPanel(new TongQuanPanel());
                     break;
                 case "Quản lý sản phẩm":
-                    showPanel(new ProductView());
+                    if (isStaff) {
+                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
+                    } else {
+                        showPanel(new ProductView());
+                    }
                     break;
                 case "Quản lý nhân viên":
-                    if (!canAccessEmployee) {
-                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập chức năng này!", "Từ chối truy cập", JOptionPane.WARNING_MESSAGE);
+                    if (isStaff) {
+                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
                     } else {
                         showPanel(new view.EmployeeView());
                     }
@@ -102,8 +94,8 @@ public class DashboardView extends JFrame {
                     showPanel(new OrderView());
                     break;
                 case "Báo cáo & Thống kê":
-                    if (!canAccessStatistics) {
-                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập chức năng này!", "Từ chối truy cập", JOptionPane.WARNING_MESSAGE);
+                    if (isStaff) {
+                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
                     } else {
                         showPanel(new StatisticView());
                     }
@@ -117,17 +109,12 @@ public class DashboardView extends JFrame {
             }
         });
 
-        // 5. RÁP 2 KHỐI VÀO NHAU (SIDEBAR TRÁI - CONTENT PHẢI)
         this.getContentPane().add(newSidebar, BorderLayout.WEST);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
-        // Mặc định khi vừa login sẽ hiển thị Tổng Quan
         showPanel(new TongQuanPanel());
     }
 
-    // ========================================================
-    // CÁC HÀM XỬ LÝ GIAO DIỆN & LOGIC
-    // ========================================================
     public void showPanel(JPanel childPanel) {
         mainContentPanel.removeAll();
         mainContentPanel.add(childPanel, BorderLayout.CENTER);
@@ -148,6 +135,9 @@ public class DashboardView extends JFrame {
             business.sql.rbac.TokenSql.getInstance().revokeToken(tk);
             business.service.LoginService.logout();
 
+            // TUI ĐÃ THÊM DÒNG NÀY ĐỂ XÓA SẠCH GỐC RỄ PHÂN QUYỀN TRONG CACHE SESSION
+            common.auth.UserSession.getInstance().clear();
+
             java.awt.EventQueue.invokeLater(() -> {
                 view.LoginView login = new view.LoginView();
                 login.setVisible(true);
@@ -159,36 +149,74 @@ public class DashboardView extends JFrame {
     }
 
     private void startSessionCheck() {
-        sessionTimer = new Timer(1000, e -> {
+        sessionTimer = new Timer(2000, e -> {
             if (isLoggingOut) {
                 ((Timer) e.getSource()).stop();
                 return;
             }
 
-            String currentToken = business.service.LoginService.getToken();
-            boolean isValid = business.sql.rbac.TokenSql.getInstance().isTokenValid(currentToken);
+            // Đưa việc quét DB vào Thread ngầm để không làm giật lag giao diện
+            new Thread(() -> {
+                // 1. Kiểm tra Token
+                String currentToken = business.service.LoginService.getToken();
+                boolean isValid = business.sql.rbac.TokenSql.getInstance().isTokenValid(currentToken);
 
-            if (!isValid) {
-                if (!isLoggingOut) {
-                    ((Timer) e.getSource()).stop();
-                    JOptionPane.showMessageDialog(this, "Phiên đăng nhập của bạn đã hết hạn!", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
+                // 2. RADAR BẢO MẬT: Kiểm tra xem quyền có bị Admin đổi ngầm dưới DB không
+                boolean roleChanged = false;
+                model.account.Account currentUser = business.service.LoginService.getCurrentUser();
 
-                    java.awt.EventQueue.invokeLater(() -> {
-                        view.LoginView login = new view.LoginView();
-                        login.setVisible(true);
-                        login.setLocationRelativeTo(null);
-                    });
+                if (currentUser != null) {
+                    try {
+                        String[] latestData = business.sql.rbac.AccountSql.getInstance().getAccountDetails(currentUser.getAccountId());
+                        if (latestData != null) {
+                            String dbRoleId = latestData[4]; // Quyền đang lưu dưới DB
+                            boolean isActive = "0".equals(latestData[5]);
 
-                    this.dispose();
+                            // So sánh quyền DB với quyền lúc vừa đăng nhập (nếu lệch là bị đá)
+                            if (!isActive || !dbRoleId.equals(currentUser.getRoleValue())) {
+                                roleChanged = true;
+                            }
+                        } else {
+                            roleChanged = true; // Tài khoản bị xóa thẳng tay
+                        }
+                    } catch (Exception ex) {
+                        // Bỏ qua lỗi DB tạm thời nếu mạng giật
+                    }
                 }
-            }
+
+                // NẾU PHÁT HIỆN BẤT THƯỜNG -> KICK NGAY LẬP TỨC
+                if (!isValid || roleChanged) {
+                    SwingUtilities.invokeLater(() -> {
+                        if (!isLoggingOut) {
+                            isLoggingOut = true;
+                            if (sessionTimer != null) {
+                                sessionTimer.stop();
+                            }
+
+                            JOptionPane.showMessageDialog(this, "Phiên đăng nhập đã hết hạn hoặc Quyền truy cập đã bị thay đổi!\nVui lòng đăng nhập lại.", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
+
+                            // Xóa sạch thông tin cũ
+                            try {
+                                common.auth.UserSession.getInstance().clear();
+                            } catch (Exception ignored) {
+                            }
+                            business.service.LoginService.logout();
+
+                            // Văng ra màn hình Login
+                            view.LoginView login = new view.LoginView();
+                            login.setVisible(true);
+                            login.setLocationRelativeTo(null);
+
+                            this.dispose(); // Tắt Dashboard hiện tại
+                        }
+                    });
+                }
+            }).start();
         });
+
         sessionTimer.start();
     }
 
-    // ========================================================
-    // HÀM MAIN KHỞI ĐỘNG
-    // ========================================================
     public static void main(String args[]) {
         System.setProperty("sun.java2d.uiScale", "1.5");
         try {

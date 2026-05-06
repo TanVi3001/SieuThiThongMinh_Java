@@ -231,9 +231,6 @@ public class EmployeeView extends JPanel {
         add(centerPanel, BorderLayout.CENTER);
     }
 
-    // =================================================================================
-    // CÁC HÀM TIỆN ÍCH UI 
-    // =================================================================================
     private void styleComboBox(JComboBox<String> cb, String placeholder) {
         cb.setPreferredSize(new Dimension(280, 38));
         cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -444,9 +441,6 @@ public class EmployeeView extends JPanel {
         return 3;
     }
 
-    // =================================================================================
-    // LOGIC & SỰ KIỆN 
-    // =================================================================================
     private void initEvents() {
         tblEmployees.addMouseListener(new MouseAdapter() {
             @Override
@@ -499,7 +493,6 @@ public class EmployeeView extends JPanel {
                 SyncVersionDao.bumpVersion("EMPLOYEES");
                 RealtimeClient.send("EMPLOYEES_CHANGED");
 
-                // === FIX: tạo token trong DB trước khi gửi mail ===
                 try {
                     new ActivationTokenService().issueToken(emp.getEmployeeId());
                 } catch (Exception ex) {
@@ -509,14 +502,14 @@ public class EmployeeView extends JPanel {
                             + "Vui lòng thử lại hoặc kiểm tra bảng ACTIVATION_TOKENS.\nChi tiết: " + ex.getMessage(),
                             "Lỗi cấp mã kích hoạt",
                             JOptionPane.ERROR_MESSAGE);
-                    return; // KHÔNG gửi mail nếu DB chưa có token
+                    return;
                 }
 
                 new Thread(() -> {
                     boolean mailSent = business.service.EmailService.sendActivationEmail(
                             emp.getEmail(),
                             emp.getEmployeeName(),
-                            emp.getEmployeeId() // CODE chính là EMP...
+                            emp.getEmployeeId()
                     );
                     if (!mailSent) {
                         System.err.println("Cảnh báo: Không thể gửi mail kích hoạt đến " + emp.getEmail());

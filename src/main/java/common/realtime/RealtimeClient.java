@@ -15,17 +15,14 @@ public final class RealtimeClient {
     private static volatile WebSocketClient client;
     private static volatile URI serverUri;
 
-    // ÉP CỨNG IP LAN LÚC DEMO CHO AN TOÀN
-    private static final String DEFAULT_LAN_WS_URL = "ws://192.168.88.210";
-
     private RealtimeClient() {
     }
 
     public static void connect(String wsUrl) {
         try {
-            // Chốt chặn: Nếu wsUrl truyền vào bị rỗng hoặc đang là localhost, ép nó về IP LAN luôn
-            if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost") || wsUrl.contains("10.0.250.60")) {
-                wsUrl = DEFAULT_LAN_WS_URL;
+            // FIX: Dùng cứng 127.0.0.1 để Windows không bị nhầm lẫn IPv6
+            if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
+                wsUrl = "ws://10.0.250.60:9999";
             }
 
             serverUri = URI.create(wsUrl);
@@ -38,6 +35,7 @@ public final class RealtimeClient {
 
                 @Override
                 public void onMessage(String message) {
+                    System.out.println("[RT] Client nhận được lệnh: " + message);
                     if ("PRODUCTS_CHANGED".equalsIgnoreCase(message)) {
                         EventBus.publish(new AppDataChangedEvent(AppEventType.PRODUCTS, "realtime"));
                     } else if ("INVENTORY_CHANGED".equalsIgnoreCase(message)) {
@@ -46,8 +44,7 @@ public final class RealtimeClient {
                         EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "realtime"));
                     } else if ("ACCOUNT_SECURITY_CHANGED".equalsIgnoreCase(message)) {
                         EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "realtime"));
-                    } // THÊM 2 DÒNG NÀY VÀO NÈ VĨ:
-                    else if ("CUSTOMERS_CHANGED".equalsIgnoreCase(message)) {
+                    } else if ("CUSTOMERS_CHANGED".equalsIgnoreCase(message)) {
                         EventBus.publish(new AppDataChangedEvent(AppEventType.CUSTOMERS, "realtime"));
                     } else if ("EMPLOYEES_CHANGED".equalsIgnoreCase(message)) {
                         EventBus.publish(new AppDataChangedEvent(AppEventType.EMPLOYEES, "realtime"));
@@ -81,7 +78,6 @@ public final class RealtimeClient {
             try {
                 if (client == null || !client.isOpen()) {
                     System.out.println("[RT] reconnecting to " + serverUri);
-                    // Dùng lại URI đã được chốt ở hàm connect
                     connect(serverUri.toString());
                 }
             } catch (Exception ignored) {
@@ -93,6 +89,9 @@ public final class RealtimeClient {
         try {
             if (client != null && client.isOpen()) {
                 client.send(message);
+                System.out.println("[RT] Đã gửi thành công lệnh lên Server: " + message);
+            } else {
+                System.err.println("[RT] Lỗi: Client chưa kết nối, không thể gửi WebSocket!");
             }
         } catch (Exception e) {
             System.out.println("[RT] send failed: " + e.getMessage());

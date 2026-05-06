@@ -1,22 +1,21 @@
 package common.security;
 
-import common.auth.UserSession;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
 import business.sql.rbac.AccountSql;
+import business.service.LoginService;
+import model.account.Account;
 import view.LoginView;
 import javax.swing.*;
 import java.awt.Window;
-import java.util.concurrent.atomic.AtomicBoolean; // IMPORT THÊM CÁI NÀY
 
 public class SecurityGuard {
 
-    // CHỐT CHẶN: Đánh dấu xem có đang trong quá trình bị "kick" ra không
-    private static final AtomicBoolean isLoggingOut = new AtomicBoolean(false);
-
     public static void attach(JPanel view) {
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
+            System.out.println("🛡️ [SecurityGuard] Bắt được tín hiệu WebSocket: " + event.getType());
+
             if (event.getType() == AppEventType.ACCOUNT_SECURITY) {
                 verifyCurrentSession(view);
             }
@@ -24,34 +23,40 @@ public class SecurityGuard {
     }
 
     private static void verifyCurrentSession(JPanel view) {
-        // Nếu đã có 1 luồng đang thực hiện văng ra rồi thì chặn các luồng khác lại
-        if (isLoggingOut.get()) {
+        Account currentUser = LoginService.getCurrentUser();
+
+        if (currentUser == null) {
+            System.out.println("🛡️ [SecurityGuard] Chưa đăng nhập, không cần check.");
             return;
         }
 
-        UserSession session = UserSession.getInstance();
-        if (!session.isLoggedIn()) {
-            return;
-        }
+        // Lấy Account ID thực sự của người dùng.
+        // NẾU CHỖ NÀY BỊ GẠCH ĐỎ: Hãy đổi .getAccountId() thành .getId() hoặc .getUsername() tùy theo ông đang đặt tên hàm trong model Account là gì nhé.
+        String accId = currentUser.getAccountId();
+        String currentRole = currentUser.getRoleId();
 
-        String currentUserId = session.getUserId();
-        String currentRole = session.getUserRole();
+        System.out.println("🛡️ [SecurityGuard] Đang check ID: " + accId + " | Role hiện tại trong App: " + currentRole);
 
         new Thread(() -> {
             try {
-                String[] latestData = AccountSql.getInstance().getAccountDetails(currentUserId);
+                String[] latestData = AccountSql.getInstance().getAccountDetails(accId);
+
                 if (latestData == null) {
+                    System.out.println("🛡️ [SecurityGuard] ❌ Lỗi: Không tìm thấy ID " + accId + " dưới DB! (Truyền sai mã)");
                     return;
                 }
 
-                String dbRoleId = latestData[4];
-                boolean isActive = "0".equals(latestData[5]);
+                String dbRoleId = latestData[4]; // Cột Role ID từ DB
+                boolean isActive = "0".equals(latestData[5]); // Trạng thái hoạt động
 
+                System.out.println("🛡️ [SecurityGuard] Role dưới DB: " + dbRoleId + " | Active: " + isActive);
+
+                // NẾU ROLE DƯỚI DB KHÁC ROLE ĐANG LƯU TRONG APP -> KICK NGAY!
                 if (!isActive || !dbRoleId.equals(currentRole)) {
-                    // Dùng compareAndSet: Chỉ cái luồng chớp thời cơ nhanh nhất đầu tiên mới được phép chạy
-                    if (isLoggingOut.compareAndSet(false, true)) {
-                        SwingUtilities.invokeLater(() -> forceLogout(view));
-                    }
+                    System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN SAI LỆCH QUYỀN -> KICK VĂNG RA!");
+                    SwingUtilities.invokeLater(() -> forceLogout(view));
+                } else {
+                    System.out.println("🛡️ [SecurityGuard] ✅ Mọi thứ bình thường.");
                 }
             } catch (Exception e) {
                 System.err.println("SecurityGuard Error: " + e.getMessage());
@@ -64,16 +69,18 @@ public class SecurityGuard {
                 "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\nVui lòng đăng nhập lại để cập nhật!",
                 "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
 
-        UserSession.getInstance().clear();
+        LoginService.logout();
 
-        // Reset lại chốt chặn để lần đăng nhập tiếp theo Vệ sĩ có thể làm việc tiếp
-        isLoggingOut.set(false);
+        // Dùng try-catch phòng hờ UserSession không tồn tại
+        try {
+            common.auth.UserSession.getInstance().clear();
+        } catch (Exception ignored) {
+        }
 
         Window window = SwingUtilities.getWindowAncestor(view);
         if (window != null) {
             window.dispose();
         }
-
         new LoginView().setVisible(true);
     }
 }
