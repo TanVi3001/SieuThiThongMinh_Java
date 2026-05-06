@@ -34,6 +34,8 @@ public class AuditLogSql implements SqlInterface<AuditLog> {
         audit.setActionType(actionType);
         audit.setReason(reason);
         audit.setEntityType("ACCOUNT");
+        // ---> BỔ SUNG DÒNG NÀY ĐỂ TRÁNH LỖI ORA-01400 <---
+        audit.setEntityId(accountId);
         audit.setIpAddress("localhost");
 
         insertWithConn(conn, audit);

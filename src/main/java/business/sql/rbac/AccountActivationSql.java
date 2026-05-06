@@ -18,17 +18,12 @@ public class AccountActivationSql {
     }
 
     public ActivationEmployeeInfo getEmployeeInfo(Connection con, String empId) throws SQLException {
-        String sql = "SELECT employee_id, employee_name, phone, email FROM EMPLOYEES "
-                + "WHERE employee_id = ? AND NVL(is_deleted, 0) = 0";
-
+        String sql = "SELECT employee_id, employee_name, phone, email FROM EMPLOYEES WHERE employee_id = ? AND NVL(is_deleted, 0) = 0";
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, empId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return new ActivationEmployeeInfo(
-                            rs.getString("employee_id"), rs.getString("employee_name"),
-                            rs.getString("phone"), rs.getString("email")
-                    );
+                    return new ActivationEmployeeInfo(rs.getString("employee_id"), rs.getString("employee_name"), rs.getString("phone"), rs.getString("email"));
                 }
             }
         }
@@ -55,13 +50,10 @@ public class AccountActivationSql {
         }
     }
 
-    /**
-     * Tạo tài khoản và TRẢ VỀ mã accountId (dạng ACC...) vừa sinh ra.
-     */
+    // TẠO TÀI KHOẢN VÀ TRẢ VỀ ACCOUNT_ID (Ví dụ: ACC123456)
     public String insertAccount(Connection con, String userId, String username, String bcryptPasswordHash, String role) throws SQLException {
-        String accountId = "ACC" + (System.currentTimeMillis() % 1000000); // Sinh ID ngắn gọn hơn
-        String sql = "INSERT INTO ACCOUNTS (ACCOUNT_ID, USER_ID, USERNAME, PASSWORD, STATUS, CREATED_AT, IS_DELETED) "
-                + "VALUES (?, ?, ?, ?, ?, SYSDATE, 0)";
+        String accountId = "ACC" + (System.currentTimeMillis() % 1000000000);
+        String sql = "INSERT INTO ACCOUNTS (ACCOUNT_ID, USER_ID, USERNAME, PASSWORD, STATUS, CREATED_AT, IS_DELETED) VALUES (?, ?, ?, ?, ?, SYSDATE, 0)";
 
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, accountId);
@@ -69,7 +61,6 @@ public class AccountActivationSql {
             ps.setString(3, username);
             ps.setString(4, bcryptPasswordHash);
             ps.setString(5, "Hoạt động");
-
             int affected = ps.executeUpdate();
             return (affected == 1) ? accountId : null;
         }
@@ -97,10 +88,23 @@ public class AccountActivationSql {
     }
 
     public void updateEmployeeAccountStatus(Connection conn, String empId) throws SQLException {
-        String sql = "UPDATE EMPLOYEES SET account_status = N'Đã cấp' WHERE employee_id = ?";
-        try (PreparedStatement pst = conn.prepareStatement(sql)) {
-            pst.setString(1, empId);
-            pst.executeUpdate();
+//        String sql = "UPDATE EMPLOYEES SET account_status = N'Đã cấp' WHERE employee_id = ?";
+//        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+//            pst.setString(1, empId);
+//            pst.executeUpdate();
+//        }
+    }
+
+    public String getEmployeeRole(Connection con, String empId) throws SQLException {
+        String sql = "SELECT role_id FROM EMPLOYEES WHERE employee_id = ?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, empId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("role_id");
+                }
+            }
         }
+        return "R_STAFF_SALE"; // Trả về mặc định nếu có lỗi
     }
 }

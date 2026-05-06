@@ -27,6 +27,7 @@ public class DashboardView extends JFrame {
         setupUI();
         startSessionCheck();
 
+        common.security.SecurityGuard.attach(mainContentPanel);
         // ==========================================
         // GẮN "MÁY NGHE LÉN" REAL-TIME CHO TOÀN BỘ DASHBOARD
         // ==========================================

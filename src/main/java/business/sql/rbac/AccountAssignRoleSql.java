@@ -6,27 +6,21 @@ import java.sql.SQLException;
 
 public class AccountAssignRoleSql {
 
+    private static AccountAssignRoleSql instance;
+
     public static AccountAssignRoleSql getInstance() {
-        return new AccountAssignRoleSql();
+        if (instance == null) {
+            instance = new AccountAssignRoleSql();
+        }
+        return instance;
     }
 
-    public int assignRoleToAccount(String accountId, String roleId) {
-        return 0;
-    }
-
-    public int removeRoleFromAccount(String accountId, String roleId) {
-        return 0;
-    }
-
-    // Trong file AccountAssignRoleSql.java, sửa lại hàm assignDefaultRole:
     public void assignDefaultRole(Connection conn, String accountId, String roleId) throws SQLException {
-    // 1. Dùng ACCOUNT_ID thay cho username
-    String sql = "INSERT INTO ACCOUNT_ASSIGN_ROLE (ACCOUNT_ID, ROLE_ID, CREATED_AT) VALUES (?, ?, SYSDATE)"; 
-    
-    try (PreparedStatement pst = conn.prepareStatement(sql)) {
-        pst.setString(1, accountId);
-        pst.setString(2, roleId);
-        pst.executeUpdate();
+        String sql = "INSERT INTO ACCOUNT_ASSIGN_ROLE (account_id, role_id, created_at) VALUES (?, ?, SYSDATE)";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, accountId);
+            pst.setString(2, roleId);
+            pst.executeUpdate();
+        }
     }
-}
 }

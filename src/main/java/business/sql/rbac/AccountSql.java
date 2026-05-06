@@ -758,7 +758,38 @@ public class AccountSql implements SqlInterface<Account> {
         }
     }
 
-    public void insertAccount(Connection conn, String username, String hashedPassword, String empId) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    /**
+     * LẤY THÔNG TIN CHI TIẾT ĐỂ SECURITY GUARD KIỂM TRA (Đã fix lỗi JOIN và
+     * Connection)
+     */
+    public String[] getAccountDetails(String accountId) {
+        String sql = "SELECT a.account_id, a.username, u.full_name, u.email, "
+                + "       COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value, "
+                + "       a.is_deleted "
+                + "FROM ACCOUNTS a "
+                + "JOIN USERS u ON a.user_id = u.user_id "
+                + "LEFT JOIN ACCOUNT_ASSIGN_ROLE aar ON a.account_id = aar.account_id AND NVL(aar.is_deleted, 0) = 0 "
+                + "LEFT JOIN ACCOUNT_ASSIGN_ROLE_GROUP aarg ON a.account_id = aarg.account_id AND NVL(aarg.is_deleted, 0) = 0 "
+                + "LEFT JOIN ROLE_GROUPS rg ON aarg.role_group_id = rg.role_group_id AND NVL(rg.is_deleted, 0) = 0 "
+                + "WHERE a.account_id = ?";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pstmt = con.prepareStatement(sql)) {
+            pstmt.setString(1, accountId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return new String[]{
+                        rs.getString("account_id"),
+                        rs.getString("username"),
+                        rs.getString("full_name"),
+                        rs.getString("email"),
+                        rs.getString("role_value"), 
+                        String.valueOf(rs.getInt("is_deleted")) 
+                    };
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi SQL AccountSql.getAccountDetails: " + e.getMessage());
+        }
+        return null;
     }
 }

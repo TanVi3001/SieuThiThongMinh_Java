@@ -3,11 +3,12 @@ package model.account;
 import java.sql.Timestamp;
 
 public class Account {
+
     private String accountId;
     private String userId;
     private String username;
     private String password;
-    private String role;      // phân quyền
+    private String role;      // Biến này đang chứa role_value (R_ADMIN_ALL, R_STORE_MNG...)
     private String status;
     private Timestamp createdAt;
     private Timestamp updatedAt;
@@ -21,7 +22,7 @@ public class Account {
 
     // Constructor đầy đủ
     public Account(String accountId, String userId, String username, String password, String role,
-                   String status, Timestamp createdAt, Timestamp updatedAt, int isDeleted) {
+            String status, Timestamp createdAt, Timestamp updatedAt, int isDeleted) {
         this.accountId = accountId;
         this.userId = userId;
         this.username = username;
@@ -33,47 +34,105 @@ public class Account {
         this.isDeleted = isDeleted;
     }
 
-    // Constructor rút gọn
+    // Constructor rút gọn (Dùng nhiều trong AccountSql)
     public Account(String accountId, String username, String password, String role, int isDeleted) {
         this.accountId = accountId;
         this.username = username;
         this.password = password;
-        this.role = role;
+        this.role = role; // role_value từ SQL được truyền vào đây
         this.isDeleted = isDeleted;
     }
 
-    public String getAccountId() { return accountId; }
-    public void setAccountId(String accountId) { this.accountId = accountId; }
+    public String getAccountId() {
+        return accountId;
+    }
 
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
+    public void setAccountId(String accountId) {
+        this.accountId = accountId;
+    }
 
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public String getUserId() {
+        return userId;
+    }
 
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
 
-    public String getRole() { return role; }
-    public void setRole(String role) { this.role = role; }
+    public String getUsername() {
+        return username;
+    }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setUsername(String username) {
+        this.username = username;
+    }
 
-    public Timestamp getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
+    public String getPassword() {
+        return password;
+    }
 
-    public Timestamp getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
+    public void setPassword(String password) {
+        this.password = password;
+    }
 
-    public int getIsDeleted() { return isDeleted; }
-    public void setIsDeleted(int isDeleted) { this.isDeleted = isDeleted; }
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Timestamp getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Timestamp createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Timestamp getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Timestamp updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public int getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(int isDeleted) {
+        this.isDeleted = isDeleted;
+    }
 
     // TOKEN
-    public String getToken() { return token; }
-    public void setToken(String token) { this.token = token; }
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    // =========================================================
+    // FIX LỖI: Trả về trực tiếp biến role thay vì ném Exception
+    // =========================================================
+    public String getRoleValue() {
+        return this.role;
+    }
 
     public Object getRoleGroupId() {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        // Trả về null thay vì ném lỗi để tránh văng App nếu vô tình gọi trúng
+        return null;
     }
 }

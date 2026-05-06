@@ -1,5 +1,8 @@
 package view;
 
+import common.auth.UserSession;
+import common.security.SecurityGuard;
+
 /**
  *
  * @author Admin
@@ -729,6 +732,15 @@ public class LoginView extends javax.swing.JFrame {
             model.account.Account acc = business.service.LoginService.authenticate(user, pass);
 
             if (acc != null) {
+                // =========================================================
+                // BƯỚC QUAN TRỌNG: LƯU THÔNG TIN VÀO SESSION NGAY KHI ĐĂNG NHẬP
+                // =========================================================
+                UserSession.getInstance().createUserSession(
+                        acc.getAccountId(),
+                        acc.getUsername(),
+                        acc.getRoleValue() // Đây là cái "linh hồn" để SecurityGuard so sánh sau này
+                );
+
                 java.awt.EventQueue.invokeLater(() -> {
                     if (business.service.AuthorizationService.isAdmin(acc)) {
                         AdminDashboardView adminScreen = new AdminDashboardView();
@@ -739,6 +751,7 @@ public class LoginView extends javax.swing.JFrame {
                         warehouseScreen.setVisible(true);
                         warehouseScreen.setLocationRelativeTo(null);
                     } else {
+                        // Trường hợp Manager hoặc Staff thông thường
                         DashboardView mainScreen = new DashboardView();
                         mainScreen.setVisible(true);
                         mainScreen.setLocationRelativeTo(null);
@@ -807,4 +820,5 @@ public class LoginView extends javax.swing.JFrame {
     private javax.swing.JButton btnLogin;
     private javax.swing.JPasswordField txtPassword;
     private javax.swing.JTextField txtUsername;
+
 }

@@ -1,9 +1,15 @@
 package business.service;
 
-import business.sql.rbac.*;
+import business.sql.rbac.AccountActivationSql;
+import business.sql.rbac.AccountAssignRoleSql;
+import business.sql.rbac.ActivationTokenSql;
+import business.sql.rbac.AuditLogSql;
 import common.db.DatabaseConnection;
+import common.sync.SyncVersionDao;
+import common.realtime.RealtimeClient;
 import model.account.ActivationEmployeeInfo;
 import org.mindrot.jbcrypt.BCrypt;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -25,66 +31,74 @@ public class AccountActivationService {
         }
     }
 
-    /**
-     * Kích hoạt tài khoản: Tên tự do - Liên kết bằng ID.
-     */
-    public boolean activateAccount(String code, String username, String passwordPlain) {
+    // Đổi thành void và throws Exception để UI hứng lỗi chi tiết
+    public void activateAccount(String code, String username, String passwordPlain) throws Exception {
         Connection con = null;
         try {
             con = DatabaseConnection.getConnection();
-            con.setAutoCommit(false); // BẮT ĐẦU GIAO DỊCH
+            con.setAutoCommit(false); // TRANSACTION
 
-            // 1. Lấy empId từ mã code
             String empId = tokenSql.getEmployeeIdIfValid(con, code.trim());
             if (empId == null) {
-                throw new Exception("Mã không hợp lệ.");
+                throw new Exception("Mã kích hoạt không hợp lệ hoặc đã hết hạn.");
             }
 
-            // 2. Kiểm tra Username tự chọn đã có ai dùng chưa
+            ActivationEmployeeInfo info = accountActivationSql.getEmployeeInfo(con, empId);
+
             if (accountActivationSql.existsAccountByUsername(con, username.trim())) {
-                throw new Exception("Tên đăng nhập đã tồn tại.");
+                throw new Exception("Tên đăng nhập đã tồn tại. Vui lòng chọn tên khác.");
             }
 
-            // 3. Mã hóa BCrypt
             String bcryptHash = BCrypt.hashpw(passwordPlain, BCrypt.gensalt(12));
 
-            // 4. Đảm bảo bản ghi USER tồn tại cho FK
-            ActivationEmployeeInfo info = accountActivationSql.getEmployeeInfo(con, empId);
+            // Đảm bảo có USERS (Fix lỗi FK_ACCOUNTS_USERS)
             if (!accountActivationSql.existsUserById(con, empId)) {
                 accountActivationSql.insertUser(con, empId, info.getFullName(), info.getEmail(), info.getPhone());
             }
 
-            // 5. TẠO TÀI KHOẢN & LẤY MÃ ACC...
-            String generatedAccId = accountActivationSql.insertAccount(con, empId, username.trim(), bcryptHash, "R_STAFF_SALE");
+            // Tạo ACCOUNTS và LẤY MÃ ACC (Quan trọng nhất)
+            String actualRole = accountActivationSql.getEmployeeRole(con, empId);
+            // Truyền actualRole vào lúc tạo ACCOUNTS
+            String generatedAccId = accountActivationSql.insertAccount(con, empId, username.trim(), bcryptHash, actualRole);
             if (generatedAccId == null) {
-                throw new Exception("Lỗi tạo tài khoản.");
+                throw new Exception("Lỗi hệ thống khi tạo tài khoản.");
             }
+            // Gán quyền dùng mã ACC (Fix lỗi FK_AAR_ACCOUNTS)
+            AccountAssignRoleSql.getInstance().assignDefaultRole(con, generatedAccId, actualRole);
 
-            // 6. GÁN QUYỀN: Dùng generatedAccId để khớp với ACCOUNT_ID trong DB[cite: 2]
-            AccountAssignRoleSql.getInstance().assignDefaultRole(con, generatedAccId, "R_STAFF_SALE");
-
-            // 7. Cập nhật trạng thái "Đã cấp"
+            // Cập nhật trạng thái "Đã cấp"
             accountActivationSql.updateEmployeeAccountStatus(con, empId);
 
-            // 8. Vô hiệu hóa mã Token
+            // Thu hồi mã kích hoạt
             tokenSql.markUsed(con, code.trim());
 
-            // 9. GHI LOG: Dùng generatedAccId để định danh chính xác[cite: 2]
-            AuditLogSql.getInstance().log(con, generatedAccId, "ACTIVATE_ACCOUNT",
-                    "Nhân viên " + info.getFullName() + " đã tự kích hoạt tài khoản thành công.");
+            // Ghi Log (Dùng mã ACC)
+            AuditLogSql.getInstance().log(con, generatedAccId, "ACTIVATE_ACCOUNT", "Kích hoạt thành công: " + username);
 
-            con.commit(); // HOÀN TẤT
-            return true;
+            con.commit();
+
+            // CẬP NHẬT GIAO DIỆN THEO THỜI GIAN THỰC
+            try {
+                SyncVersionDao.bumpVersion("ACCOUNT_SECURITY");
+                RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+            } catch (Exception e) {
+                System.err.println("Cảnh báo: Không thể gửi Realtime event.");
+            }
 
         } catch (Exception e) {
             if (con != null) try {
                 con.rollback();
             } catch (SQLException ex) {
+                ex.printStackTrace();
             }
-            System.err.println("BUG ACTIVATION: " + e.getMessage());
-            return false;
+            e.printStackTrace(); // In lỗi gốc ra Console
+            throw e; // Ném lỗi gốc ra cho UI
         } finally {
-            DatabaseConnection.closeConnection(con);
+            if (con != null) try {
+                DatabaseConnection.closeConnection(con);
+            } catch (Exception ignore) {
+            }
         }
     }
 }

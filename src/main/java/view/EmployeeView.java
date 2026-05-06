@@ -612,7 +612,7 @@ public class EmployeeView extends JPanel {
     private Employee getEmployeeFromForm() {
         String name = txtName.getText().trim();
         String phone = txtPhone.getText().trim();
-        String email = txtEmail.getText().trim();
+        String email = txtEmail.getText().trim().toLowerCase();
         String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
 
         JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
