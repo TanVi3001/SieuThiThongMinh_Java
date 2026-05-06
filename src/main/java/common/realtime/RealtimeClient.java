@@ -15,15 +15,13 @@ public final class RealtimeClient {
 
     private static volatile WebSocketClient client;
     private static volatile URI serverUri;
-
-    private static final ScheduledExecutorService RECONNECT_SCHEDULER
-            = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "RealtimeClient-Reconnect");
-                t.setDaemon(true);
-                return t;
-            });
-
     private static volatile boolean reconnectScheduled = false;
+
+    private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "RealtimeClient-Reconnect");
+        t.setDaemon(true);
+        return t;
+    });
 
     private RealtimeClient() {
     }
@@ -33,25 +31,39 @@ public final class RealtimeClient {
     }
 
     public static void connect(String wsUrl) {
+        // Nếu URL rỗng, dùng mặc định
+        if (wsUrl == null || wsUrl.isEmpty()) {
+            wsUrl = "ws://127.0.0.1:8887";
+        }
+
         try {
-            // Ưu tiên dùng localhost (127.0.0.1) và port 8887 cho WebSocket nội bộ
-            if (wsUrl == null || wsUrl.isEmpty()) {
-                wsUrl = "ws://127.0.0.1:8887";
+            serverUri = URI.create(wsUrl);
+
+            // LOGIC QUAN TRỌNG: Nếu đang online hoặc đang kết nối thì không làm gì cả
+            if (client != null) {
+                if (client.isOpen()) {
+                    System.out.println("[RT] Đã online, bỏ qua kết nối mới.");
+                    return;
+                }
+                // Đóng client cũ để giải phóng tài nguyên trước khi tạo cái mới
+                try {
+                    client.close();
+                } catch (Exception ignored) {
+                }
             }
 
-            serverUri = URI.create(wsUrl);
             System.out.println("[RT] Đang thử kết nối tới: " + serverUri);
 
             client = new WebSocketClient(serverUri) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
-                    reconnectScheduled = false;
+                    reconnectScheduled = false; // Reset trạng thái khi thành công
                     System.out.println("[RT] CONNECTED: " + serverUri);
                 }
 
                 @Override
                 public void onMessage(String message) {
-                    System.out.println("[RT] MSG: " + message);
+                    System.out.println("[RT] MSG RECEIVED: " + message);
                     AppEventType type = mapMessageToType(message);
                     if (type != null) {
                         EventBus.publish(new AppDataChangedEvent(type, "realtime"));
@@ -60,50 +72,26 @@ public final class RealtimeClient {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    System.out.println("[RT] DISCONNECTED: " + reason + " (code=" + code + ")");
-                    scheduleReconnect();
+                    // Chỉ thông báo nếu không phải do mình chủ động đóng
+                    if (code != 1000) {
+                        System.out.println("[RT] DISCONNECTED: " + reason + " (code=" + code + ")");
+                        scheduleReconnect();
+                    }
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    System.err.println("[RT] ERROR: " + ex);
-                    scheduleReconnect();
+                    System.err.println("[RT] ERROR: " + ex.getMessage());
+                    // onClose sẽ tự gọi scheduleReconnect nên ở đây không cần gọi lại
                 }
             };
 
             client.connect();
+
         } catch (Exception e) {
-            System.err.println("[RT] CONNECT FAILED: " + e);
+            System.err.println("[RT] CONNECT CRITICAL FAILED: " + e.getMessage());
             scheduleReconnect();
         }
-    }
-
-    private static AppEventType mapMessageToType(String message) {
-        if (message == null) {
-            return null;
-        }
-        if ("PRODUCTS_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.PRODUCTS;
-        }
-        if ("INVENTORY_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.INVENTORY;
-        }
-        if ("SYSTEM_CONFIG_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.SYSTEM_CONFIG;
-        }
-        if ("ACCOUNT_SECURITY_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.ACCOUNT_SECURITY;
-        }
-        if ("CUSTOMERS_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.CUSTOMERS;
-        }
-        if ("EMPLOYEES_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.EMPLOYEES;
-        }
-        if ("ORDERS_CHANGED".equalsIgnoreCase(message)) {
-            return AppEventType.ORDERS;
-        }
-        return null;
     }
 
     private static void scheduleReconnect() {
@@ -112,15 +100,12 @@ public final class RealtimeClient {
         }
 
         reconnectScheduled = true;
+        System.out.println("[RT] Sẽ thử kết nối lại sau 3 giây...");
+
         RECONNECT_SCHEDULER.schedule(() -> {
-            try {
-                if (!isOnline()) {
-                    System.out.println("[RT] Reconnecting to " + serverUri + " ...");
-                    connect(serverUri.toString());
-                } else {
-                    reconnectScheduled = false;
-                }
-            } catch (Exception ignored) {
+            reconnectScheduled = false; // Mở khóa để có thể lập lịch tiếp nếu lần này thất bại
+            if (!isOnline()) {
+                connect(serverUri.toString());
             }
         }, 3, TimeUnit.SECONDS);
     }
@@ -131,10 +116,39 @@ public final class RealtimeClient {
                 client.send(message);
                 System.out.println("[RT] SENT: " + message);
             } else {
-                System.err.println("[RT] SEND FAILED (offline): " + message);
+                System.err.println("[RT] SEND FAILED: Client đang offline. Tin nhắn: " + message);
             }
         } catch (Exception e) {
             System.err.println("[RT] SEND ERROR: " + e.getMessage());
         }
+    }
+
+    private static AppEventType mapMessageToType(String message) {
+        if (message == null) {
+            return null;
+        }
+        String msg = message.toUpperCase();
+        if (msg.contains("PRODUCTS_CHANGED")) {
+            return AppEventType.PRODUCTS;
+        }
+        if (msg.contains("INVENTORY_CHANGED")) {
+            return AppEventType.INVENTORY;
+        }
+        if (msg.contains("SYSTEM_CONFIG_CHANGED")) {
+            return AppEventType.SYSTEM_CONFIG;
+        }
+        if (msg.contains("ACCOUNT_SECURITY_CHANGED")) {
+            return AppEventType.ACCOUNT_SECURITY;
+        }
+        if (msg.contains("CUSTOMERS_CHANGED")) {
+            return AppEventType.CUSTOMERS;
+        }
+        if (msg.contains("EMPLOYEES_CHANGED")) {
+            return AppEventType.EMPLOYEES;
+        }
+        if (msg.contains("ORDERS_CHANGED")) {
+            return AppEventType.ORDERS;
+        }
+        return null;
     }
 }

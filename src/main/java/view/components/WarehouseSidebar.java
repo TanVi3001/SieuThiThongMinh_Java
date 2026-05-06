@@ -175,7 +175,7 @@ public class WarehouseSidebar extends JPanel {
                     g2.fillRoundRect(0, 5, 4, h - 10, 4, 4); 
                     g2.setColor(COLOR_ACTIVE_TEXT);
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
-                } else {
+                } else {    
                     g2.setColor(isHovered ? COLOR_HOVER_BG : COLOR_INACTIVE_BG);
                     g2.fillRect(0, 0, w, h);
                     g2.setColor(COLOR_INACTIVE_TEXT);
