@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -14,6 +15,7 @@ import java.util.Map;
 public class StatisticSql {
 
     private static StatisticSql instance;
+    private final DecimalFormat currencyFormat = new DecimalFormat("#,###");
 
     private StatisticSql() {
     }
@@ -60,7 +62,7 @@ public class StatisticSql {
         String sql = "SELECT * FROM ("
                 + "SELECT od.product_id, NVL(p.product_name, od.product_id) AS product_name, "
                 + "       SUM(NVL(od.quantity_base, od.quantity)) AS total_sold, "
-                + "       SUM(od.quantity * od.unit_price) AS total_revenue "
+                + "       SUM(NVL(od.quantity_base, od.quantity) * od.unit_price) AS total_revenue "
                 + "FROM ORDER_DETAILS od "
                 + "JOIN ORDERS o ON od.order_id = o.order_id "
                 + "LEFT JOIN PRODUCTS p ON od.product_id = p.product_id "
@@ -209,7 +211,6 @@ public class StatisticSql {
                 values.add(rs.getDouble("revenue"));
             }
         }
-        // Đảo ngược list để hiển thị từ tháng cũ -> tháng mới
         for (int i = keys.size() - 1; i >= 0; i--) {
             result.put(keys.get(i), values.get(i));
         }
@@ -251,5 +252,123 @@ public class StatisticSql {
             }
         }
         return result;
+    }
+
+    // =========================================================
+    // CÁC HÀM CHO STATISTICVIEW (BÁO CÁO CÓ BỘ LỌC NGÀY)
+    // =========================================================
+    /**
+     * Báo cáo Doanh thu (Đã bỏ cột giảm giá, Tổng tiền hàng = Doanh thu thực)
+     */
+    public List<Object[]> getRevenueReport(java.util.Date fromDate, java.util.Date toDate) {
+        List<Object[]> rows = new ArrayList<>();
+        String sql = "SELECT TO_CHAR(order_date, 'dd/MM/yyyy') as ngay, "
+                + "       COUNT(order_id) as tong_don, "
+                + "       SUM(total_amount) as doanh_thu_thuc "
+                + "FROM ORDERS "
+                + "WHERE NVL(is_deleted, 0) = 0 "
+                + "AND UPPER(NVL(status, '')) <> 'CANCELLED' "
+                + "AND order_date >= ? AND order_date < (? + 1) "
+                + "GROUP BY TO_CHAR(order_date, 'dd/MM/yyyy') "
+                + "ORDER BY TO_DATE(ngay, 'dd/MM/yyyy') DESC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            // Đưa Date Java util về Date SQL
+            pst.setDate(1, new java.sql.Date(fromDate.getTime()));
+            pst.setDate(2, new java.sql.Date(toDate.getTime()));
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    String ngay = rs.getString("ngay");
+                    int tongDon = rs.getInt("tong_don");
+                    double doanhThu = rs.getDouble("doanh_thu_thuc");
+
+                    String tienFormatted = currencyFormat.format(doanhThu);
+
+                    // Trả ra mảng Object tương ứng với số cột bên View
+                    rows.add(new Object[]{ngay, tongDon, tienFormatted, tienFormatted});
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return rows;
+    }
+
+    /**
+     * Báo cáo Sản phẩm (Tính số lượng và doanh thu từng mã)
+     */
+    public List<Object[]> getProductReport(java.util.Date fromDate, java.util.Date toDate) {
+        List<Object[]> rows = new ArrayList<>();
+        String sql = "SELECT p.product_id, NVL(p.product_name, od.product_id) AS product_name, "
+                + "       SUM(NVL(od.quantity_base, od.quantity)) AS sl_da_ban, "
+                + "       SUM(NVL(od.quantity_base, od.quantity) * od.unit_price) AS doanh_thu_mang_lai, "
+                + "       NVL(p.quantity, 0) AS ton_kho "
+                + "FROM ORDER_DETAILS od "
+                + "JOIN ORDERS o ON od.order_id = o.order_id "
+                + "JOIN PRODUCTS p ON od.product_id = p.product_id "
+                + "WHERE NVL(od.is_deleted, 0) = 0 "
+                + "  AND NVL(o.is_deleted, 0) = 0 "
+                + "  AND UPPER(NVL(o.status, '')) <> 'CANCELLED' "
+                + "  AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "GROUP BY p.product_id, p.product_name, p.quantity "
+                + "ORDER BY sl_da_ban DESC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setDate(1, new java.sql.Date(fromDate.getTime()));
+            pst.setDate(2, new java.sql.Date(toDate.getTime()));
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    String id = rs.getString("product_id");
+                    String name = rs.getString("product_name");
+                    int slBan = rs.getInt("sl_da_ban");
+                    double doanhThu = rs.getDouble("doanh_thu_mang_lai");
+                    int tonKho = rs.getInt("ton_kho");
+
+                    rows.add(new Object[]{id, name, slBan, currencyFormat.format(doanhThu), tonKho});
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return rows;
+    }
+
+    /**
+     * Báo cáo Nhân viên (Lọc các đơn hàng tạo bởi nhân viên đó)
+     */
+    public List<Object[]> getEmployeeReport(java.util.Date fromDate, java.util.Date toDate) {
+        List<Object[]> rows = new ArrayList<>();
+        String sql = "SELECT e.employee_id, e.employee_name, "
+                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'COMPLETED' THEN 1 ELSE 0 END) as don_thanh_cong, "
+                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'CANCELLED' THEN 1 ELSE 0 END) as don_huy, "
+                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'COMPLETED' THEN o.total_amount ELSE 0 END) as doanh_thu "
+                + "FROM ORDERS o "
+                + "JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
+                + "WHERE NVL(o.is_deleted, 0) = 0 "
+                + "  AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "GROUP BY e.employee_id, e.employee_name "
+                + "ORDER BY doanh_thu DESC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setDate(1, new java.sql.Date(fromDate.getTime()));
+            pst.setDate(2, new java.sql.Date(toDate.getTime()));
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    String id = rs.getString("employee_id");
+                    String name = rs.getString("employee_name");
+                    int donTC = rs.getInt("don_thanh_cong");
+                    int donHuy = rs.getInt("don_huy");
+                    double doanhThu = rs.getDouble("doanh_thu");
+
+                    rows.add(new Object[]{id, name, donTC, donHuy, currencyFormat.format(doanhThu)});
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return rows;
     }
 }

@@ -83,6 +83,18 @@
             <artifactId>jfreechart</artifactId>
             <version>1.5.4</version>
         </dependency>
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.6</version>
+        </dependency>
+        <!-- Thư viện tạo Lịch DatePicker cho Java Swing -->
+        <dependency>
+            <groupId>com.toedter</groupId>
+            <artifactId>jcalendar</artifactId>
+            <version>1.4</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
 
     <build>

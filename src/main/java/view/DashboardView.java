@@ -1,5 +1,7 @@
 package view;
 
+import common.events.AppDataChangedEvent;
+import common.events.EventBus;
 import view.components.TongQuanPanel;
 import view.components.Sidebar;
 import java.awt.BorderLayout;
@@ -7,6 +9,7 @@ import java.awt.Dimension;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
 public class DashboardView extends JFrame {
@@ -17,9 +20,29 @@ public class DashboardView extends JFrame {
     private boolean isLoggingOut = false;
     private JPanel mainContentPanel;
 
+    // Biến lưu trữ tab hiện tại đang mở để Real-time biết đường mà refresh
+    private String currentMenu = "Tổng quan";
+
     public DashboardView() {
         setupUI();
         startSessionCheck();
+
+        // ==========================================
+        // GẮN "MÁY NGHE LÉN" REAL-TIME CHO TOÀN BỘ DASHBOARD
+        // ==========================================
+        EventBus.subscribe(AppDataChangedEvent.class, e -> {
+            SwingUtilities.invokeLater(() -> {
+                // Nếu có bất kỳ thay đổi data nào, và user đang xem Tổng quan hoặc Thống kê thì tự động load lại
+                if ("Tổng quan".equals(currentMenu)) {
+                    showPanel(new TongQuanPanel());
+                } else if ("Báo cáo & Thống kê".equals(currentMenu)) {
+                    // Nếu user có quyền vô thống kê thì mới refresh
+                    if (business.service.AuthorizationService.canAccessStatisticsAndEmployees()) {
+                        showPanel(new StatisticView());
+                    }
+                }
+            });
+        });
     }
 
     private void setupUI() {
@@ -55,6 +78,8 @@ public class DashboardView extends JFrame {
         // 4. KHỞI TẠO SIDEBAR BÊN TRÁI
         Sidebar newSidebar = new Sidebar(roleForSidebar);
         newSidebar.setMenuClickListener(title -> {
+            currentMenu = title; // Cập nhật tab đang mở
+
             switch (title) {
                 case "Tổng quan":
                     showPanel(new TongQuanPanel());
@@ -75,7 +100,7 @@ public class DashboardView extends JFrame {
                 case "Hóa đơn":
                     showPanel(new OrderView());
                     break;
-                case "Thống kê":
+                case "Báo cáo & Thống kê":
                     if (!canAccessStatistics) {
                         JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập chức năng này!", "Từ chối truy cập", JOptionPane.WARNING_MESSAGE);
                     } else {
@@ -83,7 +108,6 @@ public class DashboardView extends JFrame {
                     }
                     break;
                 case "Cài đặt":
-                    // Đã sửa lại trỏ đích danh class thật, không xài class fake nữa
                     showPanel(new view.SettingsView());
                     break;
                 case "Đăng xuất":

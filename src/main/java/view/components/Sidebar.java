@@ -76,7 +76,7 @@ public class Sidebar extends JPanel {
         }
 
         if (AuthorizationService.canAccessStatisticsAndEmployees()) {
-            addMenuItem("Thống kê", IconHelper.barChart(20));
+            addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(20));
         }
 
         addMenuItem("Cài đặt", IconHelper.settings(20)); // Ai cũng thấy

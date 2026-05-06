@@ -14,8 +14,8 @@ public class DatabaseConnection {
             
             // Cấu hình thông số kết nối
             // "localhost" là máy của bạn, "1521" là cổng mặc định, "orcl" là tên database
-            String url = "jdbc:oracle:thin:@localhost:1521:orcl"; 
-            
+//            String url = "jdbc:oracle:thin:@localhost:1521:orcl"; 
+            String url = "jdbc:oracle:thin:@192.168.88.210:1521:orcl";
             // Thay đổi Username và Password theo đúng tài khoản Oracle 
             String username = "system"; 
             String password = "Admin123"; 

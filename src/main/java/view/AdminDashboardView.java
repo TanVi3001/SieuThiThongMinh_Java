@@ -40,10 +40,10 @@ public class AdminDashboardView extends javax.swing.JFrame {
                     showPanel(new view.RoleManagementPanel());
                     break;
                 case "Nhật ký hệ thống":
-                    // showPanel(new AuditLogPanel());
+                    showPanel(new AuditLogPanel()); 
                     break;
                 case "Cài đặt":
-                    // showPanel(new SettingsAdminPanel());
+                    showPanel(new SettingsAdminPanel()); 
                     break;
                 case "Đăng xuất":
                     handleLogout();

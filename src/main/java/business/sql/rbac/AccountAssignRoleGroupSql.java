@@ -52,4 +52,6 @@ public class AccountAssignRoleGroupSql {
         // TODO: SELECT account_id FROM ACCOUNT_ASSIGN_ROLE_GROUP WHERE role_group_id = ? AND is_deleted = 0
         return new ArrayList<>();
     }
+    
+    
 }

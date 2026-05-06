@@ -1,273 +1,271 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JPanel.java to edit this template
- */
 package view;
 
 import business.sql.sales_order.StatisticSql;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.text.DecimalFormat;
+import com.toedter.calendar.JDateChooser;
+import view.components.IconHelper;
+
+import java.awt.*;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import javax.swing.JOptionPane;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 
-/**
- *
- * @author Admin
- */
-public class StatisticView extends javax.swing.JPanel {
+public class StatisticView extends JPanel {
 
-    private final DecimalFormat moneyFormat = new DecimalFormat("#,##0.##");
+    private final Color bgLight = new Color(244, 246, 250);
+    private final Color cardWhite = Color.WHITE;
+    private final Color primaryBlue = new Color(67, 97, 238);
+    private final Color textDark = new Color(43, 54, 116);
+    private final Color textGray = new Color(163, 174, 208);
+    private final Color excelGreen = new Color(33, 115, 70);
+    private final Color pdfRed = new Color(210, 33, 40);
 
-    /**
-     * Creates new form StatisticView
-     */
+    private JDateChooser dpFromDate, dpToDate;
+    private JButton btnFilter, btnExportExcel, btnExportPDF;
+    private JTabbedPane tabbedPane;
+    private JLabel lblLastUpdate;
+
+    private JTable tblRevenue, tblProducts, tblEmployees;
+    private DefaultTableModel modRevenue, modProducts, modEmployees;
+
     public StatisticView() {
-        if (!business.service.AuthorizationService.canAccessStatistics()) {
-            showAccessDenied();
+        setLayout(new BorderLayout(20, 20));
+        setBackground(bgLight);
+        setBorder(new EmptyBorder(20, 30, 20, 30));
+
+        initUI();
+        initEvents();
+
+        // Đăng ký sự kiện Real-time
+        common.events.EventBus.subscribe(common.events.AppDataChangedEvent.class, e -> {
+            if (e.getType() == common.events.AppEventType.ORDERS
+                    || e.getType() == common.events.AppEventType.INVENTORY
+                    || e.getType() == common.events.AppEventType.PRODUCTS) {
+
+                SwingUtilities.invokeLater(() -> {
+                    // Cập nhật ngầm (true), không hiện thông báo
+                    refreshDataWithCurrentDates(true, false);
+                });
+            }
+        });
+
+        loadInitialData();
+    }
+
+    private void initUI() {
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setOpaque(false);
+
+        JPanel titlePanel = new JPanel(new GridLayout(2, 1));
+        titlePanel.setOpaque(false);
+        JLabel lblTitle = new JLabel("Báo Cáo & Thống Kê");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblTitle.setForeground(textDark);
+        JLabel lblSub = new JLabel("Phân tích doanh thu, hàng hóa và hiệu suất nhân viên");
+        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        lblSub.setForeground(textGray);
+        titlePanel.add(lblTitle);
+        titlePanel.add(lblSub);
+
+        dpFromDate = new JDateChooser();
+        dpFromDate.setDateFormatString("dd/MM/yyyy");
+        dpFromDate.setPreferredSize(new Dimension(140, 35));
+        dpToDate = new JDateChooser();
+        dpToDate.setDateFormatString("dd/MM/yyyy");
+        dpToDate.setPreferredSize(new Dimension(140, 35));
+
+        btnFilter = createCustomButton("Lọc Dữ Liệu", primaryBlue, Color.WHITE, IconHelper.search(18));
+        btnExportExcel = createCustomButton("Xuất Excel", excelGreen, Color.WHITE, null);
+        btnExportPDF = createCustomButton("Xuất PDF", pdfRed, Color.WHITE, null);
+
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        actionPanel.setOpaque(false);
+        actionPanel.add(createLabel("Từ ngày:"));
+        actionPanel.add(dpFromDate);
+        actionPanel.add(createLabel("Đến ngày:"));
+        actionPanel.add(dpToDate);
+        actionPanel.add(btnFilter);
+        actionPanel.add(btnExportExcel);
+        actionPanel.add(btnExportPDF);
+
+        lblLastUpdate = new JLabel("Đang tải dữ liệu...");
+        lblLastUpdate.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblLastUpdate.setForeground(new Color(100, 116, 139));
+        lblLastUpdate.setHorizontalAlignment(SwingConstants.RIGHT);
+        lblLastUpdate.setBorder(new EmptyBorder(5, 0, 0, 15));
+
+        JPanel filterWrapper = new JPanel(new BorderLayout());
+        filterWrapper.setOpaque(false);
+        filterWrapper.add(actionPanel, BorderLayout.CENTER);
+        filterWrapper.add(lblLastUpdate, BorderLayout.SOUTH);
+
+        headerPanel.add(titlePanel, BorderLayout.WEST);
+        headerPanel.add(filterWrapper, BorderLayout.EAST);
+        add(headerPanel, BorderLayout.NORTH);
+
+        tabbedPane = new JTabbedPane();
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        tabbedPane.addChangeListener(e -> {
+            for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+                tabbedPane.setForegroundAt(i, i == tabbedPane.getSelectedIndex() ? primaryBlue : textGray);
+            }
+        });
+
+        modRevenue = new DefaultTableModel(new Object[]{"Ngày giao dịch", "Tổng Đơn", "Doanh Thu Thực Tế"}, 0);
+        tblRevenue = createTable(modRevenue);
+        tabbedPane.addTab("Thống kê Doanh Thu", createTabPanel(tblRevenue));
+
+        modProducts = new DefaultTableModel(new Object[]{"Mã SP", "Tên Sản Phẩm", "Số lượng Đã Bán", "Doanh thu mang lại", "Tồn Kho Hiện Tại"}, 0);
+        tblProducts = createTable(modProducts);
+        tabbedPane.addTab("Phân tích Hàng Hóa", createTabPanel(tblProducts));
+
+        modEmployees = new DefaultTableModel(new Object[]{"Mã NV", "Tên Nhân Viên", "Đơn Hoàn Thành", "Đơn Bị Hủy", "Doanh Thu Mang Về"}, 0);
+        tblEmployees = createTable(modEmployees);
+        tabbedPane.addTab("Hiệu Suất Nhân Viên", createTabPanel(tblEmployees));
+
+        add(tabbedPane, BorderLayout.CENTER);
+    }
+
+    private void initEvents() {
+        btnFilter.addActionListener(e -> {
+            // Khi nhấn nút: Manual sync (false), và HIỆN thông báo (true)
+            refreshDataWithCurrentDates(false, true);
+        });
+    }
+
+    private void loadInitialData() {
+        Date today = new Date();
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(today);
+        cal.set(Calendar.DAY_OF_MONTH, 1);
+        Date firstDayOfMonth = cal.getTime();
+
+        dpFromDate.setDate(firstDayOfMonth);
+        dpToDate.setDate(today);
+
+        // Lần đầu tải: Không phải auto (false), KHÔNG hiện thông báo (false)
+        refreshDataWithCurrentDates(false, false);
+    }
+
+    // Cải tiến hàm refresh để kiểm soát việc hiện Popup
+    private void refreshDataWithCurrentDates(boolean isAutoSync, boolean showSuccessPopup) {
+        Date fromDate = dpFromDate.getDate();
+        Date toDate = dpToDate.getDate();
+
+        if (fromDate == null || toDate == null) {
+            if (!isAutoSync) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn đầy đủ ngày!");
+            }
             return;
         }
-        initComponents();
-        initStatisticTable();
-        loadStatistics();
+
+        if (fromDate.after(toDate)) {
+            if (!isAutoSync) {
+                JOptionPane.showMessageDialog(this, "'Từ ngày' phải nhỏ hơn 'Đến ngày'!");
+            }
+            return;
+        }
+
+        modRevenue.setRowCount(0);
+        modProducts.setRowCount(0);
+        modEmployees.setRowCount(0);
+
+        List<Object[]> revData = StatisticSql.getInstance().getRevenueReport(fromDate, toDate);
+        for (Object[] row : revData) {
+            modRevenue.addRow(row);
+        }
+
+        List<Object[]> prodData = StatisticSql.getInstance().getProductReport(fromDate, toDate);
+        for (Object[] row : prodData) {
+            modProducts.addRow(row);
+        }
+
+        List<Object[]> empData = StatisticSql.getInstance().getEmployeeReport(fromDate, toDate);
+        for (Object[] row : empData) {
+            modEmployees.addRow(row);
+        }
+
+        String timeNow = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
+        if (isAutoSync) {
+            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Đồng bộ tự động thời gian thực)");
+            lblLastUpdate.setForeground(new Color(0, 163, 108));
+        } else {
+            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Tải thủ công)");
+            lblLastUpdate.setForeground(new Color(100, 116, 139));
+            // Chỉ hiện popup nếu tham số showSuccessPopup là true
+            if (showSuccessPopup) {
+                JOptionPane.showMessageDialog(this, "✅ Đã tải dữ liệu thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
     }
 
-    private void showAccessDenied() {
-        setLayout(new java.awt.BorderLayout());
-        javax.swing.JLabel message = new javax.swing.JLabel(
-                "Bạn không có quyền truy cập chức năng thống kê.",
-                javax.swing.SwingConstants.CENTER
-        );
-        message.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 16));
-        add(message, java.awt.BorderLayout.CENTER);
-    }
-
-    private void initStatisticTable() {
-        DefaultTableModel model = new DefaultTableModel(
-                new Object[]{"Ma san pham", "Ten san pham", "So luong ban", "Doanh thu"}, 0
-        ) {
+    private JTable createTable(DefaultTableModel model) {
+        JTable table = new JTable(model) {
             @Override
-            public boolean isCellEditable(int row, int column) {
+            public boolean isCellEditable(int row, int col) {
                 return false;
             }
         };
-        jTable1.setModel(model);
-        jTable1.setAutoCreateRowSorter(true);
+        table.setRowHeight(35);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        JTableHeader header = table.getTableHeader();
+        header.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        header.setBackground(bgLight);
+        header.setForeground(primaryBlue);
+        header.setReorderingAllowed(false);
+        ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
+        table.setShowVerticalLines(false);
+        table.setSelectionBackground(new Color(237, 242, 255));
+        table.setSelectionForeground(textDark);
+        return table;
     }
 
-    private void loadStatistics() {
-        try {
-            StatisticSql statisticSql = StatisticSql.getInstance();
-            double revenue = statisticSql.getMonthlyRevenue();
-            int totalCustomers = statisticSql.getTotalCustomers();
-            int totalOrders = statisticSql.getTotalOrders();
+    private JPanel createTabPanel(JTable table) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(Color.WHITE);
+        p.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JScrollPane sp = new JScrollPane(table);
+        sp.setBorder(BorderFactory.createEmptyBorder());
+        sp.getViewport().setBackground(Color.WHITE);
+        p.add(sp, BorderLayout.CENTER);
+        return p;
+    }
 
-            TotalRevenue.setText("Doanh thu thang: " + moneyFormat.format(revenue));
-            TotalCustomer.setText("Tong khach hang: " + totalCustomers);
-            TotalOrder.setText("Tong don hang: " + totalOrders);
+    private JLabel createLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lbl.setForeground(textDark);
+        return lbl;
+    }
 
-            fillBestSellingProducts(statisticSql.getBestSellingProducts(20));
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Loi tai thong ke: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+    private JButton createCustomButton(String text, Color bg, Color fg, ImageIcon icon) {
+        JButton btn = new JButton(text);
+        if (icon != null) {
+            btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18, 18, Image.SCALE_SMOOTH)));
         }
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(fg);
+        btn.setBackground(bg);
+        btn.setPreferredSize(new Dimension(130, 35));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
+            @Override
+            public void paint(Graphics g, JComponent c) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(c.getBackground());
+                g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 20, 20);
+                super.paint(g2, c);
+                g2.dispose();
+            }
+        });
+        return btn;
     }
-
-    private void fillBestSellingProducts(List<Map<String, Object>> rows) {
-        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
-        model.setRowCount(0);
-        for (Map<String, Object> row : rows) {
-            model.addRow(new Object[]{
-                row.get("product_id"),
-                row.get("product_name"),
-                row.get("total_sold"),
-                moneyFormat.format(row.get("total_revenue"))
-            });
-        }
-    }
-// 1. Hàm lấy số lượng thẻ cảnh báo (Alert Cards)
-
-    public Map<String, Integer> getDashboardAlerts() throws SQLException {
-        Map<String, Integer> alerts = new java.util.HashMap<>();
-
-        // Đếm số sản phẩm sắp hết hàng (Dưới 10 cái)
-        String sqlLowStock = "SELECT COUNT(*) FROM INVENTORY WHERE quantity < 10 AND is_deleted = 0";
-        // Đếm số đơn hàng đang chờ xử lý
-        String sqlPendingOrder = "SELECT COUNT(*) FROM ORDERS WHERE status = N'Đang xử lý' AND is_deleted = 0";
-        // Đếm khách hàng mới trong tháng
-        String sqlNewCustomer = "SELECT COUNT(*) FROM CUSTOMERS WHERE is_deleted = 0 AND EXTRACT(MONTH FROM SYSDATE) = EXTRACT(MONTH FROM SYSDATE)"; // Giả định điều kiện khách mới
-
-        try (Connection con = common.db.DatabaseConnection.getConnection()) {
-            try (PreparedStatement ps1 = con.prepareStatement(sqlLowStock); ResultSet rs1 = ps1.executeQuery()) {
-                alerts.put("low_stock", rs1.next() ? rs1.getInt(1) : 0);
-            }
-            try (PreparedStatement ps2 = con.prepareStatement(sqlPendingOrder); ResultSet rs2 = ps2.executeQuery()) {
-                alerts.put("pending_orders", rs2.next() ? rs2.getInt(1) : 0);
-            }
-            try (PreparedStatement ps3 = con.prepareStatement(sqlNewCustomer); ResultSet rs3 = ps3.executeQuery()) {
-                alerts.put("new_customers", rs3.next() ? rs3.getInt(1) : 0);
-            }
-        }
-        return alerts;
-    }
-
-    // 2. Hàm lấy danh sách công việc khẩn cấp (Sắp hết hàng + Đơn chờ)
-    public List<Object[]> getPriorityTasks() throws SQLException {
-        List<Object[]> tasks = new java.util.ArrayList<>();
-
-        // Truy vấn 1: Sản phẩm sắp hết hàng
-        String sqlProd = "SELECT 'Hết hàng' AS loai, p.product_id, p.product_name, 'Tồn: ' || i.quantity AS trang_thai "
-                + "FROM PRODUCTS p JOIN INVENTORY i ON p.product_id = i.product_id "
-                + "WHERE i.quantity < 10 AND p.is_deleted = 0 AND i.is_deleted = 0 "
-                + "ORDER BY i.quantity ASC FETCH FIRST 5 ROWS ONLY";
-
-        // Truy vấn 2: Đơn hàng chưa giao
-        String sqlOrder = "SELECT 'Đơn hàng' AS loai, o.order_id, c.customer_name, o.status "
-                + "FROM ORDERS o JOIN CUSTOMERS c ON o.customer_id = c.customer_id "
-                + "WHERE o.status = N'Đang xử lý' AND o.is_deleted = 0 "
-                + "ORDER BY o.order_date ASC FETCH FIRST 5 ROWS ONLY";
-
-        try (Connection con = common.db.DatabaseConnection.getConnection()) {
-            try (PreparedStatement ps = con.prepareStatement(sqlProd); ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    tasks.add(new Object[]{rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)});
-                }
-            }
-            try (PreparedStatement ps = con.prepareStatement(sqlOrder); ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    tasks.add(new Object[]{rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)});
-                }
-            }
-        }
-        return tasks;
-    }
-
-    /**
-     * This method is called from within the constructor to initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is always
-     * regenerated by the Form Editor.
-     */
-    @SuppressWarnings("unchecked")
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
-    private void initComponents() {
-
-        tbStatistic = new javax.swing.JScrollPane();
-        jTable1 = new javax.swing.JTable();
-        pnTop = new javax.swing.JPanel();
-        pnTotalRevenue = new javax.swing.JPanel();
-        TotalRevenue = new javax.swing.JLabel();
-        pnTotalCustomer = new javax.swing.JPanel();
-        TotalCustomer = new javax.swing.JLabel();
-        pnTotalOrder = new javax.swing.JPanel();
-        TotalOrder = new javax.swing.JLabel();
-
-        jTable1.setModel(new javax.swing.table.DefaultTableModel(
-            new Object [][] {
-                {null, null, null, null},
-                {null, null, null, null},
-                {null, null, null, null},
-                {null, null, null, null}
-            },
-            new String [] {
-                "Mã sản phẩm", "Tên sản phẩm", "Số lượng bán", "Doanh thu"
-            }
-        ));
-        tbStatistic.setViewportView(jTable1);
-
-        pnTop.setLayout(new java.awt.GridLayout(1, 0));
-
-        pnTotalRevenue.setBackground(new java.awt.Color(204, 255, 204));
-        pnTotalRevenue.setPreferredSize(new java.awt.Dimension(92, 38));
-
-        TotalRevenue.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        TotalRevenue.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        TotalRevenue.setIcon(new javax.swing.ImageIcon(getClass().getResource("/view/image/money-Photoroom.png"))); // NOI18N
-        TotalRevenue.setText("Tổng doanh thu");
-
-        javax.swing.GroupLayout pnTotalRevenueLayout = new javax.swing.GroupLayout(pnTotalRevenue);
-        pnTotalRevenue.setLayout(pnTotalRevenueLayout);
-        pnTotalRevenueLayout.setHorizontalGroup(
-            pnTotalRevenueLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalRevenue, javax.swing.GroupLayout.DEFAULT_SIZE, 212, Short.MAX_VALUE)
-        );
-        pnTotalRevenueLayout.setVerticalGroup(
-            pnTotalRevenueLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalRevenue, javax.swing.GroupLayout.DEFAULT_SIZE, 63, Short.MAX_VALUE)
-        );
-
-        pnTop.add(pnTotalRevenue);
-
-        pnTotalCustomer.setBackground(new java.awt.Color(255, 204, 153));
-
-        TotalCustomer.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        TotalCustomer.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        TotalCustomer.setIcon(new javax.swing.ImageIcon(getClass().getResource("/view/image/multiple-users-silhouette-Photoroom.png"))); // NOI18N
-        TotalCustomer.setText("Tổng khách hàng");
-
-        javax.swing.GroupLayout pnTotalCustomerLayout = new javax.swing.GroupLayout(pnTotalCustomer);
-        pnTotalCustomer.setLayout(pnTotalCustomerLayout);
-        pnTotalCustomerLayout.setHorizontalGroup(
-            pnTotalCustomerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalCustomer, javax.swing.GroupLayout.DEFAULT_SIZE, 212, Short.MAX_VALUE)
-        );
-        pnTotalCustomerLayout.setVerticalGroup(
-            pnTotalCustomerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalCustomer, javax.swing.GroupLayout.DEFAULT_SIZE, 63, Short.MAX_VALUE)
-        );
-
-        pnTop.add(pnTotalCustomer);
-
-        pnTotalOrder.setBackground(new java.awt.Color(153, 204, 255));
-        pnTotalOrder.setPreferredSize(new java.awt.Dimension(92, 38));
-
-        TotalOrder.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        TotalOrder.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        TotalOrder.setIcon(new javax.swing.ImageIcon(getClass().getResource("/view/image/trolley-Photoroom.png"))); // NOI18N
-        TotalOrder.setText("Tổng đơn hàng");
-
-        javax.swing.GroupLayout pnTotalOrderLayout = new javax.swing.GroupLayout(pnTotalOrder);
-        pnTotalOrder.setLayout(pnTotalOrderLayout);
-        pnTotalOrderLayout.setHorizontalGroup(
-            pnTotalOrderLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalOrder, javax.swing.GroupLayout.DEFAULT_SIZE, 212, Short.MAX_VALUE)
-        );
-        pnTotalOrderLayout.setVerticalGroup(
-            pnTotalOrderLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(TotalOrder, javax.swing.GroupLayout.DEFAULT_SIZE, 63, Short.MAX_VALUE)
-        );
-
-        pnTop.add(pnTotalOrder);
-
-        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
-        this.setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(pnTop, javax.swing.GroupLayout.DEFAULT_SIZE, 638, Short.MAX_VALUE)
-            .addComponent(tbStatistic)
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addComponent(pnTop, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(tbStatistic, javax.swing.GroupLayout.DEFAULT_SIZE, 354, Short.MAX_VALUE))
-        );
-    }// </editor-fold>//GEN-END:initComponents
-
-
-    // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JLabel TotalCustomer;
-    private javax.swing.JLabel TotalOrder;
-    private javax.swing.JLabel TotalRevenue;
-    private javax.swing.JTable jTable1;
-    private javax.swing.JPanel pnTop;
-    private javax.swing.JPanel pnTotalCustomer;
-    private javax.swing.JPanel pnTotalOrder;
-    private javax.swing.JPanel pnTotalRevenue;
-    private javax.swing.JScrollPane tbStatistic;
-    // End of variables declaration//GEN-END:variables
 }

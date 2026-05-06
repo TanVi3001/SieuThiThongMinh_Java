@@ -24,10 +24,14 @@ import business.sql.sales_order.DeliveryManagementSql;
 
 // Service
 import business.service.PaymentService;
+import common.realtime.RealtimeServer;
 
 public class SieuThiOnline {
 
     public static void main(String[] args) {
+        RealtimeServer.tryStart(9999);
+        
+        common.realtime.RealtimeClient.connect("ws://192.168.88.210");
         // UTF-8 output
         try {
             System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
