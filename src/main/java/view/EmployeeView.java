@@ -70,12 +70,11 @@ public class EmployeeView extends JPanel {
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e.getType() == AppEventType.EMPLOYEES || e.getType() == AppEventType.ACCOUNT_SECURITY) {
                 System.out.println("🛡️ [EmployeeView] Detecting data changes, refreshing UI...");
-                refreshAllData(); // Gọi hàm làm mới toàn bộ
+                refreshAllData();
             }
         });
     }
 
-    // Hàm này dùng để nạp lại cả Bảng và Danh sách tìm kiếm
     private void refreshAllData() {
         SwingUtilities.invokeLater(() -> {
             loadDataToTable();
@@ -87,11 +86,9 @@ public class EmployeeView extends JPanel {
         if (cbSearch == null) {
             return;
         }
-
         employeeNameList.clear();
         cbSearch.removeAllItems();
-        cbSearch.addItem(""); // Item trống mặc định
-
+        cbSearch.addItem("");
         try {
             List<Employee> list = employeeSql.selectAll();
             for (Employee e : list) {
@@ -248,6 +245,187 @@ public class EmployeeView extends JPanel {
         add(centerPanel, BorderLayout.CENTER);
     }
 
+    private void initEvents() {
+        // --- 1. SỰ KIỆN CLICK BẢNG ---
+        tblEmployees.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent evt) {
+                int row = tblEmployees.getSelectedRow();
+                if (row >= 0) {
+                    String role = String.valueOf(tblEmployees.getValueAt(row, 5));
+                    // Bảo vệ tài khoản cấp cao
+                    if (role.contains("ADMIN") || role.contains("MNG") || role.contains("Quản")) {
+                        JOptionPane.showMessageDialog(EmployeeView.this, "⚠️ Bạn không có quyền thao tác trên hồ sơ cấp quản lý!");
+                        tblEmployees.clearSelection();
+                        clearForm();
+                        return;
+                    }
+                    txtId.setText(String.valueOf(tblEmployees.getValueAt(row, 0)));
+                    txtName.setText(String.valueOf(tblEmployees.getValueAt(row, 1)));
+                    txtPhone.setText(String.valueOf(tblEmployees.getValueAt(row, 2)));
+                    txtEmail.setText(String.valueOf(tblEmployees.getValueAt(row, 3)));
+
+                    JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
+                    roleEditor.setText(role);
+
+                    String gender = String.valueOf(tblEmployees.getValueAt(row, 6));
+                    rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
+                    rdoFemale.setSelected("Nữ".equalsIgnoreCase(gender));
+                }
+            }
+        });
+
+        // --- 2. THÊM MỚI (CÓ REAL-TIME & GỬI MAIL THREAD) ---
+        btnAdd.addActionListener(e -> {
+            Employee emp = getEmployeeFromForm();
+            if (emp == null) {
+                return;
+            }
+
+            emp.setEmployeeId("EMP" + System.currentTimeMillis());
+
+            if (employeeSql.insert(emp) > 0) {
+                // ĐỒNG BỘ REAL-TIME
+                SyncVersionDao.bumpVersion("EMPLOYEES");
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+
+                // Tạo token kích hoạt
+                try {
+                    new ActivationTokenService().issueToken(emp.getEmployeeId());
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+                // Gửi mail trong luồng riêng để tránh đứng UI
+                final String email = emp.getEmail();
+                final String name = emp.getEmployeeName();
+                final String code = emp.getEmployeeId();
+                new Thread(() -> {
+                    boolean ok = business.service.EmailService.sendActivationEmail(email, name, code);
+                    SwingUtilities.invokeLater(() -> {
+                        if (ok) {
+                            JOptionPane.showMessageDialog(this, "Thành công! Mã kích hoạt đã gửi tới mail " + email);
+                        } else {
+                            JOptionPane.showMessageDialog(this, "Hồ sơ đã lưu nhưng gửi mail thất bại. Hãy check SMTP!", "Lỗi Email", JOptionPane.WARNING_MESSAGE);
+                        }
+                    });
+                }).start();
+
+                refreshAllData();
+                clearForm();
+            }
+        });
+
+        // --- 3. CẬP NHẬT (REAL-TIME) ---
+        btnUpdate.addActionListener(e -> {
+            String id = txtId.getText();
+            if (id.isEmpty() || id.startsWith("Mã")) {
+                return;
+            }
+            Employee emp = getEmployeeFromForm();
+            if (emp == null) {
+                return;
+            }
+            emp.setEmployeeId(id);
+            if (employeeSql.update(emp) > 0) {
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+                JOptionPane.showMessageDialog(this, "Cập nhật thành công!");
+                refreshAllData();
+                clearForm();
+            }
+        });
+
+        // --- 4. XÓA (REAL-TIME) ---
+        btnDelete.addActionListener(e -> {
+            String id = txtId.getText();
+            if (id.isEmpty()) {
+                return;
+            }
+            if (JOptionPane.showConfirmDialog(this, "Xác nhận xóa hồ sơ này?", "Xác nhận", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                if (employeeSql.delete(id) > 0) {
+                    RealtimeClient.send("EMPLOYEES_CHANGED");
+                    refreshAllData();
+                    clearForm();
+                }
+            }
+        });
+
+        btnClear.addActionListener(e -> clearForm());
+
+        btnSearch.addActionListener(e -> {
+            String kw = ((JTextField) cbSearch.getEditor().getEditorComponent()).getText().trim();
+            updateTable(employeeSql.search(kw));
+        });
+    }
+
+    private Employee getEmployeeFromForm() {
+        String name = txtName.getText().trim();
+        String phone = txtPhone.getText().trim();
+        String email = txtEmail.getText().trim().toLowerCase();
+        String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
+        String role = ((JTextField) cbRole.getEditor().getEditorComponent()).getText().trim().toUpperCase();
+
+        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || role.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập đủ thông tin (*)");
+            return null;
+        }
+
+        // Kiểm tra định dạng mail chuẩn UIT
+        if (!email.endsWith("@gmail.com") && !email.endsWith("@gm.uit.edu.vn")) {
+            JOptionPane.showMessageDialog(this, "Hệ thống chỉ nhận @gmail.com hoặc @gm.uit.edu.vn");
+            return null;
+        }
+
+        Employee e = new Employee();
+        e.setEmployeeName(name);
+        e.setPhone(phone);
+        e.setEmail(email);
+        e.setGender(gender);
+        e.setRole(role);
+        e.setRoleId(role);
+        return e;
+    }
+
+    private void clearForm() {
+        txtId.setText("");
+        txtName.setText("");
+        txtPhone.setText("");
+        txtEmail.setText("");
+        btngGender.clearSelection();
+        tblEmployees.clearSelection();
+        ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
+        ((JTextField) cbRole.getEditor().getEditorComponent()).setText("");
+    }
+
+    private void loadDataToTable() {
+        updateTable(employeeSql.selectAll());
+    }
+
+    private void updateTable(List<Employee> list) {
+        tableModel.setRowCount(0);
+        list.sort((e1, e2) -> Integer.compare(getRoleRank(e1.getRole()), getRoleRank(e2.getRole())));
+        for (Employee emp : list) {
+            tableModel.addRow(new Object[]{
+                emp.getEmployeeId(), emp.getEmployeeName(), emp.getPhone(),
+                emp.getEmail(), emp.getAccountStatus(), emp.getRole(), emp.getGender()
+            });
+        }
+    }
+
+    private int getRoleRank(String role) {
+        if (role == null) {
+            return 3;
+        }
+        if (role.contains("ADMIN")) {
+            return 1;
+        }
+        if (role.contains("MNG")) {
+            return 2;
+        }
+        return 3;
+    }
+
+    // --- CÁC HÀM STYLING GIAO DIỆN ---
     private void styleComboBox(JComboBox<String> cb, String placeholder) {
         cb.setPreferredSize(new Dimension(280, 38));
         cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -333,7 +511,6 @@ public class EmployeeView extends JPanel {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 setHorizontalAlignment(JLabel.CENTER);
                 String role = String.valueOf(table.getModel().getValueAt(table.convertRowIndexToModel(row), 5));
-
                 if (role.contains("ADMIN")) {
                     setBackground(isSelected ? new Color(248, 215, 218) : new Color(255, 235, 238));
                     setForeground(new Color(220, 53, 69));
@@ -347,7 +524,6 @@ public class EmployeeView extends JPanel {
                 return c;
             }
         };
-
         for (int i = 0; i < tblEmployees.getColumnCount(); i++) {
             tblEmployees.getColumnModel().getColumn(i).setCellRenderer(customRenderer);
         }
@@ -359,242 +535,7 @@ public class EmployeeView extends JPanel {
         return gbc;
     }
 
-    private int getRoleRank(String role) {
-        if (role == null) {
-            return 3;
-        }
-        if (role.contains("ADMIN") || "Quản trị viên".equals(role)) {
-            return 1;
-        }
-        if (role.contains("MNG") || "Quản lý cửa hàng".equals(role)) {
-            return 2;
-        }
-        return 3;
-    }
-
-    private void initEvents() {
-        tblEmployees.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent evt) {
-                int row = tblEmployees.getSelectedRow();
-                if (row >= 0) {
-                    String role = String.valueOf(tblEmployees.getValueAt(row, 5));
-
-                    if ("R_ADMIN_ALL".equals(role) || "Quản trị viên".equals(role)) {
-                        JOptionPane.showMessageDialog(EmployeeView.this,
-                                "⚠️ Đây là tài khoản Quản trị viên cấp cao (Admin).\nBạn không có quyền xem hay thao tác trên hồ sơ này!",
-                                "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
-                        tblEmployees.clearSelection();
-                        clearForm();
-                        return;
-                    } else if ("R_STORE_MNG".equals(role) || "Quản lý cửa hàng".equals(role)) {
-                        JOptionPane.showMessageDialog(EmployeeView.this,
-                                "⚠️ Đây là hồ sơ Cửa hàng trưởng (Manager).\nBạn không thể can thiệp vào hồ sơ đồng cấp!",
-                                "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
-                        tblEmployees.clearSelection();
-                        clearForm();
-                        return;
-                    }
-
-                    txtId.setText(String.valueOf(tblEmployees.getValueAt(row, 0)));
-                    txtName.setText(String.valueOf(tblEmployees.getValueAt(row, 1)));
-                    txtPhone.setText(String.valueOf(tblEmployees.getValueAt(row, 2)));
-                    txtEmail.setText(String.valueOf(tblEmployees.getValueAt(row, 3)));
-
-                    JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
-                    roleEditor.setText(role);
-
-                    String gender = String.valueOf(tblEmployees.getValueAt(row, 6));
-                    rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
-                    rdoFemale.setSelected("Nữ".equalsIgnoreCase(gender));
-                }
-            }
-        });
-
-        btnAdd.addActionListener(e -> {
-            Employee emp = getEmployeeFromForm();
-            if (emp == null) {
-                return;
-            }
-
-            emp.setEmployeeId("EMP" + System.currentTimeMillis());
-
-            if (employeeSql.insert(emp) > 0) {
-                // ĐỒNG BỘ REAL-TIME
-                SyncVersionDao.bumpVersion("EMPLOYEES");
-                RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                // 1) Tạo token trong DB
-                try {
-                    new ActivationTokenService().issueToken(emp.getEmployeeId());
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(this,
-                            "Tạo hồ sơ thành công nhưng KHÔNG tạo được mã kích hoạt trong hệ thống!\nChi tiết: " + ex.getMessage(),
-                            "Lỗi cấp mã kích hoạt", JOptionPane.ERROR_MESSAGE);
-                    loadDataToTable();
-                    clearForm();
-                    return; // Dừng lại, không gửi mail
-                }
-
-                // 2) Bắt cứng các biến trước khi đưa vào Thread để tránh lỗi mất data
-                final String targetEmail = emp.getEmail();
-                final String targetName = emp.getEmployeeName();
-                final String activationCode = emp.getEmployeeId(); // CODE chính là EMP...
-
-                // 3) Chạy luồng gửi mail và BÁO KẾT QUẢ TRỰC TIẾP LÊN MÀN HÌNH
-                new Thread(() -> {
-                    boolean mailSent = business.service.EmailService.sendActivationEmail(targetEmail, targetName, activationCode);
-
-                    // Gọi ngược lại UI để hiển thị Popup
-                    SwingUtilities.invokeLater(() -> {
-                        if (mailSent) {
-                            JOptionPane.showMessageDialog(this,
-                                    "Tạo hồ sơ thành công!\nĐã gửi Mã Kích Hoạt đến email: " + targetEmail,
-                                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
-                        } else {
-                            JOptionPane.showMessageDialog(this,
-                                    "Hồ sơ đã lưu nhưng GỬI MAIL THẤT BẠI đến " + targetEmail + "!\n"
-                                    + "Nguyên nhân có thể do Mail trường học bị chặn SMTP hoặc lỗi mạng. Hãy thử dùng @gmail.com",
-                                    "Cảnh báo Email", JOptionPane.WARNING_MESSAGE);
-                        }
-                    });
-                }).start();
-
-                if (!employeeNameList.contains(emp.getEmployeeName())) {
-                    employeeNameList.add(emp.getEmployeeName());
-                    cbSearch.addItem(emp.getEmployeeName());
-                }
-                loadDataToTable();
-                clearForm();
-            } else {
-                JOptionPane.showMessageDialog(this, "Thêm hồ sơ thất bại! Vui lòng thử lại.", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        btnUpdate.addActionListener(e -> {
-            String id = txtId.getText();
-            if (id.isEmpty() || id.startsWith("Mã")) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để cập nhật!");
-                return;
-            }
-            Employee emp = getEmployeeFromForm();
-            if (emp == null) {
-                return;
-            }
-
-            emp.setEmployeeId(id);
-
-            if (employeeSql.update(emp) > 0) {
-                // ĐỒNG BỘ REAL-TIME
-                SyncVersionDao.bumpVersion("EMPLOYEES");
-                RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
-                loadDataToTable();
-                clearForm();
-            } else {
-                JOptionPane.showMessageDialog(this, "Cập nhật thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        btnDelete.addActionListener(e -> {
-            String id = txtId.getText();
-            if (id.isEmpty() || id.startsWith("Mã")) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để xóa!");
-                return;
-            }
-            int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa hồ sơ nhân viên này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
-            if (confirm == JOptionPane.YES_OPTION) {
-                if (employeeSql.delete(id) > 0) {
-                    // ĐỒNG BỘ REAL-TIME
-                    SyncVersionDao.bumpVersion("EMPLOYEES");
-                    RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                    JOptionPane.showMessageDialog(this, "Xóa hồ sơ thành công!");
-                    loadDataToTable();
-                    clearForm();
-                } else {
-                    JOptionPane.showMessageDialog(this, "Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        });
-
-        btnClear.addActionListener(e -> clearForm());
-
-        btnSearch.addActionListener(e -> {
-            JTextField searchEditor = (JTextField) cbSearch.getEditor().getEditorComponent();
-            String keyword = searchEditor.getText().trim();
-            updateTable(employeeSql.search(keyword));
-        });
-    }
-
-    private void loadDataToTable() {
-        updateTable(employeeSql.selectAll());
-    }
-
-    private void updateTable(List<Employee> list) {
-        tableModel.setRowCount(0);
-        list.sort((e1, e2) -> Integer.compare(getRoleRank(e1.getRole()), getRoleRank(e2.getRole())));
-        for (Employee emp : list) {
-            tableModel.addRow(new Object[]{
-                emp.getEmployeeId(), emp.getEmployeeName(), emp.getPhone(),
-                emp.getEmail(), emp.getAccountStatus(), emp.getRole(), emp.getGender()
-            });
-        }
-    }
-
-    private Employee getEmployeeFromForm() {
-        String name = txtName.getText().trim();
-        String phone = txtPhone.getText().trim();
-        String email = txtEmail.getText().trim().toLowerCase();
-        String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
-
-        JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
-        String role = roleEditor.getText().trim().toUpperCase();
-
-        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || role.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin cá nhân và chức vụ (*)");
-            return null;
-        }
-
-        if (!role.equals("R_STAFF_SALE") && !role.equals("R_STAFF_VIEW_PROD")) {
-            JOptionPane.showMessageDialog(this,
-                    "Phân quyền không hợp lệ!\nQuản lý chỉ được phép cấp quyền:\n- R_STAFF_SALE\n- R_STAFF_VIEW_PROD",
-                    "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
-            return null;
-        }
-
-        if (!email.endsWith("@gmail.com") && !email.endsWith("@gm.uit.edu.vn")) {
-            JOptionPane.showMessageDialog(this,
-                    "Email không hợp lệ!\nHệ thống chỉ chấp nhận đuôi @gmail.com hoặc @gm.uit.edu.vn",
-                    "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
-            return null;
-        }
-
-        Employee e = new Employee();
-        e.setEmployeeName(name);
-        e.setPhone(phone);
-        e.setEmail(email);
-        e.setGender(gender);
-        e.setRole(role);
-        e.setRoleId(role);
-
-        return e;
-    }
-
-    private void clearForm() {
-        txtId.setText("");
-        txtName.setText("");
-        txtPhone.setText("");
-        txtEmail.setText("");
-        btngGender.clearSelection();
-        tblEmployees.clearSelection();
-        ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
-        ((JTextField) cbRole.getEditor().getEditorComponent()).setText("");
-    }
-
-    // Các class hỗ trợ UI
+    // --- SUPPORT CLASSES ---
     class RoundedPanel extends JPanel {
 
         private int r;

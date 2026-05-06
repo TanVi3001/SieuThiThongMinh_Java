@@ -31,21 +31,23 @@ public final class RealtimeClient {
     }
 
     public static void connect(String wsUrl) {
-        // Nếu URL rỗng, dùng mặc định
-        if (wsUrl == null || wsUrl.isEmpty()) {
+        // 1. Xử lý logic URL/IP TRƯỚC khi tạo URI
+        // Ưu tiên dùng IP tĩnh để tránh lỗi phân giải IPv6 của Windows/Localhost
+        if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
+            // Ông có thể đổi thành 127.0.0.1 hoặc IP máy chủ cụ thể của ông
             wsUrl = "ws://127.0.0.1:8887";
         }
 
         try {
             serverUri = URI.create(wsUrl);
 
-            // LOGIC QUAN TRỌNG: Nếu đang online hoặc đang kết nối thì không làm gì cả
+            // 2. Quản lý kết nối cũ
             if (client != null) {
                 if (client.isOpen()) {
                     System.out.println("[RT] Đã online, bỏ qua kết nối mới.");
                     return;
                 }
-                // Đóng client cũ để giải phóng tài nguyên trước khi tạo cái mới
+                // Dọn dẹp client cũ
                 try {
                     client.close();
                 } catch (Exception ignored) {
@@ -54,10 +56,11 @@ public final class RealtimeClient {
 
             System.out.println("[RT] Đang thử kết nối tới: " + serverUri);
 
+            // 3. Khởi tạo Client mới
             client = new WebSocketClient(serverUri) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
-                    reconnectScheduled = false; // Reset trạng thái khi thành công
+                    reconnectScheduled = false;
                     System.out.println("[RT] CONNECTED: " + serverUri);
                 }
 
@@ -72,8 +75,7 @@ public final class RealtimeClient {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    // Chỉ thông báo nếu không phải do mình chủ động đóng
-                    if (code != 1000) {
+                    if (code != 1000) { // 1000 là đóng chủ động (Normal Closure)
                         System.out.println("[RT] DISCONNECTED: " + reason + " (code=" + code + ")");
                         scheduleReconnect();
                     }
@@ -82,7 +84,6 @@ public final class RealtimeClient {
                 @Override
                 public void onError(Exception ex) {
                     System.err.println("[RT] ERROR: " + ex.getMessage());
-                    // onClose sẽ tự gọi scheduleReconnect nên ở đây không cần gọi lại
                 }
             };
 
@@ -103,7 +104,7 @@ public final class RealtimeClient {
         System.out.println("[RT] Sẽ thử kết nối lại sau 3 giây...");
 
         RECONNECT_SCHEDULER.schedule(() -> {
-            reconnectScheduled = false; // Mở khóa để có thể lập lịch tiếp nếu lần này thất bại
+            reconnectScheduled = false;
             if (!isOnline()) {
                 connect(serverUri.toString());
             }
@@ -116,7 +117,7 @@ public final class RealtimeClient {
                 client.send(message);
                 System.out.println("[RT] SENT: " + message);
             } else {
-                System.err.println("[RT] SEND FAILED: Client đang offline. Tin nhắn: " + message);
+                System.err.println("[RT] SEND FAILED: Client offline. Msg: " + message);
             }
         } catch (Exception e) {
             System.err.println("[RT] SEND ERROR: " + e.getMessage());
@@ -128,6 +129,7 @@ public final class RealtimeClient {
             return null;
         }
         String msg = message.toUpperCase();
+
         if (msg.contains("PRODUCTS_CHANGED")) {
             return AppEventType.PRODUCTS;
         }
@@ -149,6 +151,7 @@ public final class RealtimeClient {
         if (msg.contains("ORDERS_CHANGED")) {
             return AppEventType.ORDERS;
         }
+
         return null;
     }
 }
