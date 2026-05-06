@@ -29,9 +29,9 @@ import common.realtime.RealtimeServer;
 public class SieuThiOnline {
 
     public static void main(String[] args) {
-        RealtimeServer.tryStart(9999);
+        RealtimeServer.tryStart(8887);
         
-        common.realtime.RealtimeClient.connect("ws://10.0.250.60");
+        common.realtime.RealtimeClient.connect("ws://127.0.0.1:8887");
         // UTF-8 output
         try {
             System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));

@@ -2,6 +2,10 @@ package view;
 
 import business.api.AccountActivationAPI;
 import model.account.ActivationEmployeeInfo;
+import common.realtime.RealtimeClient; // THÊM IMPORT
+import common.events.EventBus; // THÊM IMPORT
+import common.events.AppEventType; // THÊM IMPORT
+import common.events.AppDataChangedEvent; // THÊM IMPORT
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,10 +20,7 @@ public class RegisterView extends javax.swing.JFrame {
     private static final java.util.logging.Logger logger
             = java.util.logging.Logger.getLogger(RegisterView.class.getName());
 
-    // API backend (Vĩ)
     private final AccountActivationAPI activationAPI = new AccountActivationAPI();
-
-    // giữ nhân viên đã check OK để activate
     private ActivationEmployeeInfo currentEmp;
 
     public RegisterView() {
@@ -118,7 +119,6 @@ public class RegisterView extends javax.swing.JFrame {
 
     private void resetToStage1() {
         currentEmp = null;
-
         txtCode.setText("");
         txtFullName.setText("");
         txtEmail.setText("");
@@ -147,14 +147,12 @@ public class RegisterView extends javax.swing.JFrame {
 
         btnReg.setVisible(false);
         btnCheck.setVisible(true);
-
         txtCode.setEditable(true);
         txtCode.setBackground(Color.WHITE);
     }
 
     private void advanceToStage2(ActivationEmployeeInfo emp) {
         currentEmp = emp;
-
         txtCode.setEditable(false);
         txtCode.setBackground(new Color(245, 245, 245));
 
@@ -201,30 +199,16 @@ public class RegisterView extends javax.swing.JFrame {
                 JOptionPane.showMessageDialog(this, "Vui lòng nhập Mã Kích Hoạt từ email!");
                 return;
             }
-
             btnCheck.setEnabled(false);
-
             try {
                 ActivationEmployeeInfo emp = activationAPI.check(code);
-
                 if (emp != null) {
                     advanceToStage2(emp);
                 } else {
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Mã kích hoạt không tồn tại / đã dùng / đã hết hạn hoặc tài khoản đã được kích hoạt!",
-                            "Lỗi xác thực",
-                            JOptionPane.ERROR_MESSAGE
-                    );
+                    JOptionPane.showMessageDialog(this, "Mã không hợp lệ hoặc đã dùng!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                 }
             } catch (Exception ex) {
                 logger.severe(ex.toString());
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Lỗi hệ thống: " + ex.getMessage(),
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE
-                );
             } finally {
                 btnCheck.setEnabled(true);
             }
@@ -232,40 +216,45 @@ public class RegisterView extends javax.swing.JFrame {
 
         btnReg.addActionListener(e -> {
             if (currentEmp == null) {
-                JOptionPane.showMessageDialog(this, "Vui lòng kiểm tra mã kích hoạt trước!");
                 return;
             }
 
             String user = txtUsername.getText().trim();
             String pass = new String(txtPass.getPassword());
-            String code = txtCode.getText().trim(); // <-- FIX: dùng code
+            String code = txtCode.getText().trim();
 
             if (user.isEmpty() || pass.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Vui lòng tạo Tên đăng nhập và Mật khẩu!");
+                JOptionPane.showMessageDialog(this, "Vui lòng nhập đủ Username và Password!");
                 return;
             }
 
             btnReg.setEnabled(false);
-
             try {
-                // Backend sẽ tự BCrypt + insert + mark token used
+                // 1. Gọi API Kích hoạt tài khoản
                 activationAPI.activate(code, user, pass);
 
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Kích hoạt tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ."
-                );
+                // =========================================================
+                // 2. THÊM MỚI: BẮN TÍN HIỆU REAL-TIME CHO MANAGER
+                // =========================================================
+                try {
+                    // Thông báo bảo mật để các máy khác cập nhật danh sách tài khoản
+                    RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                    // Thông báo nhân viên thay đổi để cập nhật bảng hồ sơ
+                    RealtimeClient.send("EMPLOYEES_CHANGED");
 
+                    // Cập nhật giao diện cục bộ (nếu cần)
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "REGISTER_SUCCESS"));
+                } catch (Exception ex) {
+                    System.err.println("Real-time sync failed: " + ex.getMessage());
+                }
+                // =========================================================
+
+                JOptionPane.showMessageDialog(this, "Kích hoạt thành công! Đăng nhập ngay.");
                 new LoginView().setVisible(true);
                 this.dispose();
+
             } catch (Exception ex) {
-                logger.severe(ex.toString());
-                JOptionPane.showMessageDialog(
-                        this,
-                        ex.getMessage(),
-                        "Lỗi kích hoạt",
-                        JOptionPane.ERROR_MESSAGE
-                );
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             } finally {
                 btnReg.setEnabled(true);
             }
@@ -293,7 +282,6 @@ public class RegisterView extends javax.swing.JFrame {
         return btn;
     }
 
-    @SuppressWarnings("unchecked")
     private void initComponents() {
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         pack();

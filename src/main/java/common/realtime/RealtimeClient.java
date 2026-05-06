@@ -8,6 +8,7 @@ import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public final class RealtimeClient {
@@ -15,86 +16,125 @@ public final class RealtimeClient {
     private static volatile WebSocketClient client;
     private static volatile URI serverUri;
 
+    private static final ScheduledExecutorService RECONNECT_SCHEDULER
+            = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "RealtimeClient-Reconnect");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static volatile boolean reconnectScheduled = false;
+
     private RealtimeClient() {
+    }
+
+    public static boolean isOnline() {
+        return client != null && client.isOpen();
     }
 
     public static void connect(String wsUrl) {
         try {
-            // FIX: Dùng cứng 127.0.0.1 để Windows không bị nhầm lẫn IPv6
-            if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
-                wsUrl = "ws://10.0.250.60:9999";
+            // Ưu tiên dùng localhost (127.0.0.1) và port 8887 cho WebSocket nội bộ
+            if (wsUrl == null || wsUrl.isEmpty()) {
+                wsUrl = "ws://127.0.0.1:8887";
             }
 
             serverUri = URI.create(wsUrl);
+            System.out.println("[RT] Đang thử kết nối tới: " + serverUri);
 
             client = new WebSocketClient(serverUri) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
-                    System.out.println("[RT] connected to " + serverUri);
+                    reconnectScheduled = false;
+                    System.out.println("[RT] CONNECTED: " + serverUri);
                 }
 
                 @Override
                 public void onMessage(String message) {
-                    System.out.println("[RT] Client nhận được lệnh: " + message);
-                    if ("PRODUCTS_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.PRODUCTS, "realtime"));
-                    } else if ("INVENTORY_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.INVENTORY, "realtime"));
-                    } else if ("SYSTEM_CONFIG_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "realtime"));
-                    } else if ("ACCOUNT_SECURITY_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "realtime"));
-                    } else if ("CUSTOMERS_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.CUSTOMERS, "realtime"));
-                    } else if ("EMPLOYEES_CHANGED".equalsIgnoreCase(message)) {
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.EMPLOYEES, "realtime"));
+                    System.out.println("[RT] MSG: " + message);
+                    AppEventType type = mapMessageToType(message);
+                    if (type != null) {
+                        EventBus.publish(new AppDataChangedEvent(type, "realtime"));
                     }
                 }
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    System.out.println("[RT] disconnected: " + reason + " (code=" + code + ")");
+                    System.out.println("[RT] DISCONNECTED: " + reason + " (code=" + code + ")");
                     scheduleReconnect();
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    System.out.println("[RT] client error: " + ex.getMessage());
+                    System.err.println("[RT] ERROR: " + ex);
+                    scheduleReconnect();
                 }
             };
 
             client.connect();
         } catch (Exception e) {
-            System.out.println("[RT] connect failed: " + e.getMessage());
+            System.err.println("[RT] CONNECT FAILED: " + e);
             scheduleReconnect();
         }
     }
 
+    private static AppEventType mapMessageToType(String message) {
+        if (message == null) {
+            return null;
+        }
+        if ("PRODUCTS_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.PRODUCTS;
+        }
+        if ("INVENTORY_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.INVENTORY;
+        }
+        if ("SYSTEM_CONFIG_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.SYSTEM_CONFIG;
+        }
+        if ("ACCOUNT_SECURITY_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.ACCOUNT_SECURITY;
+        }
+        if ("CUSTOMERS_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.CUSTOMERS;
+        }
+        if ("EMPLOYEES_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.EMPLOYEES;
+        }
+        if ("ORDERS_CHANGED".equalsIgnoreCase(message)) {
+            return AppEventType.ORDERS;
+        }
+        return null;
+    }
+
     private static void scheduleReconnect() {
-        if (serverUri == null) {
+        if (serverUri == null || reconnectScheduled) {
             return;
         }
-        Executors.newSingleThreadScheduledExecutor().schedule(() -> {
+
+        reconnectScheduled = true;
+        RECONNECT_SCHEDULER.schedule(() -> {
             try {
-                if (client == null || !client.isOpen()) {
-                    System.out.println("[RT] reconnecting to " + serverUri);
+                if (!isOnline()) {
+                    System.out.println("[RT] Reconnecting to " + serverUri + " ...");
                     connect(serverUri.toString());
+                } else {
+                    reconnectScheduled = false;
                 }
             } catch (Exception ignored) {
             }
-        }, 2, TimeUnit.SECONDS);
+        }, 3, TimeUnit.SECONDS);
     }
 
     public static void send(String message) {
         try {
-            if (client != null && client.isOpen()) {
+            if (isOnline()) {
                 client.send(message);
-                System.out.println("[RT] Đã gửi thành công lệnh lên Server: " + message);
+                System.out.println("[RT] SENT: " + message);
             } else {
-                System.err.println("[RT] Lỗi: Client chưa kết nối, không thể gửi WebSocket!");
+                System.err.println("[RT] SEND FAILED (offline): " + message);
             }
         } catch (Exception e) {
-            System.out.println("[RT] send failed: " + e.getMessage());
+            System.err.println("[RT] SEND ERROR: " + e.getMessage());
         }
     }
 }

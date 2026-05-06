@@ -6,8 +6,8 @@ import javax.mail.internet.*;
 
 public class EmailService {
     // TÙNG NHỚ THAY EMAIL VÀ APP PASSWORD CỦA BẠN VÀO ĐÂY NHÉ
-    private static final String MY_EMAIL = "nguyentung28012006@gmail.com"; 
-    private static final String APP_PASSWORD = "bsjk hidy klbi akup"; 
+    private static final String MY_EMAIL = "papylovevip1@gmail.com"; 
+    private static final String APP_PASSWORD = "hzvpraxtcxhkynkg"; 
 
     public static boolean sendActivationEmail(String toEmail, String employeeName, String activationCode) {
         Properties props = new Properties();

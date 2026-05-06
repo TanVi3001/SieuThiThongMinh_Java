@@ -793,12 +793,12 @@ public class LoginView extends javax.swing.JFrame {
         business.service.TokenCleanupService.start();
 
         // (Optional) giữ SyncWatcher làm fallback
-        // common.sync.SyncWatcher.start(2);
+        common.sync.SyncWatcher.start(2);
         // REALTIME: start server (ai mở app trước sẽ host server), rồi connect client
         common.realtime.RealtimeServer.tryStart(8887);
 
         // Nếu chạy LAN: thay localhost bằng IP máy host, ví dụ ws://192.168.1.10:8887
-        common.realtime.RealtimeClient.connect("ws://localhost:8887");
+        common.realtime.RealtimeClient.connect("ws://127.0.0.1:8887");
 
         java.awt.EventQueue.invokeLater(() -> {
             LoginView login = new LoginView();
