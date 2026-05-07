@@ -1,12 +1,9 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package common.utils;
 
 import java.util.Properties;
 import javax.mail.*;
 import javax.mail.internet.*;
+
 /**
  *
  * @author nguye
@@ -36,7 +33,9 @@ public class EmailUtils {
         message.setFrom(new InternetAddress(fromEmail));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail));
         message.setSubject(subject);
-        message.setText(body);
+        
+        // SỬA Ở ĐÂY: Set Content Type là HTML thay vì Text thông thường
+        message.setContent(body, "text/html; charset=UTF-8");
 
         Transport.send(message);
     }
