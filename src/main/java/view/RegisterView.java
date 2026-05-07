@@ -112,6 +112,7 @@ public class RegisterView extends javax.swing.JFrame {
         this.getContentPane().add(cardPanel, new GridBagConstraints());
         this.setSize(500, 750);
         this.setLocationRelativeTo(null);
+        this.setResizable(false);
 
         resetToStage1();
         initEvents();

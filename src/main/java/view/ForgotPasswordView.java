@@ -4,7 +4,6 @@
  */
 package view;
 
-import common.utils.EmailUtils;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -12,39 +11,43 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities; // THÊM IMPORT
+
 /**
  *
  * @author nguye
  */
 public class ForgotPasswordView extends javax.swing.JFrame {
+
     private javax.swing.JTextField txtOTP;
     private javax.swing.JPasswordField txtNewPass;
     private javax.swing.JPasswordField txtConfirmPass;
-    
+    private javax.swing.JButton btnSendOTP; // Lưu biến nút bấm
+
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(ForgotPasswordView.class.getName());
     /**
      * Creates new form ForgotPasswordView
      */
-    
+
     private String usernameFromLogin; // Biến lưu tên đăng nhập từ LoginView truyền sang
-    
+
     public ForgotPasswordView(String username) {
         this.usernameFromLogin = username;
         initComponents();
         setupModernUI();
     }
-    
+
     public ForgotPasswordView() {
         this(""); // Gọi lại constructor ở trên với chuỗi rỗng
     }
-  
+
     private void setupModernUI() {
         this.getContentPane().removeAll();
-        this.getContentPane().setLayout(new java.awt.GridBagLayout()); 
-        this.getContentPane().setBackground(java.awt.Color.WHITE); 
+        this.getContentPane().setLayout(new java.awt.GridBagLayout());
+        this.getContentPane().setBackground(java.awt.Color.WHITE);
 
         javax.swing.JPanel cardPanel = new javax.swing.JPanel(null);
-        cardPanel.setBackground(java.awt.Color.WHITE); 
+        cardPanel.setBackground(java.awt.Color.WHITE);
         cardPanel.setPreferredSize(new java.awt.Dimension(450, 680)); // Tăng chiều cao để chứa form dài
 
         java.awt.Color navyBlue = new java.awt.Color(44, 62, 80);
@@ -67,7 +70,7 @@ public class ForgotPasswordView extends javax.swing.JFrame {
         txtUserEmail.putClientProperty("JTextField.placeholderText", "Email đã đăng ký...");
         cardPanel.add(txtUserEmail);
 
-        javax.swing.JButton btnSendOTP = new javax.swing.JButton("GỬI MÃ XÁC MINH") {
+        btnSendOTP = new javax.swing.JButton("GỬI MÃ XÁC MINH") {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -143,87 +146,93 @@ public class ForgotPasswordView extends javax.swing.JFrame {
         this.getContentPane().add(cardPanel, new java.awt.GridBagConstraints());
         this.setSize(500, 750);
         this.setLocationRelativeTo(null);
+        this.setResizable(false);
     }
 
     /**
      * Logic xử lý gửi mail
      */
     /**
-    * Bước 1: Tìm Username và gửi OTP
-    */
-   private void handleSendOTP() {
-       String userEmail = txtUserEmail.getText().trim();
-       if (userEmail.isEmpty()) {
-           JOptionPane.showMessageDialog(this, "Vui lòng nhập Email!");
-           return;
-       }
+     * Bước 1: Tìm Username và gửi OTP
+     */
+    private void handleSendOTP() {
+        String userEmail = txtUserEmail.getText().trim();
+        if (userEmail.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập Email!");
+            return;
+        }
 
-       // 1. Dò tìm Username từ Database dựa trên Email
-       String foundUsername = business.sql.rbac.AccountSql.getInstance().findUsernameByEmail(userEmail);
+        // 1. Dò tìm Username từ Database dựa trên Email
+        String foundUsername = business.sql.rbac.AccountSql.getInstance().findUsernameByEmail(userEmail);
 
-       if (foundUsername != null) {
-           // 2. Tạo OTP ngẫu nhiên
-           String otp = String.valueOf(new java.util.Random().nextInt(900000) + 100000);
+        if (foundUsername != null) {
+            // 2. Tạo OTP ngẫu nhiên
+            String otp = String.valueOf(new java.util.Random().nextInt(900000) + 100000);
 
-           // 3. Lưu OTP vào CSDL (Hết hạn sau 5 phút)
-           business.sql.rbac.AccountSql.getInstance().saveOTP(userEmail, otp);
+            // 3. Lưu OTP vào CSDL (Hết hạn sau 5 phút)
+            business.sql.rbac.AccountSql.getInstance().saveOTP(userEmail, otp);
 
-           try {
-               String systemEmail = "nguyentung28012006@gmail.com";
-               String appPass = "zulx asyc wosl hagf";
-               String content = "Chào bạn,\n\n"
-                       + "Tên đăng nhập của bạn là: " + foundUsername + "\n"
-                       + "Mã xác minh (OTP) để đổi mật khẩu là: " + otp + "\n"
-                       + "Mã này có hiệu lực trong 5 phút. Vui lòng không chia sẻ cho bất kỳ ai!";
+            // Vô hiệu hóa nút và đổi text để người dùng biết máy đang xử lý
+            btnSendOTP.setEnabled(false);
+            btnSendOTP.setText("Đang gửi mail...");
 
-               EmailUtils.sendEmail(systemEmail, appPass, userEmail, "Khôi phục tài khoản", content);
-               JOptionPane.showMessageDialog(this, "Mã OTP và Tên đăng nhập đã được gửi vào Email của bạn!");
-           } catch (Exception ex) {
-               JOptionPane.showMessageDialog(this, "Lỗi gửi mail: " + ex.getMessage());
-           }
-       } else {
-           JOptionPane.showMessageDialog(this, "Email này không tồn tại trong hệ thống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-       }
-   }
+            // Chạy tiến trình gửi mail ở luồng riêng (Tránh đơ máy)
+            new Thread(() -> {
+                boolean mailSent = business.service.EmailService.sendPasswordRecoveryOTP(userEmail, foundUsername, otp);
 
-   /**
-    * Bước 2: Kiểm tra OTP và Cập nhật mật khẩu mới
-    */
-   private void handleResetPassword() {
-       String email = txtUserEmail.getText().trim();
-       String otpInput = txtOTP.getText().trim();
-       String newPass = new String(txtNewPass.getPassword());
-       String confirmPass = new String(txtConfirmPass.getPassword());
+                SwingUtilities.invokeLater(() -> {
+                    if (mailSent) {
+                        JOptionPane.showMessageDialog(this, "Mã OTP và Tên đăng nhập đã được gửi vào Email của bạn!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                        btnSendOTP.setText("Gửi lại mã OTP");
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Lỗi gửi mail! Vui lòng kiểm tra lại kết nối mạng.", "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
+                        btnSendOTP.setText("GỬI MÃ XÁC MINH");
+                    }
+                    btnSendOTP.setEnabled(true);
+                });
+            }).start();
+        } else {
+            JOptionPane.showMessageDialog(this, "Email này không tồn tại trong hệ thống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
-       if (otpInput.isEmpty() || newPass.isEmpty()) {
-           JOptionPane.showMessageDialog(this, "Vui lòng nhập đầy đủ OTP và mật khẩu mới!");
-           return;
-       }
-       if (!newPass.equals(confirmPass)) {
-           JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!");
-           return;
-       }
+    /**
+     * Bước 2: Kiểm tra OTP và Cập nhật mật khẩu mới
+     */
+    private void handleResetPassword() {
+        String email = txtUserEmail.getText().trim();
+        String otpInput = txtOTP.getText().trim();
+        String newPass = new String(txtNewPass.getPassword());
+        String confirmPass = new String(txtConfirmPass.getPassword());
 
-       // Kiểm tra OTP trong DB (Khớp và chưa hết hạn)
-       boolean isValid = business.sql.rbac.AccountSql.getInstance().validateOTP(email, otpInput);
+        if (otpInput.isEmpty() || newPass.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập đầy đủ OTP và mật khẩu mới!");
+            return;
+        }
+        if (!newPass.equals(confirmPass)) {
+            JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!");
+            return;
+        }
 
-       if (isValid) {
-           // Cập nhật pass mới
-           business.sql.rbac.AccountSql.getInstance().updatePasswordByEmail(email, newPass);
-           JOptionPane.showMessageDialog(this, "Đổi mật khẩu thành công! Bạn hãy dùng Username trong mail để đăng nhập.");
-           new LoginView().setVisible(true);
-           this.dispose();
-       } else {
-           JOptionPane.showMessageDialog(this, "Mã OTP không đúng hoặc đã hết hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-       }
-   }
+        // Kiểm tra OTP trong DB (Khớp và chưa hết hạn)
+        boolean isValid = business.sql.rbac.AccountSql.getInstance().validateOTP(email, otpInput);
+
+        if (isValid) {
+            // Cập nhật pass mới
+            business.sql.rbac.AccountSql.getInstance().updatePasswordByEmail(email, newPass);
+            JOptionPane.showMessageDialog(this, "Đổi mật khẩu thành công! Bạn hãy dùng Username trong mail để đăng nhập.");
+            new LoginView().setVisible(true);
+            this.dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Mã OTP không đúng hoặc đã hết hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
      * regenerated by the Form Editor.
      */
-    
     // <editor-fold defaultstate="collapsed" desc="Generated Code">                          
     private void initComponents() {
 
@@ -260,65 +269,65 @@ public class ForgotPasswordView extends javax.swing.JFrame {
         javax.swing.GroupLayout LoginViewLayout = new javax.swing.GroupLayout(LoginView);
         LoginView.setLayout(LoginViewLayout);
         LoginViewLayout.setHorizontalGroup(
-            LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(LoginViewLayout.createSequentialGroup()
-                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(LoginViewLayout.createSequentialGroup()
-                        .addGap(43, 43, 43)
-                        .addComponent(jLabel1))
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, LoginViewLayout.createSequentialGroup()
-                        .addGap(65, 65, 65)
-                        .addComponent(Username)
-                        .addGap(18, 18, 18)
-                        .addComponent(txtUserEmail)))
-                .addContainerGap(49, Short.MAX_VALUE))
-            .addGroup(LoginViewLayout.createSequentialGroup()
-                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(LoginViewLayout.createSequentialGroup()
-                        .addGap(157, 157, 157)
-                        .addComponent(btnLogin))
-                    .addGroup(LoginViewLayout.createSequentialGroup()
-                        .addGap(150, 150, 150)
-                        .addComponent(Login)))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                                .addGap(43, 43, 43)
+                                                .addComponent(jLabel1))
+                                        .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, LoginViewLayout.createSequentialGroup()
+                                                .addGap(65, 65, 65)
+                                                .addComponent(Username)
+                                                .addGap(18, 18, 18)
+                                                .addComponent(txtUserEmail)))
+                                .addContainerGap(49, Short.MAX_VALUE))
+                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                                .addGap(157, 157, 157)
+                                                .addComponent(btnLogin))
+                                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                                .addGap(150, 150, 150)
+                                                .addComponent(Login)))
+                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         LoginViewLayout.setVerticalGroup(
-            LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(LoginViewLayout.createSequentialGroup()
-                .addGap(46, 46, 46)
-                .addComponent(Login)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jLabel1)
-                .addGap(18, 18, 18)
-                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(txtUserEmail, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(Username, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(29, 29, 29)
-                .addComponent(btnLogin)
-                .addContainerGap(35, Short.MAX_VALUE))
+                LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGroup(LoginViewLayout.createSequentialGroup()
+                                .addGap(46, 46, 46)
+                                .addComponent(Login)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabel1)
+                                .addGap(18, 18, 18)
+                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                        .addComponent(txtUserEmail, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addComponent(Username, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGap(29, 29, 29)
+                                .addComponent(btnLogin)
+                                .addContainerGap(35, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(LoginView, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addComponent(LoginView, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
         );
         layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(LoginView, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addComponent(LoginView, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
 
         pack();
     }// </editor-fold>                        
 
-    private void txtUserEmailActionPerformed(java.awt.event.ActionEvent evt) {                                             
+    private void txtUserEmailActionPerformed(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
-    }                                            
+    }
 
-    private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {                                         
+    private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
-    }                                        
+    }
 
     /**
      * @param args the command line arguments
