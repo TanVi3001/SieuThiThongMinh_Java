@@ -145,6 +145,7 @@ public class ForgotPasswordView extends javax.swing.JFrame {
         this.getContentPane().add(cardPanel, new java.awt.GridBagConstraints());
         this.setSize(500, 750);
         this.setLocationRelativeTo(null);
+        this.setResizable(false);
     }
 
     /**

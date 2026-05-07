@@ -64,7 +64,7 @@ public class SieuThiOnline {
 
         // KHỞI ĐỘNG REAL-TIME (Server trước, Client sau)
         RealtimeServer.tryStart(8887);
-        RealtimeClient.connect("ws://10.0.214.135:8887");
+        RealtimeClient.connect("ws://10.45.80.101");
 
         System.out.println("-------------------------------------------------------");
         System.out.println("BẮT ĐẦU QUY TRÌNH KIỂM THỬ TÍCH HỢP HỆ THỐNG");

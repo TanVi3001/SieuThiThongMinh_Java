@@ -54,7 +54,7 @@ public class DashboardView extends JFrame {
         }
 
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        this.setMinimumSize(new Dimension(1024, 768));
+        setMinimumSize(new Dimension(1200, 700));
         this.setLocationRelativeTo(null);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.getContentPane().setLayout(new BorderLayout());

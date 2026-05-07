@@ -23,6 +23,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
         this.setTitle("SMART SUPERMARKET - CENTRAL ADMIN PORTAL");
         this.setExtendedState(MAXIMIZED_BOTH);
         this.setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(1200, 700));
         
         // Khởi tạo Sidebar Admin
         adminSidebar = new AdminSidebar();

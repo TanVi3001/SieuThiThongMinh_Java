@@ -510,6 +510,7 @@ public class LoginView extends javax.swing.JFrame {
         this.pack();
         this.setSize(960, 620);
         this.setLocationRelativeTo(null);
+        this.setResizable(false);
         this.revalidate();
         this.repaint();
     }
