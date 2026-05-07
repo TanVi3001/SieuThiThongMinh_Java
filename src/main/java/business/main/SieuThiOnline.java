@@ -63,8 +63,13 @@ public class SieuThiOnline {
         System.out.println("\n--- [HỆ THỐNG] Đang khởi động các dịch vụ ngầm... ---");
 
         // KHỞI ĐỘNG REAL-TIME (Server trước, Client sau)
+        String currentIp = common.utils.NetworkUtils.getLocalIPv4Address();
+        System.out.println("Đang khởi động Server tại địa chỉ IP: " + currentIp);
+        
         RealtimeServer.tryStart(8887);
+
         RealtimeClient.connect("ws://127.0.0.1:8887");
+
 
         System.out.println("-------------------------------------------------------");
         System.out.println("BẮT ĐẦU QUY TRÌNH KIỂM THỬ TÍCH HỢP HỆ THỐNG");
