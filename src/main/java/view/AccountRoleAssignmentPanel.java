@@ -283,8 +283,34 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 pnlCurrRole.revalidate();
                 pnlCurrRole.repaint();
 
+                // =========================================================================
+                // LÀM MỜ THẺ ADMIN NẾU CHỌN NHÂN VIÊN KHÁC
+                // =========================================================================
+                model.account.Account currentUser = business.service.LoginService.getCurrentUser();
+                String currentLoggedId = (currentUser != null && currentUser.getAccountId() != null) ? currentUser.getAccountId() : "";
+                
+                // Chỉ cho phép click thẻ Quản trị viên nếu tự click vào chính mình
+                boolean allowAdmin = accountId.equals(currentLoggedId) || "Quản trị viên".equals(role);
+                
+                JRadioButton adminRb = radioMap.get("Quản trị viên");
+                if (adminRb != null) {
+                    adminRb.setEnabled(allowAdmin);
+                    
+                    Container card = adminRb.getParent();
+                    if (card != null) {
+                        card.setEnabled(allowAdmin);
+                        // Làm mờ toàn bộ chữ bên trong thẻ
+                        for (Component c : card.getComponents()) {
+                            c.setEnabled(allowAdmin);
+                        }
+                    }
+                }
+                // =========================================================================
+
                 if (radioMap.containsKey(role)) {
                     radioMap.get(role).setSelected(true);
+                } else {
+                    roleGroup.clearSelection();
                 }
             }
         });
@@ -412,28 +438,22 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             if (success) {
                 JOptionPane.showMessageDialog(this, "Cập nhật phân quyền thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
 
-                // =========================================================
-                // BẮN TÍN HIỆU 2 NÒNG ĐỂ ĐUỔI MANAGER REAL-TIME
-                // =========================================================
                 AppDataChangedEvent securityEvent = new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED");
 
-                // Nòng 1: Gửi qua WebSocket
                 try {
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                    common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED"); // Update luôn cả bảng nhân viên
+                    common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED"); 
                     System.out.println("Đã bắn tín hiệu bảo mật qua WebSocket.");
                 } catch (Exception ex) {
                     System.err.println("Cảnh báo: Không thể gửi qua WebSocket - " + ex.getMessage());
                 }
 
-                // Nòng 2: Gửi qua EventBus (Cục bộ)
                 try {
                     EventBus.publish(securityEvent);
                     System.out.println("Đã bắn tín hiệu bảo mật qua EventBus cục bộ.");
                 } catch (Exception ex) {
                     System.err.println("Cảnh báo: Không thể gửi qua EventBus - " + ex.getMessage());
                 }
-                // =========================================================
 
                 selectedAccountId = "";
                 setupModernLayout();
@@ -517,7 +537,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         card.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                rb.setSelected(true);
+                if (card.isEnabled()) {
+                    rb.setSelected(true);
+                }
             }
         });
 
