@@ -20,7 +20,6 @@ import common.realtime.RealtimeClient;
 import common.events.EventBus;
 import common.events.AppEventType;
 import common.events.AppDataChangedEvent;
-import java.awt.Window;
 import javax.swing.SwingUtilities;
 import common.security.SecurityGuard;
 import common.sync.SyncVersionDao;
@@ -411,19 +410,37 @@ public class ManagerManagementView extends JPanel {
             }
         });
 
+        // --- NÚT THÊM ---
         btnAdd.addActionListener(e -> {
             Employee emp = getManagerFromForm();
             if (emp == null) {
                 return;
             }
 
+            // BƯỚC BẢO MẬT: Chặn trùng Email và Số điện thoại
+            if (isEmailDuplicate(emp.getEmail(), null)) {
+                JOptionPane.showMessageDialog(this,
+                        "Email này đã được sử dụng trong hệ thống!\nVui lòng dùng email khác cho Quản lý mới.",
+                        "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+                txtEmail.requestFocus();
+                return;
+            }
+            if (isPhoneDuplicate(emp.getPhone(), null)) {
+                JOptionPane.showMessageDialog(this,
+                        "Số điện thoại này đã được đăng ký cho người khác!\nVui lòng dùng số khác.",
+                        "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+                txtPhone.requestFocus();
+                return;
+            }
+
             emp.setEmployeeId("MNG" + System.currentTimeMillis());
 
             if (employeeSql.insert(emp) > 0) {
-                // ĐỒNG BỘ REAL-TIME (TUI ĐÃ THÊM Ở ĐÂY NÈ ÔNG)
                 SyncVersionDao.bumpVersion("EMPLOYEES");
                 RealtimeClient.send("EMPLOYEES_CHANGED");
                 RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+
+                System.out.println("[AUDIT LOG] Admin vừa cấp quyền Manager cho tài khoản: " + emp.getEmail());
 
                 try {
                     new ActivationTokenService().issueToken(emp.getEmployeeId());
@@ -464,6 +481,7 @@ public class ManagerManagementView extends JPanel {
             }
         });
 
+        // --- NÚT CẬP NHẬT ---
         btnUpdate.addActionListener(e -> {
             String id = txtId.getText();
             if (id.isEmpty() || id.startsWith("Mã")) {
@@ -475,10 +493,25 @@ public class ManagerManagementView extends JPanel {
                 return;
             }
 
+            // BƯỚC BẢO MẬT: Chặn trùng Email và Số điện thoại (Bỏ qua ID của chính quản lý đang sửa)
+            if (isEmailDuplicate(emp.getEmail(), id)) {
+                JOptionPane.showMessageDialog(this,
+                        "Email này đã bị trùng với một nhân sự khác trong hệ thống!\nVui lòng nhập email khác.",
+                        "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+                txtEmail.requestFocus();
+                return;
+            }
+            if (isPhoneDuplicate(emp.getPhone(), id)) {
+                JOptionPane.showMessageDialog(this,
+                        "Số điện thoại này đã bị trùng với một nhân sự khác trong hệ thống!\nVui lòng nhập số khác.",
+                        "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+                txtPhone.requestFocus();
+                return;
+            }
+
             emp.setEmployeeId(id);
 
             if (employeeSql.update(emp) > 0) {
-                // ĐỒNG BỘ REAL-TIME 
                 SyncVersionDao.bumpVersion("EMPLOYEES");
                 RealtimeClient.send("EMPLOYEES_CHANGED");
                 RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
@@ -490,6 +523,7 @@ public class ManagerManagementView extends JPanel {
             }
         });
 
+        // --- NÚT XÓA ---
         btnDelete.addActionListener(e -> {
             String id = txtId.getText();
             if (id.isEmpty() || id.startsWith("Mã")) {
@@ -499,7 +533,6 @@ public class ManagerManagementView extends JPanel {
             int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn thu hồi quyền Quản lý cửa hàng này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
                 if (employeeSql.delete(id) > 0) {
-                    // ĐỒNG BỘ REAL-TIME 
                     SyncVersionDao.bumpVersion("EMPLOYEES");
                     RealtimeClient.send("EMPLOYEES_CHANGED");
                     RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
@@ -553,7 +586,7 @@ public class ManagerManagementView extends JPanel {
     private Employee getManagerFromForm() {
         String name = txtName.getText().trim();
         String phone = txtPhone.getText().trim();
-        String email = txtEmail.getText().trim();
+        String email = txtEmail.getText().trim().toLowerCase();
         String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
 
         if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty()) {
@@ -561,10 +594,21 @@ public class ManagerManagementView extends JPanel {
             return null;
         }
 
-        if (!email.endsWith("@gmail.com") && !email.endsWith("@gm.uit.edu.vn")) {
+        // BƯỚC BẢO MẬT 1: Kiểm tra định dạng Regex & Domain cho Email
+        if (!isValidEmail(email)) {
             JOptionPane.showMessageDialog(this,
-                    "Email không hợp lệ!\nHệ thống chỉ chấp nhận đuôi @gmail.com hoặc @gm.uit.edu.vn",
+                    "Email không hợp lệ!\n- Vui lòng kiểm tra lại khoảng trắng, ký tự đặc biệt.",
                     "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+            txtEmail.requestFocus();
+            return null;
+        }
+
+        // BƯỚC BẢO MẬT 2: Kiểm tra định dạng Số điện thoại
+        if (!isValidPhone(phone)) {
+            JOptionPane.showMessageDialog(this,
+                    "Số điện thoại không hợp lệ!\n- Phải đủ 10 chữ số.\n- Bắt đầu bằng các đầu số hợp lệ (03, 05, 07, 08, 09).",
+                    "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+            txtPhone.requestFocus();
             return null;
         }
 
@@ -589,5 +633,63 @@ public class ManagerManagementView extends JPanel {
         if (cbSearch != null) {
             ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
         }
+    }
+
+    // =========================================================================
+    // CÁC HÀM HELPER: KIỂM TRA BẢO MẬT DỮ LIỆU EMAIL & PHONE
+    // =========================================================================
+    // 1. Kiểm tra cú pháp và tên miền (UIT/Gmail)
+    private boolean isValidEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return false;
+        }
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        return email.matches(emailRegex) && (email.endsWith("@gmail.com") || email.endsWith("@gm.uit.edu.vn"));
+    }
+
+    // 2. Kiểm tra trùng lặp trong toàn bộ hệ thống (Email)
+    private boolean isEmailDuplicate(String email, String excludeId) {
+        try {
+            List<Employee> list = employeeSql.selectAll();
+            for (Employee e : list) {
+                if (e.getEmail() != null && e.getEmail().equalsIgnoreCase(email)) {
+                    if (excludeId != null && e.getEmployeeId().equals(excludeId)) {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return false;
+    }
+
+    // 3. Kiểm tra định dạng Số điện thoại (Chuẩn nhà mạng Việt Nam)
+    private boolean isValidPhone(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return false;
+        }
+        // Regex: Bắt buộc bắt đầu bằng 0, theo sau là 3, 5, 7, 8, 9 và đúng 8 chữ số nữa (Tổng 10 số)
+        String phoneRegex = "^(0)(3|5|7|8|9)[0-9]{8}$";
+        return phone.matches(phoneRegex);
+    }
+
+    // 4. Kiểm tra trùng lặp Số điện thoại
+    private boolean isPhoneDuplicate(String phone, String excludeId) {
+        try {
+            List<Employee> list = employeeSql.selectAll();
+            for (Employee e : list) {
+                if (e.getPhone() != null && e.getPhone().equals(phone)) {
+                    if (excludeId != null && e.getEmployeeId().equals(excludeId)) {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return false;
     }
 }
