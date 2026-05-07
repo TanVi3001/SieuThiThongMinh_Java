@@ -59,24 +59,28 @@ public class Sidebar extends JPanel {
         // =========================================================
         // SỬA LẠI: DÙNG TRỰC TIẾP BIẾN userRole ĐỂ QUYẾT ĐỊNH MENU
         // =========================================================
-        addMenuItem("Tổng quan", IconHelper.dashboard(20)); // Ai cũng thấy
+        addMenuItem("Tổng quan", IconHelper.dashboard(20));
 
-        // Nếu KHÔNG PHẢI là Nhân viên bán hàng thì mới hiển thị các tab Quản lý
-        if (!"R_STAFF_SALE".equals(userRole)) {
-            addMenuItem("Quản lý sản phẩm", IconHelper.product(20));
+// SALE cũng cần thấy sản phẩm để tra cứu khi bán hàng
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(20));
+
+// Chỉ manager/admin mới thấy nhân viên + thống kê
+        boolean isManagerOrAdmin
+                = "R_ADMIN_ALL".equalsIgnoreCase(userRole)
+                || "R_STORE_MNG".equalsIgnoreCase(userRole);
+
+        if (isManagerOrAdmin) {
             addMenuItem("Quản lý nhân viên", IconHelper.employee(20));
         }
 
-        // Ai cũng thấy Khách hàng và Hóa đơn (POS)
         addMenuItem("Khách hàng", IconHelper.customer(20));
         addMenuItem("Hóa đơn", IconHelper.bill(20));
 
-        // Thống kê cũng chỉ dành cho Quản lý / Admin
-        if (!"R_STAFF_SALE".equals(userRole)) {
+        if (isManagerOrAdmin) {
             addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(20));
         }
 
-        addMenuItem("Cài đặt", IconHelper.settings(20)); // Ai cũng thấy
+        addMenuItem("Cài đặt", IconHelper.settings(20));
 
         JScrollPane scrollPane = new JScrollPane(menuPanel);
         scrollPane.setBorder(null);

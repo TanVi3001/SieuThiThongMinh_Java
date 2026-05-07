@@ -74,11 +74,7 @@ public class DashboardView extends JFrame {
                     showPanel(new TongQuanPanel());
                     break;
                 case "Quản lý sản phẩm":
-                    if (isStaff) {
-                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
-                    } else {
-                        showPanel(new ProductView());
-                    }
+                    showPanel(new ProductView());
                     break;
                 case "Quản lý nhân viên":
                     if (isStaff) {
