@@ -88,48 +88,48 @@ public class SieuThiOnline {
             System.err.println("[CẢNH BÁO] GĐ0.1 - Lỗi dọn dẹp token.");
         }
 
-        // GĐ1: Model + SQL Mapping
-        try {
-            System.out.println("\n--- GĐ1: Kiểm tra Model/SQL Mapping ---");
-            List<Supplier> dsNhaCC = SuppliersSql.getInstance().selectAll();
-            if (dsNhaCC != null && !dsNhaCC.isEmpty()) {
-                System.out.println("-> Lấy được " + dsNhaCC.size() + " nhà cung cấp.");
-            }
-
-            List<Store> dsCuaHang = StoresSql.getInstance().selectAll();
-            if (dsCuaHang != null) {
-                System.out.println("-> Lấy được " + dsCuaHang.size() + " cửa hàng.");
-            }
-        } catch (Exception e) {
-            System.err.println("[!] Lỗi Mapping dữ liệu.");
-        }
-
-        // GĐ5: Xuất báo cáo Excel (Việc nặng)
-        try {
-            List<Inventory> dsTonKho = InventorySql.getInstance().selectAll();
-            if (dsTonKho != null && !dsTonKho.isEmpty()) {
-                String filePath = "E:\\Inventory_Report_Vi.xlsx";
-                ExcelExporter.exportInventory(dsTonKho, filePath);
-                System.out.println("\n[HOÀN TẤT] GĐ5 - Đã xuất báo cáo Excel tại: " + filePath);
-            }
-        } catch (Exception e) {
-            System.err.println("[!] GĐ5 - Lỗi xuất Excel: " + e.getMessage());
-        }
-
-        // GĐ6: Transaction Thanh toán (Dễ kẹt DB nhất)
-        try {
-            System.out.println("\n--- GĐ6: Kiểm tra giao dịch thanh toán ---");
-            String maHD = "HD_ST_1002";
-            Order hd = new Order(maHD, "KH001", "EMP_01", new java.sql.Date(System.currentTimeMillis()), 150000.0, "ĐÃ THANH TOÁN");
-            List<OrderDetail> gioHang = new ArrayList<>();
-            gioHang.add(new OrderDetail(maHD, "PROD_MILK_01", 2, 20000.0));
-            gioHang.add(new OrderDetail(maHD, "PROD_MILK_02", 5, 8000.0));
-
-            boolean ok = PaymentService.thanhToan(hd, gioHang);
-            System.out.println(ok ? "[HOÀN TẤT] Giao dịch thành công." : "[THẤT BẠI] Giao dịch thất bại.");
-        } catch (Exception e) {
-            System.err.println("[NGHIÊM TRỌNG] GĐ6 - Lỗi logic thanh toán.");
-        }
+//        // GĐ1: Model + SQL Mapping
+//        try {
+//            System.out.println("\n--- GĐ1: Kiểm tra Model/SQL Mapping ---");
+//            List<Supplier> dsNhaCC = SuppliersSql.getInstance().selectAll();
+//            if (dsNhaCC != null && !dsNhaCC.isEmpty()) {
+//                System.out.println("-> Lấy được " + dsNhaCC.size() + " nhà cung cấp.");
+//            }
+//
+//            List<Store> dsCuaHang = StoresSql.getInstance().selectAll();
+//            if (dsCuaHang != null) {
+//                System.out.println("-> Lấy được " + dsCuaHang.size() + " cửa hàng.");
+//            }
+//        } catch (Exception e) {
+//            System.err.println("[!] Lỗi Mapping dữ liệu.");
+//        }
+//
+//        // GĐ5: Xuất báo cáo Excel (Việc nặng)
+//        try {
+//            List<Inventory> dsTonKho = InventorySql.getInstance().selectAll();
+//            if (dsTonKho != null && !dsTonKho.isEmpty()) {
+//                String filePath = "E:\\Inventory_Report_Vi.xlsx";
+//                ExcelExporter.exportInventory(dsTonKho, filePath);
+//                System.out.println("\n[HOÀN TẤT] GĐ5 - Đã xuất báo cáo Excel tại: " + filePath);
+//            }
+//        } catch (Exception e) {
+//            System.err.println("[!] GĐ5 - Lỗi xuất Excel: " + e.getMessage());
+//        }
+//
+//        // GĐ6: Transaction Thanh toán (Dễ kẹt DB nhất)
+//        try {
+//            System.out.println("\n--- GĐ6: Kiểm tra giao dịch thanh toán ---");
+//            String maHD = "HD_ST_1002";
+//            Order hd = new Order(maHD, "KH001", "EMP_01", new java.sql.Date(System.currentTimeMillis()), 150000.0, "ĐÃ THANH TOÁN");
+//            List<OrderDetail> gioHang = new ArrayList<>();
+//            gioHang.add(new OrderDetail(maHD, "PROD_MILK_01", 2, 20000.0));
+//            gioHang.add(new OrderDetail(maHD, "PROD_MILK_02", 5, 8000.0));
+//
+//            boolean ok = PaymentService.thanhToan(hd, gioHang);
+//            System.out.println(ok ? "[HOÀN TẤT] Giao dịch thành công." : "[THẤT BẠI] Giao dịch thất bại.");
+//        } catch (Exception e) {
+//            System.err.println("[NGHIÊM TRỌNG] GĐ6 - Lỗi logic thanh toán.");
+//        }
 
         System.out.println("\n-------------------------------------------------------");
         System.out.println("KẾT THÚC QUY TRÌNH KIỂM THỬ - HỆ THỐNG SẴN SÀNG");
