@@ -35,7 +35,7 @@ public final class RealtimeClient {
         // Ưu tiên dùng IP tĩnh để tránh lỗi phân giải IPv6 của Windows/Localhost
         if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
             // Có thể đổi thành 127.0.0.1 hoặc IP máy chủ cụ thể của ông
-            wsUrl = "ws://10.45.80.101";
+            wsUrl = "ws://127.0.0.1:8887";
         }
 
         try {

@@ -1,6 +1,6 @@
 package view;
 
-import business.sql.sales_order.StatisticSql;
+import business.service.StatisticService;
 import com.toedter.calendar.JDateChooser;
 import view.components.IconHelper;
 
@@ -31,6 +31,8 @@ public class StatisticView extends JPanel {
 
     private JTable tblRevenue, tblProducts, tblEmployees;
     private DefaultTableModel modRevenue, modProducts, modEmployees;
+
+    private final StatisticService statisticService = new StatisticService();
 
     public StatisticView() {
         setLayout(new BorderLayout(20, 20));
@@ -131,10 +133,7 @@ public class StatisticView extends JPanel {
     }
 
     private void initEvents() {
-        btnFilter.addActionListener(e -> {
-            // Khi nhấn nút: Manual sync (false), và HIỆN thông báo (true)
-            refreshDataWithCurrentDates(false, true);
-        });
+        btnFilter.addActionListener(e -> refreshDataWithCurrentDates(false, true));
     }
 
     private void loadInitialData() {
@@ -147,59 +146,52 @@ public class StatisticView extends JPanel {
         dpFromDate.setDate(firstDayOfMonth);
         dpToDate.setDate(today);
 
-        // Lần đầu tải: Không phải auto (false), KHÔNG hiện thông báo (false)
         refreshDataWithCurrentDates(false, false);
     }
 
-    // Cải tiến hàm refresh để kiểm soát việc hiện Popup
     private void refreshDataWithCurrentDates(boolean isAutoSync, boolean showSuccessPopup) {
         Date fromDate = dpFromDate.getDate();
         Date toDate = dpToDate.getDate();
 
-        if (fromDate == null || toDate == null) {
+        try {
+            modRevenue.setRowCount(0);
+            modProducts.setRowCount(0);
+            modEmployees.setRowCount(0);
+
+            List<Object[]> revData = statisticService.getRevenueReport(fromDate, toDate);
+            for (Object[] row : revData) {
+                modRevenue.addRow(row);
+            }
+
+            List<Object[]> prodData = statisticService.getProductReport(fromDate, toDate);
+            for (Object[] row : prodData) {
+                modProducts.addRow(row);
+            }
+
+            List<Object[]> empData = statisticService.getEmployeeReport(fromDate, toDate);
+            for (Object[] row : empData) {
+                modEmployees.addRow(row);
+            }
+
+            String timeNow = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
+            if (isAutoSync) {
+                lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Đồng bộ tự động thời gian thực)");
+                lblLastUpdate.setForeground(new Color(0, 163, 108));
+            } else {
+                lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Tải thủ công)");
+                lblLastUpdate.setForeground(new Color(100, 116, 139));
+                if (showSuccessPopup) {
+                    JOptionPane.showMessageDialog(this, "✅ Đã tải dữ liệu thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+
+        } catch (IllegalArgumentException ex) {
             if (!isAutoSync) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn đầy đủ ngày!");
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Thông báo", JOptionPane.WARNING_MESSAGE);
             }
-            return;
-        }
-
-        if (fromDate.after(toDate)) {
-            if (!isAutoSync) {
-                JOptionPane.showMessageDialog(this, "'Từ ngày' phải nhỏ hơn 'Đến ngày'!");
-            }
-            return;
-        }
-
-        modRevenue.setRowCount(0);
-        modProducts.setRowCount(0);
-        modEmployees.setRowCount(0);
-
-        List<Object[]> revData = StatisticSql.getInstance().getRevenueReport(fromDate, toDate);
-        for (Object[] row : revData) {
-            modRevenue.addRow(row);
-        }
-
-        List<Object[]> prodData = StatisticSql.getInstance().getProductReport(fromDate, toDate);
-        for (Object[] row : prodData) {
-            modProducts.addRow(row);
-        }
-
-        List<Object[]> empData = StatisticSql.getInstance().getEmployeeReport(fromDate, toDate);
-        for (Object[] row : empData) {
-            modEmployees.addRow(row);
-        }
-
-        String timeNow = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
-        if (isAutoSync) {
-            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Đồng bộ tự động thời gian thực)");
-            lblLastUpdate.setForeground(new Color(0, 163, 108));
-        } else {
-            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Tải thủ công)");
-            lblLastUpdate.setForeground(new Color(100, 116, 139));
-            // Chỉ hiện popup nếu tham số showSuccessPopup là true
-            if (showSuccessPopup) {
-                JOptionPane.showMessageDialog(this, "✅ Đã tải dữ liệu thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
-            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Lỗi khi tải dữ liệu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -246,7 +238,9 @@ public class StatisticView extends JPanel {
         JButton btn = new JButton(text);
         if (icon != null) {
             btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18, 18, Image.SCALE_SMOOTH)));
+            btn.setIconTextGap(8);
         }
+
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setForeground(fg);
         btn.setBackground(bg);
@@ -255,17 +249,59 @@ public class StatisticView extends JPanel {
         btn.setFocusPainted(false);
         btn.setBorderPainted(false);
         btn.setContentAreaFilled(false);
+        btn.setOpaque(false);
+
+        // Màu state
+        final Color normal = bg;
+        final Color hover = adjustColor(bg, +18);   // sáng hơn
+        final Color press = adjustColor(bg, -18);   // tối hơn
+
+        // UI custom paint bo góc
         btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
             @Override
             public void paint(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.getBackground());
-                g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 20, 20);
-                super.paint(g2, c);
-                g2.dispose();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                    ButtonModel model = ((AbstractButton) c).getModel();
+                    Color fill = normal;
+                    if (model.isPressed()) {
+                        fill = press;
+                    } else if (model.isRollover()) {
+                        fill = hover;
+                    }
+
+                    g2.setColor(fill);
+                    g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 20, 20);
+                } finally {
+                    g2.dispose();
+                }
+
+                super.paint(g, c);
             }
         });
+
+        // Bật rollover để hover hoạt động
+        btn.setRolloverEnabled(true);
+
+        // (Tuỳ chọn) làm chữ/ico “nhô” nhẹ khi pressed
+        btn.getModel().addChangeListener(e -> {
+            if (btn.getModel().isPressed()) {
+                btn.setBorder(BorderFactory.createEmptyBorder(1, 0, 0, 0));
+            } else {
+                btn.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+            }
+        });
+
         return btn;
     }
+
+    private Color adjustColor(Color color, int amount) {
+        int r = Math.min(255, Math.max(0, color.getRed() + amount));
+        int g = Math.min(255, Math.max(0, color.getGreen() + amount));
+        int b = Math.min(255, Math.max(0, color.getBlue() + amount));
+        return new Color(r, g, b);
+    }
+
 }

@@ -17,7 +17,7 @@ public class StatisticSql {
     private static StatisticSql instance;
     private final DecimalFormat currencyFormat = new DecimalFormat("#,###");
 
-    private StatisticSql() {
+    public StatisticSql() {
     }
 
     public static StatisticSql getInstance() {
@@ -262,15 +262,15 @@ public class StatisticSql {
      */
     public List<Object[]> getRevenueReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
-        String sql = "SELECT TO_CHAR(order_date, 'dd/MM/yyyy') as ngay, "
-                + "       COUNT(order_id) as tong_don, "
+        String sql = "SELECT TO_CHAR(TRUNC(order_date), 'dd/MM/yyyy') AS ngay, "
+                + "        COUNT(order_id) AS tong_don, "
                 + "       SUM(total_amount) as doanh_thu_thuc "
                 + "FROM ORDERS "
                 + "WHERE NVL(is_deleted, 0) = 0 "
                 + "AND UPPER(NVL(status, '')) <> 'CANCELLED' "
                 + "AND order_date >= ? AND order_date < (? + 1) "
-                + "GROUP BY TO_CHAR(order_date, 'dd/MM/yyyy') "
-                + "ORDER BY TO_DATE(ngay, 'dd/MM/yyyy') DESC";
+                + "GROUP BY TRUNC(order_date) "
+                + "ORDER BY TRUNC(order_date) DESC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             // Đưa Date Java util về Date SQL
@@ -285,8 +285,8 @@ public class StatisticSql {
 
                     String tienFormatted = currencyFormat.format(doanhThu);
 
-                    // Trả ra mảng Object tương ứng với số cột bên View
-                    rows.add(new Object[]{ngay, tongDon, tienFormatted, tienFormatted});
+                    // SAU (ĐÚNG - 3 cột khớp DefaultTableModel của StatisticView)
+                    rows.add(new Object[]{ngay, tongDon, tienFormatted});
                 }
             }
         } catch (SQLException e) {

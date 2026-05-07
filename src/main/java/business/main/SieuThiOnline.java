@@ -64,7 +64,7 @@ public class SieuThiOnline {
 
         // KHỞI ĐỘNG REAL-TIME (Server trước, Client sau)
         RealtimeServer.tryStart(8887);
-        RealtimeClient.connect("ws://10.45.80.101");
+        RealtimeClient.connect("ws://127.0.0.1:8887");
 
         System.out.println("-------------------------------------------------------");
         System.out.println("BẮT ĐẦU QUY TRÌNH KIỂM THỬ TÍCH HỢP HỆ THỐNG");
@@ -88,9 +88,14 @@ public class SieuThiOnline {
             System.err.println("[CẢNH BÁO] GĐ0.1 - Lỗi dọn dẹp token.");
         }
 
-
         System.out.println("\n-------------------------------------------------------");
         System.out.println("KẾT THÚC QUY TRÌNH KIỂM THỬ - HỆ THỐNG SẴN SÀNG");
-        System.out.println("-------------------------------------------------------");
+        System.out.println("-------------------------------------------------------"); 
+        
+//         System.out.println(common.utils.PasswordUtils.hash("123456"));// --> Câu lệnh để lấy mã hash cho tài khoảng admin, 
+//         //có mã này đem vào mật khẩu trong Bảng Account ->Commit sẽ đăng nhập được -> sau khi chạy xong phải log dòng này lại
+
     }
 }
+//Tách 2 cái này ra, 1 cái là nội dung tạo bảng, 1 cái là nội dung insert dữ liệu đầu vào trừ(trừ admin, tài khoản)
+
