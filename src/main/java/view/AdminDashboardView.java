@@ -21,9 +21,12 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
     private void setupAdminUI() {
         this.setTitle("SMART SUPERMARKET - CENTRAL ADMIN PORTAL");
-        this.setExtendedState(MAXIMIZED_BOTH);
         this.setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(1200, 700));
+        
+        // BẢO VỆ LỚP 1: Luôn mở Full màn hình và khóa mốc thu nhỏ tối thiểu
+        this.setExtendedState(MAXIMIZED_BOTH);
+        this.setMinimumSize(new Dimension(1100, 700));
+        this.setLocationRelativeTo(null);
         
         // Khởi tạo Sidebar Admin
         adminSidebar = new AdminSidebar();
@@ -63,7 +66,17 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
     public void showPanel(JPanel panel) {
         mainContentPanel.removeAll();
-        mainContentPanel.add(panel, BorderLayout.CENTER);
+        
+        // BẢO VỆ LỚP 2: Bọc thẻ con vào Thanh cuộn để chống ép bẹp biểu đồ
+        panel.setMinimumSize(new Dimension(900, 600)); // Kích thước an toàn cho thẻ con
+        
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Lăn chuột mượt hơn
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        
+        mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
     }
