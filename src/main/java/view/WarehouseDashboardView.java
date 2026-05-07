@@ -40,10 +40,12 @@ public class WarehouseDashboardView extends JFrame {
                     // showPanel(new view.SupplierView());
                     break;
                 case "Danh mục & Thuế VAT":
-                    // showPanel(new view.CategoryTaxView());
+                    // MỞ FORM DANH MỤC VÀ THUẾ
+                    showPanel(new CategoryTaxView()); 
                     break;
                 case "Cài đặt":
-                    // showPanel(new view.SettingsView());
+                    // MỞ FORM CÀI ĐẶT KHO HÀNG
+                    showPanel(new SettingsWarehouseView()); 
                     break;
                 case "Đăng xuất":
                     handleLogout();

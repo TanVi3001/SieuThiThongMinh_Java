@@ -718,64 +718,50 @@ public class LoginView extends javax.swing.JFrame {
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {
         String user = txtUsername.getText().trim();
-        String pass = new String(txtPassword.getPassword());
+        char[] passwordChars = txtPassword.getPassword();
+        String pass = new String(passwordChars);
 
         if (user.isEmpty() || pass.isEmpty()) {
-            javax.swing.JOptionPane.showMessageDialog(this,
-                    "Vui lòng nhập đầy đủ Tài khoản và Mật khẩu!",
-                    "Nhắc nhở",
-                    javax.swing.JOptionPane.WARNING_MESSAGE);
+            javax.swing.JOptionPane.showMessageDialog(this, "Nhập đủ tài khoản/mật khẩu!");
             return;
         }
 
-        try {
-            model.account.Account acc = business.service.LoginService.authenticate(user, pass);
+        // Khóa nút để tránh nhấn nhiều lần gây đơ
+        btnLogin.setEnabled(false);
 
-            if (acc != null) {
-                // =========================================================
-                // BƯỚC QUAN TRỌNG: LƯU THÔNG TIN VÀO SESSION NGAY KHI ĐĂNG NHẬP
-                // =========================================================
-                UserSession.getInstance().createUserSession(
-                        acc.getAccountId(),
-                        acc.getUsername(),
-                        acc.getRoleValue() // Đây là cái "linh hồn" để SecurityGuard so sánh sau này
-                );
+        // CHẠY LUỒNG RIÊNG ĐỂ UI KHÔNG BỊ TREO
+        new Thread(() -> {
+            try {
+                model.account.Account acc = business.service.LoginService.authenticate(user, pass);
 
                 java.awt.EventQueue.invokeLater(() -> {
-                    if (business.service.AuthorizationService.isAdmin(acc)) {
-                        AdminDashboardView adminScreen = new AdminDashboardView();
-                        adminScreen.setVisible(true);
-                        adminScreen.setLocationRelativeTo(null);
-                    } else if (business.service.AuthorizationService.isWarehouseStaff(acc)) {
-                        WarehouseDashboardView warehouseScreen = new WarehouseDashboardView();
-                        warehouseScreen.setVisible(true);
-                        warehouseScreen.setLocationRelativeTo(null);
+                    if (acc != null) {
+                        common.auth.UserSession.getInstance().createUserSession(
+                                acc.getAccountId(), acc.getUsername(), acc.getRoleValue());
+
+                        if (business.service.AuthorizationService.isAdmin(acc)) {
+                            new AdminDashboardView().setVisible(true);
+                        } else if (business.service.AuthorizationService.isWarehouseStaff(acc)) {
+                            new WarehouseDashboardView().setVisible(true);
+                        } else {
+                            new DashboardView().setVisible(true);
+                        }
+                        this.dispose();
                     } else {
-                        // Trường hợp Manager hoặc Staff thông thường
-                        DashboardView mainScreen = new DashboardView();
-                        mainScreen.setVisible(true);
-                        mainScreen.setLocationRelativeTo(null);
+                        javax.swing.JOptionPane.showMessageDialog(this, "Sai tài khoản hoặc mật khẩu!");
+                        btnLogin.setEnabled(true);
                     }
                 });
-                this.dispose();
-            } else {
-                javax.swing.JOptionPane.showMessageDialog(this,
-                        "Tài khoản hoặc mật khẩu không chính xác!",
-                        "Lỗi đăng nhập",
-                        javax.swing.JOptionPane.ERROR_MESSAGE);
-
-                txtPassword.setText("");
-                txtPassword.requestFocusInWindow();
+            } catch (Exception e) {
+                java.awt.EventQueue.invokeLater(() -> {
+                    javax.swing.JOptionPane.showMessageDialog(this, "Lỗi kết nối DB: " + e.getMessage());
+                    btnLogin.setEnabled(true);
+                });
+            } finally {
+                // FIX BUG java.util.Arrays
+                java.util.Arrays.fill(passwordChars, '\0');
             }
-        } catch (Exception e) {
-            javax.swing.JOptionPane.showMessageDialog(this,
-                    "Hệ thống đang gặp sự cố kết nối: " + e.getMessage(),
-                    "LỖI NGHIÊM TRỌNG",
-                    javax.swing.JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-        } finally {
-            java.util.Arrays.fill(txtPassword.getPassword(), '\0');
-        }
+        }).start();
     }
 
     private void txtUsernameActionPerformed(java.awt.event.ActionEvent evt) {
@@ -793,12 +779,12 @@ public class LoginView extends javax.swing.JFrame {
         business.service.TokenCleanupService.start();
 
         // (Optional) giữ SyncWatcher làm fallback
-        // common.sync.SyncWatcher.start(2);
+        common.sync.SyncWatcher.start(2);
         // REALTIME: start server (ai mở app trước sẽ host server), rồi connect client
         common.realtime.RealtimeServer.tryStart(8887);
 
         // Nếu chạy LAN: thay localhost bằng IP máy host, ví dụ ws://192.168.1.10:8887
-        common.realtime.RealtimeClient.connect("ws://localhost:8887");
+        common.realtime.RealtimeClient.connect("ws://127.0.0.1:8887");
 
         java.awt.EventQueue.invokeLater(() -> {
             LoginView login = new LoginView();

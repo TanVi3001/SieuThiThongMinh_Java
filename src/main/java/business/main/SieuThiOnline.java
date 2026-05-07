@@ -7,6 +7,7 @@ import common.report.ExcelExporter;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.SwingUtilities;
 
 // Model
 import model.product.Supplier;
@@ -25,144 +26,113 @@ import business.sql.sales_order.DeliveryManagementSql;
 // Service
 import business.service.PaymentService;
 import common.realtime.RealtimeServer;
+import common.realtime.RealtimeClient;
+import view.LoginView;
 
 public class SieuThiOnline {
 
     public static void main(String[] args) {
-        RealtimeServer.tryStart(9999);
-        
-        common.realtime.RealtimeClient.connect("ws://10.0.250.60");
-        // UTF-8 output
-        try {
-            System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
-        } catch (java.io.UnsupportedEncodingException e) {
-            System.err.println("[LỖI] Hệ thống không hỗ trợ UTF-8: " + e.getMessage());
-        }
-
-        System.out.println("-------------------------------------------------------");
-        System.out.println("BẮT ĐẦU KIỂM THỬ TÍCH HỢP HỆ THỐNG");
-        System.out.println("-------------------------------------------------------");
-
-        // GIAI ĐOẠN 0: DB Connection
-        System.out.println("[THÔNG BÁO] GĐ0 - Kiểm tra kết nối Oracle...");
-        try (Connection con = DatabaseConnection.getConnection()) {
-            if (con != null) {
-                System.out.println("[HOÀN TẤT] Kết nối DB thành công.");
-            } else {
-                System.out.println("[THẤT BẠI] Kết nối DB trả về null.");
-            }
-        } catch (Exception e) {
-            System.out.println("[CẢNH BÁO] Lỗi kết nối DB: " + e.getMessage());
-        }
-
-        // GĐ0.1: Cleanup token ngay khi app khởi động
-        System.out.println("\n[THÔNG BÁO] GĐ0.1 - Dọn token hết hạn/revoked...");
-        try {
-            int deleted = TokenSql.getInstance().deleteExpiredTokens();
-            System.out.println("[HOÀN TẤT] Startup token cleanup deleted rows = " + deleted);
-
-            // bật cleanup định kỳ (ví dụ mỗi 15 phút)
-            TokenCleanupService.start();
-            System.out.println("[HOÀN TẤT] Đã bật TokenCleanupService định kỳ.");
-        } catch (Exception e) {
-            System.out.println("[CẢNH BÁO] Không dọn token được: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // GIAI ĐOẠN 1: Model + SQL Mapping
-        System.out.println("\n[THÔNG BÁO] GĐ1 - Kiểm tra Model/SQL mapping...");
-        try {
-            System.out.println("--- 1.1 Supplier ---");
-            List<Supplier> dsNhaCC = SuppliersSql.getInstance().selectAll();
-            if (dsNhaCC == null || dsNhaCC.isEmpty()) {
-                System.out.println("[!] DB chưa có dữ liệu Supplier.");
-            } else {
-                for (Supplier s : dsNhaCC) {
-                    System.out.printf("ID: %-10s | Tên NCC: %-20s | SĐT: %s%n",
-                            s.getSupplierId(), s.getSupplierName(), s.getPhoneNumber());
-                }
-            }
-
-            System.out.println("\n--- 1.2 Store ---");
-            List<Store> dsCuaHang = StoresSql.getInstance().selectAll();
-            if (dsCuaHang != null) {
-                for (Store st : dsCuaHang) {
-                    System.out.println("Cửa hàng: " + st.getStoreName() + " - Địa chỉ: " + st.getAddress());
-                }
-            }
-
-            System.out.println("\n--- 1.3 DeliveryManagement ---");
-            List<DeliveryManagement> dsGiaoHang = DeliveryManagementSql.getInstance().selectAll();
-            if (dsGiaoHang != null && !dsGiaoHang.isEmpty()) {
-                DeliveryManagement dm = dsGiaoHang.get(0);
-                System.out.println("Đơn giao thử nghiệm: " + dm.getOrderId()
-                        + " | Trạng thái: " + dm.getDeliveryStatus());
-            } else {
-                System.out.println("[!] Chưa có dữ liệu DeliveryManagement.");
-            }
-
-        } catch (Exception e) {
-            System.out.println("[CẢNH BÁO] Lỗi mapping Model/SQL: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // GIAI ĐOẠN 5: Export Excel
-        System.out.println("\n[THÔNG BÁO] GĐ5 - Kiểm tra xuất báo cáo kho...");
-        try {
-            List<Inventory> dsTonKho = InventorySql.getInstance().selectAll();
-            String filePath = "E:\\Inventory_Report_Vi.xlsx";
-
-            if (dsTonKho == null || dsTonKho.isEmpty()) {
-                System.out.println("[!] Không có dữ liệu tồn kho để xuất.");
-            } else {
-                ExcelExporter.exportInventory(dsTonKho, filePath);
-                System.out.println("[HOÀN TẤT] Export Excel thành công: " + filePath);
-            }
-        } catch (Exception e) {
-            System.out.println("[CẢNH BÁO] Lỗi export Excel: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // GIAI ĐOẠN 6: Payment Transaction
-        System.out.println("\n[THÔNG BÁO] GĐ6 - Kiểm tra giao dịch thanh toán...");
-        String maHD = "HD_ST_1002";
-
-        Order hd = new Order(
-                maHD,
-                "KH001",
-                "EMP_01",
-                new java.sql.Date(System.currentTimeMillis()),
-                150000.0,
-                "ĐÃ THANH TOÁN"
-        );
-
-        List<OrderDetail> gioHang = new ArrayList<>();
-        gioHang.add(new OrderDetail(maHD, "PROD_MILK_01", 2, 20000.0));
-        gioHang.add(new OrderDetail(maHD, "PROD_MILK_02", 5, 8000.0));
-
-        try {
-            boolean ok = PaymentService.thanhToan(hd, gioHang);
-            if (ok) {
-                System.out.println("[HOÀN TẤT] Giao dịch thành công: đã lưu hóa đơn + cập nhật tồn kho.");
-            } else {
-                System.out.println("[THẤT BẠI] Giao dịch thất bại: đã rollback.");
-            }
-        } catch (Exception e) {
-            System.out.println("[NGHIÊM TRỌNG] Lỗi giao dịch: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        System.out.println("\n-------------------------------------------------------");
-        System.out.println("KẾT THÚC QUY TRÌNH KIỂM THỬ TÍCH HỢP");
-        System.out.println("-------------------------------------------------------");
-
-        // UI
+        // 1. SETUP GIAO DIỆN TRƯỚC (ĐỂ HIỆN APP NGAY LẬP TỨC)
         try {
             com.formdev.flatlaf.FlatLightLaf.setup();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("[LỖI] Không thể setup FlatLaf: " + e.getMessage());
         }
 
-        java.awt.EventQueue.invokeLater(() -> new view.LoginView().setVisible(true));
+        // Mở màn hình Login ngay trên luồng Event Dispatch Thread (EDT)
+        SwingUtilities.invokeLater(() -> {
+            LoginView login = new LoginView();
+            login.setLocationRelativeTo(null);
+            login.setVisible(true);
+        });
+
+        // 2. CHẠY TOÀN BỘ LOGIC KIỂM THỬ VÀ SERVICE TRONG LUỒNG NGẦM (CHỐNG ĐƠ UI)
+        new Thread(() -> {
+            runBackgroundSystems();
+        }).start();
+    }
+
+    private static void runBackgroundSystems() {
+        // UTF-8 output cho Console
+        try {
+            System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
+        } catch (java.io.UnsupportedEncodingException e) {
+            System.err.println("[LỖI] Hệ thống không hỗ trợ UTF-8");
+        }
+
+        System.out.println("\n--- [HỆ THỐNG] Đang khởi động các dịch vụ ngầm... ---");
+
+        // KHỞI ĐỘNG REAL-TIME (Server trước, Client sau)
+        RealtimeServer.tryStart(8887);
+        RealtimeClient.connect("ws://127.0.0.1:8887");
+
+        System.out.println("-------------------------------------------------------");
+        System.out.println("BẮT ĐẦU QUY TRÌNH KIỂM THỬ TÍCH HỢP HỆ THỐNG");
+        System.out.println("-------------------------------------------------------");
+
+        // GĐ0: DB Connection
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (con != null) {
+                System.out.println("[HOÀN TẤT] GĐ0 - Kết nối Database thành công.");
+            }
+        } catch (Exception e) {
+            System.err.println("[CẢNH BÁO] GĐ0 - Lỗi kết nối DB: " + e.getMessage());
+        }
+
+        // GĐ0.1: Dọn dẹp Token
+        try {
+            int deleted = TokenSql.getInstance().deleteExpiredTokens();
+            System.out.println("[HOÀN TẤT] GĐ0.1 - Đã dọn " + deleted + " token hết hạn.");
+            TokenCleanupService.start();
+        } catch (Exception e) {
+            System.err.println("[CẢNH BÁO] GĐ0.1 - Lỗi dọn dẹp token.");
+        }
+
+//        // GĐ1: Model + SQL Mapping
+//        try {
+//            System.out.println("\n--- GĐ1: Kiểm tra Model/SQL Mapping ---");
+//            List<Supplier> dsNhaCC = SuppliersSql.getInstance().selectAll();
+//            if (dsNhaCC != null && !dsNhaCC.isEmpty()) {
+//                System.out.println("-> Lấy được " + dsNhaCC.size() + " nhà cung cấp.");
+//            }
+//
+//            List<Store> dsCuaHang = StoresSql.getInstance().selectAll();
+//            if (dsCuaHang != null) {
+//                System.out.println("-> Lấy được " + dsCuaHang.size() + " cửa hàng.");
+//            }
+//        } catch (Exception e) {
+//            System.err.println("[!] Lỗi Mapping dữ liệu.");
+//        }
+//
+//        // GĐ5: Xuất báo cáo Excel (Việc nặng)
+//        try {
+//            List<Inventory> dsTonKho = InventorySql.getInstance().selectAll();
+//            if (dsTonKho != null && !dsTonKho.isEmpty()) {
+//                String filePath = "E:\\Inventory_Report_Vi.xlsx";
+//                ExcelExporter.exportInventory(dsTonKho, filePath);
+//                System.out.println("\n[HOÀN TẤT] GĐ5 - Đã xuất báo cáo Excel tại: " + filePath);
+//            }
+//        } catch (Exception e) {
+//            System.err.println("[!] GĐ5 - Lỗi xuất Excel: " + e.getMessage());
+//        }
+//
+//        // GĐ6: Transaction Thanh toán (Dễ kẹt DB nhất)
+//        try {
+//            System.out.println("\n--- GĐ6: Kiểm tra giao dịch thanh toán ---");
+//            String maHD = "HD_ST_1002";
+//            Order hd = new Order(maHD, "KH001", "EMP_01", new java.sql.Date(System.currentTimeMillis()), 150000.0, "ĐÃ THANH TOÁN");
+//            List<OrderDetail> gioHang = new ArrayList<>();
+//            gioHang.add(new OrderDetail(maHD, "PROD_MILK_01", 2, 20000.0));
+//            gioHang.add(new OrderDetail(maHD, "PROD_MILK_02", 5, 8000.0));
+//
+//            boolean ok = PaymentService.thanhToan(hd, gioHang);
+//            System.out.println(ok ? "[HOÀN TẤT] Giao dịch thành công." : "[THẤT BẠI] Giao dịch thất bại.");
+//        } catch (Exception e) {
+//            System.err.println("[NGHIÊM TRỌNG] GĐ6 - Lỗi logic thanh toán.");
+//        }
+
+        System.out.println("\n-------------------------------------------------------");
+        System.out.println("KẾT THÚC QUY TRÌNH KIỂM THỬ - HỆ THỐNG SẴN SÀNG");
+        System.out.println("-------------------------------------------------------");
     }
 }
