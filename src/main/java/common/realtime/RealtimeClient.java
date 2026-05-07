@@ -32,10 +32,10 @@ public final class RealtimeClient {
 
     public static void connect(String wsUrl) {
         // 1. Xử lý logic URL/IP TRƯỚC khi tạo URI
-        // Ưu tiên dùng IP tĩnh để tránh lỗi phân giải IPv6 của Windows/Localhost
-        if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
-            // Có thể đổi thành 127.0.0.1 hoặc IP máy chủ cụ thể của ông
-            wsUrl = "ws://10.45.80.101";
+        // Tự động quét IP LAN thay vì dùng IP tĩnh
+        if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost") || wsUrl.contains("10.45.80.101")) {
+            String currentIp = common.utils.NetworkUtils.getLocalIPv4Address();
+            wsUrl = "ws://" + currentIp + ":8887";
         }
 
         try {
