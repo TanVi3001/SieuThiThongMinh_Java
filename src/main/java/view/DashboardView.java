@@ -9,6 +9,7 @@ import java.awt.Dimension;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
@@ -53,10 +54,13 @@ public class DashboardView extends JFrame {
             this.setTitle("SMART SUPERMARKET - STORE PORTAL");
         }
 
-        this.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        setMinimumSize(new Dimension(1200, 700));
-        this.setLocationRelativeTo(null);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        // BẢO VỆ LỚP 1: Mở Full màn hình và thiết lập giới hạn thu nhỏ
+        this.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        this.setMinimumSize(new Dimension(1100, 700));
+        this.setLocationRelativeTo(null);
+        
         this.getContentPane().setLayout(new BorderLayout());
 
         mainContentPanel = new JPanel(new BorderLayout());
@@ -113,7 +117,17 @@ public class DashboardView extends JFrame {
 
     public void showPanel(JPanel childPanel) {
         mainContentPanel.removeAll();
-        mainContentPanel.add(childPanel, BorderLayout.CENTER);
+        
+        // BẢO VỆ LỚP 2: Chống vỡ các báo cáo và thống kê bằng thanh cuộn
+        childPanel.setMinimumSize(new Dimension(900, 600)); 
+        
+        JScrollPane scrollPane = new JScrollPane(childPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        
+        mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
     }
@@ -131,7 +145,6 @@ public class DashboardView extends JFrame {
             business.sql.rbac.TokenSql.getInstance().revokeToken(tk);
             business.service.LoginService.logout();
 
-            // TUI ĐÃ THÊM DÒNG NÀY ĐỂ XÓA SẠCH GỐC RỄ PHÂN QUYỀN TRONG CACHE SESSION
             common.auth.UserSession.getInstance().clear();
 
             java.awt.EventQueue.invokeLater(() -> {
@@ -151,13 +164,10 @@ public class DashboardView extends JFrame {
                 return;
             }
 
-            // Đưa việc quét DB vào Thread ngầm để không làm giật lag giao diện
             new Thread(() -> {
-                // 1. Kiểm tra Token
                 String currentToken = business.service.LoginService.getToken();
                 boolean isValid = business.sql.rbac.TokenSql.getInstance().isTokenValid(currentToken);
 
-                // 2. RADAR BẢO MẬT: Kiểm tra xem quyền có bị Admin đổi ngầm dưới DB không
                 boolean roleChanged = false;
                 model.account.Account currentUser = business.service.LoginService.getCurrentUser();
 
@@ -165,22 +175,19 @@ public class DashboardView extends JFrame {
                     try {
                         String[] latestData = business.sql.rbac.AccountSql.getInstance().getAccountDetails(currentUser.getAccountId());
                         if (latestData != null) {
-                            String dbRoleId = latestData[4]; // Quyền đang lưu dưới DB
+                            String dbRoleId = latestData[4]; 
                             boolean isActive = "0".equals(latestData[5]);
 
-                            // So sánh quyền DB với quyền lúc vừa đăng nhập (nếu lệch là bị đá)
                             if (!isActive || !dbRoleId.equals(currentUser.getRoleValue())) {
                                 roleChanged = true;
                             }
                         } else {
-                            roleChanged = true; // Tài khoản bị xóa thẳng tay
+                            roleChanged = true; 
                         }
                     } catch (Exception ex) {
-                        // Bỏ qua lỗi DB tạm thời nếu mạng giật
                     }
                 }
 
-                // NẾU PHÁT HIỆN BẤT THƯỜNG -> KICK NGAY LẬP TỨC
                 if (!isValid || roleChanged) {
                     SwingUtilities.invokeLater(() -> {
                         if (!isLoggingOut) {
@@ -191,19 +198,17 @@ public class DashboardView extends JFrame {
 
                             JOptionPane.showMessageDialog(this, "Phiên đăng nhập đã hết hạn hoặc Quyền truy cập đã bị thay đổi!\nVui lòng đăng nhập lại.", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
 
-                            // Xóa sạch thông tin cũ
                             try {
                                 common.auth.UserSession.getInstance().clear();
                             } catch (Exception ignored) {
                             }
                             business.service.LoginService.logout();
 
-                            // Văng ra màn hình Login
                             view.LoginView login = new view.LoginView();
                             login.setVisible(true);
                             login.setLocationRelativeTo(null);
 
-                            this.dispose(); // Tắt Dashboard hiện tại
+                            this.dispose(); 
                         }
                     });
                 }

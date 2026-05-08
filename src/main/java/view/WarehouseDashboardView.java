@@ -20,13 +20,13 @@ public class WarehouseDashboardView extends JFrame {
                           ? currentUser.getUsername() : "Nhân viên Kho";
 
         this.setTitle("SMART SUPERMARKET - WAREHOUSE PORTAL | " + username);
-        this.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        setMinimumSize(new Dimension(1200, 700));
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         
+        // BẢO VỆ LỚP 1: Luôn mở Full màn hình và khóa mốc thu nhỏ tối thiểu
+        this.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        this.setMinimumSize(new Dimension(1100, 700));
+        this.setLocationRelativeTo(null);
         
-        
-        // --- CHÌA KHÓA Ở ĐÂY: LAYOUT GIỐNG HỆT ADMIN ---
         this.getContentPane().setLayout(new BorderLayout());
         
         warehouseSidebar = new WarehouseSidebar();
@@ -42,11 +42,9 @@ public class WarehouseDashboardView extends JFrame {
                     // showPanel(new view.SupplierView());
                     break;
                 case "Danh mục & Thuế VAT":
-                    // MỞ FORM DANH MỤC VÀ THUẾ
                     showPanel(new CategoryTaxView()); 
                     break;
                 case "Cài đặt":
-                    // MỞ FORM CÀI ĐẶT KHO HÀNG
                     showPanel(new SettingsWarehouseView()); 
                     break;
                 case "Đăng xuất":
@@ -58,9 +56,7 @@ public class WarehouseDashboardView extends JFrame {
         mainContentPanel = new JPanel(new BorderLayout());
         mainContentPanel.setBackground(bgWarehouse);
 
-        // Sidebar vuốt thẳng từ trên xuống dưới ở bên TRÁI
         this.getContentPane().add(warehouseSidebar, BorderLayout.WEST); 
-        // Content lấp đầy phần GIỮA
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER); 
             
         showPanel(new view.InventoryView());
@@ -68,7 +64,17 @@ public class WarehouseDashboardView extends JFrame {
 
     public void showPanel(JPanel panel) {
         mainContentPanel.removeAll();
-        mainContentPanel.add(panel, BorderLayout.CENTER);
+        
+        // BẢO VỆ LỚP 2: Bọc thẻ con vào Thanh cuộn để chống ép bẹp
+        panel.setMinimumSize(new Dimension(900, 600)); 
+        
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        
+        mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
     }
