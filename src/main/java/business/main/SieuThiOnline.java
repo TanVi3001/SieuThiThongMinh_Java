@@ -25,6 +25,7 @@ import business.sql.sales_order.DeliveryManagementSql;
 
 // Service
 import business.service.PaymentService;
+import com.formdev.flatlaf.FlatLightLaf;
 import common.realtime.RealtimeServer;
 import common.realtime.RealtimeClient;
 import view.LoginView;
@@ -32,6 +33,7 @@ import view.LoginView;
 public class SieuThiOnline {
 
     public static void main(String[] args) {
+        FlatLightLaf.setup();
         // 1. SETUP GIAO DIỆN TRƯỚC (ĐỂ HIỆN APP NGAY LẬP TỨC)
         try {
             com.formdev.flatlaf.FlatLightLaf.setup();
