@@ -459,38 +459,17 @@ public class SellPanel extends JPanel {
                 int qty = (int) modCart.getValueAt(i, 2);
                 double price = (double) modCart.getValueAt(i, 3);
 
-                String unitId = null;
-
-                // 🌟 GIẢI PHÁP TRỊ TẬN GỐC LỖI KHÓA NGOẠI: Móc trực tiếp Unit ID từ Database lên
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection()) {
-                    // Ưu tiên 1: Lấy đúng unit_id của sản phẩm này trong bảng PRODUCTS
-                    String sql = "SELECT NVL(base_unit_id, unit_id) as uid FROM PRODUCTS WHERE product_id = ?";
-                    try (java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
-                        ps.setString(1, pId);
-                        try (java.sql.ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) {
-                                unitId = rs.getString("uid");
-                            }
+                // 🌟 FIX LỖI ORA-01400: Luôn gán 1 giá trị Unit tồn tại thực tế nếu SP bị bỏ trống
+                String unitId = "U_CAI"; // Default là U_CAI (Thường luôn tồn tại trong các DB)
+                for (Product p : allProducts) {
+                    if (p.getProductId().equals(pId)) {
+                        if (p.getBaseUnitId() != null && !p.getBaseUnitId().trim().isEmpty()) {
+                            unitId = p.getBaseUnitId();
+                        } else if (p.getUnit() != null && !p.getUnit().toString().trim().isEmpty()) {
+                            unitId = p.getUnit().toString();
                         }
+                        break;
                     }
-
-                    // Ưu tiên 2: Lỡ sản phẩm dưới DB bị nhân viên nhập thiếu Unit, 
-                    // ta lấy đại 1 cái Unit ID CÓ THẬT trong bảng UNITS để "chữa cháy" bill
-                    if (unitId == null || unitId.trim().isEmpty()) {
-                        String sqlFallback = "SELECT unit_id FROM UNITS FETCH FIRST 1 ROWS ONLY";
-                        try (java.sql.PreparedStatement ps = con.prepareStatement(sqlFallback); java.sql.ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) {
-                                unitId = rs.getString("unit_id");
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                // Đảm bảo không bao giờ bị dính NullPointerException hay lỗi khóa ngoại nữa
-                if (unitId == null) {
-                    unitId = "";
                 }
 
                 details.add(new OrderDetail(orderId, pId, qty, price, unitId, 0));
@@ -505,7 +484,7 @@ public class SellPanel extends JPanel {
                 loadProducts();
 
                 JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
-                txtEditor.setText("Nhập mã SP, tên SP..."); // Gán lại chữ gợi ý
+                txtEditor.setText(SEARCH_HINT);
                 txtEditor.setForeground(Color.GRAY);
                 txtEditor.requestFocus();
 
@@ -515,7 +494,7 @@ public class SellPanel extends JPanel {
                 }
 
             } else {
-                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!\nKiểm tra lại thông tin khách hàng hoặc kết nối Database.", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!\nLỗi liên quan đến Database (Kiểm tra xem Unit ID có khớp không)", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage(), "Exception", JOptionPane.ERROR_MESSAGE);
