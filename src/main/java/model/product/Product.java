@@ -140,4 +140,15 @@ public class Product {
     public void setUnitId(String unitId) {
         this.unitId = unitId;
     }
+
+    // Hình ảnh sản phẩm
+    private String imagePath;
+
+    public String getImagePath() {
+        return imagePath;
+    }
+
+    public void setImagePath(String imagePath) {
+        this.imagePath = imagePath;
+    }
 }

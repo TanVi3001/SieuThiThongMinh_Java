@@ -50,6 +50,8 @@ public class ProductView extends JPanel {
 
     private JTextField txtName, txtPrice, txtQuantity;
     private JComboBox<String> cbCategory, cbSearch;
+    private JLabel lblImagePreview;
+    private String selectedImagePath = null;
 
     private JTable tblProducts;
     private DefaultTableModel tableModel;
@@ -91,11 +93,11 @@ public class ProductView extends JPanel {
 
     private void loadAutoCompleteData() {
         categoryList.clear();
-        categoryList.add("CAT001 - Nước giải khát");
-        categoryList.add("CAT002 - Bánh kẹo");
-        categoryList.add("CAT003 - Gia vị");
-        categoryList.add("CAT004 - Đồ gia dụng");
-        categoryList.add("CAT005 - Hóa mỹ phẩm");
+        categoryList.add("CAT001 - Thực phẩm khô");
+        categoryList.add("CAT002 - Đồ uống");
+        categoryList.add("CAT003 - Hóa mỹ phẩm");
+        categoryList.add("CAT004 - Bánh kẹo");
+        categoryList.add("CAT005 - Thực phẩm tươi sống");
 
         productNameList.clear();
         try {
@@ -204,8 +206,50 @@ public class ProductView extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
         formCard.add(createLabel("Loại sản phẩm (*)"), gbc);
         gbc.gridy = y++;
-        gbc.insets = new Insets(0, 0, 30, 0);
+        gbc.insets = new Insets(0, 0, 15, 0);
         formCard.add(cbCategory, gbc);
+
+        // Hình ảnh sản phẩm
+        gbc.gridy = y++;
+        gbc.insets = new Insets(0, 0, 5, 0);
+        formCard.add(createLabel("Hình ảnh"), gbc);
+
+        lblImagePreview = new JLabel("Chưa chọn ảnh", SwingConstants.CENTER);
+        lblImagePreview.setPreferredSize(new Dimension(180, 120));
+        lblImagePreview.setBorder(BorderFactory.createDashedBorder(new Color(180, 180, 180), 2, 4));
+        lblImagePreview.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblImagePreview.setForeground(new Color(150, 150, 150));
+        gbc.gridy = y++;
+        gbc.insets = new Insets(0, 0, 5, 0);
+        formCard.add(lblImagePreview, gbc);
+
+        JButton btnChooseImage = createCustomButton("Chọn ảnh", new Color(108, 117, 125), Color.WHITE, null);
+        btnChooseImage.addActionListener(e -> {
+            JFileChooser fc = new JFileChooser();
+            fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Ảnh (jpg, png, gif)", "jpg", "jpeg", "png", "gif"));
+            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                java.io.File srcFile = fc.getSelectedFile();
+                String fileName = srcFile.getName();
+                // Copy ảnh vào resources/view/image/
+                try {
+                    java.net.URL resUrl = getClass().getClassLoader().getResource("view/image");
+                    if (resUrl != null) {
+                        java.io.File destDir = new java.io.File(resUrl.toURI());
+                        java.io.File destFile = new java.io.File(destDir, fileName);
+                        java.nio.file.Files.copy(srcFile.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+                selectedImagePath = fileName; // Chỉ lưu tên file
+                ImageIcon icon = new ImageIcon(new ImageIcon(srcFile.getAbsolutePath()).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
+                lblImagePreview.setIcon(icon);
+                lblImagePreview.setText("");
+            }
+        });
+        gbc.gridy = y++;
+        gbc.insets = new Insets(0, 0, 30, 0);
+        formCard.add(btnChooseImage, gbc);
 
         btnAdd = createCustomButton("Thêm", primaryBlue, Color.WHITE, IconHelper.add(20));
         btnUpdate = createCustomButton("Cập nhật", new Color(255, 153, 0), Color.BLACK, IconHelper.edit(20));
@@ -587,6 +631,10 @@ public class ProductView extends JPanel {
         ((JTextField) cbCategory.getEditor().getEditorComponent()).setText("");
         ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
 
+        selectedImagePath = null;
+        lblImagePreview.setIcon(null);
+        lblImagePreview.setText("Chưa chọn ảnh");
+
         tblProducts.clearSelection();
     }
 
@@ -641,6 +689,31 @@ public class ProductView extends JPanel {
 
         JTextField editor = (JTextField) cbCategory.getEditor().getEditorComponent();
         editor.setText(categoryObj == null ? "" : categoryObj.toString().trim());
+
+        // Hiển thị ảnh nếu có
+        String productId = tblProducts.getValueAt(row, 0).toString().trim();
+        Product selected = ProductsSql.getInstance().findById(productId);
+        if (selected != null && selected.getImagePath() != null && !selected.getImagePath().isEmpty()) {
+            selectedImagePath = selected.getImagePath();
+            try {
+                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + selectedImagePath);
+                if (imgUrl != null) {
+                    ImageIcon icon = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
+                    lblImagePreview.setIcon(icon);
+                    lblImagePreview.setText("");
+                } else {
+                    lblImagePreview.setIcon(null);
+                    lblImagePreview.setText("Không tìm thấy ảnh");
+                }
+            } catch (Exception e) {
+                lblImagePreview.setIcon(null);
+                lblImagePreview.setText("Không tải được ảnh");
+            }
+        } else {
+            selectedImagePath = null;
+            lblImagePreview.setIcon(null);
+            lblImagePreview.setText("Chưa có ảnh");
+        }
     }
 
     private List<Map<String, Object>> getAllProductsFromTable() {
@@ -722,6 +795,7 @@ public class ProductView extends JPanel {
             p.setBasePrice(new BigDecimal(priceText));
             p.setQuantity(Integer.parseInt(qtyText));
             p.setCategoryId(categoryId);
+            p.setImagePath(selectedImagePath);
             return p;
         } catch (Exception e) {
             return null;

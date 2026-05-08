@@ -76,8 +76,8 @@ public class ProductsSql {
         List<Product> list = new ArrayList<>();
 
         String sql = "SELECT p.product_id, p.product_name, p.base_price, "
-                + "       p.category_id, p.supplier_id, "
-                + "       i.store_id, i.quantity, i.unit " // LẤY CỘT QUANTITY TỪ BẢNG INVENTORY
+                + "       p.category_id, p.supplier_id, p.image_path, "
+                + "       i.store_id, i.quantity, i.unit "
                 + "FROM PRODUCTS p "
                 + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND NVL(i.is_deleted, 0) = 0 "
                 + "WHERE NVL(p.is_deleted, 0) = 0 "
@@ -92,6 +92,7 @@ public class ProductsSql {
                 p.setBasePrice(rs.getBigDecimal("base_price"));
                 p.setCategoryId(rs.getString("category_id"));
                 p.setSupplierId(rs.getString("supplier_id"));
+                try { p.setImagePath(rs.getString("image_path")); } catch (Exception ignored) {}
 
                 try {
                     p.setStoreId(rs.getString("store_id"));
@@ -114,8 +115,8 @@ public class ProductsSql {
 
     public boolean insert(Product p) {
         String sqlProduct = "INSERT INTO PRODUCTS "
-                + "(product_id, product_name, base_price, category_id, supplier_id, is_deleted) "
-                + "VALUES (?, ?, ?, ?, ?, 0)";
+                + "(product_id, product_name, base_price, category_id, supplier_id, image_path, is_deleted) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 0)";
 
         String sqlInventory = "INSERT INTO INVENTORY "
                 + "(product_id, store_id, quantity, unit, last_updated, is_deleted) "
@@ -139,6 +140,7 @@ public class ProductsSql {
                 psProd.setBigDecimal(3, p.getBasePrice());
                 psProd.setString(4, p.getCategoryId());
                 psProd.setString(5, p.getSupplierId());
+                psProd.setString(6, p.getImagePath());
                 int prodRows = psProd.executeUpdate();
 
                 psInv.setString(1, p.getProductId());
@@ -181,7 +183,7 @@ public class ProductsSql {
 
     public boolean update(Product p) {
         String sqlProduct = "UPDATE PRODUCTS "
-                + "SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ? "
+                + "SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ?, image_path = ? "
                 + "WHERE product_id = ? AND is_deleted = 0";
 
         String sqlInventory = "UPDATE INVENTORY "
@@ -210,7 +212,8 @@ public class ProductsSql {
                 psProd.setBigDecimal(2, p.getBasePrice());
                 psProd.setString(3, p.getCategoryId() != null ? p.getCategoryId().trim() : "");
                 psProd.setString(4, p.getSupplierId() != null ? p.getSupplierId().trim() : "SUP001");
-                psProd.setString(5, p.getProductId().trim());
+                psProd.setString(5, p.getImagePath());
+                psProd.setString(6, p.getProductId().trim());
                 int prodRows = psProd.executeUpdate();
 
                 // UPDATE INVENTORY
@@ -385,6 +388,34 @@ public class ProductsSql {
     // ==========================================
     // 3 HÀM BỔ SUNG CHO GIAO DIỆN PRODUCTVIEW
     // ==========================================
+    public Product findById(String productId) {
+        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, p.image_path, "
+                + "i.store_id, i.quantity, i.unit "
+                + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
+                + "WHERE p.is_deleted = 0 AND p.product_id = ? FETCH FIRST 1 ROWS ONLY";
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Product p = new Product();
+                    p.setProductId(rs.getString("product_id"));
+                    p.setProductName(rs.getString("product_name"));
+                    p.setBasePrice(rs.getBigDecimal("base_price"));
+                    p.setCategoryId(rs.getString("category_id"));
+                    p.setSupplierId(rs.getString("supplier_id"));
+                    p.setImagePath(rs.getString("image_path"));
+                    try { p.setStoreId(rs.getString("store_id")); } catch (Exception ignored) {}
+                    try { p.setUnit(rs.getString("unit")); } catch (Exception ignored) {}
+                    p.setQuantity(rs.getInt("quantity"));
+                    return p;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public Product findByExactName(String name) {
         String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, i.store_id, i.quantity, i.unit "
                 + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
