@@ -109,3 +109,22 @@ WHERE customer_id = 'CUST003';
 
 -- Bắt buộc phải COMMIT để lưu vĩnh viễn xuống ổ cứng nhé
 COMMIT;
+
+SELECT 
+    c.customer_id, 
+    c.customer_name, 
+    c.phone, 
+    c.email, 
+    c.address,
+    NVL(SUM(o.total_amount), 0) AS total_spending,
+    CASE 
+        WHEN NVL(SUM(o.total_amount), 0) >= 50000000 THEN N'Kim cương'
+        WHEN NVL(SUM(o.total_amount), 0) >= 20000000 THEN N'Vàng'
+        WHEN NVL(SUM(o.total_amount), 0) >= 5000000 THEN N'Bạc'
+        ELSE N'Đồng' 
+    END AS member_rank
+FROM CUSTOMERS c
+LEFT JOIN ORDERS o ON c.customer_id = o.customer_id AND o.is_deleted = 0
+WHERE c.is_deleted = 0
+GROUP BY c.customer_id, c.customer_name, c.phone, c.email, c.address;
+-- Thêm rank cho customer --
