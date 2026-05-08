@@ -3,6 +3,8 @@ package view.components;
 import java.awt.Image;
 import java.io.File;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 
@@ -93,6 +95,38 @@ public class IconHelper {
     // Lưu ý: Đã sửa đúng tên file tìm kiếm có trên Git
     public static ImageIcon search(int size) {
         return load("search-interface-symbol.png", size);
+    }
+    
+    // ===== THÊM MỚI: Category icon support =====
+    private static final Map<String, ImageIcon> categoryIconCache = new HashMap<>();
+    private static final String CATEGORY_ICON_PATH = "/view/image/categories/";
+
+    public static ImageIcon getCategoryIcon(String categoryId, int size) {
+        String key = categoryId + "_" + size;
+        if (categoryIconCache.containsKey(key)) {
+            return categoryIconCache.get(key);
+        }
+
+        // Thử load theo categoryId (VD: CAT001.png)
+        ImageIcon icon = loadAndScale(CATEGORY_ICON_PATH + categoryId + ".png", size);
+
+        // Fallback về default nếu không có
+        if (icon == null) {
+            icon = loadAndScale(CATEGORY_ICON_PATH + "default.png", size);
+        }
+
+        if (icon != null) {
+            categoryIconCache.put(key, icon);
+        }
+        return icon != null ? icon : new ImageIcon();
+    }
+
+    private static ImageIcon loadAndScale(String path, int size) {
+        URL url = IconHelper.class.getResource(path);
+        if (url == null) return null;
+        Image img = new ImageIcon(url).getImage()
+                        .getScaledInstance(size, size, Image.SCALE_SMOOTH);
+        return new ImageIcon(img);
     }
 
     // ==================================================================
