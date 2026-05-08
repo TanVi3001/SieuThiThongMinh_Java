@@ -220,6 +220,9 @@ public class CategoryTaxView extends JPanel {
             }
         };
         tblCategories.getColumnModel().getColumn(2).setCellRenderer(vatRenderer);
+        tblCategories.getColumnModel()
+            .getColumn(0)
+            .setCellRenderer(new view.components.CategoryTableRenderer(24));
     }
 
     private GridBagConstraints addGbc(GridBagConstraints gbc, int y, int b) {

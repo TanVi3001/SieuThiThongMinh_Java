@@ -176,6 +176,7 @@ public class ProductView extends JPanel {
         cbCategory = new JComboBox<>();
         styleComboBox(cbCategory, "Chọn hoặc nhập mã/tên loại...");
         setupAutoComplete(cbCategory, categoryList);
+        cbCategory.setRenderer(new view.components.CategoryComboRenderer(18));
 
         int y = 0;
         gbc.gridy = y++;
@@ -243,6 +244,10 @@ public class ProductView extends JPanel {
         tblProducts.setShowVerticalLines(false);
         tblProducts.setSelectionBackground(new Color(237, 242, 255));
         tblProducts.setSelectionForeground(textDark);
+        // Cột "Loại SP" (index 4) hiển thị icon + text
+        tblProducts.getColumnModel()
+                .getColumn(4)
+                .setCellRenderer(new view.components.CategoryTableRenderer(20));
 
         JScrollPane scrollPane = new JScrollPane(tblProducts);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
