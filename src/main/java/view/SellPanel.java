@@ -20,7 +20,13 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SellPanel extends JPanel {
+
+
+
+/**
+ * SellPanel — Màn hình bán hàng POS đầy đủ.
+ */
+public class SellPanel extends javax.swing.JPanel {
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
 
