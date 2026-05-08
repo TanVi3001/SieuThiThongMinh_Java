@@ -25,7 +25,7 @@ public class Product {
 
     // Constructor cũ
     public Product(String productId, String productName, BigDecimal basePrice,
-                   String categoryId, String supplierId, int isDeleted, int quantity) {
+            String categoryId, String supplierId, int isDeleted, int quantity) {
         this.productId = productId;
         this.productName = productName;
         this.basePrice = basePrice;
@@ -37,8 +37,8 @@ public class Product {
 
     // Constructor đầy đủ hơn (khuyên dùng)
     public Product(String productId, String productName, BigDecimal basePrice,
-                   String categoryId, String supplierId, int isDeleted, int quantity,
-                   String storeId, String unit) {
+            String categoryId, String supplierId, int isDeleted, int quantity,
+            String storeId, String unit) {
         this.productId = productId;
         this.productName = productName;
         this.basePrice = basePrice;
@@ -129,5 +129,15 @@ public class Product {
 
     public void setUnit(String unit) {
         this.unit = unit;
+    }
+    // Thêm vào file Product.java
+    private String unitId;
+
+    public String getUnitId() {
+        return unitId;
+    }
+
+    public void setUnitId(String unitId) {
+        this.unitId = unitId;
     }
 }

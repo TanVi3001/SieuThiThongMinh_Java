@@ -374,21 +374,39 @@ public class CustomerView extends JPanel {
     }
 
     private void searchAndFilterTable(String keyword) {
-        tableModel.setRowCount(0);
-        try {
-            List<Customer> list = CustomersSql.getInstance().selectAll();
-            for (Customer c : list) {
-                String name = c.getCustomerName() != null ? c.getCustomerName().toLowerCase() : "";
-                String phone = c.getPhone() != null ? c.getPhone() : "";
 
-                if (keyword.isEmpty() || name.contains(keyword) || phone.contains(keyword)) {
-                    String id = c.getCustomerId() != null ? c.getCustomerId() : "";
-                    String cName = c.getCustomerName() != null ? c.getCustomerName() : "";
-                    String email = c.getEmail() != null ? c.getEmail() : "";
-                    String address = c.getAddress() != null ? c.getAddress() : "";
-                    tableModel.addRow(new Object[]{id, cName, phone, email, address});
+        tableModel.setRowCount(0);
+
+        try {
+
+            List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
+
+            for (Customer c : list) {
+
+                String name = c.getCustomerName() != null
+                        ? c.getCustomerName().toLowerCase()
+                        : "";
+
+                String phone = c.getPhone() != null
+                        ? c.getPhone()
+                        : "";
+
+                if (keyword.isEmpty()
+                        || name.contains(keyword)
+                        || phone.contains(keyword)) {
+
+                    tableModel.addRow(new Object[]{
+                        c.getCustomerId(),
+                        c.getCustomerName(),
+                        c.getPhone(),
+                        c.getEmail(),
+                        c.getAddress(),
+                        String.format("%,.0f VNĐ", c.getTotalSpending()),
+                        c.getMemberRank()
+                    });
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -397,7 +415,6 @@ public class CustomerView extends JPanel {
     private void loadCustomerData() {
         tableModel.setRowCount(0);
         try {
-            // Gọi hàm có tính rank ở Bước 3
             List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
             for (Customer c : list) {
                 tableModel.addRow(new Object[]{
@@ -406,8 +423,10 @@ public class CustomerView extends JPanel {
                     c.getPhone(),
                     c.getEmail(),
                     c.getAddress(),
-                    String.format("%,.0f VNĐ", c.getTotalSpending()), // Định dạng tiền
-                    c.getMemberRank() // Hạng thành viên
+                    // 🌟 Hiển thị tiền định dạng chuẩn VNĐ
+                    String.format("%,.0f VNĐ", c.getTotalSpending()),
+                    // 🌟 Gọi hàm tính hạng tự động từ model
+                    c.getMemberRank()
                 });
             }
         } catch (Exception e) {

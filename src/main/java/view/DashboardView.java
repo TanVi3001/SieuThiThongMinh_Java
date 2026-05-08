@@ -6,12 +6,14 @@ import view.components.TongQuanPanel;
 import view.components.Sidebar;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Component; // Thêm cái này
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import common.events.AppEventType;
 
 public class DashboardView extends JFrame {
 
@@ -29,10 +31,29 @@ public class DashboardView extends JFrame {
 
         common.security.SecurityGuard.attach(mainContentPanel);
 
+        // =========================================================
+        // 🌟 BẮT SÓNG REAL-TIME TỪ TỔNG ĐÀI
+        // =========================================================
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             SwingUtilities.invokeLater(() -> {
-                if ("Tổng quan".equals(currentMenu)) {
-                    showPanel(new TongQuanPanel());
+                // Chỉ nạp lại dữ liệu nếu người dùng ĐANG MỞ tab đó
+                if (e.getType() == AppEventType.ORDERS && "Tổng quan".equals(currentMenu)) {
+                    System.out.println("Cập nhật Real-time: Refresh Dashboard...");
+
+                    // Lấy cái JScrollPane (lớp bảo vệ 2) đang chứa TongQuanPanel
+                    if (mainContentPanel.getComponentCount() > 0) {
+                        Component c = mainContentPanel.getComponent(0);
+                        if (c instanceof JScrollPane) {
+                            JScrollPane scroll = (JScrollPane) c;
+                            Component innerPanel = scroll.getViewport().getView();
+
+                            // Nếu cái bên trong là TongQuanPanel thì ép nó tải lại DB
+                            if (innerPanel instanceof TongQuanPanel) {
+                                // Gọi thẳng vào hàm đã public
+                                ((TongQuanPanel) innerPanel).loadRealData();
+                            }
+                        }
+                    }
                 } else if ("Báo cáo & Thống kê".equals(currentMenu)) {
                     if (business.service.AuthorizationService.canAccessStatisticsAndEmployees()) {
                         showPanel(new StatisticView());
@@ -40,6 +61,7 @@ public class DashboardView extends JFrame {
                 }
             });
         });
+
     }
 
     private void setupUI() {
@@ -56,7 +78,6 @@ public class DashboardView extends JFrame {
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        // BẢO VỆ LỚP 1: Mở Full màn hình và thiết lập giới hạn thu nhỏ
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         this.setMinimumSize(new Dimension(1100, 700));
         this.setLocationRelativeTo(null);
@@ -121,7 +142,6 @@ public class DashboardView extends JFrame {
     public void showPanel(JPanel childPanel) {
         mainContentPanel.removeAll();
 
-        // BẢO VỆ LỚP 2: Chống vỡ các báo cáo và thống kê bằng thanh cuộn
         childPanel.setMinimumSize(new Dimension(900, 600));
 
         JScrollPane scrollPane = new JScrollPane(childPanel);
