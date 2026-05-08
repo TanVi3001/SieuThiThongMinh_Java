@@ -1,65 +1,41 @@
 package business.service;
 
-import model.account.Account;
 import common.db.DatabaseConnection;
-import common.utils.NetworkUtils;
-
+import model.account.Account;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.UUID;
 
 public class AuditLogService {
 
-    /**
-     * Ghi lại nhật ký hệ thống.
-     * @param actionType Loại hành động (THÊM MỚI, CẬP NHẬT, XÓA, ĐĂNG NHẬP...)
-     * @param entityType Đối tượng bị tác động (TÀI KHOẢN, NHÂN VIÊN, SẢN PHẨM...)
-     * @param entityId ID của đối tượng bị tác động
-     * @param oldValue Dữ liệu cũ (nếu có)
-     * @param newValue Dữ liệu mới (nếu có)
-     * @param reason Lý do thao tác (nếu có)
-     */
-    public static void logAction(String actionType, String entityType, String entityId, 
-                                 String oldValue, String newValue, String reason) {
-        
-        new Thread(() -> {
-            // SỬ DỤNG BẢNG AUDIT_LOG THEO CHUẨN TIẾNG ANH
-            String sql = "INSERT INTO AUDIT_LOG (LOG_ID, ACCOUNT_ID, ACTION_TYPE, ENTITY_TYPE, "
-                       + "ENTITY_ID, OLD_VALUE, NEW_VALUE, REASON, IP_ADDRESS, DEVICE_INFO) "
-                       + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                       
-            try (Connection con = DatabaseConnection.getConnection();
-                 PreparedStatement ps = con.prepareStatement(sql)) {
+    public static void logAction(String actionType, String entityType, String entityId, String oldValue, String newValue, String reason) {
+        // Lấy thông tin người đang thao tác
+        Account currentUser = LoginService.getCurrentUser();
+        String accountId = (currentUser != null) ? currentUser.getAccountId() : null;
 
-                // Lấy người dùng đang đăng nhập
-                Account currentUser = LoginService.getCurrentUser();
-                String accountId = (currentUser != null && currentUser.getAccountId() != null) 
-                                    ? currentUser.getAccountId() : "SYSTEM";
-                
-                // Lấy IP nội bộ
-                String ipAddress = "127.0.0.1"; 
-                try {
-                    ipAddress = NetworkUtils.getLocalIPv4Address();
-                } catch(Exception ignored) {}
+        // Tạo mã Log ngẫu nhiên (Ví dụ: LOG_A1B2C3D4)
+        String logId = "LOG_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
 
-                String logId = "LOG_" + System.currentTimeMillis();
-                String deviceInfo = System.getProperty("os.name") + " - Java GUI";
+        String sql = "INSERT INTO AUDIT_LOG (LOG_ID, ACCOUNT_ID, ACTION_TYPE, ENTITY_TYPE, ENTITY_ID, OLD_VALUE, NEW_VALUE, REASON) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-                ps.setString(1, logId);
-                ps.setString(2, accountId);
-                ps.setString(3, actionType);
-                ps.setString(4, entityType);
-                ps.setString(5, entityId);
-                ps.setString(6, oldValue);
-                ps.setString(7, newValue);
-                ps.setString(8, reason);
-                ps.setString(9, ipAddress);
-                ps.setString(10, deviceInfo);
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
 
-                ps.executeUpdate();
+            ps.setString(1, logId);
+            ps.setString(2, accountId);
+            ps.setString(3, actionType);     // THÊM MỚI, CẬP NHẬT, XÓA...
+            ps.setString(4, entityType);     // ACCOUNTS, ROLES, PRODUCTS...
+            ps.setString(5, entityId);       // Mã đối tượng bị tác động
+            ps.setString(6, oldValue);
+            ps.setString(7, newValue);
+            ps.setString(8, reason);
 
-            } catch (Exception e) {
-                System.err.println("Lỗi ghi Nhật ký hệ thống (Audit Log): " + e.getMessage());
-            }
-        }).start();
+            ps.executeUpdate();
+            System.out.println("📝 [AuditLog] Đã ghi nhận thành công: " + actionType + " trên " + entityType);
+
+        } catch (Exception e) {
+            System.err.println("❌ [AuditLog] Lỗi ghi nhật ký hệ thống: " + e.getMessage());
+        }
     }
 }

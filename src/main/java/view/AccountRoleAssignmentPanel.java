@@ -26,6 +26,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     private JLabel lblSelectedDept;
     private JPanel pnlCurrRole;
     private String selectedAccountId = "";
+    private String selectedOldRole = "";
 
     private JPanel listItems;
     private JTextField txtSearch;
@@ -271,6 +272,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 selectedAccountId = accountId;
+                selectedOldRole = role;
                 lblSelectedUser.setText(name);
                 lblSelectedEmail.setText(email);
                 lblSelectedDept.setText(dept);
@@ -445,6 +447,19 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             boolean success = business.sql.rbac.AccountSql.getInstance().updateAccountRole(selectedAccountId, newRoleId);
 
             if (success) {
+                // =========================================================
+                // 1. GHI LẠI NHẬT KÝ KIỂM TOÁN (AUDIT LOG) NGAY LẬP TỨC
+                // =========================================================
+                business.service.AuditLogService.logAction(
+                    "CẬP NHẬT", 
+                    "ACCOUNTS", 
+                    selectedAccountId, 
+                    selectedOldRole,
+                    newRoleId,
+                    "Admin thay đổi quyền nhân viên"
+                );
+                // =========================================================
+
                 JOptionPane.showMessageDialog(this, "Cập nhật phân quyền thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
 
                 AppDataChangedEvent securityEvent = new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED");

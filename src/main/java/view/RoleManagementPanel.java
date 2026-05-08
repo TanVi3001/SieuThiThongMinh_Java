@@ -137,30 +137,53 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         try (Connection con = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
              
+            boolean hasChanges = false; // Biến cờ để biết có gì mới không
+
             for (RoleMatrixItem item : roleDataList) {
                 if ("R_ADMIN_ALL".equals(item.roleId)) continue; 
 
-                ps.setInt(1, item.canView ? 1 : 0);
-                ps.setInt(2, item.canAdd ? 1 : 0);
-                ps.setInt(3, item.canEdit ? 1 : 0);
-                ps.setInt(4, item.canDelete ? 1 : 0);
-                ps.setInt(5, item.canExport ? 1 : 0);
-                ps.setString(6, item.roleId);
-                ps.addBatch();
+                // CHỈ LƯU VÀ GHI LOG NẾU CHECKBOX CÓ SỰ THAY ĐỔI
+                if (item.isChanged()) {
+                    ps.setInt(1, item.canView ? 1 : 0);
+                    ps.setInt(2, item.canAdd ? 1 : 0);
+                    ps.setInt(3, item.canEdit ? 1 : 0);
+                    ps.setInt(4, item.canDelete ? 1 : 0);
+                    ps.setInt(5, item.canExport ? 1 : 0);
+                    ps.setString(6, item.roleId);
+                    ps.addBatch();
+                    hasChanges = true;
+                    
+                    // =========================================================
+                    // GHI AUDIT LOG CHI TIẾT SỰ THAY ĐỔI
+                    // =========================================================
+                    business.service.AuditLogService.logAction(
+                        "CẬP NHẬT", 
+                        "ROLES", 
+                        item.roleId, 
+                        item.getOldPermissions(), 
+                        item.getActionDiff(),
+                        "Admin tinh chỉnh quyền hạn trên Ma trận"
+                    );
+                    
+                    // Reset lại bộ nhớ sau khi lưu
+                    item.updateOriginals();
+                }
             }
             
-            ps.executeBatch();
-            
-            business.service.AuditLogService.logAction(
-                "CẬP NHẬT", "HỆ THỐNG", "ROLES", "", "Cập nhật Ma trận Phân quyền", "Admin cấu hình"
-            );
+            if (hasChanges) {
+                ps.executeBatch();
+                
+                // Bắn tín hiệu chốt đơn
+                try {
+                    common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
+                } catch (Exception ignored) {}
 
-            try {
-                common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
-            } catch (Exception ignored) {}
-
-            JOptionPane.showMessageDialog(this, "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                // Nếu bấm lưu mà không tích đổi gì cả thì báo nhẹ
+                JOptionPane.showMessageDialog(this, "Không có sự thay đổi nào để lưu.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+            }
             
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi cập nhật phân quyền: " + e.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
@@ -304,6 +327,9 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         String roleId;
         String roleName;
         boolean canView, canAdd, canEdit, canDelete, canExport;
+        
+        // --- THÊM BIẾN LƯU BẢN GỐC ĐỂ SO SÁNH ---
+        boolean oldView, oldAdd, oldEdit, oldDelete, oldExport;
 
         public RoleMatrixItem(String roleId, String roleName, boolean view, boolean add, boolean edit, boolean del, boolean exp) {
             this.roleId = roleId;
@@ -313,6 +339,70 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             this.canEdit = edit;
             this.canDelete = del;
             this.canExport = exp;
+            
+            // Lưu lại hiện trạng khi vừa load từ DB lên
+            this.oldView = view;
+            this.oldAdd = add;
+            this.oldEdit = edit;
+            this.oldDelete = del;
+            this.oldExport = exp;
+        }
+
+        // Hàm kiểm tra xem Admin có thực sự sửa quyền của Role này không?
+        public boolean isChanged() {
+            return canView != oldView || canAdd != oldAdd || canEdit != oldEdit || 
+                   canDelete != oldDelete || canExport != oldExport;
+        }
+
+        // Dịch các Checkbox thành chuỗi Tiếng Việt dễ đọc
+        public String getPermissionsString(boolean v, boolean a, boolean e, boolean d, boolean x) {
+            java.util.List<String> list = new java.util.ArrayList<>();
+            if (v) list.add("Xem");
+            if (a) list.add("Thêm");
+            if (e) list.add("Sửa");
+            if (d) list.add("Xóa");
+            if (x) list.add("Xuất file");
+            return list.isEmpty() ? "Không có quyền" : String.join(", ", list);
+        }
+        
+        public String getOldPermissions() {
+            return getPermissionsString(oldView, oldAdd, oldEdit, oldDelete, oldExport);
+        }
+        
+        public String getNewPermissions() {
+            return getPermissionsString(canView, canAdd, canEdit, canDelete, canExport);
+        }
+
+        // Cập nhật lại bản gốc sau khi đã lưu thành công
+        public void updateOriginals() {
+            oldView = canView; oldAdd = canAdd; oldEdit = canEdit; 
+            oldDelete = canDelete; oldExport = canExport;
+        }
+        
+        public String getActionDiff() {
+            java.util.List<String> bat = new java.util.ArrayList<>();
+            java.util.List<String> tat = new java.util.ArrayList<>();
+            
+            if (!oldView && canView) bat.add("Xem");
+            if (oldView && !canView) tat.add("Xem");
+            
+            if (!oldAdd && canAdd) bat.add("Thêm");
+            if (oldAdd && !canAdd) tat.add("Thêm");
+            
+            if (!oldEdit && canEdit) bat.add("Sửa");
+            if (oldEdit && !canEdit) tat.add("Sửa");
+            
+            if (!oldDelete && canDelete) bat.add("Xóa");
+            if (oldDelete && !canDelete) tat.add("Xóa");
+            
+            if (!oldExport && canExport) bat.add("Xuất file");
+            if (oldExport && !canExport) tat.add("Xuất file");
+            
+            java.util.List<String> result = new java.util.ArrayList<>();
+            if (!bat.isEmpty()) result.add("Bật: " + String.join(", ", bat));
+            if (!tat.isEmpty()) result.add("Tắt: " + String.join(", ", tat));
+            
+            return String.join(" | ", result);
         }
     }
 

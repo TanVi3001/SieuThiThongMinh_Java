@@ -35,15 +35,11 @@ public class AuditLogPanel extends JPanel {
         initUI();
         initEvents(); 
         
-        // Load dữ liệu lần đầu khi khởi tạo Panel
         loadRealData("Tất cả Hành động", "Tất cả Đối tượng", ""); 
-        
-        // Thiết lập cơ chế Real-time qua EventBus
         setupRealtimeSync();
     }
 
     private void initUI() {
-        // ── 1. HEADER ────────────────────────────────────────────────────────
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setOpaque(false);
 
@@ -61,7 +57,6 @@ public class AuditLogPanel extends JPanel {
         headerPanel.add(titlePanel, BorderLayout.WEST);
         add(headerPanel, BorderLayout.NORTH);
 
-        // ── 2. FILTER BAR ────────────────────────────────────────────────────
         RoundedPanel filterCard = new RoundedPanel(15, cardWhite);
         filterCard.setLayout(new FlowLayout(FlowLayout.LEFT, 15, 15));
         filterCard.setBorder(new EmptyBorder(5, 10, 5, 10));
@@ -92,17 +87,21 @@ public class AuditLogPanel extends JPanel {
         filterCard.add(btnRefresh); 
         filterCard.add(btnExport);
 
-        // ── 3. BẢNG DỮ LIỆU (AUDIT TABLE) ────────────────────────────────────
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
+        // 🔥 CỘT SỐ 7: LÀ CỘT ẨN DÙNG ĐỂ CHỨA DỮ LIỆU ĐẦY ĐỦ CHO POPUP
         tableModel = new DefaultTableModel(new Object[]{
-            "Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "Mã Đối tượng (ID)", "Chi tiết thay đổi"
+            "Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "Mã Đối tượng (ID)", "Chi tiết thay đổi", "FullDetails"
         }, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tblLogs = new JTable(tableModel);
+        
+        // Giấu cột FullDetails đi, không cho hiện trên bảng chính
+        tblLogs.removeColumn(tblLogs.getColumnModel().getColumn(7));
+        
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblLogs);
@@ -125,13 +124,8 @@ public class AuditLogPanel extends JPanel {
         txtSearch.addActionListener(e -> applyFilter());
         cbActionType.addActionListener(e -> applyFilter());
         cbEntity.addActionListener(e -> applyFilter());
-        
-        // =====================================================================
-        // SỰ KIỆN NÚT CẬP NHẬT: Dọn dẹp bộ lọc và tải lại dữ liệu mới nhất
-        // =====================================================================
         btnRefresh.addActionListener(e -> resetAndRefresh());
 
-        // Mở màn hình chi tiết khi Click đúp vào dòng
         tblLogs.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -141,30 +135,21 @@ public class AuditLogPanel extends JPanel {
             }
         });
         
-        // Thêm tính năng nút Export
         btnExport.addActionListener(e -> {
              JOptionPane.showMessageDialog(this, "Tính năng Xuất Excel đang được xây dựng.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
         });
     }
 
-    // Hàm thực thi chức năng Cập nhật (Refresh)
     private void resetAndRefresh() {
-        // Trả các bộ lọc về mặc định
         txtSearch.setText("");
         cbActionType.setSelectedIndex(0);
         cbEntity.setSelectedIndex(0);
-        
-        // Kéo dữ liệu mới nhất
         applyFilter();
     }
 
-    // =========================================================================
-    // CƠ CHẾ LẮNG NGHE SỰ KIỆN ĐỂ LOAD REAL-TIME KHÔNG CẦN TIMER
-    // =========================================================================
     private void setupRealtimeSync() {
         try {
             EventBus.subscribe(AppDataChangedEvent.class, event -> {
-                // Nhận bất kỳ tín hiệu nào thay đổi từ Data
                 SwingUtilities.invokeLater(() -> applyFilter());
             });
         } catch (Exception e) {
@@ -172,17 +157,25 @@ public class AuditLogPanel extends JPanel {
         }
     }
 
+    // =====================================================================
+    // 🔥 NÂNG CẤP GIAO DIỆN POPUP CHI TIẾT
+    // =====================================================================
     private void showLogDetailDialog() {
         int row = tblLogs.getSelectedRow();
         if (row < 0) return;
+        
+        // Chuyển đổi index dòng từ View sang Model (Bắt buộc vì ta đã giấu cột)
+        int modelRow = tblLogs.convertRowIndexToModel(row);
 
-        String time = tblLogs.getValueAt(row, 0).toString();
-        String user = tblLogs.getValueAt(row, 1).toString();
-        String ip = tblLogs.getValueAt(row, 2).toString();
-        String action = tblLogs.getValueAt(row, 3).toString();
-        String entity = tblLogs.getValueAt(row, 4).toString();
-        String entityId = tblLogs.getValueAt(row, 5).toString();
-        String details = tblLogs.getValueAt(row, 6).toString();
+        String time = tableModel.getValueAt(modelRow, 0).toString();
+        String user = tableModel.getValueAt(modelRow, 1).toString();
+        String ip = tableModel.getValueAt(modelRow, 2).toString();
+        String action = tableModel.getValueAt(modelRow, 3).toString();
+        String entity = tableModel.getValueAt(modelRow, 4).toString();
+        String entityId = tableModel.getValueAt(modelRow, 5).toString();
+        
+        // Lấy chuỗi FullDetails từ cột ẩn số 7 thay vì cột 6
+        String fullDetails = tableModel.getValueAt(modelRow, 7).toString();
 
         JPanel panel = new JPanel(new BorderLayout(10, 15));
         panel.setPreferredSize(new Dimension(600, 450));
@@ -203,13 +196,13 @@ public class AuditLogPanel extends JPanel {
 
         JLabel lblInfo = new JLabel(html.toString());
         
-        JTextArea txtDetails = new JTextArea(details);
-        txtDetails.setFont(new Font("Consolas", Font.PLAIN, 14));
+        JTextArea txtDetails = new JTextArea(fullDetails); // Hiện chuỗi FullDetails lên
+        txtDetails.setFont(new Font("Consolas", Font.PLAIN, 15));
         txtDetails.setLineWrap(true);
         txtDetails.setWrapStyleWord(true);
         txtDetails.setEditable(false);
         txtDetails.setBackground(new Color(248, 249, 252));
-        txtDetails.setBorder(new EmptyBorder(10, 10, 10, 10));
+        txtDetails.setBorder(new EmptyBorder(15, 15, 15, 15));
 
         JScrollPane sp = new JScrollPane(txtDetails);
         sp.setBorder(BorderFactory.createLineBorder(borderGray));
@@ -229,21 +222,30 @@ public class AuditLogPanel extends JPanel {
 
     private String translateReadable(String text) {
         if (text == null) return null;
-        return text.replace("R_ADMIN_ALL", "Toàn quyền hệ thống")
-                   .replace("R_STORE_MNG", "Quản lý chi nhánh")
+        return text.replace("R_ADMIN_ALL", "Quản trị viên")
+                   .replace("R_STORE_MNG", "Quản lý cửa hàng")
                    .replace("R_STAFF_SALE", "Nhân viên bán hàng")
-                   .replace("R_STAFF_VIEW_PROD", "Nhân viên kho")
-                   .replace("Quyền:", "Chức vụ:");
+                   .replace("R_STAFF_STOCK", "Nhân viên kho")
+                   .replace("R_STAFF_VIEW_PROD", "Nhân viên kho");
     }
 
     private void loadRealData(String actionFilter, String entityFilter, String searchKeyword) {
         int selectedRow = tblLogs.getSelectedRow();
         tableModel.setRowCount(0);
 
+        // Đã bổ sung thêm a.REASON để kéo lý do từ DB lên
         StringBuilder sql = new StringBuilder(
             "SELECT TO_CHAR(a.CREATED_AT, 'DD/MM/YYYY HH24:MI:SS') AS log_time, " +
             "acc.username, a.IP_ADDRESS, a.ACTION_TYPE, a.ENTITY_TYPE, a.ENTITY_ID, " +
-            "a.NEW_VALUE, a.OLD_VALUE " +
+            "a.NEW_VALUE, a.OLD_VALUE, a.REASON, " + 
+            "(CASE " +
+            "  WHEN a.ENTITY_TYPE = 'ACCOUNTS' THEN (SELECT u.full_name FROM ACCOUNTS ac JOIN USERS u ON ac.user_id = u.user_id WHERE ac.account_id = a.ENTITY_ID) " +
+            "  WHEN a.ENTITY_TYPE = 'EMPLOYEES' THEN (SELECT employee_name FROM EMPLOYEES WHERE employee_id = a.ENTITY_ID) " +
+            "  WHEN a.ENTITY_TYPE = 'PRODUCTS' THEN (SELECT product_name FROM PRODUCTS WHERE product_id = a.ENTITY_ID) " +
+            "  WHEN a.ENTITY_TYPE = 'CUSTOMERS' THEN (SELECT customer_name FROM CUSTOMERS WHERE customer_id = a.ENTITY_ID) " +
+            "  WHEN a.ENTITY_TYPE = 'ROLES' THEN (SELECT role_name FROM ROLES WHERE role_id = a.ENTITY_ID) " +
+            "  ELSE CAST(a.ENTITY_ID AS NVARCHAR2(50)) " +
+            "END) AS target_name " +
             "FROM AUDIT_LOG a " +
             "LEFT JOIN ACCOUNTS acc ON a.ACCOUNT_ID = acc.ACCOUNT_ID " +
             "WHERE a.IS_DELETED = 0 "
@@ -278,21 +280,52 @@ public class AuditLogPanel extends JPanel {
                 String entity = rs.getString("ENTITY_TYPE");
                 String entityId = rs.getString("ENTITY_ID");
                 
+                String reason = rs.getString("REASON");
+                if (reason == null || reason.isEmpty()) reason = "Hệ thống ghi nhận tự động";
+                
+                String targetName = rs.getString("target_name");
+                if (targetName == null || targetName.isEmpty()) targetName = entityId;
+                
                 String newValue = translateReadable(rs.getString("NEW_VALUE"));
                 String oldValue = translateReadable(rs.getString("OLD_VALUE"));
                 
-                String details = "";
-                if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
-                    details = oldValue + "  ➡️  " + newValue; 
-                } else if (newValue != null && !newValue.isEmpty()) {
-                    details = "Thêm mới: " + newValue;
+                String details = ""; // Nội dung rút gọn hiện ở Bảng
+                String fullDetails = ""; // Nội dung đầy đủ có Enter xuống dòng hiện ở Popup
+                
+                if ("ROLES".equalsIgnoreCase(entity) && "CẬP NHẬT".equalsIgnoreCase(action)) {
+                    details = "Chỉnh quyền [" + targetName + "]: " + newValue; 
+                    fullDetails = "🔹 Chức vụ bị tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
+                                  "🔹 Chi tiết thay đổi:\n   " + newValue + "\n\n" + // Hiển thị Bật/Tắt
+                                  "🔹 Quyền hạn trước đó:\n   " + oldValue + "\n\n" +
+                                  "💡 Ghi chú:\n   " + reason;
+                                  
+                // 🔥 NẾU LÀ CÁC CẬP NHẬT KHÁC (Đổi chức vụ, đổi thông tin...) THÌ DÙNG MẪU NÀY
+                } else if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
+                    details = "Cập nhật [" + targetName + "]: " + oldValue + " sang " + newValue; 
+                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
+                                  "🔹 Dữ liệu ban đầu:\n   " + oldValue + "\n\n" +
+                                  "🔹 Dữ liệu sau khi cập nhật:\n   " + newValue + "\n\n" +
+                                  "💡 Lý do / Ghi chú:\n   " + reason;
+                    
+                    }else if (newValue != null && !newValue.isEmpty()) {
+                    details = "Thêm mới [" + targetName + "]: " + newValue;
+                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
+                                  "🔹 Dữ liệu được thêm mới:\n   " + newValue + "\n\n" +
+                                  "💡 Lý do / Ghi chú:\n   " + reason;
+                                  
                 } else if (oldValue != null && !oldValue.isEmpty()) {
-                    details = "Đã xóa: " + oldValue;
+                    details = "Đã xóa [" + targetName + "]: " + oldValue;
+                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
+                                  "🔹 Dữ liệu bị xóa:\n   " + oldValue + "\n\n" +
+                                  "💡 Lý do / Ghi chú:\n   " + reason;
                 } else {
-                    details = "Không có mô tả chi tiết";
+                    details = "Thao tác trên [" + targetName + "]";
+                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
+                                  "💡 Lý do / Ghi chú:\n   " + reason;
                 }
 
-                tableModel.addRow(new Object[]{time, user, ip, action, entity, entityId, details});
+                // Chú ý: Có truyền thêm fullDetails vào cột số 7
+                tableModel.addRow(new Object[]{time, user, ip, action, entity, entityId, details, fullDetails});
             }
             
             if (selectedRow >= 0 && selectedRow < tableModel.getRowCount()) {
@@ -301,6 +334,7 @@ public class AuditLogPanel extends JPanel {
 
         } catch (Exception e) { 
             e.printStackTrace(); 
+            JOptionPane.showMessageDialog(this, "Lỗi tải dữ liệu: " + e.getMessage(), "Lỗi SQL", JOptionPane.ERROR_MESSAGE);
         }
     }
 
