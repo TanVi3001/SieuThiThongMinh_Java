@@ -16,100 +16,115 @@ import java.util.List;
 public class PaymentService {
 
     public static boolean thanhToan(Order hoaDon, List<OrderDetail> dsChiTiet) {
-        Connection con = null;
+        java.sql.Connection con = null;
         try {
-            con = DatabaseConnection.getConnection();
-            // BƯỚC 1: QUAN TRỌNG NHẤT - Tắt tự động lưu để quản lý Transaction
-            con.setAutoCommit(false);
+            con = common.db.DatabaseConnection.getConnection();
+            con.setAutoCommit(false); // Bật chế độ Transaction an toàn
 
-            // BƯỚC 2: VALIDATE TỒN KHO REAL-TIME TRƯỚC KHI GHI DATA
+            // =========================================================
+            // BƯỚC 1: VALIDATE TỒN KHO BẰNG CỘT `STOCK_QUANTITY`
+            // =========================================================
             for (OrderDetail ct : dsChiTiet) {
-                // Tính số lượng quy đổi ra đơn vị gốc (VD: 1 Lốc = 6 Chai)
-                int baseQuantity = ProductUnitsSql.getInstance()
-                        .convertToBaseQuantityWithConn(con, ct.getProductId(), ct.getUnitId(), ct.getQuantity());
-
-                String checkStockSql = "SELECT quantity FROM PRODUCTS WHERE product_id = ?";
-                try (PreparedStatement psCheck = con.prepareStatement(checkStockSql)) {
+                // SỬ DỤNG ĐÚNG CỘT `stock_quantity` NHƯ TRONG HÌNH 3
+                String checkStockSql = "SELECT stock_quantity FROM PRODUCTS WHERE product_id = ?";
+                try (java.sql.PreparedStatement psCheck = con.prepareStatement(checkStockSql)) {
                     psCheck.setString(1, ct.getProductId());
-                    try (ResultSet rsCheck = psCheck.executeQuery()) {
+                    try (java.sql.ResultSet rsCheck = psCheck.executeQuery()) {
                         if (rsCheck.next()) {
-                            int currentStock = rsCheck.getInt("quantity");
-                            if (currentStock < baseQuantity) {
-                                // 🚨 CẢNH BÁO VÀ CHẶN ĐỨNG GIAO DỊCH
+                            int currentStock = rsCheck.getInt("stock_quantity");
+                            if (currentStock < ct.getQuantity()) {
                                 javax.swing.JOptionPane.showMessageDialog(null,
                                         "🚨 CẢNH BÁO: Sản phẩm " + ct.getProductId() + " không đủ tồn kho!\n"
-                                        + "Khách muốn mua: " + baseQuantity + " | Tồn kho thực tế: " + currentStock,
-                                        "Lỗi đồng bộ", javax.swing.JOptionPane.ERROR_MESSAGE);
-                                con.rollback(); // Quay xe ngay lập tức
-                                return false;   // Ngừng thanh toán
+                                        + "Khách muốn mua: " + ct.getQuantity() + " | Tồn kho thực tế: " + currentStock,
+                                        "Lỗi tồn kho", javax.swing.JOptionPane.ERROR_MESSAGE);
+                                con.rollback();
+                                return false;
                             }
                         } else {
-                            throw new SQLException("Không tìm thấy sản phẩm trong hệ thống: " + ct.getProductId());
+                            throw new java.sql.SQLException("Không tìm thấy sản phẩm: " + ct.getProductId());
                         }
                     }
                 }
             }
 
-            // BƯỚC 3: Mọi thứ đã an toàn, tiến hành lưu Hóa đơn chính
-            int resOrder = OrdersSql.getInstance().insertWithConn(con, hoaDon);
-            if (resOrder <= 0) {
-                throw new SQLException("Lỗi lưu hóa đơn!");
-            }
+            // =========================================================
+            // BƯỚC 2: INSERT VÀO BẢNG `ORDERS` (Chuẩn theo Hình 2)
+            // =========================================================
+            String insertOrderSql = "INSERT INTO ORDERS (order_id, customer_id, employee_id, order_date, total_amount, status, payment_method_id, notes, is_deleted) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)";
+            try (java.sql.PreparedStatement psOrder = con.prepareStatement(insertOrderSql)) {
+                psOrder.setString(1, hoaDon.getOrderId());
+                psOrder.setString(2, hoaDon.getCustomerId());
+                psOrder.setString(3, hoaDon.getEmployeeId());
+                psOrder.setDate(4, hoaDon.getOrderDate());
+                psOrder.setDouble(5, hoaDon.getTotalAmount());
+                psOrder.setString(6, hoaDon.getStatus());
+                psOrder.setString(7, hoaDon.getPaymentMethodId());
+                psOrder.setString(8, hoaDon.getNote()); // Nhét vào cột NOTES
 
-            // BƯỚC 4: Duyệt danh sách để lưu Chi tiết & Trừ tồn kho
-            for (OrderDetail ct : dsChiTiet) {
-                int baseQuantity = ProductUnitsSql.getInstance()
-                        .convertToBaseQuantityWithConn(con, ct.getProductId(), ct.getUnitId(), ct.getQuantity());
-
-                String resolvedUnitId = ProductUnitsSql.getInstance()
-                        .resolveUnitIdWithConn(con, ct.getUnitId());
-
-                OrderDetail detailToSave = new OrderDetail(
-                        ct.getOrderId(),
-                        ct.getProductId(),
-                        ct.getQuantity(),
-                        ct.getUnitPrice(),
-                        resolvedUnitId,
-                        baseQuantity
-                );
-
-                // 4.1: Lưu chi tiết hóa đơn
-                int resDetail = OrderDetailsSql.getInstance().insertWithConn(con, detailToSave);
-                if (resDetail <= 0) {
-                    throw new SQLException("Lỗi lưu chi tiết hóa đơn!");
-                }
-
-                // 4.2: Trừ tồn kho sản phẩm
-                int resUpdateStock = ProductsSql.getInstance().subtractStockWithConn(con, ct.getProductId(), baseQuantity);
-                if (resUpdateStock <= 0) {
-                    throw new SQLException("Lỗi trừ tồn kho cho SP: " + ct.getProductId());
+                int resOrder = psOrder.executeUpdate();
+                if (resOrder <= 0) {
+                    throw new java.sql.SQLException("Lỗi lưu hóa đơn chính!");
                 }
             }
 
-            // BƯỚC 5: Nếu mọi thứ xanh mượt thì "Chốt đơn"
+            // =========================================================
+            // BƯỚC 3: INSERT `ORDER_DETAILS` VÀ UPDATE `PRODUCTS` 
+            // (Chuẩn theo Hình 1 và Hình 3, không dùng UNIT_ID)
+            // =========================================================
+            String insertDetailSql = "INSERT INTO ORDER_DETAILS (order_id, product_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?)";
+            String updateStockSql = "UPDATE PRODUCTS SET stock_quantity = stock_quantity - ? WHERE product_id = ?";
+
+            try (java.sql.PreparedStatement psDetail = con.prepareStatement(insertDetailSql); java.sql.PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql)) {
+
+                for (OrderDetail ct : dsChiTiet) {
+                    // 3.1: Lưu Chi Tiết Hóa Đơn (Tự tính LINE_TOTAL = quantity * unit_price)
+                    psDetail.setString(1, hoaDon.getOrderId()); // Dùng ID từ hóa đơn cho chắc
+                    psDetail.setString(2, ct.getProductId());
+                    psDetail.setInt(3, ct.getQuantity());
+                    psDetail.setDouble(4, ct.getUnitPrice());
+                    psDetail.setDouble(5, ct.getQuantity() * ct.getUnitPrice()); // LINE_TOTAL
+
+                    int resDetail = psDetail.executeUpdate();
+                    if (resDetail <= 0) {
+                        throw new java.sql.SQLException("Lỗi lưu chi tiết: " + ct.getProductId());
+                    }
+
+                    // 3.2: TRỪ TỒN KHO TRỰC TIẾP TRÊN CỘT `STOCK_QUANTITY`
+                    psUpdateStock.setInt(1, ct.getQuantity());
+                    psUpdateStock.setString(2, ct.getProductId());
+                    int resUpdateStock = psUpdateStock.executeUpdate();
+                    if (resUpdateStock <= 0) {
+                        throw new java.sql.SQLException("Lỗi trừ kho: " + ct.getProductId());
+                    }
+                }
+            }
+
+            // =========================================================
+            // BƯỚC 4: HOÀN TẤT VÀ CHỐT ĐƠN (COMMIT)
+            // =========================================================
             con.commit();
-            System.out.println("✅ Thanh toán hoàn tất! Dữ liệu đã được đồng bộ vào Oracle.");
+            System.out.println("✅ Thanh toán hoàn tất! Database đã được cập nhật mượt mà.");
             return true;
 
         } catch (Exception e) {
-            // BƯỚC 6: Có biến là "Quay xe" (Rollback) toàn bộ
             try {
                 if (con != null) {
                     con.rollback();
                 }
-            } catch (SQLException ex) {
+            } catch (java.sql.SQLException ex) {
                 ex.printStackTrace();
             }
             System.out.println("❌ Thanh toán thất bại: " + e.getMessage());
+            e.printStackTrace();
             return false;
         } finally {
-            // Trả lại trạng thái cũ và đóng kết nối
             try {
                 if (con != null) {
                     con.setAutoCommit(true);
                     con.close();
                 }
-            } catch (SQLException e) {
+            } catch (java.sql.SQLException e) {
                 e.printStackTrace();
             }
         }

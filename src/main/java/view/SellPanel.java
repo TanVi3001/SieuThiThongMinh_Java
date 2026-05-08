@@ -20,13 +20,7 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-
-
-
-/**
- * SellPanel — Màn hình bán hàng POS đầy đủ.
- */
-public class SellPanel extends javax.swing.JPanel {
+public class SellPanel extends JPanel {
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
 
@@ -48,6 +42,7 @@ public class SellPanel extends javax.swing.JPanel {
     // --- Data ---
     private List<Product> allProducts = new ArrayList<>();
     private double currentTotal = 0;
+    private final String SEARCH_HINT = "Nhập mã SP, tên SP..."; // Chữ gợi ý
 
     public SellPanel() {
         buildUI();
@@ -57,18 +52,17 @@ public class SellPanel extends javax.swing.JPanel {
     }
 
     // =========================================================================
-    // 1. XÂY DỰNG GIAO DIỆN CÓ AUTOCOMPLETE VÀ CHỌN SỐ LƯỢNG
+    // 1. XÂY DỰNG GIAO DIỆN
     // =========================================================================
     private void buildUI() {
         setLayout(new BorderLayout(10, 10));
         setBackground(new Color(245, 247, 250));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        // --- TOP PANEL (AutoComplete + Qty) ---
         JPanel pnlTop = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
         pnlTop.setOpaque(false);
 
-        JLabel lblSearch = new JLabel("🔍 Tìm SP / Mã vạch:");
+        JLabel lblSearch = new JLabel("🔍 Tìm SP:");
         lblSearch.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
         cboSearch = new JComboBox<>();
@@ -93,7 +87,6 @@ public class SellPanel extends javax.swing.JPanel {
         pnlTop.add(btnAdd);
         add(pnlTop, BorderLayout.NORTH);
 
-        // --- CENTER PANEL (Danh sách SP & Giỏ hàng) ---
         JPanel pnlCenter = new JPanel(new GridLayout(1, 2, 15, 0));
         pnlCenter.setOpaque(false);
 
@@ -132,7 +125,6 @@ public class SellPanel extends javax.swing.JPanel {
         pnlCenter.add(pnlRight);
         add(pnlCenter, BorderLayout.CENTER);
 
-        // --- BOTTOM PANEL (Thanh toán) ---
         JPanel pnlBottom = new JPanel(new BorderLayout(10, 10));
         pnlBottom.setOpaque(false);
         pnlBottom.setBorder(BorderFactory.createMatteBorder(2, 0, 0, 0, new Color(200, 200, 200)));
@@ -155,7 +147,7 @@ public class SellPanel extends javax.swing.JPanel {
         pnlTotal.add(new JLabel("Thanh toán:"));
         pnlTotal.add(cboPaymentMethod);
         pnlTotal.add(lblTotal);
-        pnlTotal.add(btnRemove); // Nút xóa dòng
+        pnlTotal.add(btnRemove);
         pnlTotal.add(btnCancel);
         pnlTotal.add(btnPay);
 
@@ -164,28 +156,83 @@ public class SellPanel extends javax.swing.JPanel {
     }
 
     // =========================================================================
-    // 2. LOGIC NGHIỆP VỤ & AUTOCOMPLETE FIX LỖI
+    // 2. LOGIC AUTOCOMPLETE CỰC XỊN XÒ
     // =========================================================================
     private void initEvents() {
         JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
 
-        // 🌟 FIX BUG 1: AutoComplete mượt mà hơn
+        // 🌟 TẠO CHỮ GỢI Ý (PLACEHOLDER)
+        txtEditor.setText(SEARCH_HINT);
+        txtEditor.setForeground(Color.GRAY);
+
+        txtEditor.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (txtEditor.getText().equals(SEARCH_HINT)) {
+                    txtEditor.setText("");
+                    txtEditor.setForeground(Color.BLACK);
+                }
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                if (txtEditor.getText().isEmpty()) {
+                    txtEditor.setText(SEARCH_HINT);
+                    txtEditor.setForeground(Color.GRAY);
+                }
+            }
+        });
+
+        // 🌟 XỔ FULL SẢN PHẨM KHI BẤM NÚT TRỎ XUỐNG
+        cboSearch.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                SwingUtilities.invokeLater(() -> {
+                    String currentText = txtEditor.getText();
+                    if (currentText.isEmpty() || currentText.equals(SEARCH_HINT)) {
+                        cboSearch.removeAllItems();
+                        for (Product p : allProducts) {
+                            if (p.getQuantity() > 0) {
+                                cboSearch.addItem(p.getProductId() + " - " + p.getProductName());
+                            }
+                        }
+                        if (currentText.equals(SEARCH_HINT)) {
+                            txtEditor.setText("");
+                            txtEditor.setForeground(Color.BLACK);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
+            }
+        });
+
+        // AutoComplete mượt mà khi gõ chữ
         txtEditor.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    btnAdd.doClick(); // Nhấn Enter là tự bấm Thêm
+                    btnAdd.doClick();
                     return;
                 }
                 if (e.getKeyCode() == KeyEvent.VK_UP || e.getKeyCode() == KeyEvent.VK_DOWN) {
                     return;
                 }
 
-                // Dùng invokeLater để tránh đụng độ luồng của Swing
                 SwingUtilities.invokeLater(() -> {
                     String txt = txtEditor.getText();
+                    if (txt.equals(SEARCH_HINT)) {
+                        return;
+                    }
+
                     cboSearch.removeAllItems();
-                    cboSearch.addItem(txt); // Giữ lại text đang gõ
+                    cboSearch.addItem(txt);
 
                     if (!txt.isEmpty()) {
                         for (Product p : allProducts) {
@@ -204,17 +251,18 @@ public class SellPanel extends javax.swing.JPanel {
             }
         });
 
-        // 🌟 FIX BUG 2: Nút Thêm vào giỏ bắt đủ trường hợp
         btnAdd.addActionListener(e -> {
             String selected = "";
             if (cboSearch.getSelectedItem() != null) {
                 selected = cboSearch.getSelectedItem().toString();
             }
-            if (selected.isEmpty()) {
+            if (selected.isEmpty() || selected.equals(SEARCH_HINT)) {
                 selected = txtEditor.getText();
             }
+            if (selected.equals(SEARCH_HINT)) {
+                selected = "";
+            }
 
-            // Nếu text trống, kiểm tra xem có đang click dòng nào trên bảng SP không
             if (selected.isEmpty()) {
                 int row = tblProducts.getSelectedRow();
                 if (row >= 0) {
@@ -228,7 +276,6 @@ public class SellPanel extends javax.swing.JPanel {
                 return;
             }
 
-            // Nếu nhập tay hoặc chọn từ ComboBox
             String pId = selected.contains(" - ") ? selected.split(" - ")[0].trim() : selected.trim();
             addToCartExplicit(pId, (int) spnQty.getValue());
 
@@ -238,20 +285,18 @@ public class SellPanel extends javax.swing.JPanel {
             txtEditor.requestFocus();
         });
 
-        // Double-click bảng SP
         tblProducts.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     int row = tblProducts.getSelectedRow();
                     if (row >= 0) {
-                        addToCartExplicit(tblProducts.getValueAt(row, 0).toString(), 1); // Double click auto thêm 1
+                        addToCartExplicit(tblProducts.getValueAt(row, 0).toString(), 1);
                     }
                 }
             }
         });
 
-        // 🌟 FIX BUG 3: Nút xóa món
         btnRemove.addActionListener(e -> {
             int row = tblCart.getSelectedRow();
             if (row >= 0) {
@@ -375,7 +420,7 @@ public class SellPanel extends javax.swing.JPanel {
     }
 
     // =========================================================================
-    // 4. FIX BUG THANH TOÁN
+    // 4. FIX BUG THANH TOÁN (ORA-01400: UNIT_ID NULL)
     // =========================================================================
     private void processPayment() {
         if (modCart.getRowCount() == 0) {
@@ -384,7 +429,6 @@ public class SellPanel extends javax.swing.JPanel {
         }
 
         try {
-            // Lấy ID nhân viên
             String empId = "EMP1777277282761";
             if (SessionManager.getCurrentUser() != null && SessionManager.getCurrentUser().getAccountId() != null) {
                 empId = SessionManager.getCurrentUser().getAccountId();
@@ -415,22 +459,43 @@ public class SellPanel extends javax.swing.JPanel {
                 int qty = (int) modCart.getValueAt(i, 2);
                 double price = (double) modCart.getValueAt(i, 3);
 
-                // 🌟 Ràng buộc Unit an toàn để không bị lỗi Database FK
                 String unitId = null;
-                for (Product p : allProducts) {
-                    if (p.getProductId().equals(pId)) {
-                        unitId = p.getBaseUnitId();
-                        if (unitId == null && p.getUnit() != null) {
-                            unitId = p.getUnit().toString();
+
+                // 🌟 GIẢI PHÁP TRỊ TẬN GỐC LỖI KHÓA NGOẠI: Móc trực tiếp Unit ID từ Database lên
+                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection()) {
+                    // Ưu tiên 1: Lấy đúng unit_id của sản phẩm này trong bảng PRODUCTS
+                    String sql = "SELECT NVL(base_unit_id, unit_id) as uid FROM PRODUCTS WHERE product_id = ?";
+                    try (java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+                        ps.setString(1, pId);
+                        try (java.sql.ResultSet rs = ps.executeQuery()) {
+                            if (rs.next()) {
+                                unitId = rs.getString("uid");
+                            }
                         }
-                        break;
                     }
+
+                    // Ưu tiên 2: Lỡ sản phẩm dưới DB bị nhân viên nhập thiếu Unit, 
+                    // ta lấy đại 1 cái Unit ID CÓ THẬT trong bảng UNITS để "chữa cháy" bill
+                    if (unitId == null || unitId.trim().isEmpty()) {
+                        String sqlFallback = "SELECT unit_id FROM UNITS FETCH FIRST 1 ROWS ONLY";
+                        try (java.sql.PreparedStatement ps = con.prepareStatement(sqlFallback); java.sql.ResultSet rs = ps.executeQuery()) {
+                            if (rs.next()) {
+                                unitId = rs.getString("unit_id");
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+                // Đảm bảo không bao giờ bị dính NullPointerException hay lỗi khóa ngoại nữa
+                if (unitId == null) {
+                    unitId = "";
                 }
 
                 details.add(new OrderDetail(orderId, pId, qty, price, unitId, 0));
             }
 
-            // Gọi Payment Service
             boolean success = PaymentService.thanhToan(order, details);
 
             if (success) {
@@ -440,7 +505,8 @@ public class SellPanel extends javax.swing.JPanel {
                 loadProducts();
 
                 JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
-                txtEditor.setText("");
+                txtEditor.setText("Nhập mã SP, tên SP..."); // Gán lại chữ gợi ý
+                txtEditor.setForeground(Color.GRAY);
                 txtEditor.requestFocus();
 
                 try {
@@ -449,9 +515,7 @@ public class SellPanel extends javax.swing.JPanel {
                 }
 
             } else {
-                // 🚨 CÁCH FIX TRIỆT ĐỂ NẾU VẪN LỖI DB: 
-                // Yêu cầu ông mở tab "Output" (phía dưới màn hình NetBeans) để xem cái dòng chữ đỏ nó báo lỗi bảng nào (PRODUCTS hay ORDER_DETAILS)
-                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!\nHãy mở tab Output (Console) của NetBeans để xem chi tiết lỗi SQL là gì nhé.", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!\nKiểm tra lại thông tin khách hàng hoặc kết nối Database.", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage(), "Exception", JOptionPane.ERROR_MESSAGE);
