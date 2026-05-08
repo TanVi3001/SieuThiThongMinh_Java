@@ -1,5 +1,8 @@
 package view;
 
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.events.EventBus;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -22,8 +25,7 @@ public class AuditLogPanel extends JPanel {
     private DefaultTableModel tableModel;
     private JTextField txtSearch;
     private JComboBox<String> cbActionType, cbEntity;
-    private JButton btnFilter, btnExport;
-    private Timer autoRefreshTimer; // Khai báo bộ đếm nhịp
+    private JButton btnFilter, btnRefresh, btnExport;
 
     public AuditLogPanel() {
         setLayout(new BorderLayout(20, 20));
@@ -32,7 +34,12 @@ public class AuditLogPanel extends JPanel {
 
         initUI();
         initEvents(); 
+        
+        // Load dữ liệu lần đầu khi khởi tạo Panel
         loadRealData("Tất cả Hành động", "Tất cả Đối tượng", ""); 
+        
+        // Thiết lập cơ chế Real-time qua EventBus
+        setupRealtimeSync();
     }
 
     private void initUI() {
@@ -42,10 +49,10 @@ public class AuditLogPanel extends JPanel {
 
         JPanel titlePanel = new JPanel(new GridLayout(2, 1));
         titlePanel.setOpaque(false);
-        JLabel lblTitle = new JLabel("Nhật Ký Hoạt Động Hệ Thống");
+        JLabel lblTitle = new JLabel("Nhật Ký Hoạt Động Hệ Thống (Audit Trail)");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(textDark);
-        JLabel lblSub = new JLabel("Truy vết và giám sát mọi thao tác thay đổi dữ liệu (Audit Trail)");
+        JLabel lblSub = new JLabel("Giám sát mọi thao tác Thêm/Sửa/Xóa của tất cả các tài khoản theo thời gian thực");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblSub.setForeground(textGray);
         titlePanel.add(lblTitle);
@@ -62,21 +69,27 @@ public class AuditLogPanel extends JPanel {
         txtSearch = createTextField("Tìm kiếm theo tài khoản hoặc IP...");
         txtSearch.setPreferredSize(new Dimension(280, 40));
 
-        cbActionType = new JComboBox<>(new String[]{"Tất cả Hành động", "THÊM MỚI", "CẬP NHẬT", "XÓA", "ĐĂNG NHẬP"});
+        cbActionType = new JComboBox<>(new String[]{
+            "Tất cả Hành động", "THÊM MỚI", "CẬP NHẬT", "XÓA", "ĐĂNG NHẬP", "ĐĂNG XUẤT", "XUẤT FILE"
+        });
         cbActionType.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbActionType.setPreferredSize(new Dimension(180, 40));
 
-        cbEntity = new JComboBox<>(new String[]{"Tất cả Đối tượng", "TÀI KHOẢN", "NHÂN VIÊN", "SẢN PHẨM", "HÓA ĐƠN", "KHÁCH HÀNG", "HỆ THỐNG"});
+        cbEntity = new JComboBox<>(new String[]{
+            "Tất cả Đối tượng", "ROLES", "ACCOUNTS", "EMPLOYEES", "PRODUCTS", "ORDERS", "CUSTOMERS", "INVENTORY", "HỆ THỐNG"
+        });
         cbEntity.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbEntity.setPreferredSize(new Dimension(180, 40));
 
         btnFilter = createCustomButton("Lọc dữ liệu", new Color(54, 92, 245), Color.WHITE, IconHelper.search(18));
+        btnRefresh = createCustomButton("Cập nhật", new Color(23, 162, 184), Color.WHITE, IconHelper.refresh(18)); 
         btnExport = createCustomButton("Xuất Excel", new Color(165, 177, 194), Color.WHITE, IconHelper.barChart(18));
 
         filterCard.add(new JLabel("Tìm kiếm: ")); filterCard.add(txtSearch);
         filterCard.add(new JLabel("Hành động: ")); filterCard.add(cbActionType);
         filterCard.add(new JLabel("Đối tượng: ")); filterCard.add(cbEntity);
         filterCard.add(btnFilter);
+        filterCard.add(btnRefresh); 
         filterCard.add(btnExport);
 
         // ── 3. BẢNG DỮ LIỆU (AUDIT TABLE) ────────────────────────────────────
@@ -84,7 +97,9 @@ public class AuditLogPanel extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "ID Đối tượng", "Chi tiết thay đổi"}, 0) {
+        tableModel = new DefaultTableModel(new Object[]{
+            "Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "Mã Đối tượng (ID)", "Chi tiết thay đổi"
+        }, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tblLogs = new JTable(tableModel);
@@ -110,32 +125,57 @@ public class AuditLogPanel extends JPanel {
         txtSearch.addActionListener(e -> applyFilter());
         cbActionType.addActionListener(e -> applyFilter());
         cbEntity.addActionListener(e -> applyFilter());
+        
+        // =====================================================================
+        // SỰ KIỆN NÚT CẬP NHẬT: Dọn dẹp bộ lọc và tải lại dữ liệu mới nhất
+        // =====================================================================
+        btnRefresh.addActionListener(e -> resetAndRefresh());
 
-        // SỰ KIỆN NHẤP CHUỘT VÀO HÀNG ĐỂ XEM CHI TIẾT
+        // Mở màn hình chi tiết khi Click đúp vào dòng
         tblLogs.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 1) { 
+                if (e.getClickCount() == 2) { 
                     showLogDetailDialog();
                 }
             }
         });
-
-        // -------------------------------------------------------------
-        // TÍNH NĂNG TỰ ĐỘNG LÀM MỚI (AUTO-REFRESH) MỖI 5 GIÂY (5000ms)
-        // -------------------------------------------------------------
-        autoRefreshTimer = new Timer(5000, e -> {
-            // Vẫn giữ nguyên các điều kiện lọc (Action, Entity, Search)
-            applyFilter(); 
+        
+        // Thêm tính năng nút Export
+        btnExport.addActionListener(e -> {
+             JOptionPane.showMessageDialog(this, "Tính năng Xuất Excel đang được xây dựng.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
         });
-        autoRefreshTimer.start();
+    }
+
+    // Hàm thực thi chức năng Cập nhật (Refresh)
+    private void resetAndRefresh() {
+        // Trả các bộ lọc về mặc định
+        txtSearch.setText("");
+        cbActionType.setSelectedIndex(0);
+        cbEntity.setSelectedIndex(0);
+        
+        // Kéo dữ liệu mới nhất
+        applyFilter();
+    }
+
+    // =========================================================================
+    // CƠ CHẾ LẮNG NGHE SỰ KIỆN ĐỂ LOAD REAL-TIME KHÔNG CẦN TIMER
+    // =========================================================================
+    private void setupRealtimeSync() {
+        try {
+            EventBus.subscribe(AppDataChangedEvent.class, event -> {
+                // Nhận bất kỳ tín hiệu nào thay đổi từ Data
+                SwingUtilities.invokeLater(() -> applyFilter());
+            });
+        } catch (Exception e) {
+            System.err.println("Lỗi thiết lập real-time Audit Log: " + e.getMessage());
+        }
     }
 
     private void showLogDetailDialog() {
         int row = tblLogs.getSelectedRow();
         if (row < 0) return;
 
-        // Lấy dữ liệu từ hàng được chọn
         String time = tblLogs.getValueAt(row, 0).toString();
         String user = tblLogs.getValueAt(row, 1).toString();
         String ip = tblLogs.getValueAt(row, 2).toString();
@@ -144,21 +184,21 @@ public class AuditLogPanel extends JPanel {
         String entityId = tblLogs.getValueAt(row, 5).toString();
         String details = tblLogs.getValueAt(row, 6).toString();
 
-        // Tạo giao diện Popup đẹp
         JPanel panel = new JPanel(new BorderLayout(10, 15));
-        panel.setPreferredSize(new Dimension(500, 400));
+        panel.setPreferredSize(new Dimension(600, 450));
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
         StringBuilder html = new StringBuilder("<html><body style='font-family:Segoe UI; font-size:11pt;'>");
-        html.append("<h2 style='color:#365CF5;'>Thông Tin Chi Tiết Log</h2>");
+        html.append("<h2 style='color:#365CF5; margin-bottom:5px;'>Thông Tin Chi Tiết Giao Dịch</h2>");
         html.append("<hr color='#E2E8F0'>");
-        html.append("<b>⌚ Thời gian:</b> ").append(time).append("<br><br>");
-        html.append("<b>👤 Tài khoản:</b> ").append(user).append("<br><br>");
-        html.append("<b>🌐 Địa chỉ IP:</b> ").append(ip).append("<br><br>");
-        html.append("<b>⚡ Hành động:</b> ").append(action).append("<br><br>");
-        html.append("<b>📦 Đối tượng:</b> ").append(entity).append(" (ID: ").append(entityId).append(")<br><br>");
-        html.append("<b>📝 Nội dung thay đổi:</b>");
+        html.append("<table width='100%' cellpadding='5'>");
+        html.append("<tr><td width='120'><b>⌚ Thời gian:</b></td><td>").append(time).append("</td></tr>");
+        html.append("<tr><td><b>👤 Tài khoản:</b></td><td><span style='color:#E63946; font-weight:bold;'>").append(user).append("</span></td></tr>");
+        html.append("<tr><td><b>🌐 Địa chỉ IP:</b></td><td>").append(ip).append("</td></tr>");
+        html.append("<tr><td><b>⚡ Hành động:</b></td><td>").append(action).append("</td></tr>");
+        html.append("<tr><td><b>📦 Đối tượng:</b></td><td>").append(entity).append(" (Mã: ").append(entityId).append(")</td></tr>");
+        html.append("</table><br><b>📝 Nội dung thay đổi chi tiết:</b>");
         html.append("</body></html>");
 
         JLabel lblInfo = new JLabel(html.toString());
@@ -177,7 +217,7 @@ public class AuditLogPanel extends JPanel {
         panel.add(lblInfo, BorderLayout.NORTH);
         panel.add(sp, BorderLayout.CENTER);
 
-        JOptionPane.showMessageDialog(this, panel, "Chi tiết hoạt động", JOptionPane.PLAIN_MESSAGE);
+        JOptionPane.showMessageDialog(this, panel, "Truy vết hệ thống (Audit Trail)", JOptionPane.PLAIN_MESSAGE);
     }
 
     private void applyFilter() {
@@ -187,9 +227,6 @@ public class AuditLogPanel extends JPanel {
         loadRealData(action, entity, keyword);
     }
 
-    // -------------------------------------------------------------
-    // HÀM PHIÊN DỊCH CÁC MÃ CODE CỨNG SANG TIẾNG VIỆT
-    // -------------------------------------------------------------
     private String translateReadable(String text) {
         if (text == null) return null;
         return text.replace("R_ADMIN_ALL", "Toàn quyền hệ thống")
@@ -200,11 +237,11 @@ public class AuditLogPanel extends JPanel {
     }
 
     private void loadRealData(String actionFilter, String entityFilter, String searchKeyword) {
-        int selectedRow = tblLogs.getSelectedRow(); // Ghi nhớ dòng đang chọn (nếu có)
+        int selectedRow = tblLogs.getSelectedRow();
         tableModel.setRowCount(0);
 
         StringBuilder sql = new StringBuilder(
-            "SELECT TO_CHAR(a.CREATED_AT, 'YYYY-MM-DD HH24:MI:SS') AS log_time, " +
+            "SELECT TO_CHAR(a.CREATED_AT, 'DD/MM/YYYY HH24:MI:SS') AS log_time, " +
             "acc.username, a.IP_ADDRESS, a.ACTION_TYPE, a.ENTITY_TYPE, a.ENTITY_ID, " +
             "a.NEW_VALUE, a.OLD_VALUE " +
             "FROM AUDIT_LOG a " +
@@ -213,15 +250,16 @@ public class AuditLogPanel extends JPanel {
         );
 
         if (actionFilter != null && !actionFilter.equals("Tất cả Hành động")) {
-            sql.append(" AND a.ACTION_TYPE = '").append(actionFilter).append("' ");
+            sql.append(" AND UPPER(a.ACTION_TYPE) = '").append(actionFilter).append("' ");
         }
         if (entityFilter != null && !entityFilter.equals("Tất cả Đối tượng")) {
-            sql.append(" AND a.ENTITY_TYPE = '").append(entityFilter).append("' ");
+            sql.append(" AND UPPER(a.ENTITY_TYPE) = '").append(entityFilter).append("' ");
         }
         if (searchKeyword != null && !searchKeyword.trim().isEmpty()) {
             sql.append(" AND (LOWER(acc.username) LIKE LOWER('%").append(searchKeyword).append("%') ")
                .append(" OR a.IP_ADDRESS LIKE '%").append(searchKeyword).append("%') ");
         }
+        
         sql.append(" ORDER BY a.CREATED_AT DESC");
 
         try (java.sql.Connection con = common.db.DatabaseConnection.getConnection();
@@ -230,40 +268,46 @@ public class AuditLogPanel extends JPanel {
 
             while (rs.next()) {
                 String time = rs.getString("log_time");
-                String user = rs.getString("username") != null ? rs.getString("username") : "SYSTEM";
+                String user = rs.getString("username");
+                if(user == null || user.isEmpty()) user = "Hệ thống (SYSTEM)";
+                
                 String ip = rs.getString("IP_ADDRESS");
+                if(ip == null || ip.isEmpty()) ip = "Localhost";
+                
                 String action = rs.getString("ACTION_TYPE");
                 String entity = rs.getString("ENTITY_TYPE");
                 String entityId = rs.getString("ENTITY_ID");
                 
-                // Sử dụng bộ phiên dịch để chuyển sang tiếng Việt trước khi nối chuỗi
                 String newValue = translateReadable(rs.getString("NEW_VALUE"));
                 String oldValue = translateReadable(rs.getString("OLD_VALUE"));
                 
                 String details = "";
-                if ("CẬP NHẬT".equals(action) && oldValue != null && newValue != null) {
+                if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
                     details = oldValue + "  ➡️  " + newValue; 
                 } else if (newValue != null && !newValue.isEmpty()) {
-                    details = newValue;
+                    details = "Thêm mới: " + newValue;
                 } else if (oldValue != null && !oldValue.isEmpty()) {
                     details = "Đã xóa: " + oldValue;
+                } else {
+                    details = "Không có mô tả chi tiết";
                 }
 
                 tableModel.addRow(new Object[]{time, user, ip, action, entity, entityId, details});
             }
             
-            // Khôi phục lại dòng đang chọn (để bảng không bị nháy mất màu xanh khi Auto-refresh)
             if (selectedRow >= 0 && selectedRow < tableModel.getRowCount()) {
                 tblLogs.setRowSelectionInterval(selectedRow, selectedRow);
             }
 
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) { 
+            e.printStackTrace(); 
+        }
     }
 
     private void setupTableStyle() {
         tblLogs.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); 
         
-        tblLogs.setRowHeight(38);
+        tblLogs.setRowHeight(40); 
         tblLogs.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         tblLogs.setShowVerticalLines(false);
         tblLogs.setSelectionBackground(new Color(237, 242, 255));
@@ -271,25 +315,24 @@ public class AuditLogPanel extends JPanel {
         tblLogs.getTableHeader().setReorderingAllowed(false);
 
         tblLogs.getColumnModel().getColumn(0).setPreferredWidth(160); 
-        tblLogs.getColumnModel().getColumn(1).setPreferredWidth(120); 
+        tblLogs.getColumnModel().getColumn(1).setPreferredWidth(150); 
         tblLogs.getColumnModel().getColumn(2).setPreferredWidth(120); 
-        tblLogs.getColumnModel().getColumn(3).setPreferredWidth(100); 
-        tblLogs.getColumnModel().getColumn(4).setPreferredWidth(120); 
+        tblLogs.getColumnModel().getColumn(3).setPreferredWidth(130); 
+        tblLogs.getColumnModel().getColumn(4).setPreferredWidth(130); 
         tblLogs.getColumnModel().getColumn(5).setPreferredWidth(150); 
-        tblLogs.getColumnModel().getColumn(6).setPreferredWidth(600); // Chi tiết hiển thị rất rộng
+        tblLogs.getColumnModel().getColumn(6).setPreferredWidth(600); 
 
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setBackground(textDark);
         headerRenderer.setForeground(Color.WHITE);
         headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
+        headerRenderer.setBorder(BorderFactory.createEmptyBorder(12, 10, 12, 10));
 
         for (int i = 0; i < tblLogs.getColumnCount(); i++) {
             tblLogs.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
         }
     }
 
-    // --- CÁC HÀM TIỆN ÍCH UI KHÁC ---
     private JTextField createTextField(String placeholder) {
         JTextField txt = new JTextField();
         txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -304,7 +347,7 @@ public class AuditLogPanel extends JPanel {
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setForeground(fg); btn.setBackground(bg);
         btn.setPreferredSize(new Dimension(130, 40));
-        btn.setCursor(new Cursor(12)); btn.setFocusPainted(false); btn.setBorderPainted(false); btn.setContentAreaFilled(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); btn.setFocusPainted(false); btn.setBorderPainted(false); btn.setContentAreaFilled(false);
         btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
             @Override public void paint(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
