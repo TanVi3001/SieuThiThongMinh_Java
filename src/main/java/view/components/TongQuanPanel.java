@@ -24,6 +24,11 @@ import org.jfree.chart.renderer.category.LineAndShapeRenderer;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 
+// IMPORT EVENTBUS ĐỂ LÀM REAL-TIME
+import common.events.EventBus;
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+
 /**
  * TongQuanPanel — Dashboard tổng quan.
  */
@@ -32,13 +37,13 @@ public class TongQuanPanel extends JPanel {
     // =============================================
     // MÀU CHỦ ĐẠO
     // =============================================
-    private static final Color COLOR_BG        = new Color(243, 245, 250);
-    private static final Color COLOR_PURPLE    = new Color(99, 102, 241);
-    private static final Color COLOR_BLUE      = new Color(14, 165, 233);
-    private static final Color COLOR_ORANGE    = new Color(249, 115, 22);
-    private static final Color COLOR_GREEN     = new Color(34, 197, 94);
-    private static final Color COLOR_WHITE     = Color.WHITE;
-    private static final Color COLOR_BORDER    = new Color(226, 232, 240);
+    private static final Color COLOR_BG = new Color(243, 245, 250);
+    private static final Color COLOR_PURPLE = new Color(99, 102, 241);
+    private static final Color COLOR_BLUE = new Color(14, 165, 233);
+    private static final Color COLOR_ORANGE = new Color(249, 115, 22);
+    private static final Color COLOR_GREEN = new Color(34, 197, 94);
+    private static final Color COLOR_WHITE = Color.WHITE;
+    private static final Color COLOR_BORDER = new Color(226, 232, 240);
     private static final Color COLOR_TEXT_DARK = new Color(30, 41, 59);
     private static final Color COLOR_TEXT_GRAY = new Color(100, 116, 139);
 
@@ -51,20 +56,33 @@ public class TongQuanPanel extends JPanel {
 
     private DefaultCategoryDataset barDataset;
     private DefaultCategoryDataset lineDataset;
-    private DefaultPieDataset      pieDataset;
+    private DefaultPieDataset pieDataset;
 
-    private JPanel        statsPanel;
+    private JPanel statsPanel;
     private DefaultTableModel tableModel;
 
     // =============================================
     // CONSTRUCTOR
     // =============================================
     public TongQuanPanel() {
-        barDataset  = new DefaultCategoryDataset();
+        barDataset = new DefaultCategoryDataset();
         lineDataset = new DefaultCategoryDataset();
-        pieDataset  = new DefaultPieDataset();
+        pieDataset = new DefaultPieDataset();
         initComponents();
         loadRealData();
+
+        // ==========================================================
+        // 🌟 BẮT SÓNG REAL-TIME TẠI ĐÂY LÀ CHUẨN NHẤT
+        // ==========================================================
+        EventBus.subscribe(AppDataChangedEvent.class, event -> {
+            if (event.getType() == AppEventType.ORDERS) {
+                // Ép chạy trên luồng giao diện để không bị treo
+                SwingUtilities.invokeLater(() -> {
+                    System.out.println("TongQuanPanel đang tự update Real-time...");
+                    loadRealData(); // Gọi lại hàm load dữ liệu
+                });
+            }
+        });
     }
 
     // =============================================
@@ -78,18 +96,16 @@ public class TongQuanPanel extends JPanel {
         // ------------------------------------------
         // DÒNG 1: 3 THẺ TỔNG QUAN
         // ------------------------------------------
-        lblRevenue   = new JLabel("0");
+        lblRevenue = new JLabel("0");
         lblCustomers = new JLabel("0");
-        lblOrders    = new JLabel("0");
+        lblOrders = new JLabel("0");
 
         JPanel topCardsPanel = new JPanel(new GridLayout(1, 3, 16, 0));
         topCardsPanel.setOpaque(false);
         topCardsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
         topCardsPanel.setPreferredSize(new Dimension(1000, 120));
 
-        // Dòng 1: 3 THẺ TỔNG QUAN
-        // Thêm IconHelper vào cuối mỗi dòng
-        topCardsPanel.add(createSummaryCard("Hôm nay", "DOANH THU", lblRevenue, COLOR_PURPLE, IconHelper.revenue(24))); 
+        topCardsPanel.add(createSummaryCard("Hôm nay", "DOANH THU", lblRevenue, COLOR_PURPLE, IconHelper.revenue(24)));
         topCardsPanel.add(createSummaryCard("Hôm nay", "KHÁCH HÀNG", lblCustomers, COLOR_BLUE, IconHelper.customer(24)));
         topCardsPanel.add(createSummaryCard("Hôm nay", "ĐƠN HÀNG", lblOrders, COLOR_ORANGE, IconHelper.order(24)));
 
@@ -104,9 +120,9 @@ public class TongQuanPanel extends JPanel {
         middleChartsPanel.setPreferredSize(new Dimension(1000, 290));
         middleChartsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 290));
 
-        middleChartsPanel.add(wrapChart(createBarChartPanel(),  "DOANH THU 5 THÁNG QUA", IconHelper.barChart(16)));
-        middleChartsPanel.add(wrapChart(createLineChartPanel(), "LƯỢT KHÁCH TRONG TUẦN",  IconHelper.lineChart(16)));
-        middleChartsPanel.add(wrapChart(createPieChartPanel(),  "TỶ TRỌNG NGÀNH HÀNG",   IconHelper.pieChart(16)));
+        middleChartsPanel.add(wrapChart(createBarChartPanel(), "DOANH THU 5 THÁNG QUA", IconHelper.barChart(16)));
+        middleChartsPanel.add(wrapChart(createLineChartPanel(), "LƯỢT KHÁCH TRONG TUẦN", IconHelper.lineChart(16)));
+        middleChartsPanel.add(wrapChart(createPieChartPanel(), "TỶ TRỌNG NGÀNH HÀNG", IconHelper.pieChart(16)));
 
         add(middleChartsPanel);
         add(Box.createRigidArea(new Dimension(0, 20)));
@@ -136,53 +152,49 @@ public class TongQuanPanel extends JPanel {
     // SUMMARY CARD — Bo góc, vòng tròn trang trí
     // =============================================
     private JPanel createSummaryCard(String subtitle, String title, JLabel valueLabel, Color bgColor, ImageIcon icon) {
-    JPanel card = new JPanel(new BorderLayout()) {
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bgColor);
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10); // Bo góc nhẹ theo ảnh mẫu
-            g2.dispose();
-        }
-    };
-    card.setOpaque(false);
-    card.setBorder(new EmptyBorder(10, 15, 10, 15));
+        JPanel card = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(bgColor);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                g2.dispose();
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(new EmptyBorder(10, 15, 10, 15));
 
-    // --- CỘM BÊN TRÁI (Subtitle + Title có Icon) ---
-    JPanel leftPanel = new JPanel();
-    leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
-    leftPanel.setOpaque(false);
+        JPanel leftPanel = new JPanel();
+        leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
+        leftPanel.setOpaque(false);
 
-    JLabel lblSub = new JLabel(subtitle);
-    lblSub.setForeground(new Color(255, 255, 255, 200));
-    lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        JLabel lblSub = new JLabel(subtitle);
+        lblSub.setForeground(new Color(255, 255, 255, 200));
+        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
 
-    // Title kèm Icon
-    JLabel lblTitle = new JLabel(title);
-    lblTitle.setIcon(icon); // Gắn icon vào label
-    lblTitle.setIconTextGap(10); // Khoảng cách giữa icon và chữ
-    lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
-    lblTitle.setForeground(Color.WHITE);
+        JLabel lblTitle = new JLabel(title);
+        lblTitle.setIcon(icon);
+        lblTitle.setIconTextGap(10);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        lblTitle.setForeground(Color.WHITE);
 
-    leftPanel.add(lblSub);
-    leftPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Khoảng cách dòng
-    leftPanel.add(lblTitle);
+        leftPanel.add(lblSub);
+        leftPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        leftPanel.add(lblTitle);
 
-    // --- CỘM BÊN PHẢI (Số hiển thị) ---
-    valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 36));
-    valueLabel.setForeground(Color.WHITE);
-    valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 36));
+        valueLabel.setForeground(Color.WHITE);
+        valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
 
-    card.add(leftPanel, BorderLayout.WEST);
-    card.add(valueLabel, BorderLayout.EAST);
+        card.add(leftPanel, BorderLayout.WEST);
+        card.add(valueLabel, BorderLayout.EAST);
 
-    return card;
-}
-      
+        return card;
+    }
 
     // =============================================
-    // WRAP CHART — Card trắng, bo góc, header gọn
+    // WRAP CHART
     // =============================================
     private JPanel wrapChart(JPanel chartPanel, String title, ImageIcon icon) {
         JPanel wrapper = new JPanel(new BorderLayout()) {
@@ -225,7 +237,7 @@ public class TongQuanPanel extends JPanel {
     }
 
     // =============================================
-    // PROGRESS ROW — Thanh tròn hiện đại (vẽ tay)
+    // PROGRESS ROW
     // =============================================
     private JPanel createProgressRow(String name, int percent, String displayValue, Color color) {
         JPanel row = new JPanel(new BorderLayout(10, 0));
@@ -237,7 +249,6 @@ public class TongQuanPanel extends JPanel {
         lblName.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblName.setForeground(COLOR_TEXT_DARK);
 
-        // Progress bar vẽ tay — bo tròn
         JPanel progressTrack = new JPanel(null) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -261,9 +272,9 @@ public class TongQuanPanel extends JPanel {
         lblVal.setPreferredSize(new Dimension(65, 20));
         lblVal.setHorizontalAlignment(JLabel.RIGHT);
 
-        row.add(lblName,       BorderLayout.WEST);
+        row.add(lblName, BorderLayout.WEST);
         row.add(progressTrack, BorderLayout.CENTER);
-        row.add(lblVal,        BorderLayout.EAST);
+        row.add(lblVal, BorderLayout.EAST);
         return row;
     }
 
@@ -283,7 +294,6 @@ public class TongQuanPanel extends JPanel {
         };
         tableContainer.setOpaque(false);
 
-        // Header bảng
         JPanel tableHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 10));
         tableHeader.setOpaque(false);
         tableHeader.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_BORDER));
@@ -294,12 +304,14 @@ public class TongQuanPanel extends JPanel {
         tableHeader.add(tblTitle);
         tableContainer.add(tableHeader, BorderLayout.NORTH);
 
-        // Table model
         tableModel = new DefaultTableModel(
                 new Object[][]{},
                 new String[]{"STT", "MÃ ĐƠN", "TRẠNG THÁI", "TIẾN ĐỘ"}
         ) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return false;
+            }
         };
 
         JTable table = new JTable(tableModel);
@@ -313,17 +325,16 @@ public class TongQuanPanel extends JPanel {
         table.setBackground(COLOR_WHITE);
         table.setIntercellSpacing(new Dimension(0, 0));
 
-        // Header style — xám nhạt hiện đại
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setBackground(new Color(248, 250, 252));
         headerRenderer.setForeground(COLOR_TEXT_GRAY);
         headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 11));
         headerRenderer.setHorizontalAlignment(JLabel.CENTER);
         headerRenderer.setBorder(new EmptyBorder(8, 8, 8, 8));
-        for (int i = 0; i < table.getColumnModel().getColumnCount(); i++)
+        for (int i = 0; i < table.getColumnModel().getColumnCount(); i++) {
             table.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
+        }
 
-        // Cell renderer
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val,
@@ -450,47 +461,53 @@ public class TongQuanPanel extends JPanel {
     // =============================================
     // LOAD DỮ LIỆU THẬT TỪ DATABASE
     // =============================================
-    private void loadRealData() {
+    public void loadRealData() {
         try (Connection con = DatabaseConnection.getConnection()) {
             DecimalFormat df = new DecimalFormat("#,###");
 
             // 1. THẺ TỔNG QUAN
             String sqlRev = "SELECT NVL(SUM(total_amount), 0) FROM ORDERS "
                     + "WHERE NVL(is_deleted, 0) = 0 "
-                    + "AND UPPER(NVL(status, '')) <> 'CANCELLED' "
+                    + "AND UPPER(NVL(status, '')) <> 'CANCELLED' AND UPPER(NVL(status, '')) <> 'ĐÃ HỦY' "
                     + "AND TRUNC(order_date) = TRUNC(SYSDATE)";
-            try (PreparedStatement ps = con.prepareStatement(sqlRev);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) lblRevenue.setText(df.format(rs.getDouble(1)));
+            try (PreparedStatement ps = con.prepareStatement(sqlRev); ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    lblRevenue.setText(df.format(rs.getDouble(1)));
+                }
             }
 
             String sqlCus = "SELECT COUNT(*) FROM CUSTOMERS WHERE NVL(is_deleted, 0) = 0";
-            try (PreparedStatement ps = con.prepareStatement(sqlCus);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) lblCustomers.setText(String.valueOf(rs.getInt(1)));
+            try (PreparedStatement ps = con.prepareStatement(sqlCus); ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    lblCustomers.setText(String.valueOf(rs.getInt(1)));
+                }
             }
 
             String sqlOrd = "SELECT COUNT(*) FROM ORDERS "
                     + "WHERE NVL(is_deleted, 0) = 0 AND TRUNC(order_date) = TRUNC(SYSDATE)";
-            try (PreparedStatement ps = con.prepareStatement(sqlOrd);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) lblOrders.setText(String.valueOf(rs.getInt(1)));
+            try (PreparedStatement ps = con.prepareStatement(sqlOrd); ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    lblOrders.setText(String.valueOf(rs.getInt(1)));
+                }
             }
 
             // 2. BIỂU ĐỒ
             StatisticSql sqlDao = StatisticSql.getInstance();
 
             barDataset.clear();
-            for (Map.Entry<String, Double> e : sqlDao.getRevenueByMonth().entrySet())
+            for (Map.Entry<String, Double> e : sqlDao.getRevenueByMonth().entrySet()) {
                 barDataset.addValue(e.getValue() / 1_000_000.0, "Doanh thu", e.getKey());
+            }
 
             lineDataset.clear();
-            for (Map.Entry<String, Integer> e : sqlDao.getOrdersByDay().entrySet())
+            for (Map.Entry<String, Integer> e : sqlDao.getOrdersByDay().entrySet()) {
                 lineDataset.addValue(e.getValue(), "Đơn", e.getKey());
+            }
 
             pieDataset.clear();
-            for (Map.Entry<String, Integer> e : sqlDao.getCategoryDistribution().entrySet())
+            for (Map.Entry<String, Integer> e : sqlDao.getCategoryDistribution().entrySet()) {
                 pieDataset.setValue(e.getKey(), e.getValue());
+            }
 
             // 3. TỒN KHO
             statsPanel.removeAll();
@@ -502,10 +519,9 @@ public class TongQuanPanel extends JPanel {
                     + "WHERE p.is_deleted = 0 AND i.is_deleted = 0 "
                     + "ORDER BY i.quantity DESC FETCH FIRST 4 ROWS ONLY";
 
-            Color[] colors = { COLOR_PURPLE, COLOR_BLUE, COLOR_ORANGE, COLOR_GREEN };
+            Color[] colors = {COLOR_PURPLE, COLOR_BLUE, COLOR_ORANGE, COLOR_GREEN};
             int idx = 0;
-            try (PreparedStatement ps = con.prepareStatement(sqlStock);
-                 ResultSet rs = ps.executeQuery()) {
+            try (PreparedStatement ps = con.prepareStatement(sqlStock); ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String name = rs.getString("product_name");
                     int qty = rs.getInt("qty");
@@ -522,7 +538,7 @@ public class TongQuanPanel extends JPanel {
             int stt = 1;
             for (Map<String, Object> order : sqlDao.getRecentOrders(4)) {
                 String orderId = (String) order.get("order_id");
-                String status  = (String) order.get("status");
+                String status = (String) order.get("status");
                 String progress = (status.equalsIgnoreCase("Hoàn thành") || status.equalsIgnoreCase("COMPLETED")) ? "100%"
                         : (status.equalsIgnoreCase("Đang xử lý") || status.equalsIgnoreCase("PROCESSING")) ? "50%"
                         : "20%";

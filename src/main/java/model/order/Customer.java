@@ -1,39 +1,59 @@
 package model.order;
 
 /**
- *
  * @author nguye
  */
 public class Customer {
 
     private String customerId;
     private String customerName;
-    private String roleId;
     private String phone;
     private String email;
     private String address;
     private int rewardPoints;
     private int isDeleted;
-    private double totalSpending; // Tổng chi tiêu
-    private String memberRank;    // Hạng thành viên
+    private double totalSpending;
+    private String memberRank;
 
     public Customer() {
     }
 
-    public Customer(String customerId, String customerName, String roleId,
-            String phone, String email, String address,
-            int rewardPoints, int isDeleted) {
-        this.customerId = customerId;
-        this.customerName = customerName;
-        this.roleId = roleId;
-        this.phone = phone;
-        this.email = email;
-        this.address = address;
-        this.rewardPoints = rewardPoints;
-        this.isDeleted = isDeleted;
+    // --- LOGIC HẠNG THÀNH VIÊN ĐỘNG ---
+    // Tự động tính hạng dựa trên số tiền đã nạp vào totalSpending
+    public String getMemberRank() {
+        if (totalSpending >= 80_000_000) {
+            return "Kim cương";
+        }
+        if (totalSpending >= 40_000_000) {
+            return "Vàng";
+        }
+        if (totalSpending >= 15_000_000) {
+            return "Bạc";
+        }
+        if (totalSpending >= 5_000_000) {
+            return "Đồng";
+        }
+        return "Thường";
     }
 
-    // ===== ID =====
+    // --- TỶ LỆ GIẢM GIÁ (ÁP DỤNG ĐƠN SAU) ---
+    public double getDiscountRate() {
+        String rank = getMemberRank();
+        return switch (rank) {
+            case "Kim cương" ->
+                0.12;
+            case "Vàng" ->
+                0.08;
+            case "Bạc" ->
+                0.05;
+            case "Đồng" ->
+                0.02;
+            default ->
+                0.00;
+        };
+    }
+
+    // --- GETTERS & SETTERS (Đã dọn dẹp trùng lặp) ---
     public String getCustomerId() {
         return customerId;
     }
@@ -42,16 +62,14 @@ public class Customer {
         this.customerId = customerId;
     }
 
-    // Alias để tương thích code cũ đang dùng getCustomerID/setCustomerID
     public String getCustomerID() {
         return customerId;
-    }
+    } // Alias cho code cũ
 
     public void setCustomerID(String customerId) {
         this.customerId = customerId;
     }
 
-    // ===== Name =====
     public String getCustomerName() {
         return customerName;
     }
@@ -60,16 +78,6 @@ public class Customer {
         this.customerName = customerName;
     }
 
-    // ===== Role =====
-    public String getRoleId() {
-        return roleId;
-    }
-
-    public void setRoleId(String roleId) {
-        this.roleId = roleId;
-    }
-
-    // ===== Phone =====
     public String getPhone() {
         return phone;
     }
@@ -77,43 +85,6 @@ public class Customer {
     public void setPhone(String phone) {
         this.phone = phone;
     }
-
-    // ===== Email =====
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    // ===== Address =====
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
-    }
-
-    // ===== Reward =====
-    public int getRewardPoints() {
-        return rewardPoints;
-    }
-
-    public void setRewardPoints(int rewardPoints) {
-        this.rewardPoints = rewardPoints;
-    }
-
-    // ===== Soft delete =====
-    public int getIsDeleted() {
-        return isDeleted;
-    }
-
-    public void setIsDeleted(int isDeleted) {
-        this.isDeleted = isDeleted;
-    }
-    // Getter và Setter
 
     public double getTotalSpending() {
         return totalSpending;
@@ -123,11 +94,39 @@ public class Customer {
         this.totalSpending = totalSpending;
     }
 
-    public String getMemberRank() {
-        return memberRank;
-    }
-
     public void setMemberRank(String memberRank) {
         this.memberRank = memberRank;
+    }
+
+    public int getRewardPoints() {
+        return rewardPoints;
+    }
+
+    public void setRewardPoints(int rewardPoints) {
+        this.rewardPoints = rewardPoints;
+    }
+
+    public int getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(int isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
     }
 }

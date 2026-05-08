@@ -34,6 +34,11 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private Map<String, JRadioButton> radioMap = new HashMap<>();
     private ButtonGroup roleGroup;
+    
+    // --- Các biến khai báo thêm để xử lý Logic Ẩn/Hiện Thẻ ---
+    private JPanel roleCardsContainer;
+    private Map<String, JPanel> roleCardMap = new HashMap<>();
+    private JButton btnSaveRole;
 
     public AccountRoleAssignmentPanel() {
         initComponents();
@@ -208,17 +213,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         cbDept.addActionListener(e -> loadData.run());
 
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
-
-            public void removeUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
-
-            public void changedUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
         });
 
         loadData.run();
@@ -284,27 +281,32 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 pnlCurrRole.repaint();
 
                 // =========================================================================
-                // LÀM MỜ THẺ ADMIN NẾU CHỌN NHÂN VIÊN KHÁC
+                // LOGIC THAY ĐỔI GIAO DIỆN ĐỘNG THEO YÊU CẦU
                 // =========================================================================
-                model.account.Account currentUser = business.service.LoginService.getCurrentUser();
-                String currentLoggedId = (currentUser != null && currentUser.getAccountId() != null) ? currentUser.getAccountId() : "";
-                
-                // Chỉ cho phép click thẻ Quản trị viên nếu tự click vào chính mình
-                boolean allowAdmin = accountId.equals(currentLoggedId) || "Quản trị viên".equals(role);
-                
-                JRadioButton adminRb = radioMap.get("Quản trị viên");
-                if (adminRb != null) {
-                    adminRb.setEnabled(allowAdmin);
+                roleCardsContainer.removeAll(); // Xóa sạch các thẻ cũ trên màn hình
+
+                if ("Quản trị viên".equals(role)) {
+                    // NẾU LÀ ADMIN: Chỉ add duy nhất thẻ Quản trị viên và khóa lại
+                    roleCardsContainer.add(roleCardMap.get("Quản trị viên"));
                     
-                    Container card = adminRb.getParent();
-                    if (card != null) {
-                        card.setEnabled(allowAdmin);
-                        // Làm mờ toàn bộ chữ bên trong thẻ
-                        for (Component c : card.getComponents()) {
-                            c.setEnabled(allowAdmin);
-                        }
-                    }
+                    radioMap.get("Quản trị viên").setEnabled(false);
+                    btnSaveRole.setEnabled(false); // Không cho lưu
+                } else {
+                    // NẾU KHÔNG PHẢI ADMIN: Add 3 thẻ nhân viên vào (Giấu thẻ Admin đi)
+                    roleCardsContainer.add(roleCardMap.get("Quản lý cửa hàng"));
+                    roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+                    roleCardsContainer.add(roleCardMap.get("Nhân viên bán hàng"));
+                    roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+                    roleCardsContainer.add(roleCardMap.get("Nhân viên kho"));
+
+                    radioMap.get("Quản lý cửa hàng").setEnabled(true);
+                    radioMap.get("Nhân viên bán hàng").setEnabled(true);
+                    radioMap.get("Nhân viên kho").setEnabled(true);
+                    btnSaveRole.setEnabled(true); // Cho phép lưu
                 }
+
+                roleCardsContainer.revalidate();
+                roleCardsContainer.repaint();
                 // =========================================================================
 
                 if (radioMap.containsKey(role)) {
@@ -371,8 +373,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
         roleGroup = new ButtonGroup();
         radioMap.clear();
+        roleCardMap.clear();
 
-        JPanel roleCardsContainer = new JPanel();
+        roleCardsContainer = new JPanel();
         roleCardsContainer.setLayout(new BoxLayout(roleCardsContainer, BoxLayout.Y_AXIS));
         roleCardsContainer.setBackground(cardWhite);
         roleCardsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -391,9 +394,15 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
             JPanel card = createRoleCard(roleInfo[1], roleInfo[2], roleGroup, rb);
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
-            roleCardsContainer.add(card);
-            roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+            roleCardMap.put(roleInfo[1], card);
         }
+
+        // Khởi tạo mặc định: Hiển thị 3 role bình thường (Chưa chọn ai thì ẩn Admin)
+        roleCardsContainer.add(roleCardMap.get("Quản lý cửa hàng"));
+        roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+        roleCardsContainer.add(roleCardMap.get("Nhân viên bán hàng"));
+        roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+        roleCardsContainer.add(roleCardMap.get("Nhân viên kho"));
 
         centerPanel.add(roleCardsContainer);
 
@@ -416,10 +425,10 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         JPanel bottomBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         bottomBtns.setBackground(cardWhite);
         JButton btnCancel = createCustomButton("Hủy bỏ", new Color(235, 238, 244), textDark);
-        JButton btnSave = createCustomButton("Lưu thay đổi", primaryBlue, Color.WHITE);
+        btnSaveRole = createCustomButton("Lưu thay đổi", primaryBlue, Color.WHITE);
         bottomBtns.add(btnCancel);
 
-        btnSave.addActionListener(e -> {
+        btnSaveRole.addActionListener(e -> {
             if (selectedAccountId == null || selectedAccountId.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Vui lòng chọn một tài khoản từ danh sách bên trái!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
                 return;
@@ -464,7 +473,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             }
         });
 
-        bottomBtns.add(btnSave);
+        bottomBtns.add(btnSaveRole);
         container.add(bottomBtns, BorderLayout.SOUTH);
 
         return container;
@@ -537,7 +546,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         card.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (card.isEnabled()) {
+                if (card.isEnabled() && rb.isEnabled()) {
                     rb.setSelected(true);
                 }
             }

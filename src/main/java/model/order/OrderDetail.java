@@ -1,10 +1,8 @@
 package model.order;
 
 /**
- * Model OrderDetail
- * Leader: Lê Tấn Vĩ (Đã dọn dẹp đống rác của Tùng)
+ * Model OrderDetail Leader: Lê Tấn Vĩ (Đã dọn dẹp đống rác của Tùng)
  */
-    
 public class OrderDetail {
 
     private final String orderId;
@@ -29,6 +27,7 @@ public class OrderDetail {
         this.quantityInBaseUnit = quantityInBaseUnit;
         this.isDeleted = false;
     }
+    // Thêm vào file OrderDetail.java
 
     // Sửa lại để trả về giá trị thực tế thay vì ném lỗi
     public String getProductId() {
@@ -54,14 +53,15 @@ public class OrderDetail {
     public int getQuantityInBaseUnit() {
         return quantityInBaseUnit > 0 ? quantityInBaseUnit : quantity;
     }
-    
-    public boolean isDeleted() { 
-        return isDeleted; 
+
+    public boolean isDeleted() {
+        return isDeleted;
     }
-    
+
     //Setter
     public void setIsDeleted(boolean isDeleted) {
         this.isDeleted = isDeleted;
     }
-    
+
+   
 }

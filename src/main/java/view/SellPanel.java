@@ -3,8 +3,10 @@ package view;
 import business.service.PaymentService;
 import business.service.SessionManager;
 import business.sql.prod_inventory.ProductsSql;
+import business.sql.sales_order.CustomersSql;
 import business.sql.sales_order.OrdersSql;
 import business.sql.sales_order.PaymentMethodsSql;
+import model.order.Customer;
 import model.order.Order;
 import model.order.OrderDetail;
 import model.payment.PaymentMethod;
@@ -20,11 +22,16 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
+import common.events.EventBus;
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.realtime.RealtimeClient;
+import common.sync.SyncVersionDao;
+
 public class SellPanel extends JPanel {
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
 
-    // --- UI Components ---
     private JComboBox<String> cboSearch;
     private JSpinner spnQty;
     private JButton btnAdd;
@@ -39,10 +46,16 @@ public class SellPanel extends JPanel {
     private JComboBox<String> cboPaymentMethod;
     private JButton btnPay, btnCancel, btnRemove;
 
-    // --- Data ---
+    // --- Biến Loyalty ---
+    private JTextField txtCustomerPhone;
+    private JButton btnFindCustomer;
+    private JLabel lblCustomerInfo;
+    private Customer selectedCustomer = null;
+    private double finalAmountToPay = 0; // Tiền sau khi đã trừ chiết khấu
+
     private List<Product> allProducts = new ArrayList<>();
     private double currentTotal = 0;
-    private final String SEARCH_HINT = "Nhập mã SP, tên SP..."; // Chữ gợi ý
+    private final String SEARCH_HINT = "Nhập mã SP, tên SP...";
 
     public SellPanel() {
         buildUI();
@@ -51,9 +64,6 @@ public class SellPanel extends JPanel {
         loadPaymentMethods();
     }
 
-    // =========================================================================
-    // 1. XÂY DỰNG GIAO DIỆN
-    // =========================================================================
     private void buildUI() {
         setLayout(new BorderLayout(10, 10));
         setBackground(new Color(245, 247, 250));
@@ -92,7 +102,7 @@ public class SellPanel extends JPanel {
 
         JPanel pnlLeft = new JPanel(new BorderLayout(0, 5));
         pnlLeft.setOpaque(false);
-        JLabel lblProdTitle = new JLabel("DANH SÁCH SẢN PHẨM (Double-click để chọn)");
+        JLabel lblProdTitle = new JLabel("DANH SÁCH SẢN PHẨM (Click đúp để chọn)");
         lblProdTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
         modProducts = new DefaultTableModel(new Object[]{"Mã SP", "Tên SP", "Giá bán", "Tồn kho"}, 0) {
@@ -129,6 +139,26 @@ public class SellPanel extends JPanel {
         pnlBottom.setOpaque(false);
         pnlBottom.setBorder(BorderFactory.createMatteBorder(2, 0, 0, 0, new Color(200, 200, 200)));
 
+        // --- KHU VỰC TÌM KHÁCH HÀNG (LOYALTY) ---
+        JPanel pnlCustomer = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 15));
+        pnlCustomer.setOpaque(false);
+        txtCustomerPhone = new JTextField(12);
+        txtCustomerPhone.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        txtCustomerPhone.setPreferredSize(new Dimension(150, 35));
+        btnFindCustomer = createButton("Tìm KH", new Color(52, 152, 219));
+        btnFindCustomer.setPreferredSize(new Dimension(100, 35));
+
+        lblCustomerInfo = new JLabel("Khách vãng lai (0%)");
+        lblCustomerInfo.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblCustomerInfo.setForeground(new Color(41, 128, 185));
+
+        pnlCustomer.add(new JLabel("SĐT Khách:"));
+        pnlCustomer.add(txtCustomerPhone);
+        pnlCustomer.add(btnFindCustomer);
+        pnlCustomer.add(lblCustomerInfo);
+        pnlBottom.add(pnlCustomer, BorderLayout.WEST);
+
+        // --- KHU VỰC THANH TOÁN ---
         JPanel pnlTotal = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
         pnlTotal.setOpaque(false);
 
@@ -137,14 +167,13 @@ public class SellPanel extends JPanel {
         cboPaymentMethod.setPreferredSize(new Dimension(150, 45));
 
         lblTotal = new JLabel("Tổng tiền: 0 đ");
-        lblTotal.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        lblTotal.setFont(new Font("Segoe UI", Font.BOLD, 20));
         lblTotal.setForeground(new Color(192, 57, 43));
 
         btnPay = createButton("✔ Thanh toán", new Color(39, 174, 96));
         btnCancel = createButton("🗑 Hủy đơn", new Color(231, 76, 60));
         btnRemove = createButton("➖ Xóa món", new Color(243, 156, 18));
 
-        pnlTotal.add(new JLabel("Thanh toán:"));
         pnlTotal.add(cboPaymentMethod);
         pnlTotal.add(lblTotal);
         pnlTotal.add(btnRemove);
@@ -155,13 +184,74 @@ public class SellPanel extends JPanel {
         add(pnlBottom, BorderLayout.SOUTH);
     }
 
-    // =========================================================================
-    // 2. LOGIC AUTOCOMPLETE CỰC XỊN XÒ
-    // =========================================================================
     private void initEvents() {
-        JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
+        // --- SỰ KIỆN TÌM VÀ ĐĂNG KÝ KHÁCH HÀNG NHANH ---
+        btnFindCustomer.addActionListener(e -> {
+            String phone = txtCustomerPhone.getText().trim();
+            if (phone.isEmpty()) {
+                selectedCustomer = null;
+                lblCustomerInfo.setText("Khách vãng lai (0%)");
+                calculateTotal();
+                return;
+            }
 
-        // 🌟 TẠO CHỮ GỢI Ý (PLACEHOLDER)
+            selectedCustomer = CustomersSql.getInstance().findByPhone(phone);
+            if (selectedCustomer != null) {
+                lblCustomerInfo.setText(String.format("Hạng: %s | Giảm: %.0f%% | T.Chi: %s",
+                        selectedCustomer.getMemberRank(),
+                        selectedCustomer.getDiscountRate() * 100,
+                        moneyFormat.format(selectedCustomer.getTotalSpending())));
+                calculateTotal();
+            } else {
+                int addConfirm = JOptionPane.showConfirmDialog(this, "Không tìm thấy khách hàng với SĐT này! Bạn có muốn đăng ký ngay không?", "Khách hàng mới", JOptionPane.YES_NO_OPTION);
+                if (addConfirm == JOptionPane.YES_OPTION) {
+                    // Mở Form đăng ký nhanh
+                    JTextField txtNewName = new JTextField();
+                    Object[] message = {
+                        "Tên khách hàng (*):", txtNewName,
+                        "Số điện thoại:", new JLabel(phone)
+                    };
+                    int option = JOptionPane.showConfirmDialog(this, message, "Đăng ký nhanh tại quầy", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                    if (option == JOptionPane.OK_OPTION) {
+                        String newName = txtNewName.getText().trim();
+                        if (!newName.isEmpty()) {
+                            Customer newCus = new Customer();
+                            newCus.setCustomerId("CUS" + System.currentTimeMillis());
+                            newCus.setCustomerName(newName);
+                            newCus.setPhone(phone);
+                            newCus.setRewardPoints(0);
+
+                            if (CustomersSql.getInstance().insert(newCus) > 0) {
+                                try {
+                                    SyncVersionDao.bumpVersion("CUSTOMERS");
+                                    RealtimeClient.send("CUSTOMERS_CHANGED");
+                                } catch (Exception ignored) {
+                                }
+
+                                // Gán ngay cho khách vừa tạo
+                                selectedCustomer = CustomersSql.getInstance().findByPhone(phone);
+                                lblCustomerInfo.setText(String.format("Hạng: %s | Giảm: %.0f%% | T.Chi: %s",
+                                        selectedCustomer.getMemberRank(),
+                                        selectedCustomer.getDiscountRate() * 100,
+                                        moneyFormat.format(selectedCustomer.getTotalSpending())));
+                                calculateTotal();
+                                JOptionPane.showMessageDialog(this, "✅ Đăng ký thành công! Đã tự động áp dụng thông tin cho đơn này.");
+                            } else {
+                                JOptionPane.showMessageDialog(this, "❌ Đăng ký thất bại do lỗi Database!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(this, "⚠️ Tên khách hàng không được để trống!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+                        }
+                    }
+                } else {
+                    selectedCustomer = null;
+                    lblCustomerInfo.setText("Khách vãng lai (0%)");
+                    calculateTotal();
+                }
+            }
+        });
+
+        JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
         txtEditor.setText(SEARCH_HINT);
         txtEditor.setForeground(Color.GRAY);
 
@@ -183,7 +273,6 @@ public class SellPanel extends JPanel {
             }
         });
 
-        // 🌟 XỔ FULL SẢN PHẨM KHI BẤM NÚT TRỎ XUỐNG
         cboSearch.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
@@ -213,7 +302,6 @@ public class SellPanel extends JPanel {
             }
         });
 
-        // AutoComplete mượt mà khi gõ chữ
         txtEditor.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent e) {
@@ -366,9 +454,6 @@ public class SellPanel extends JPanel {
         w.execute();
     }
 
-    // =========================================================================
-    // 3. LOGIC GIỎ HÀNG
-    // =========================================================================
     private void addToCartExplicit(String productId, int qtyToAdd) {
         Product product = null;
         for (Product p : allProducts) {
@@ -411,17 +496,27 @@ public class SellPanel extends JPanel {
         }
     }
 
+    // --- TÍNH LẠI TIỀN BILL, TRỪ CHIẾT KHẤU ĐẬM CHẤT TIẾNG VIỆT ---
     private void calculateTotal() {
         currentTotal = 0;
         for (int i = 0; i < modCart.getRowCount(); i++) {
             currentTotal += (double) modCart.getValueAt(i, 4);
         }
-        lblTotal.setText("Tổng tiền: " + moneyFormat.format(currentTotal));
+
+        double discountRate = selectedCustomer != null ? selectedCustomer.getDiscountRate() : 0.0;
+        double discountAmount = currentTotal * discountRate;
+        finalAmountToPay = currentTotal - discountAmount;
+
+        if (discountRate > 0) {
+            lblTotal.setText(String.format("Tổng: %s | Giảm: -%s | Trả: %s",
+                    moneyFormat.format(currentTotal),
+                    moneyFormat.format(discountAmount),
+                    moneyFormat.format(finalAmountToPay)));
+        } else {
+            lblTotal.setText("Tổng tiền: " + moneyFormat.format(currentTotal));
+        }
     }
 
-    // =========================================================================
-    // 4. FIX BUG THANH TOÁN (ORA-01400: UNIT_ID NULL)
-    // =========================================================================
     private void processPayment() {
         if (modCart.getRowCount() == 0) {
             JOptionPane.showMessageDialog(this, "Giỏ hàng đang trống!", "Chú ý", JOptionPane.WARNING_MESSAGE);
@@ -444,12 +539,12 @@ public class SellPanel extends JPanel {
 
             Order order = new Order();
             order.setOrderId(orderId);
-            order.setCustomerId(null);
+            order.setCustomerId(selectedCustomer != null ? selectedCustomer.getCustomerId() : null);
             order.setEmployeeId(empId);
             order.setPaymentMethodId(pm);
             order.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
-            order.setTotalAmount(currentTotal);
-            order.setStatus("COMPLETED");
+            order.setTotalAmount(finalAmountToPay);
+            order.setStatus("Hoàn thành");
             order.setNote("POS Bán trực tiếp");
             order.setDeleted(false);
 
@@ -459,38 +554,16 @@ public class SellPanel extends JPanel {
                 int qty = (int) modCart.getValueAt(i, 2);
                 double price = (double) modCart.getValueAt(i, 3);
 
-                String unitId = null;
-
-                // 🌟 GIẢI PHÁP TRỊ TẬN GỐC LỖI KHÓA NGOẠI: Móc trực tiếp Unit ID từ Database lên
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection()) {
-                    // Ưu tiên 1: Lấy đúng unit_id của sản phẩm này trong bảng PRODUCTS
-                    String sql = "SELECT NVL(base_unit_id, unit_id) as uid FROM PRODUCTS WHERE product_id = ?";
-                    try (java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
-                        ps.setString(1, pId);
-                        try (java.sql.ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) {
-                                unitId = rs.getString("uid");
-                            }
+                String unitId = "U_CAI";
+                for (Product p : allProducts) {
+                    if (p.getProductId().equals(pId)) {
+                        if (p.getBaseUnitId() != null && !p.getBaseUnitId().trim().isEmpty()) {
+                            unitId = p.getBaseUnitId();
+                        } else if (p.getUnit() != null && !p.getUnit().toString().trim().isEmpty()) {
+                            unitId = p.getUnit().toString();
                         }
+                        break;
                     }
-
-                    // Ưu tiên 2: Lỡ sản phẩm dưới DB bị nhân viên nhập thiếu Unit, 
-                    // ta lấy đại 1 cái Unit ID CÓ THẬT trong bảng UNITS để "chữa cháy" bill
-                    if (unitId == null || unitId.trim().isEmpty()) {
-                        String sqlFallback = "SELECT unit_id FROM UNITS FETCH FIRST 1 ROWS ONLY";
-                        try (java.sql.PreparedStatement ps = con.prepareStatement(sqlFallback); java.sql.ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) {
-                                unitId = rs.getString("unit_id");
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                // Đảm bảo không bao giờ bị dính NullPointerException hay lỗi khóa ngoại nữa
-                if (unitId == null) {
-                    unitId = "";
                 }
 
                 details.add(new OrderDetail(orderId, pId, qty, price, unitId, 0));
@@ -501,21 +574,39 @@ public class SellPanel extends JPanel {
             if (success) {
                 JOptionPane.showMessageDialog(this, "✅ Đã thanh toán thành công!\nMã bill: " + orderId, "Hoàn tất", JOptionPane.INFORMATION_MESSAGE);
                 modCart.setRowCount(0);
+
+                selectedCustomer = null;
+                lblCustomerInfo.setText("Khách vãng lai (0%)");
+                txtCustomerPhone.setText("");
                 calculateTotal();
+
                 loadProducts();
 
                 JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
-                txtEditor.setText("Nhập mã SP, tên SP..."); // Gán lại chữ gợi ý
+                txtEditor.setText(SEARCH_HINT);
                 txtEditor.setForeground(Color.GRAY);
                 txtEditor.requestFocus();
 
                 try {
-                    common.events.EventBus.publish(new common.events.AppDataChangedEvent(common.events.AppEventType.ORDERS, "Có bill POS mới"));
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.ORDERS, "Có bill POS mới"));
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.INVENTORY, "Tồn kho bị giảm"));
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.PRODUCTS, "Cập nhật sản phẩm"));
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.CUSTOMERS, "Cập nhật chi tiêu khách"));
+
+                    SyncVersionDao.bumpVersion("ORDERS");
+                    SyncVersionDao.bumpVersion("INVENTORY");
+                    SyncVersionDao.bumpVersion("PRODUCTS");
+                    SyncVersionDao.bumpVersion("CUSTOMERS");
+
+                    RealtimeClient.send("ORDERS_CHANGED");
+                    RealtimeClient.send("INVENTORY_CHANGED");
+                    RealtimeClient.send("PRODUCTS_CHANGED");
+                    RealtimeClient.send("CUSTOMERS_CHANGED");
                 } catch (Exception ignored) {
                 }
 
             } else {
-                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!\nKiểm tra lại thông tin khách hàng hoặc kết nối Database.", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage(), "Exception", JOptionPane.ERROR_MESSAGE);

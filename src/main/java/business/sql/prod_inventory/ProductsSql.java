@@ -77,10 +77,10 @@ public class ProductsSql {
 
         String sql = "SELECT p.product_id, p.product_name, p.base_price, "
                 + "       p.category_id, p.supplier_id, "
-                + "       i.store_id, i.quantity, i.unit "
+                + "       i.store_id, i.quantity, i.unit " // LẤY CỘT QUANTITY TỪ BẢNG INVENTORY
                 + "FROM PRODUCTS p "
-                + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
-                + "WHERE p.is_deleted = 0 "
+                + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND NVL(i.is_deleted, 0) = 0 "
+                + "WHERE NVL(p.is_deleted, 0) = 0 "
                 + "ORDER BY p.product_id";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
