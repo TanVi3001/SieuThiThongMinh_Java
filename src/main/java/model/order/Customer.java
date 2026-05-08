@@ -14,13 +14,15 @@ public class Customer {
     private String address;
     private int rewardPoints;
     private int isDeleted;
+    private double totalSpending; // Tổng chi tiêu
+    private String memberRank;    // Hạng thành viên
 
     public Customer() {
     }
 
     public Customer(String customerId, String customerName, String roleId,
-                    String phone, String email, String address,
-                    int rewardPoints, int isDeleted) {
+            String phone, String email, String address,
+            int rewardPoints, int isDeleted) {
         this.customerId = customerId;
         this.customerName = customerName;
         this.roleId = roleId;
@@ -110,5 +112,22 @@ public class Customer {
 
     public void setIsDeleted(int isDeleted) {
         this.isDeleted = isDeleted;
+    }
+    // Getter và Setter
+
+    public double getTotalSpending() {
+        return totalSpending;
+    }
+
+    public void setTotalSpending(double totalSpending) {
+        this.totalSpending = totalSpending;
+    }
+
+    public String getMemberRank() {
+        return memberRank;
+    }
+
+    public void setMemberRank(String memberRank) {
+        this.memberRank = memberRank;
     }
 }

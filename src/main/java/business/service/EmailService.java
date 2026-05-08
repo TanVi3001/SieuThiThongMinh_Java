@@ -7,7 +7,6 @@ public class EmailService {
     // =========================================================================
     // CẤU HÌNH TÀI KHOẢN GỬI MAIL (CHỈ CẦN SỬA Ở ĐÂY NẾU THAY ĐỔI)
     // =========================================================================
-    // TÙNG NHỚ THAY EMAIL VÀ APP PASSWORD CỦA BẠN VÀO ĐÂY NHÉ
     private static final String MY_EMAIL = "nguyentung28012006@gmail.com"; 
     private static final String APP_PASSWORD = "yrmx mviw enuj ydce"; 
 
