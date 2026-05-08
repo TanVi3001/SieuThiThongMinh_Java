@@ -70,7 +70,7 @@ public class CustomerView extends JPanel {
     private void loadAutoCompleteData() {
         customerSearchList.clear();
         try {
-            List<Customer> list = CustomersSql.getInstance().getCustomersWithOrders();
+            List<Customer> list = CustomersSql.getInstance().selectAll();
             for (Customer c : list) {
                 if (c.getCustomerName() != null && !c.getCustomerName().isEmpty()) {
                     String phone = c.getPhone() != null ? c.getPhone() : "N/A";
@@ -375,7 +375,7 @@ public class CustomerView extends JPanel {
     private void searchAndFilterTable(String keyword) {
         tableModel.setRowCount(0);
         try {
-            List<Customer> list = CustomersSql.getInstance().getCustomersWithOrders();
+            List<Customer> list = CustomersSql.getInstance().selectAll();
             for (Customer c : list) {
                 String name = c.getCustomerName() != null ? c.getCustomerName().toLowerCase() : "";
                 String phone = c.getPhone() != null ? c.getPhone() : "";
@@ -396,7 +396,7 @@ public class CustomerView extends JPanel {
     private void loadCustomerData() {
         tableModel.setRowCount(0);
         try {
-            List<Customer> list = CustomersSql.getInstance().getCustomersWithOrders();
+            List<Customer> list = CustomersSql.getInstance().selectAll();
             for (Customer c : list) {
                 String id = c.getCustomerId() != null ? c.getCustomerId() : "";
                 String name = c.getCustomerName() != null ? c.getCustomerName() : "";
