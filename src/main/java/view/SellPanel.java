@@ -24,7 +24,6 @@ import java.util.UUID;
 
 /**
  * SellPanel — Màn hình bán hàng POS đầy đủ.
- * Không dùng NetBeans Form Editor; toàn bộ UI build programmatically.
  */
 public class SellPanel extends javax.swing.JPanel {
 
