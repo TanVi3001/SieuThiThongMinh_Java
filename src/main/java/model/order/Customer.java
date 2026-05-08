@@ -14,7 +14,6 @@ public class Customer {
     private int isDeleted;
     private double totalSpending;
     private String memberRank;
-
     public Customer() {
     }
 

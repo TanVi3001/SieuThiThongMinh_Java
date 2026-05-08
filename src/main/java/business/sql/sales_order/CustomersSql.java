@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JOptionPane;
 import model.order.Customer;
+import model.order.Order;
 
 public class CustomersSql implements SqlInterface<Customer> {
 
@@ -87,28 +88,63 @@ public class CustomersSql implements SqlInterface<Customer> {
         }
         return null;
     }
+    // Bước 1: Tạo hàm dùng chung để tính hạng dựa trên chi tiêu
+
+    public void applyMemberRank(Customer c) {
+        double spending = c.getTotalSpending();
+        if (spending >= 80000000) {
+            c.setMemberRank("Kim cương");
+        } else if (spending >= 40000000) {
+            c.setMemberRank("Vàng");
+        } else if (spending >= 15000000) {
+            c.setMemberRank("Bạc");
+        } else if (spending >= 5000000) {
+            c.setMemberRank("Đồng");
+        } else {
+            c.setMemberRank("Thường");
+        }
+    }
 
     // ========================================================
     // 🌟 FIX: TÌM KHÁCH HÀNG QUA SĐT (Đã sửa lỗi viết hoa TOTAL_SPENDING)
     // ========================================================
+    // Bước 2: Cập nhật hàm findByPhone để áp dụng hạng
     public Customer findByPhone(String phone) {
+
         String sql = "SELECT c.*, "
-                + "NVL((SELECT SUM(total_amount) FROM ORDERS o WHERE o.customer_id = c.customer_id AND o.is_deleted = 0), 0) AS TOTAL_SPENDING "
-                + "FROM CUSTOMERS c WHERE c.PHONE = ? AND c.is_deleted = 0";
+                + "NVL((SELECT SUM(o.total_amount) "
+                + "FROM ORDERS o "
+                + "WHERE o.customer_id = c.customer_id "
+                + "AND o.is_deleted = 0 "
+                + "AND o.status = 'Hoàn thành'), 0) AS TOTAL_SPENDING "
+                + "FROM CUSTOMERS c "
+                + "WHERE c.PHONE = ? "
+                + "AND c.is_deleted = 0";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, phone);
+
             try (ResultSet rs = pst.executeQuery()) {
+
                 if (rs.next()) {
+
                     Customer c = map(rs);
-                    // Dùng chữ IN HOA TOTAL_SPENDING để khớp với Oracle
-                    c.setTotalSpending(rs.getDouble("TOTAL_SPENDING"));
+
+                    double spending = rs.getDouble("TOTAL_SPENDING");
+
+                    c.setTotalSpending(spending);
+
+                    applyMemberRank(c);
+
                     return c;
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return null;
     }
 
@@ -144,34 +180,37 @@ public class CustomersSql implements SqlInterface<Customer> {
     // 🌟 FIX: LẤY DANH SÁCH KHÁCH KÈM HẠNG (Đã sửa lỗi logic "Đồng")
     // ========================================================
     public List<Customer> selectAllWithRank() {
+
         List<Customer> list = new ArrayList<>();
+
         String sql = "SELECT c.*, "
-                + "NVL((SELECT SUM(total_amount) FROM ORDERS o WHERE o.customer_id = c.customer_id AND o.is_deleted = 0), 0) AS TOTAL_SPENDING "
-                + "FROM CUSTOMERS c WHERE c.is_deleted = 0";
+                + "NVL((SELECT SUM(o.total_amount) "
+                + "FROM ORDERS o "
+                + "WHERE o.customer_id = c.customer_id "
+                + "AND o.is_deleted = 0 "
+                + "AND o.status = 'Hoàn thành'), 0) AS TOTAL_SPENDING "
+                + "FROM CUSTOMERS c "
+                + "WHERE c.is_deleted = 0";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+
             while (rs.next()) {
+
                 Customer c = map(rs);
+
                 double spending = rs.getDouble("TOTAL_SPENDING");
+
                 c.setTotalSpending(spending);
 
-                // Logic xếp hạng chuẩn 5 hạng (Khớp hoàn toàn với Customer.java)
-                if (spending >= 80000000) {
-                    c.setMemberRank("Kim cương");
-                } else if (spending >= 40000000) {
-                    c.setMemberRank("Vàng");
-                } else if (spending >= 15000000) {
-                    c.setMemberRank("Bạc");
-                } else if (spending >= 5000000) {
-                    c.setMemberRank("Đồng");
-                } else {
-                    c.setMemberRank("Thường"); // Trả về "Thường" nếu dưới 5 triệu
-                }
+                applyMemberRank(c);
+
                 list.add(c);
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return list;
     }
 
@@ -184,6 +223,170 @@ public class CustomersSql implements SqlInterface<Customer> {
         c.setPhone(rs.getString("PHONE"));
         c.setEmail(rs.getString("EMAIL"));
         c.setAddress(rs.getString("ADDRESS"));
+        try {
+            c.setMemberRank(rs.getString("MEMBER_RANK"));
+        } catch (Exception e) {
+        }
         return c;
+    }
+
+    public int addCustomerSpending(String customerId, double amount) {
+
+        String sql
+                = "UPDATE CUSTOMERS "
+                + "SET REWARD_POINTS = NVL(REWARD_POINTS,0) + ? "
+                + "WHERE CUSTOMER_ID = ? AND IS_DELETED = 0";
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setInt(1, (int) (amount / 1000)); // ví dụ: 1000đ = 1 điểm
+            pst.setString(2, customerId);
+
+            return pst.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return 0;
+    }
+
+    public void updateCustomerAfterPayment(Connection con, Order order) throws SQLException {
+
+        // Không có khách hàng thành viên
+        if (order.getCustomerId() == null || order.getCustomerId().isBlank()) {
+            return;
+        }
+
+        // ==================================================
+        // 1. CỘNG ĐIỂM THƯỞNG
+        // ==================================================
+        int earnedPoints = (int) (order.getTotalAmount() / 10000);
+
+        String pointSql
+                = "UPDATE CUSTOMERS "
+                + "SET REWARD_POINTS = NVL(REWARD_POINTS, 0) + ? "
+                + "WHERE CUSTOMER_ID = ? AND IS_DELETED = 0";
+
+        try (PreparedStatement pst = con.prepareStatement(pointSql)) {
+
+            pst.setInt(1, earnedPoints);
+            pst.setString(2, order.getCustomerId());
+
+            pst.executeUpdate();
+        }
+
+        // ==================================================
+        // 2. TÍNH TỔNG CHI TIÊU
+        // ==================================================
+        double totalSpending = 0;
+
+        String spendingSql
+                = "SELECT NVL(SUM(TOTAL_AMOUNT), 0) AS TOTAL "
+                + "FROM ORDERS "
+                + "WHERE CUSTOMER_ID = ? "
+                + "AND NVL(IS_DELETED, 0) = 0 "
+                + "AND STATUS = 'Hoàn thành'";
+
+        try (PreparedStatement pst = con.prepareStatement(spendingSql)) {
+
+            pst.setString(1, order.getCustomerId());
+
+            try (ResultSet rs = pst.executeQuery()) {
+
+                if (rs.next()) {
+                    totalSpending = rs.getDouble("TOTAL");
+                }
+            }
+        }
+
+        // ==================================================
+        // 3. XÁC ĐỊNH HẠNG
+        // ==================================================
+        String rank;
+
+        if (totalSpending >= 80000000) {
+            rank = "Kim cương";
+        } else if (totalSpending >= 40000000) {
+            rank = "Vàng";
+        } else if (totalSpending >= 15000000) {
+            rank = "Bạc";
+        } else if (totalSpending >= 5000000) {
+            rank = "Đồng";
+        } else {
+            rank = "Thường";
+        }
+
+        // ==================================================
+        // 4. UPDATE HẠNG
+        // ==================================================
+        String rankSql
+                = "UPDATE CUSTOMERS "
+                + "SET MEMBER_RANK = ? "
+                + "WHERE CUSTOMER_ID = ?";
+
+        try (PreparedStatement pst = con.prepareStatement(rankSql)) {
+
+            pst.setString(1, rank);
+            pst.setString(2, order.getCustomerId());
+
+            pst.executeUpdate();
+        }
+    }
+
+    public void recalculateCustomerRank(Connection con, String customerId) throws SQLException {
+
+        if (customerId == null || customerId.isBlank()) {
+            return;
+        }
+
+        double totalSpending = 0;
+
+        String spendingSql
+                = "SELECT NVL(SUM(TOTAL_AMOUNT), 0) AS TOTAL "
+                + "FROM ORDERS "
+                + "WHERE CUSTOMER_ID = ? "
+                + "AND NVL(IS_DELETED, 0) = 0 "
+                + "AND STATUS = 'Hoàn thành'";
+
+        try (PreparedStatement pst = con.prepareStatement(spendingSql)) {
+
+            pst.setString(1, customerId);
+
+            try (ResultSet rs = pst.executeQuery()) {
+
+                if (rs.next()) {
+                    totalSpending = rs.getDouble("TOTAL");
+                }
+            }
+        }
+
+        String rank;
+
+        if (totalSpending >= 80000000) {
+            rank = "Kim cương";
+        } else if (totalSpending >= 40000000) {
+            rank = "Vàng";
+        } else if (totalSpending >= 15000000) {
+            rank = "Bạc";
+        } else if (totalSpending >= 5000000) {
+            rank = "Đồng";
+        } else {
+            rank = "Thường";
+        }
+
+        String sql
+                = "UPDATE CUSTOMERS "
+                + "SET MEMBER_RANK = ? "
+                + "WHERE CUSTOMER_ID = ?";
+
+        try (PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, rank);
+            pst.setString(2, customerId);
+
+            pst.executeUpdate();
+        }
     }
 }

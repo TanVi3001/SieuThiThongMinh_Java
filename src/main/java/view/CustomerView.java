@@ -70,7 +70,7 @@ public class CustomerView extends JPanel {
     private void loadAutoCompleteData() {
         customerSearchList.clear();
         try {
-            List<Customer> list = CustomersSql.getInstance().selectAll();
+            List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
             for (Customer c : list) {
                 if (c.getCustomerName() != null && !c.getCustomerName().isEmpty()) {
                     String phone = c.getPhone() != null ? c.getPhone() : "N/A";
@@ -248,8 +248,8 @@ public class CustomerView extends JPanel {
                     txtId.setText(tblCustomers.getValueAt(row, 0).toString());
                     txtName.setText(tblCustomers.getValueAt(row, 1).toString());
                     txtPhone.setText(tblCustomers.getValueAt(row, 2).toString());
-                    txtEmail.setText(tblCustomers.getValueAt(row, 3).toString());
-                    txtAddress.setText(tblCustomers.getValueAt(row, 4).toString());
+                    txtEmail.setText(String.valueOf(tblCustomers.getValueAt(row, 3)));
+                    txtAddress.setText(String.valueOf(tblCustomers.getValueAt(row, 4)));
                 }
             }
         });
@@ -268,7 +268,7 @@ public class CustomerView extends JPanel {
                     RealtimeClient.send("CUSTOMERS_CHANGED");
 
                     JOptionPane.showMessageDialog(this, "✅ Thêm khách hàng thành công!");
-                    loadCustomerData();
+                    loadAutoCompleteData();
                     btnClear.doClick();
                 } else {
                     JOptionPane.showMessageDialog(this, "❌ Thêm thất bại, vui lòng kiểm tra lại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -297,7 +297,7 @@ public class CustomerView extends JPanel {
                     RealtimeClient.send("CUSTOMERS_CHANGED");
 
                     JOptionPane.showMessageDialog(this, "✅ Cập nhật thông tin thành công!");
-                    loadCustomerData();
+                    loadAutoCompleteData();
                     btnClear.doClick();
                 } else {
                     JOptionPane.showMessageDialog(this, "❌ Cập nhật thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -322,7 +322,7 @@ public class CustomerView extends JPanel {
                         RealtimeClient.send("CUSTOMERS_CHANGED");
 
                         JOptionPane.showMessageDialog(this, "✅ Xóa khách hàng thành công!");
-                        loadCustomerData();
+                        loadAutoCompleteData();
                         btnClear.doClick();
                     } else {
                         JOptionPane.showMessageDialog(this, "❌ Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -435,6 +435,7 @@ public class CustomerView extends JPanel {
     }
 
     public void refreshTable() {
+        loadAutoCompleteData();
         loadCustomerData();
     }
 

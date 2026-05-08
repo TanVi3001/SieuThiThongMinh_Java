@@ -17,7 +17,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
-import java.sql.Date;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +27,10 @@ import common.events.AppEventType;
 import common.realtime.RealtimeClient;
 import common.sync.SyncVersionDao;
 
+/**
+ * Panel bán hàng POS tại quầy Hỗ trợ: Tìm sản phẩm, Giỏ hàng, Loyalty (Khách
+ * hàng thân thiết), Thanh toán đa phương thức
+ */
 public class SellPanel extends JPanel {
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
@@ -185,72 +188,34 @@ public class SellPanel extends JPanel {
     }
 
     private void initEvents() {
-        // --- SỰ KIỆN TÌM VÀ ĐĂNG KÝ KHÁCH HÀNG NHANH ---
+        // --- SỰ KIỆN TÌM KHÁCH HÀNG ---
+        // Nhấn Enter tại ô SĐT sẽ tự động kích hoạt nút tìm
+        txtCustomerPhone.addActionListener(e -> btnFindCustomer.doClick());
+
         btnFindCustomer.addActionListener(e -> {
             String phone = txtCustomerPhone.getText().trim();
             if (phone.isEmpty()) {
-                selectedCustomer = null;
-                lblCustomerInfo.setText("Khách vãng lai (0%)");
-                calculateTotal();
+                resetCustomerInfo();
                 return;
             }
 
+            // Gọi Database tìm khách hàng
             selectedCustomer = CustomersSql.getInstance().findByPhone(phone);
             if (selectedCustomer != null) {
-                lblCustomerInfo.setText(String.format("Hạng: %s | Giảm: %.0f%% | T.Chi: %s",
-                        selectedCustomer.getMemberRank(),
-                        selectedCustomer.getDiscountRate() * 100,
-                        moneyFormat.format(selectedCustomer.getTotalSpending())));
-                calculateTotal();
+                updateCustomerUI();
             } else {
-                int addConfirm = JOptionPane.showConfirmDialog(this, "Không tìm thấy khách hàng với SĐT này! Bạn có muốn đăng ký ngay không?", "Khách hàng mới", JOptionPane.YES_NO_OPTION);
+                int addConfirm = JOptionPane.showConfirmDialog(this,
+                        "Không tìm thấy khách hàng này! Đăng ký ngay?",
+                        "Khách hàng mới", JOptionPane.YES_NO_OPTION);
                 if (addConfirm == JOptionPane.YES_OPTION) {
-                    // Mở Form đăng ký nhanh
-                    JTextField txtNewName = new JTextField();
-                    Object[] message = {
-                        "Tên khách hàng (*):", txtNewName,
-                        "Số điện thoại:", new JLabel(phone)
-                    };
-                    int option = JOptionPane.showConfirmDialog(this, message, "Đăng ký nhanh tại quầy", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-                    if (option == JOptionPane.OK_OPTION) {
-                        String newName = txtNewName.getText().trim();
-                        if (!newName.isEmpty()) {
-                            Customer newCus = new Customer();
-                            newCus.setCustomerId("CUS" + System.currentTimeMillis());
-                            newCus.setCustomerName(newName);
-                            newCus.setPhone(phone);
-                            newCus.setRewardPoints(0);
-
-                            if (CustomersSql.getInstance().insert(newCus) > 0) {
-                                try {
-                                    SyncVersionDao.bumpVersion("CUSTOMERS");
-                                    RealtimeClient.send("CUSTOMERS_CHANGED");
-                                } catch (Exception ignored) {
-                                }
-
-                                // Gán ngay cho khách vừa tạo
-                                selectedCustomer = CustomersSql.getInstance().findByPhone(phone);
-                                lblCustomerInfo.setText(String.format("Hạng: %s | Giảm: %.0f%% | T.Chi: %s",
-                                        selectedCustomer.getMemberRank(),
-                                        selectedCustomer.getDiscountRate() * 100,
-                                        moneyFormat.format(selectedCustomer.getTotalSpending())));
-                                calculateTotal();
-                                JOptionPane.showMessageDialog(this, "✅ Đăng ký thành công! Đã tự động áp dụng thông tin cho đơn này.");
-                            } else {
-                                JOptionPane.showMessageDialog(this, "❌ Đăng ký thất bại do lỗi Database!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                            }
-                        } else {
-                            JOptionPane.showMessageDialog(this, "⚠️ Tên khách hàng không được để trống!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
-                        }
-                    }
+                    handleQuickRegister(phone);
                 } else {
-                    selectedCustomer = null;
-                    lblCustomerInfo.setText("Khách vãng lai (0%)");
-                    calculateTotal();
+                    resetCustomerInfo();
                 }
             }
         });
 
+        // --- SỰ KIỆN TÌM SẢN PHẨM ---
         JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
         txtEditor.setText(SEARCH_HINT);
         txtEditor.setForeground(Color.GRAY);
@@ -273,35 +238,6 @@ public class SellPanel extends JPanel {
             }
         });
 
-        cboSearch.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-            @Override
-            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                SwingUtilities.invokeLater(() -> {
-                    String currentText = txtEditor.getText();
-                    if (currentText.isEmpty() || currentText.equals(SEARCH_HINT)) {
-                        cboSearch.removeAllItems();
-                        for (Product p : allProducts) {
-                            if (p.getQuantity() > 0) {
-                                cboSearch.addItem(p.getProductId() + " - " + p.getProductName());
-                            }
-                        }
-                        if (currentText.equals(SEARCH_HINT)) {
-                            txtEditor.setText("");
-                            txtEditor.setForeground(Color.BLACK);
-                        }
-                    }
-                });
-            }
-
-            @Override
-            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
-            }
-
-            @Override
-            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
-            }
-        });
-
         txtEditor.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent e) {
@@ -321,7 +257,6 @@ public class SellPanel extends JPanel {
 
                     cboSearch.removeAllItems();
                     cboSearch.addItem(txt);
-
                     if (!txt.isEmpty()) {
                         for (Product p : allProducts) {
                             if (p.getQuantity() > 0) {
@@ -332,57 +267,32 @@ public class SellPanel extends JPanel {
                             }
                         }
                         cboSearch.showPopup();
-                    } else {
-                        cboSearch.hidePopup();
                     }
                 });
             }
         });
 
         btnAdd.addActionListener(e -> {
-            String selected = "";
-            if (cboSearch.getSelectedItem() != null) {
-                selected = cboSearch.getSelectedItem().toString();
-            }
+            String selected = (cboSearch.getSelectedItem() != null) ? cboSearch.getSelectedItem().toString() : "";
             if (selected.isEmpty() || selected.equals(SEARCH_HINT)) {
                 selected = txtEditor.getText();
             }
-            if (selected.equals(SEARCH_HINT)) {
-                selected = "";
-            }
 
-            if (selected.isEmpty()) {
+            if (selected.isEmpty() || selected.equals(SEARCH_HINT)) {
                 int row = tblProducts.getSelectedRow();
                 if (row >= 0) {
-                    String pId = tblProducts.getValueAt(row, 0).toString();
-                    addToCartExplicit(pId, (int) spnQty.getValue());
-                    spnQty.setValue(1);
-                    tblProducts.clearSelection();
+                    addToCartExplicit(tblProducts.getValueAt(row, 0).toString(), (int) spnQty.getValue());
                 } else {
-                    JOptionPane.showMessageDialog(this, "Vui lòng nhập tên SP hoặc click chọn SP trong bảng!");
+                    JOptionPane.showMessageDialog(this, "Vui lòng chọn sản phẩm!");
                 }
                 return;
             }
 
             String pId = selected.contains(" - ") ? selected.split(" - ")[0].trim() : selected.trim();
             addToCartExplicit(pId, (int) spnQty.getValue());
-
             txtEditor.setText("");
-            cboSearch.removeAllItems();
             spnQty.setValue(1);
             txtEditor.requestFocus();
-        });
-
-        tblProducts.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    int row = tblProducts.getSelectedRow();
-                    if (row >= 0) {
-                        addToCartExplicit(tblProducts.getValueAt(row, 0).toString(), 1);
-                    }
-                }
-            }
         });
 
         btnRemove.addActionListener(e -> {
@@ -390,21 +300,151 @@ public class SellPanel extends JPanel {
             if (row >= 0) {
                 modCart.removeRow(row);
                 calculateTotal();
-            } else {
-                JOptionPane.showMessageDialog(this, "Vui lòng click chọn 1 món trong giỏ hàng để xóa!", "Nhắc nhở", JOptionPane.WARNING_MESSAGE);
             }
         });
 
         btnCancel.addActionListener(e -> {
             modCart.setRowCount(0);
-            calculateTotal();
+            resetCustomerInfo();
         });
 
         btnPay.addActionListener(e -> processPayment());
     }
 
+    private void processPayment() {
+        if (modCart.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, "Giỏ hàng đang trống!", "Chú ý", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            // 1. Chuẩn bị thông tin hóa đơn
+            String empId = (SessionManager.getCurrentUser() != null)
+                    ? SessionManager.getCurrentUser().getAccountId()
+                    : "EMP_DEFAULT";
+
+            String pm = (cboPaymentMethod.getSelectedItem() != null)
+                    ? cboPaymentMethod.getSelectedItem().toString()
+                    : "PM_CASH";
+
+            String orderId = OrdersSql.getInstance().generateNextOrderId();
+
+            Order order = new Order();
+            order.setOrderId(orderId);
+            order.setCustomerId(selectedCustomer != null ? selectedCustomer.getCustomerId() : null);
+            order.setEmployeeId(empId);
+            order.setPaymentMethodId(pm);
+            order.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
+            order.setTotalAmount(finalAmountToPay);
+            order.setStatus("Hoàn thành");
+            order.setNote("POS Bán trực tiếp");
+
+            // 2. Chuẩn bị danh sách chi tiết
+            List<OrderDetail> details = new ArrayList<>();
+            for (int i = 0; i < modCart.getRowCount(); i++) {
+                String pId = modCart.getValueAt(i, 0).toString();
+                int qty = (int) modCart.getValueAt(i, 2);
+                double price = (double) modCart.getValueAt(i, 3);
+
+                // Tìm UnitId an toàn bằng Stream
+                String unitId = allProducts.stream()
+                        .filter(p -> p.getProductId().equals(pId))
+                        .findFirst()
+                        .map(p -> (p.getBaseUnitId() != null && !p.getBaseUnitId().isBlank()) ? p.getBaseUnitId() : "U_CAI")
+                        .orElse("U_CAI");
+
+                details.add(new OrderDetail(orderId, pId, qty, price, unitId, 0));
+            }
+
+            // 3. Thực thi thanh toán
+            boolean success = PaymentService.thanhToan(order, details);
+
+            if (success) {
+                JOptionPane.showMessageDialog(this, "✅ Thanh toán thành công!\nMã bill: " + orderId);
+                modCart.setRowCount(0);
+
+                // --- QUAN TRỌNG: CẬP NHẬT LẠI THÔNG TIN KHÁCH HÀNG (ĐỂ THẤY HẠNG MỚI) ---
+                if (selectedCustomer != null) {
+                    selectedCustomer = CustomersSql.getInstance().findByPhone(selectedCustomer.getPhone());
+                    updateCustomerUI();
+                } else {
+                    resetCustomerInfo();
+                }
+
+                refreshUIState();
+                notifySystemChanged();
+            } else {
+                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+
+    private void handleQuickRegister(String phone) {
+        JTextField txtNewName = new JTextField();
+        Object[] message = {"Tên khách hàng (*):", txtNewName, "Số điện thoại:", new JLabel(phone)};
+        int option = JOptionPane.showConfirmDialog(this, message, "Đăng ký nhanh", JOptionPane.OK_CANCEL_OPTION);
+
+        if (option == JOptionPane.OK_OPTION && !txtNewName.getText().trim().isEmpty()) {
+            Customer newCus = new Customer();
+            newCus.setCustomerId("CUS" + System.currentTimeMillis());
+            newCus.setCustomerName(txtNewName.getText().trim());
+            newCus.setPhone(phone);
+
+            if (CustomersSql.getInstance().insert(newCus) > 0) {
+                SyncVersionDao.bumpVersion("CUSTOMERS");
+                RealtimeClient.send("CUSTOMERS_CHANGED");
+                selectedCustomer = CustomersSql.getInstance().findByPhone(phone);
+                updateCustomerUI();
+                JOptionPane.showMessageDialog(this, "✅ Đăng ký thành công!");
+            }
+        }
+    }
+
+    private void updateCustomerUI() {
+        if (selectedCustomer != null) {
+            lblCustomerInfo.setText(String.format("Hạng: %s | Giảm: %.0f%% | T.Chi: %s",
+                    selectedCustomer.getMemberRank(),
+                    selectedCustomer.getDiscountRate() * 100,
+                    moneyFormat.format(selectedCustomer.getTotalSpending())));
+        }
+        calculateTotal();
+    }
+
+    private void resetCustomerInfo() {
+
+        selectedCustomer = null;
+
+        txtCustomerPhone.setText("");
+
+        lblCustomerInfo.setText("Khách vãng lai (0%)");
+
+        calculateTotal();
+    }
+
+    private void refreshUIState() {
+        loadProducts(); // Cập nhật lại tồn kho trong bảng
+        JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
+        txtEditor.setText(SEARCH_HINT);
+        txtEditor.setForeground(Color.GRAY);
+    }
+
+    private void notifySystemChanged() {
+        try {
+            String[] tags = {"ORDERS", "INVENTORY", "PRODUCTS", "CUSTOMERS"};
+            for (String tag : tags) {
+                SyncVersionDao.bumpVersion(tag); //
+                RealtimeClient.send(tag + "_CHANGED"); //
+                EventBus.publish(new AppDataChangedEvent(AppEventType.valueOf(tag), "Update after POS"));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     private void loadProducts() {
-        SwingWorker<List<Product>, Void> w = new SwingWorker<>() {
+        new SwingWorker<List<Product>, Void>() {
             @Override
             protected List<Product> doInBackground() {
                 return ProductsSql.getInstance().searchByName("");
@@ -417,23 +457,18 @@ public class SellPanel extends JPanel {
                     modProducts.setRowCount(0);
                     for (Product p : allProducts) {
                         if (p.getQuantity() > 0) {
-                            modProducts.addRow(new Object[]{
-                                p.getProductId(), p.getProductName(),
-                                p.getBasePrice() != null ? moneyFormat.format(p.getBasePrice()) : "0 đ",
-                                p.getQuantity()
-                            });
+                            modProducts.addRow(new Object[]{p.getProductId(), p.getProductName(),
+                                moneyFormat.format(p.getBasePrice()), p.getQuantity()});
                         }
                     }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+                } catch (Exception ignored) {
                 }
             }
-        };
-        w.execute();
+        }.execute();
     }
 
     private void loadPaymentMethods() {
-        SwingWorker<List<PaymentMethod>, Void> w = new SwingWorker<>() {
+        new SwingWorker<List<PaymentMethod>, Void>() {
             @Override
             protected List<PaymentMethod> doInBackground() {
                 return PaymentMethodsSql.getInstance().selectAll();
@@ -446,182 +481,60 @@ public class SellPanel extends JPanel {
                     for (PaymentMethod pm : get()) {
                         cboPaymentMethod.addItem(pm.getPaymentMethodId());
                     }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
+                } catch (Exception ignored) {
                 }
             }
-        };
-        w.execute();
+        }.execute();
     }
 
     private void addToCartExplicit(String productId, int qtyToAdd) {
-        Product product = null;
-        for (Product p : allProducts) {
-            if (p.getProductId().equalsIgnoreCase(productId)) {
-                product = p;
-                break;
-            }
-        }
-
+        Product product = allProducts.stream().filter(p -> p.getProductId().equalsIgnoreCase(productId)).findFirst().orElse(null);
         if (product == null || product.getQuantity() <= 0) {
-            JOptionPane.showMessageDialog(this, "Không tìm thấy sản phẩm " + productId + " hoặc đã hết hàng!");
+            JOptionPane.showMessageDialog(this, "Sản phẩm không khả dụng!");
             return;
         }
 
-        double price = product.getBasePrice() != null ? product.getBasePrice().doubleValue() : 0;
-
+        double price = product.getBasePrice().doubleValue();
         for (int i = 0; i < modCart.getRowCount(); i++) {
             if (modCart.getValueAt(i, 0).toString().equalsIgnoreCase(productId)) {
-                int currentQty = (int) modCart.getValueAt(i, 2);
-                int newQty = currentQty + qtyToAdd;
-
+                int newQty = (int) modCart.getValueAt(i, 2) + qtyToAdd;
                 if (newQty <= product.getQuantity()) {
                     modCart.setValueAt(newQty, i, 2);
                     modCart.setValueAt(newQty * price, i, 4);
                     calculateTotal();
                 } else {
-                    JOptionPane.showMessageDialog(this, "Sản phẩm này chỉ còn " + product.getQuantity() + " trong kho!");
+                    JOptionPane.showMessageDialog(this, "Vượt quá tồn kho!");
                 }
                 return;
             }
         }
 
         if (qtyToAdd <= product.getQuantity()) {
-            modCart.addRow(new Object[]{
-                product.getProductId(), product.getProductName(), qtyToAdd, price, price * qtyToAdd
-            });
+            modCart.addRow(new Object[]{product.getProductId(), product.getProductName(), qtyToAdd, price, price * qtyToAdd});
             calculateTotal();
-        } else {
-            JOptionPane.showMessageDialog(this, "Sản phẩm này chỉ còn " + product.getQuantity() + " trong kho!");
         }
     }
 
-    // --- TÍNH LẠI TIỀN BILL, TRỪ CHIẾT KHẤU ĐẬM CHẤT TIẾNG VIỆT ---
     private void calculateTotal() {
         currentTotal = 0;
         for (int i = 0; i < modCart.getRowCount(); i++) {
             currentTotal += (double) modCart.getValueAt(i, 4);
         }
+        double rate = (selectedCustomer != null) ? selectedCustomer.getDiscountRate() : 0;
+        finalAmountToPay = currentTotal * (1 - rate);
 
-        double discountRate = selectedCustomer != null ? selectedCustomer.getDiscountRate() : 0.0;
-        double discountAmount = currentTotal * discountRate;
-        finalAmountToPay = currentTotal - discountAmount;
-
-        if (discountRate > 0) {
+        if (rate > 0) {
             lblTotal.setText(String.format("Tổng: %s | Giảm: -%s | Trả: %s",
-                    moneyFormat.format(currentTotal),
-                    moneyFormat.format(discountAmount),
-                    moneyFormat.format(finalAmountToPay)));
+                    moneyFormat.format(currentTotal), moneyFormat.format(currentTotal * rate), moneyFormat.format(finalAmountToPay)));
         } else {
             lblTotal.setText("Tổng tiền: " + moneyFormat.format(currentTotal));
-        }
-    }
-
-    private void processPayment() {
-        if (modCart.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, "Giỏ hàng đang trống!", "Chú ý", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        try {
-            String empId = "EMP1777277282761";
-            if (SessionManager.getCurrentUser() != null && SessionManager.getCurrentUser().getAccountId() != null) {
-                empId = SessionManager.getCurrentUser().getAccountId();
-            }
-
-            String pm = cboPaymentMethod.getSelectedItem() != null ? cboPaymentMethod.getSelectedItem().toString() : "PM_CASH";
-
-            String orderId = "HD" + System.currentTimeMillis();
-            try {
-                orderId = OrdersSql.getInstance().generateNextOrderId();
-            } catch (Exception ignored) {
-            }
-
-            Order order = new Order();
-            order.setOrderId(orderId);
-            order.setCustomerId(selectedCustomer != null ? selectedCustomer.getCustomerId() : null);
-            order.setEmployeeId(empId);
-            order.setPaymentMethodId(pm);
-            order.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
-            order.setTotalAmount(finalAmountToPay);
-            order.setStatus("Hoàn thành");
-            order.setNote("POS Bán trực tiếp");
-            order.setDeleted(false);
-
-            List<OrderDetail> details = new ArrayList<>();
-            for (int i = 0; i < modCart.getRowCount(); i++) {
-                String pId = modCart.getValueAt(i, 0).toString();
-                int qty = (int) modCart.getValueAt(i, 2);
-                double price = (double) modCart.getValueAt(i, 3);
-
-                String unitId = "U_CAI";
-                for (Product p : allProducts) {
-                    if (p.getProductId().equals(pId)) {
-                        if (p.getBaseUnitId() != null && !p.getBaseUnitId().trim().isEmpty()) {
-                            unitId = p.getBaseUnitId();
-                        } else if (p.getUnit() != null && !p.getUnit().toString().trim().isEmpty()) {
-                            unitId = p.getUnit().toString();
-                        }
-                        break;
-                    }
-                }
-
-                details.add(new OrderDetail(orderId, pId, qty, price, unitId, 0));
-            }
-
-            boolean success = PaymentService.thanhToan(order, details);
-
-            if (success) {
-                JOptionPane.showMessageDialog(this, "✅ Đã thanh toán thành công!\nMã bill: " + orderId, "Hoàn tất", JOptionPane.INFORMATION_MESSAGE);
-                modCart.setRowCount(0);
-
-                selectedCustomer = null;
-                lblCustomerInfo.setText("Khách vãng lai (0%)");
-                txtCustomerPhone.setText("");
-                calculateTotal();
-
-                loadProducts();
-
-                JTextField txtEditor = (JTextField) cboSearch.getEditor().getEditorComponent();
-                txtEditor.setText(SEARCH_HINT);
-                txtEditor.setForeground(Color.GRAY);
-                txtEditor.requestFocus();
-
-                try {
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.ORDERS, "Có bill POS mới"));
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.INVENTORY, "Tồn kho bị giảm"));
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.PRODUCTS, "Cập nhật sản phẩm"));
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.CUSTOMERS, "Cập nhật chi tiêu khách"));
-
-                    SyncVersionDao.bumpVersion("ORDERS");
-                    SyncVersionDao.bumpVersion("INVENTORY");
-                    SyncVersionDao.bumpVersion("PRODUCTS");
-                    SyncVersionDao.bumpVersion("CUSTOMERS");
-
-                    RealtimeClient.send("ORDERS_CHANGED");
-                    RealtimeClient.send("INVENTORY_CHANGED");
-                    RealtimeClient.send("PRODUCTS_CHANGED");
-                    RealtimeClient.send("CUSTOMERS_CHANGED");
-                } catch (Exception ignored) {
-                }
-
-            } else {
-                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage(), "Exception", JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
         }
     }
 
     private JTable createTable(DefaultTableModel model) {
         JTable table = new JTable(model);
         table.setRowHeight(35);
-        table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
-        table.getTableHeader().setBackground(new Color(236, 240, 241));
-        table.getTableHeader().setReorderingAllowed(false);
-
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(JLabel.CENTER);
         table.setDefaultRenderer(Object.class, centerRenderer);
@@ -633,8 +546,6 @@ public class SellPanel extends JPanel {
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setBackground(bg);
         btn.setForeground(Color.WHITE);
-        btn.setFocusPainted(false);
-        btn.setPreferredSize(new Dimension(140, 45));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
     }

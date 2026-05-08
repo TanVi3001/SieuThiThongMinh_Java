@@ -8,6 +8,7 @@ import model.order.Order;
 import model.order.OrderDetail;
 import java.sql.*;
 import java.util.List;
+import business.sql.sales_order.CustomersSql;
 
 public class PaymentService {
 
@@ -70,6 +71,8 @@ public class PaymentService {
                     psSt.executeUpdate();
                 }
             }
+            // 4. UPDATE KHÁCH HÀNG THÀNH VIÊN
+            CustomersSql.getInstance().updateCustomerAfterPayment(con, hoaDon);
 
             con.commit();
             return true;
@@ -114,15 +117,22 @@ public class PaymentService {
             }
 
             // Cập nhật trạng thái Tiếng Việt
-            String sqlUpdateStatus = "UPDATE ORDERS SET status = 'Đã hủy', note = note || ? WHERE order_id = ?";
+            String sqlUpdateStatus
+                    = "UPDATE ORDERS "
+                    + "SET status = 'Đã hủy', "
+                    + "note = NVL(note, '') || ?, "
+                    + "updated_at = CURRENT_TIMESTAMP "
+                    + "WHERE order_id = ?";
+
             try (PreparedStatement ps = con.prepareStatement(sqlUpdateStatus)) {
+
                 ps.setString(1, " | Lý do hủy: " + reason);
                 ps.setString(2, orderId);
+
                 ps.executeUpdate();
             }
-
             logStatusChange(con, orderId, order.getStatus(), "Đã hủy", employeeId, reason);
-
+            CustomersSql.getInstance().recalculateCustomerRank(con, order.getCustomerId());
             con.commit();
             return true;
         } catch (Exception e) {
