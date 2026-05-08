@@ -2,6 +2,7 @@ package view;
 
 import business.service.StatisticService;
 import com.toedter.calendar.JDateChooser;
+import common.utils.FormatUtils; // Đảm bảo bạn đã tạo file này như hướng dẫn trước
 import view.components.IconHelper;
 
 import java.awt.*;
@@ -13,6 +14,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import javax.swing.table.TableColumnModel;
 
 public class StatisticView extends JPanel {
 
@@ -49,7 +51,6 @@ public class StatisticView extends JPanel {
                     || e.getType() == common.events.AppEventType.PRODUCTS) {
 
                 SwingUtilities.invokeLater(() -> {
-                    // Cập nhật ngầm (true), không hiện thông báo
                     refreshDataWithCurrentDates(true, false);
                 });
             }
@@ -111,22 +112,29 @@ public class StatisticView extends JPanel {
 
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        tabbedPane.addChangeListener(e -> {
-            for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-                tabbedPane.setForegroundAt(i, i == tabbedPane.getSelectedIndex() ? primaryBlue : textGray);
-            }
-        });
 
+        // TAB 1: DOANH THU
         modRevenue = new DefaultTableModel(new Object[]{"Ngày giao dịch", "Tổng Đơn", "Doanh Thu Thực Tế"}, 0);
         tblRevenue = createTable(modRevenue);
+        alignColumn(tblRevenue, 1, SwingConstants.CENTER); // Tổng đơn căn giữa
+        alignColumn(tblRevenue, 2, SwingConstants.RIGHT); // Tiền căn phải
         tabbedPane.addTab("Thống kê Doanh Thu", createTabPanel(tblRevenue));
 
+        // TAB 2: HÀNG HÓA
         modProducts = new DefaultTableModel(new Object[]{"Mã SP", "Tên Sản Phẩm", "Số lượng Đã Bán", "Doanh thu mang lại", "Tồn Kho Hiện Tại"}, 0);
         tblProducts = createTable(modProducts);
+        alignColumn(tblProducts, 2, SwingConstants.CENTER);
+        alignColumn(tblProducts, 3, SwingConstants.RIGHT);
+        alignColumn(tblProducts, 4, SwingConstants.CENTER);
         tabbedPane.addTab("Phân tích Hàng Hóa", createTabPanel(tblProducts));
 
+        // TAB 3: NHÂN VIÊN (Khớp theo ảnh mẫu của bạn)
         modEmployees = new DefaultTableModel(new Object[]{"Mã NV", "Tên Nhân Viên", "Đơn Hoàn Thành", "Đơn Bị Hủy", "Doanh Thu Mang Về"}, 0);
         tblEmployees = createTable(modEmployees);
+        alignColumn(tblEmployees, 0, SwingConstants.LEFT);
+        alignColumn(tblEmployees, 2, SwingConstants.CENTER);
+        alignColumn(tblEmployees, 3, SwingConstants.CENTER);
+        alignColumn(tblEmployees, 4, SwingConstants.RIGHT);
         tabbedPane.addTab("Hiệu Suất Nhân Viên", createTabPanel(tblEmployees));
 
         add(tabbedPane, BorderLayout.CENTER);
@@ -150,48 +158,70 @@ public class StatisticView extends JPanel {
     }
 
     private void refreshDataWithCurrentDates(boolean isAutoSync, boolean showSuccessPopup) {
+        // 1. Lấy ngày từ JDateChooser
         Date fromDate = dpFromDate.getDate();
         Date toDate = dpToDate.getDate();
 
+        // Kiểm tra nếu người dùng chưa chọn ngày
+        if (fromDate == null || toDate == null) {
+            if (!isAutoSync) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn khoảng thời gian cần lọc!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            }
+            return;
+        }
+
         try {
+            // 2. Xóa sạch dữ liệu cũ trên Table trước khi nạp mới
             modRevenue.setRowCount(0);
             modProducts.setRowCount(0);
             modEmployees.setRowCount(0);
 
+            // 3. Gọi Service để lấy dữ liệu mới dựa trên ngày đã chọn
+            // Nạp Tab 1: Doanh thu
             List<Object[]> revData = statisticService.getRevenueReport(fromDate, toDate);
             for (Object[] row : revData) {
+                row[2] = common.utils.FormatUtils.formatCurrency((double) row[2]);
                 modRevenue.addRow(row);
             }
 
+            // Nạp Tab 2: Hàng hóa
             List<Object[]> prodData = statisticService.getProductReport(fromDate, toDate);
             for (Object[] row : prodData) {
+                row[3] = common.utils.FormatUtils.formatCurrency((double) row[3]);
                 modProducts.addRow(row);
             }
 
+            // Nạp Tab 3: Hiệu suất nhân viên (Phần bạn đang cần nhất)
             List<Object[]> empData = statisticService.getEmployeeReport(fromDate, toDate);
             for (Object[] row : empData) {
+                // Định dạng tiền cho cột cuối cùng
+                double revenue = (double) row[4];
+                row[4] = common.utils.FormatUtils.formatCurrency(revenue);
                 modEmployees.addRow(row);
             }
 
+            // 4. Cập nhật nhãn thời gian
             String timeNow = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
-            if (isAutoSync) {
-                lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Đồng bộ tự động thời gian thực)");
-                lblLastUpdate.setForeground(new Color(0, 163, 108));
-            } else {
-                lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Tải thủ công)");
-                lblLastUpdate.setForeground(new Color(100, 116, 139));
-                if (showSuccessPopup) {
-                    JOptionPane.showMessageDialog(this, "✅ Đã tải dữ liệu thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
-                }
+            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + (isAutoSync ? " (Tự động)" : " (Thủ công)"));
+
+            if (showSuccessPopup) {
+                JOptionPane.showMessageDialog(this, "✅ Lọc dữ liệu thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             }
 
-        } catch (IllegalArgumentException ex) {
-            if (!isAutoSync) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Thông báo", JOptionPane.WARNING_MESSAGE);
-            }
         } catch (Exception ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi khi tải dữ liệu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Lỗi khi lọc dữ liệu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void updateLastUpdateLabel(boolean isAutoSync) {
+        String timeNow = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
+        if (isAutoSync) {
+            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Đồng bộ tự động)");
+            lblLastUpdate.setForeground(new Color(0, 163, 108));
+        } else {
+            lblLastUpdate.setText("Cập nhật lần cuối: " + timeNow + " (Tải thủ công)");
+            lblLastUpdate.setForeground(textGray);
         }
     }
 
@@ -202,18 +232,27 @@ public class StatisticView extends JPanel {
                 return false;
             }
         };
-        table.setRowHeight(35);
+        table.setRowHeight(40);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        table.setSelectionBackground(new Color(232, 240, 254));
+        table.setSelectionForeground(textDark);
+        table.setShowVerticalLines(false);
+        table.setIntercellSpacing(new Dimension(0, 0));
+
         JTableHeader header = table.getTableHeader();
+        header.setPreferredSize(new Dimension(0, 45));
         header.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        header.setBackground(bgLight);
+        header.setBackground(new Color(248, 249, 250));
         header.setForeground(primaryBlue);
         header.setReorderingAllowed(false);
-        ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
-        table.setShowVerticalLines(false);
-        table.setSelectionBackground(new Color(237, 242, 255));
-        table.setSelectionForeground(textDark);
+
         return table;
+    }
+
+    private void alignColumn(JTable table, int column, int alignment) {
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer();
+        renderer.setHorizontalAlignment(alignment);
+        table.getColumnModel().getColumn(column).setCellRenderer(renderer);
     }
 
     private JPanel createTabPanel(JTable table) {
@@ -251,57 +290,25 @@ public class StatisticView extends JPanel {
         btn.setContentAreaFilled(false);
         btn.setOpaque(false);
 
-        // Màu state
-        final Color normal = bg;
-        final Color hover = adjustColor(bg, +18);   // sáng hơn
-        final Color press = adjustColor(bg, -18);   // tối hơn
-
-        // UI custom paint bo góc
         btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
             @Override
             public void paint(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                try {
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                    ButtonModel model = ((AbstractButton) c).getModel();
-                    Color fill = normal;
-                    if (model.isPressed()) {
-                        fill = press;
-                    } else if (model.isRollover()) {
-                        fill = hover;
-                    }
-
-                    g2.setColor(fill);
-                    g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 20, 20);
-                } finally {
-                    g2.dispose();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                ButtonModel model = ((AbstractButton) c).getModel();
+                Color fill = bg;
+                if (model.isPressed()) {
+                    fill = bg.darker();
+                } else if (model.isRollover()) {
+                    fill = bg.brighter();
                 }
 
+                g2.setColor(fill);
+                g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 15, 15);
+                g2.dispose();
                 super.paint(g, c);
             }
         });
-
-        // Bật rollover để hover hoạt động
-        btn.setRolloverEnabled(true);
-
-        // (Tuỳ chọn) làm chữ/ico “nhô” nhẹ khi pressed
-        btn.getModel().addChangeListener(e -> {
-            if (btn.getModel().isPressed()) {
-                btn.setBorder(BorderFactory.createEmptyBorder(1, 0, 0, 0));
-            } else {
-                btn.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-            }
-        });
-
         return btn;
     }
-
-    private Color adjustColor(Color color, int amount) {
-        int r = Math.min(255, Math.max(0, color.getRed() + amount));
-        int g = Math.min(255, Math.max(0, color.getGreen() + amount));
-        int b = Math.min(255, Math.max(0, color.getBlue() + amount));
-        return new Color(r, g, b);
-    }
-
 }

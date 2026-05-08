@@ -784,3 +784,7 @@ GROUP BY
     e.employee_name;
 
 COMMIT;
+
+INSERT INTO CATEGORIES (category_id, category_name) VALUES ('CAT004', 'Bánh kẹo');
+INSERT INTO CATEGORIES (category_id, category_name) VALUES ('CAT005', 'Thực phẩm tươi sống');
+COMMIT;

@@ -3,10 +3,12 @@ package business.service;
 import model.account.Account;
 
 public class SessionManager {
+
     private static String token;
     private static Account currentUser;
 
-    private SessionManager() {}
+    private SessionManager() {
+    }
 
     public static void startSession(Account user, String tk) {
         currentUser = user;
