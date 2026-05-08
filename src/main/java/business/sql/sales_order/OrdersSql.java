@@ -3,31 +3,55 @@ package business.sql.sales_order;
 import business.sql.SqlInterface;
 import common.db.DatabaseConnection;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import model.order.Order;
 
 public class OrdersSql implements SqlInterface<Order> {
 
+    // =========================================================
+    // SINGLETON
+    // =========================================================
     private static OrdersSql instance;
 
     private OrdersSql() {
     }
 
-    public static OrdersSql getInstance() {
+    public static synchronized OrdersSql getInstance() {
         if (instance == null) {
             instance = new OrdersSql();
         }
         return instance;
     }
 
+    // =========================================================
+    // INSERT
+    // =========================================================
     public int insertWithConn(Connection con, Order order) throws SQLException {
-        String sql = "INSERT INTO ORDERS (order_id, customer_id, employee_id, payment_method_id, order_date, total_amount, status, note) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        String sql = """
+            INSERT INTO ORDERS
+            (
+                ORDER_ID,
+                CUSTOMER_ID,
+                EMPLOYEE_ID,
+                PAYMENT_METHOD_ID,
+                ORDER_DATE,
+                TOTAL_AMOUNT,
+                STATUS,
+                NOTE,
+                IS_DELETED
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """;
+
         try (PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, order.getOrderId());
             pst.setString(2, order.getCustomerId());
             pst.setString(3, order.getEmployeeId());
@@ -36,260 +60,500 @@ public class OrdersSql implements SqlInterface<Order> {
             pst.setDouble(6, order.getTotalAmount());
             pst.setString(7, order.getStatus());
             pst.setString(8, order.getNote());
+
             return pst.executeUpdate();
         }
     }
 
     @Override
-    public int insert(Order t) {
+    public int insert(Order order) {
+
         try (Connection con = DatabaseConnection.getConnection()) {
-            return insertWithConn(con, t);
+
+            return insertWithConn(con, order);
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.insert: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.insert(): " + e.getMessage());
             e.printStackTrace();
+
             return 0;
         }
     }
 
+    // =========================================================
+    // UPDATE
+    // =========================================================
     @Override
-    public int update(Order t) {
-        String sql = "UPDATE ORDERS "
-                + "SET customer_id = ?, employee_id = ?, order_date = ?, total_amount = ?, status = ? "
-                + "WHERE order_id = ? AND NVL(is_deleted, 0) = 0";
+    public int update(Order order) {
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, t.getCustomerId());
-            pst.setString(2, t.getEmployeeId());
-            pst.setDate(3, t.getOrderDate());
-            pst.setDouble(4, t.getTotalAmount());
-            pst.setString(5, t.getStatus());
-            pst.setString(6, t.getOrderId());
+        String sql = """
+            UPDATE ORDERS
+            SET
+                CUSTOMER_ID = ?,
+                EMPLOYEE_ID = ?,
+                PAYMENT_METHOD_ID = ?,
+                ORDER_DATE = ?,
+                TOTAL_AMOUNT = ?,
+                STATUS = ?,
+                NOTE = ?
+            WHERE ORDER_ID = ?
+              AND NVL(IS_DELETED, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, order.getCustomerId());
+            pst.setString(2, order.getEmployeeId());
+            pst.setString(3, order.getPaymentMethodId());
+            pst.setDate(4, order.getOrderDate());
+            pst.setDouble(5, order.getTotalAmount());
+            pst.setString(6, order.getStatus());
+            pst.setString(7, order.getNote());
+            pst.setString(8, order.getOrderId());
+
             return pst.executeUpdate();
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.update: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.update(): " + e.getMessage());
             e.printStackTrace();
+
             return 0;
         }
     }
 
+    // =========================================================
+    // UPDATE STATUS
+    // =========================================================
     public int updateStatus(String orderId, String status) {
-        String sql = "UPDATE ORDERS SET status = ? WHERE order_id = ? AND NVL(is_deleted, 0) = 0";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        String sql = """
+            UPDATE ORDERS
+            SET STATUS = ?
+            WHERE ORDER_ID = ?
+              AND NVL(IS_DELETED, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, status);
             pst.setString(2, orderId);
+
             return pst.executeUpdate();
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.updateStatus: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.updateStatus(): " + e.getMessage());
             e.printStackTrace();
+
             return 0;
         }
     }
 
-    public int updateStatusWithConn(Connection con, String orderId, String status) throws SQLException {
-        String sql = "UPDATE ORDERS SET status = ? WHERE order_id = ? AND NVL(is_deleted, 0) = 0";
+    public int updateStatusWithConn(
+            Connection con,
+            String orderId,
+            String status
+    ) throws SQLException {
+
+        String sql = """
+            UPDATE ORDERS
+            SET STATUS = ?
+            WHERE ORDER_ID = ?
+              AND NVL(IS_DELETED, 0) = 0
+        """;
+
         try (PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, status);
             pst.setString(2, orderId);
+
             return pst.executeUpdate();
         }
     }
 
+    // =========================================================
+    // SOFT DELETE
+    // =========================================================
     @Override
     public int delete(String id) {
-        String sql = "UPDATE ORDERS SET is_deleted = 1 WHERE order_id = ?";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        String sql = """
+            UPDATE ORDERS
+            SET IS_DELETED = 1
+            WHERE ORDER_ID = ?
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, id);
+
             return pst.executeUpdate();
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.delete: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.delete(): " + e.getMessage());
             e.printStackTrace();
+
             return 0;
         }
     }
 
+    // =========================================================
+    // SELECT BY ID
+    // =========================================================
     @Override
     public Order selectById(String id) {
-        String sql = "SELECT * FROM ORDERS WHERE order_id = ? AND NVL(is_deleted, 0) = 0";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        String sql = """
+            SELECT
+                o.*,
+                e.EMPLOYEE_NAME
+            FROM ORDERS o
+            LEFT JOIN EMPLOYEES e
+                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+            WHERE o.ORDER_ID = ?
+              AND NVL(o.IS_DELETED, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, id);
+
             try (ResultSet rs = pst.executeQuery()) {
+
                 if (rs.next()) {
                     return mapOrder(rs);
                 }
             }
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.selectById: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.selectById(): " + e.getMessage());
             e.printStackTrace();
         }
+
         return null;
     }
 
-    @Override
-    public List<Order> selectByCondition(String condition) {
-        if (condition == null
-                || condition.isBlank()
-                || "Tat ca".equalsIgnoreCase(condition)
-                || "Tất cả".equalsIgnoreCase(condition)) {
-            return selectAll();
-        }
-
-        ArrayList<Order> list = new ArrayList<>();
-        // Tương tự, JOIN thêm bảng EMPLOYEES
-        String sql = "SELECT o.*, e.employee_name "
-                + "FROM ORDERS o "
-                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
-                + "WHERE NVL(o.is_deleted, 0) = 0 AND UPPER(o.status) = UPPER(?) "
-                + "ORDER BY o.order_date DESC";
-
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, condition);
-            try (ResultSet rs = pst.executeQuery()) {
-                while (rs.next()) {
-                    list.add(mapOrder(rs));
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.selectByCondition: " + e.getMessage());
-            e.printStackTrace();
-        }
-        return list;
-    }
-
+    // =========================================================
+    // SELECT ALL
+    // =========================================================
     @Override
     public ArrayList<Order> selectAll() {
-        ArrayList<Order> list = new ArrayList<>();
-        // JOIN thêm bảng EMPLOYEES để lấy employee_name
-        String sql = "SELECT o.*, e.employee_name "
-                + "FROM ORDERS o "
-                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
-                + "WHERE NVL(o.is_deleted, 0) = 0 "
-                + "ORDER BY o.order_date DESC";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+        ArrayList<Order> list = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                o.*,
+                e.EMPLOYEE_NAME
+            FROM ORDERS o
+            LEFT JOIN EMPLOYEES e
+                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+            WHERE NVL(o.IS_DELETED, 0) = 0
+            ORDER BY o.ORDER_DATE DESC
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+
             while (rs.next()) {
                 list.add(mapOrder(rs));
             }
+
         } catch (SQLException e) {
-            System.err.println("Loi tai OrdersSql.selectAll: " + e.getMessage());
+
+            System.err.println("❌ OrdersSql.selectAll(): " + e.getMessage());
             e.printStackTrace();
         }
+
         return list;
     }
 
-    public ArrayList<Order> selectAll(String currentUserRole, String currentEmployeeId) {
+    // =========================================================
+    // SELECT ALL WITH ROLE FILTER
+    // =========================================================
+    public ArrayList<Order> selectAll(
+            String currentUserRole,
+            String currentEmployeeId
+    ) {
+
         ArrayList<Order> list = new ArrayList<>();
 
-        String sql = "SELECT o.*, e.employee_name "
-                + "FROM ORDERS o "
-                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
-                + "WHERE NVL(o.is_deleted, 0) = 0 ";
+        StringBuilder sql = new StringBuilder("""
+            SELECT
+                o.*,
+                e.EMPLOYEE_NAME
+            FROM ORDERS o
+            LEFT JOIN EMPLOYEES e
+                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+            WHERE NVL(o.IS_DELETED, 0) = 0
+        """);
 
-        // NẾU LÀ SALE: Bắt buộc chỉ lấy hóa đơn do chính ID của người đó tạo
+        // Nhân viên bán hàng chỉ xem bill của mình
         if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
-            sql += " AND o.employee_id = ? ";
+            sql.append(" AND o.EMPLOYEE_ID = ? ");
         }
 
-        sql += " ORDER BY o.order_date DESC";
+        sql.append(" ORDER BY o.ORDER_DATE DESC ");
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
 
-            // Gán param nếu là Sale
             if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
                 pst.setString(1, currentEmployeeId);
             }
 
             try (ResultSet rs = pst.executeQuery()) {
+
                 while (rs.next()) {
                     list.add(mapOrder(rs));
                 }
             }
+
         } catch (SQLException e) {
+
+            System.err.println("❌ OrdersSql.selectAll(role): " + e.getMessage());
             e.printStackTrace();
         }
+
         return list;
     }
 
+    // =========================================================
+    // SELECT BY CONDITION
+    // =========================================================
+    @Override
+    public List<Order> selectByCondition(String condition) {
+
+        if (condition == null
+                || condition.isBlank()
+                || "Tat ca".equalsIgnoreCase(condition)
+                || "Tất cả".equalsIgnoreCase(condition)) {
+
+            return selectAll();
+        }
+
+        List<Order> list = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                o.*,
+                e.EMPLOYEE_NAME
+            FROM ORDERS o
+            LEFT JOIN EMPLOYEES e
+                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+            WHERE NVL(o.IS_DELETED, 0) = 0
+              AND UPPER(o.STATUS) = UPPER(?)
+            ORDER BY o.ORDER_DATE DESC
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, condition);
+
+            try (ResultSet rs = pst.executeQuery()) {
+
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+
+            System.err.println("❌ OrdersSql.selectByCondition(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    // =========================================================
+    // MAP RESULTSET -> ORDER
+    // =========================================================
     private Order mapOrder(ResultSet rs) throws SQLException {
-        String id = rs.getString("order_id");
-        String customerId = rs.getString("customer_id");
-        String employeeId = rs.getString("employee_id");
-        java.sql.Date date = rs.getDate("order_date");
-        double amount = rs.getDouble("total_amount");
-        String status = rs.getString("status");
-        boolean deleted = rs.getInt("is_deleted") == 1;
 
-        Order order = new Order(id, customerId, employeeId, date, amount, status, deleted);
+        Order order = new Order();
 
-        // Bắt lỗi an toàn
+        order.setOrderId(rs.getString("ORDER_ID"));
+        order.setCustomerId(rs.getString("CUSTOMER_ID"));
+        order.setEmployeeId(rs.getString("EMPLOYEE_ID"));
+
         try {
-            String empName = rs.getString("employee_name");
-            order.setNote(empName);
-        } catch (Exception e) {
+            order.setPaymentMethodId(rs.getString("PAYMENT_METHOD_ID"));
+        } catch (Exception ignored) {
+        }
+
+        order.setOrderDate(rs.getDate("ORDER_DATE"));
+        order.setTotalAmount(rs.getDouble("TOTAL_AMOUNT"));
+        order.setStatus(rs.getString("STATUS"));
+
+        try {
+            order.setNote(rs.getString("NOTE"));
+        } catch (Exception ignored) {
+        }
+
+        try {
+            order.setDeleted(rs.getInt("IS_DELETED") == 1);
+        } catch (Exception ignored) {
+        }
+
+        // TEMP: lưu tên nhân viên vào note phụ nếu cần
+        try {
+            String empName = rs.getString("EMPLOYEE_NAME");
+
+            if (empName != null && !empName.isBlank()) {
+                order.setEmployeeName(empName);
+            }
+
+        } catch (Exception ignored) {
         }
 
         return order;
     }
 
-    // =========================================================================
-    // LẤY DANH SÁCH CHI TIẾT CỦA 1 HÓA ĐƠN DỰA VÀO MÃ ĐƠN (ORDER_ID)
-    // =========================================================================
+    // =========================================================
+    // CHI TIẾT HÓA ĐƠN
+    // =========================================================
     public List<Object[]> getOrderDetailsByOrderId(String orderId) {
+
         List<Object[]> list = new ArrayList<>();
 
-        // Query móc nối 2 bảng để lấy Tên sản phẩm và tính Thành tiền
-        String sql = "SELECT od.product_id, p.product_name, od.quantity, od.unit_price, "
-                + "(od.quantity * od.unit_price) AS total_price "
-                + "FROM ORDER_DETAILS od "
-                + "JOIN PRODUCTS p ON od.product_id = p.product_id "
-                + "WHERE od.order_id = ?";
+        String sql = """
+            SELECT
+                od.PRODUCT_ID,
+                p.PRODUCT_NAME,
+                od.QUANTITY,
+                od.UNIT_PRICE,
+                (od.QUANTITY * od.UNIT_PRICE) AS TOTAL_PRICE
+            FROM ORDER_DETAILS od
+            JOIN PRODUCTS p
+                ON od.PRODUCT_ID = p.PRODUCT_ID
+            WHERE od.ORDER_ID = ?
+        """;
 
-        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
-            ps.setString(1, orderId);
+            pst.setString(1, orderId);
 
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = pst.executeQuery()) {
+
                 while (rs.next()) {
+
                     Object[] row = new Object[5];
-                    row[0] = rs.getString("product_id");
-                    row[1] = rs.getString("product_name");
-                    row[2] = rs.getInt("quantity");
-                    row[3] = rs.getBigDecimal("unit_price"); // Hoặc getDouble tùy data type của ông
-                    row[4] = rs.getBigDecimal("total_price");
+
+                    row[0] = rs.getString("PRODUCT_ID");
+                    row[1] = rs.getString("PRODUCT_NAME");
+                    row[2] = rs.getInt("QUANTITY");
+                    row[3] = rs.getBigDecimal("UNIT_PRICE");
+                    row[4] = rs.getBigDecimal("TOTAL_PRICE");
 
                     list.add(row);
                 }
             }
-        } catch (Exception e) {
-            System.err.println("Lỗi Load Chi tiết hóa đơn: " + e.getMessage());
+
+        } catch (SQLException e) {
+
+            System.err.println("❌ OrdersSql.getOrderDetailsByOrderId(): " + e.getMessage());
             e.printStackTrace();
         }
+
         return list;
     }
 
-    // =========================================================================
-    // TẠO MÃ HÓA ĐƠN TỰ ĐỘNG (Ví dụ: HD2605_001)
-    // =========================================================================
+    // =========================================================
+    // GENERATE ORDER ID
+    // VD: HD2605_001
+    // =========================================================
     public String generateNextOrderId() {
-        // Lấy yyMM hiện tại (Ví dụ Tháng 5 năm 2026 -> 2605)
-        String prefix = "HD" + new java.text.SimpleDateFormat("yyMM").format(new java.util.Date()) + "_";
-        String sql = "SELECT MAX(order_id) FROM ORDERS WHERE order_id LIKE ?";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        String prefix = "HD"
+                + new SimpleDateFormat("yyMM").format(new java.util.Date())
+                + "_";
+
+        String sql = """
+            SELECT MAX(ORDER_ID)
+            FROM ORDERS
+            WHERE ORDER_ID LIKE ?
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             pst.setString(1, prefix + "%");
+
             try (ResultSet rs = pst.executeQuery()) {
-                if (rs.next() && rs.getString(1) != null) {
-                    String maxId = rs.getString(1); // VD: HD2605_009
-                    // Cắt lấy phần số phía sau dấu _
-                    int nextNum = Integer.parseInt(maxId.substring(maxId.lastIndexOf("_") + 1)) + 1;
-                    return prefix + String.format("%03d", nextNum); // Format thành 3 chữ số: 010
+
+                if (rs.next()) {
+
+                    String maxId = rs.getString(1);
+
+                    if (maxId != null && !maxId.isBlank()) {
+
+                        int nextNumber = Integer.parseInt(
+                                maxId.substring(maxId.lastIndexOf("_") + 1)
+                        ) + 1;
+
+                        return prefix + String.format("%03d", nextNumber);
+                    }
                 }
             }
+
         } catch (Exception e) {
+
+            System.err.println("❌ OrdersSql.generateNextOrderId(): " + e.getMessage());
             e.printStackTrace();
         }
-        return prefix + "001"; // Nếu tháng này chưa có đơn nào thì bắt đầu từ 001
+
+        return prefix + "001";
+    }
+
+    // =========================================================
+    // SEARCH BY DATE RANGE
+    // =========================================================
+    public List<Order> findByDateRange(Date fromDate, Date toDate) {
+
+        List<Order> list = new ArrayList<>();
+
+        String sql = """
+            SELECT
+                o.*,
+                e.EMPLOYEE_NAME
+            FROM ORDERS o
+            LEFT JOIN EMPLOYEES e
+                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+            WHERE NVL(o.IS_DELETED, 0) = 0
+              AND o.ORDER_DATE BETWEEN ? AND ?
+            ORDER BY o.ORDER_DATE DESC
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setDate(1, fromDate);
+            pst.setDate(2, toDate);
+
+            try (ResultSet rs = pst.executeQuery()) {
+
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+
+            System.err.println("❌ OrdersSql.findByDateRange(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return list;
     }
 }
