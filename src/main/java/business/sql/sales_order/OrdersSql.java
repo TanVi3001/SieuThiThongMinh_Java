@@ -137,9 +137,12 @@ public class OrdersSql implements SqlInterface<Order> {
         }
 
         ArrayList<Order> list = new ArrayList<>();
-        String sql = "SELECT * FROM ORDERS "
-                + "WHERE NVL(is_deleted, 0) = 0 AND UPPER(status) = UPPER(?) "
-                + "ORDER BY order_date DESC";
+        // Tương tự, JOIN thêm bảng EMPLOYEES
+        String sql = "SELECT o.*, e.employee_name "
+                + "FROM ORDERS o "
+                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
+                + "WHERE NVL(o.is_deleted, 0) = 0 AND UPPER(o.status) = UPPER(?) "
+                + "ORDER BY o.order_date DESC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, condition);
@@ -158,7 +161,12 @@ public class OrdersSql implements SqlInterface<Order> {
     @Override
     public ArrayList<Order> selectAll() {
         ArrayList<Order> list = new ArrayList<>();
-        String sql = "SELECT * FROM ORDERS WHERE NVL(is_deleted, 0) = 0 ORDER BY order_date DESC";
+        // JOIN thêm bảng EMPLOYEES để lấy employee_name
+        String sql = "SELECT o.*, e.employee_name "
+                + "FROM ORDERS o "
+                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
+                + "WHERE NVL(o.is_deleted, 0) = 0 "
+                + "ORDER BY o.order_date DESC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
@@ -166,6 +174,39 @@ public class OrdersSql implements SqlInterface<Order> {
             }
         } catch (SQLException e) {
             System.err.println("Loi tai OrdersSql.selectAll: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    public ArrayList<Order> selectAll(String currentUserRole, String currentEmployeeId) {
+        ArrayList<Order> list = new ArrayList<>();
+
+        String sql = "SELECT o.*, e.employee_name "
+                + "FROM ORDERS o "
+                + "LEFT JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
+                + "WHERE NVL(o.is_deleted, 0) = 0 ";
+
+        // NẾU LÀ SALE: Bắt buộc chỉ lấy hóa đơn do chính ID của người đó tạo
+        if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
+            sql += " AND o.employee_id = ? ";
+        }
+
+        sql += " ORDER BY o.order_date DESC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            // Gán param nếu là Sale
+            if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
+                pst.setString(1, currentEmployeeId);
+            }
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+        } catch (SQLException e) {
             e.printStackTrace();
         }
         return list;
@@ -179,7 +220,17 @@ public class OrdersSql implements SqlInterface<Order> {
         double amount = rs.getDouble("total_amount");
         String status = rs.getString("status");
         boolean deleted = rs.getInt("is_deleted") == 1;
-        return new Order(id, customerId, employeeId, date, amount, status, deleted);
+
+        Order order = new Order(id, customerId, employeeId, date, amount, status, deleted);
+
+        // Bắt lỗi an toàn
+        try {
+            String empName = rs.getString("employee_name");
+            order.setNote(empName);
+        } catch (Exception e) {
+        }
+
+        return order;
     }
 
     // =========================================================================
@@ -216,5 +267,29 @@ public class OrdersSql implements SqlInterface<Order> {
             e.printStackTrace();
         }
         return list;
+    }
+
+    // =========================================================================
+    // TẠO MÃ HÓA ĐƠN TỰ ĐỘNG (Ví dụ: HD2605_001)
+    // =========================================================================
+    public String generateNextOrderId() {
+        // Lấy yyMM hiện tại (Ví dụ Tháng 5 năm 2026 -> 2605)
+        String prefix = "HD" + new java.text.SimpleDateFormat("yyMM").format(new java.util.Date()) + "_";
+        String sql = "SELECT MAX(order_id) FROM ORDERS WHERE order_id LIKE ?";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, prefix + "%");
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next() && rs.getString(1) != null) {
+                    String maxId = rs.getString(1); // VD: HD2605_009
+                    // Cắt lấy phần số phía sau dấu _
+                    int nextNum = Integer.parseInt(maxId.substring(maxId.lastIndexOf("_") + 1)) + 1;
+                    return prefix + String.format("%03d", nextNum); // Format thành 3 chữ số: 010
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return prefix + "001"; // Nếu tháng này chưa có đơn nào thì bắt đầu từ 001
     }
 }

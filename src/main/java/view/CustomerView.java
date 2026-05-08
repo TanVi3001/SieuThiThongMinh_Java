@@ -209,7 +209,8 @@ public class CustomerView extends JPanel {
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         tableModel = new DefaultTableModel(
-                new Object[]{"Mã KH", "Tên khách hàng", "Số điện thoại", "Email", "Địa chỉ"}, 0) {
+                new Object[]{"Mã KH", "Tên khách hàng", "SĐT", "Email", "Địa chỉ", "Tổng chi", "Hạng"}, 0
+        ) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -396,14 +397,18 @@ public class CustomerView extends JPanel {
     private void loadCustomerData() {
         tableModel.setRowCount(0);
         try {
-            List<Customer> list = CustomersSql.getInstance().selectAll();
+            // Gọi hàm có tính rank ở Bước 3
+            List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
             for (Customer c : list) {
-                String id = c.getCustomerId() != null ? c.getCustomerId() : "";
-                String name = c.getCustomerName() != null ? c.getCustomerName() : "";
-                String phone = c.getPhone() != null ? c.getPhone() : "";
-                String email = c.getEmail() != null ? c.getEmail() : "";
-                String address = c.getAddress() != null ? c.getAddress() : "";
-                tableModel.addRow(new Object[]{id, name, phone, email, address});
+                tableModel.addRow(new Object[]{
+                    c.getCustomerId(),
+                    c.getCustomerName(),
+                    c.getPhone(),
+                    c.getEmail(),
+                    c.getAddress(),
+                    String.format("%,.0f VNĐ", c.getTotalSpending()), // Định dạng tiền
+                    c.getMemberRank() // Hạng thành viên
+                });
             }
         } catch (Exception e) {
             e.printStackTrace();

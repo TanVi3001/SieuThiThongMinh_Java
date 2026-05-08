@@ -56,26 +56,31 @@ public class Sidebar extends JPanel {
         menuPanel.setBackground(Color.WHITE);
         menuPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
 
-        // =========================================================
-        // SỬA LẠI: DÙNG TRỰC TIẾP BIẾN userRole ĐỂ QUYẾT ĐỊNH MENU
-        // =========================================================
+        // Khai báo các quyền
+        boolean isSale = "R_STAFF_SALE".equalsIgnoreCase(userRole);
+        boolean isManagerOrAdmin = "R_ADMIN_ALL".equalsIgnoreCase(userRole) || "R_STORE_MNG".equalsIgnoreCase(userRole);
+
+        // Ai cũng thấy Tổng quan
         addMenuItem("Tổng quan", IconHelper.dashboard(20));
 
-// SALE cũng cần thấy sản phẩm để tra cứu khi bán hàng
+        // CHỈ STAFF SALE MỚI THẤY NÚT BÁN HÀNG (Dùng Icon Cart hoặc Barcode)
+        if (isSale) {
+            addMenuItem("Bán hàng", IconHelper.product(20)); 
+        }
+
+        // Ai cũng thấy Sản phẩm (Dùng Icon Box/Inventory)
         addMenuItem("Quản lý sản phẩm", IconHelper.product(20));
 
-// Chỉ manager/admin mới thấy nhân viên + thống kê
-        boolean isManagerOrAdmin
-                = "R_ADMIN_ALL".equalsIgnoreCase(userRole)
-                || "R_STORE_MNG".equalsIgnoreCase(userRole);
-
+        // Chỉ Manager/Admin thấy Nhân sự
         if (isManagerOrAdmin) {
             addMenuItem("Quản lý nhân viên", IconHelper.employee(20));
         }
 
+        // Ai cũng thấy Khách hàng & Hóa đơn
         addMenuItem("Khách hàng", IconHelper.customer(20));
         addMenuItem("Hóa đơn", IconHelper.bill(20));
 
+        // Chỉ Manager/Admin thấy Thống kê
         if (isManagerOrAdmin) {
             addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(20));
         }

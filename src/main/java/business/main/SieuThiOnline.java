@@ -104,5 +104,4 @@ public class SieuThiOnline {
 
     }
 }
-//Tách 2 cái này ra, 1 cái là nội dung tạo bảng, 1 cái là nội dung insert dữ liệu đầu vào trừ(trừ admin, tài khoản)
 

@@ -624,11 +624,12 @@ public class OrderView extends javax.swing.JPanel {
     // ==========================================
     private void initTableModel() {
         DefaultTableModel model = new DefaultTableModel(
+                // ĐÃ XÓA "NHÂN VIÊN"
                 new Object[]{"Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"}, 0
         ) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Không cho sửa trực tiếp trên bảng
+                return false;
             }
         };
         jTable1.setModel(model);
@@ -643,19 +644,25 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     // ==========================================
-    // Load toàn bộ dữ liệu đơn hàng từ DB lên bảng
+    // Load dữ liệu đơn hàng từ DB lên bảng (Đã ép Phân quyền)
     // ==========================================
     private void loadDataToTable() {
         try {
-            // Sử dụng singleton OrdersSql đã viết
-            List<Order> list = OrdersSql.getInstance().selectAll();
+            // Lấy thông tin người đang đăng nhập (Tùy project của ông lưu ở đâu, tui ví dụ SessionManager)
+            String role = business.service.SessionManager.getCurrentUser().getRoleId();
+            String empId = business.service.SessionManager.getCurrentUser().getAccountId();
+
+            // GỌI HÀM CÓ THAM SỐ THAY VÌ HÀM KHÔNG THAM SỐ CŨ
+            List<Order> list = OrdersSql.getInstance().selectAll(role, empId);
             fillTable(list);
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi tải danh sách đơn hàng: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    // 2. Sửa hàm fillTable
     private void fillTable(List<Order> list) {
         DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
         model.setRowCount(0);
@@ -918,6 +925,13 @@ public class OrderView extends javax.swing.JPanel {
         pnButton.add(btnIssueAnInvoice, gridBagConstraints);
 
         add(pnButton, java.awt.BorderLayout.PAGE_END);
+        // Lấy quyền của người đang đăng nhập (Ví dụ dùng SessionManager)
+        String currentUserRole = business.service.SessionManager.getCurrentUser().getRoleId();
+
+        // Nếu là Sale thì ẩn nút Cập nhật trạng thái đi
+        if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
+            btnUpdate.setVisible(false); // Nút cập nhật trạng thái
+        }
     }// </editor-fold>                        
 
     private void btnUpdateActionPerformed(java.awt.event.ActionEvent evt) {

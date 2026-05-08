@@ -198,4 +198,26 @@ public class IconHelper {
     public static ImageIcon saveMoney(int size) {
         return load("save-money.png", size);
     }
+    
+    public static ImageIcon accessDenied(int size) {
+        ImageIcon originalIcon = load("access_denied_icon.png", size);
+        if (originalIcon == null) return null;
+
+        // Tạo một bức tranh trống hỗ trợ nền trong suốt (ARGB)
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g2 = img.createGraphics();
+        
+        // 1. Vẽ cái ảnh gốc (màu đen) lên bức tranh
+        g2.drawImage(originalIcon.getImage(), 0, 0, null);
+        
+        // 2. Bật chế độ "Chỉ tô màu lên những nét vẽ có sẵn, bỏ qua nền trong suốt"
+        g2.setComposite(java.awt.AlphaComposite.SrcAtop);
+        
+        // 3. Quét một lớp sơn màu đỏ (Màu chuẩn của báo lỗi) lên toàn bộ
+        g2.setColor(new java.awt.Color(220, 53, 69)); 
+        g2.fillRect(0, 0, size, size);
+        g2.dispose();
+
+        return new ImageIcon(img);
+    }
 }

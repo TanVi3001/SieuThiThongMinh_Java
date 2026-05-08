@@ -260,14 +260,18 @@ public class StatisticSql {
     /**
      * Báo cáo Doanh thu (Đã bỏ cột giảm giá, Tổng tiền hàng = Doanh thu thực)
      */
+    /**
+     * Báo cáo Doanh thu (CHỈ TÍNH CÁC ĐƠN ĐÃ HOÀN THÀNH)
+     */
     public List<Object[]> getRevenueReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
+
         String sql = "SELECT TO_CHAR(TRUNC(order_date), 'dd/MM/yyyy') AS ngay, "
                 + "        COUNT(order_id) AS tong_don, "
                 + "       SUM(total_amount) as doanh_thu_thuc "
                 + "FROM ORDERS "
                 + "WHERE NVL(is_deleted, 0) = 0 "
-                + "AND UPPER(NVL(status, '')) <> 'CANCELLED' "
+                + "AND (UPPER(NVL(status, '')) = 'COMPLETED' OR UPPER(NVL(status, '')) = N'HOÀN THÀNH') " // BỘ LỌC CHUẨN ĐÉT Ở ĐÂY
                 + "AND order_date >= ? AND order_date < (? + 1) "
                 + "GROUP BY TRUNC(order_date) "
                 + "ORDER BY TRUNC(order_date) DESC";
@@ -283,9 +287,9 @@ public class StatisticSql {
                     int tongDon = rs.getInt("tong_don");
                     double doanhThu = rs.getDouble("doanh_thu_thuc");
 
-                    String tienFormatted = currencyFormat.format(doanhThu);
+                    // Định dạng tiền có luôn chữ VNĐ cho đồng bộ với các tab khác
+                    String tienFormatted = currencyFormat.format(doanhThu) + " VNĐ";
 
-                    // SAU (ĐÚNG - 3 cột khớp DefaultTableModel của StatisticView)
                     rows.add(new Object[]{ngay, tongDon, tienFormatted});
                 }
             }
@@ -295,24 +299,20 @@ public class StatisticSql {
         return rows;
     }
 
-    /**
-     * Báo cáo Sản phẩm (Tính số lượng và doanh thu từng mã)
-     */
     public List<Object[]> getProductReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
         String sql = "SELECT p.product_id, NVL(p.product_name, od.product_id) AS product_name, "
-                + "       SUM(NVL(od.quantity_base, od.quantity)) AS sl_da_ban, "
-                + "       SUM(NVL(od.quantity_base, od.quantity) * od.unit_price) AS doanh_thu_mang_lai, "
-                + "       NVL(p.quantity, 0) AS ton_kho "
-                + "FROM ORDER_DETAILS od "
-                + "JOIN ORDERS o ON od.order_id = o.order_id "
-                + "JOIN PRODUCTS p ON od.product_id = p.product_id "
-                + "WHERE NVL(od.is_deleted, 0) = 0 "
-                + "  AND NVL(o.is_deleted, 0) = 0 "
-                + "  AND UPPER(NVL(o.status, '')) <> 'CANCELLED' "
-                + "  AND o.order_date >= ? AND o.order_date < (? + 1) "
-                + "GROUP BY p.product_id, p.product_name, p.quantity "
-                + "ORDER BY sl_da_ban DESC";
+                + "       NVL(SUM(od.quantity), 0) AS sl_da_ban, "
+                + "       NVL(SUM(od.quantity * od.unit_price), 0) AS doanh_thu_mang_lai, "
+                + "       (SELECT NVL(SUM(quantity), 0) FROM INVENTORY WHERE product_id = p.product_id AND is_deleted = 0) AS ton_kho "
+                + "FROM PRODUCTS p "
+                + "LEFT JOIN ORDER_DETAILS od ON p.product_id = od.product_id AND od.is_deleted = 0 "
+                + "LEFT JOIN ORDERS o ON od.order_id = o.order_id AND NVL(o.is_deleted, 0) = 0 "
+                + "       AND (UPPER(NVL(o.status, '')) = 'COMPLETED' OR UPPER(NVL(o.status, '')) = N'HOÀN THÀNH') "
+                + "       AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "WHERE NVL(p.is_deleted, 0) = 0 "
+                + "GROUP BY p.product_id, p.product_name "
+                + "ORDER BY sl_da_ban DESC, doanh_thu_mang_lai DESC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setDate(1, new java.sql.Date(fromDate.getTime()));
@@ -326,7 +326,7 @@ public class StatisticSql {
                     double doanhThu = rs.getDouble("doanh_thu_mang_lai");
                     int tonKho = rs.getInt("ton_kho");
 
-                    rows.add(new Object[]{id, name, slBan, currencyFormat.format(doanhThu), tonKho});
+                    rows.add(new Object[]{id, name, slBan, currencyFormat.format(doanhThu) + " VNĐ", tonKho});
                 }
             }
         } catch (SQLException e) {
@@ -336,20 +336,43 @@ public class StatisticSql {
     }
 
     /**
-     * Báo cáo Nhân viên (Lọc các đơn hàng tạo bởi nhân viên đó)
+     * Báo cáo Nhân viên (Khớp với 5 cột: Mã NV, Tên NV, Đơn thành công, Đơn
+     * hủy, Doanh thu)
+     */
+    /**
+     * Báo cáo Nhân viên (CHỈ lấy những người ĐÃ CÓ TÀI KHOẢN và mang quyền BÁN
+     * HÀNG)
+     */
+    /**
+     * Báo cáo Nhân viên: Chỉ lấy những người ĐÃ CÓ TÀI KHOẢN và CÓ QUYỀN SALE
+     * Hiển thị đầy đủ kể cả khi doanh thu = 0
+     */
+    /**
+     * Báo cáo Nhân viên: Chỉ lấy những người ĐÃ CÓ TÀI KHOẢN và CÓ QUYỀN SALE.
+     * Fix lỗi lệch mã USR và EMP bằng cách kiểm tra thêm trùng tên.
      */
     public List<Object[]> getEmployeeReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
+
         String sql = "SELECT e.employee_id, e.employee_name, "
-                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'COMPLETED' THEN 1 ELSE 0 END) as don_thanh_cong, "
-                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'CANCELLED' THEN 1 ELSE 0 END) as don_huy, "
-                + "       SUM(CASE WHEN UPPER(NVL(o.status, '')) = 'COMPLETED' THEN o.total_amount ELSE 0 END) as doanh_thu "
-                + "FROM ORDERS o "
-                + "JOIN EMPLOYEES e ON o.employee_id = e.employee_id "
-                + "WHERE NVL(o.is_deleted, 0) = 0 "
-                + "  AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "       COUNT(CASE WHEN (UPPER(NVL(o.status, '')) = 'COMPLETED' OR UPPER(NVL(o.status, '')) = N'HOÀN THÀNH') THEN 1 END) as don_thanh_cong, "
+                + "       COUNT(CASE WHEN (UPPER(NVL(o.status, '')) = 'CANCELLED' OR UPPER(NVL(o.status, '')) = N'ĐÃ HỦY') THEN 1 END) as don_huy, "
+                + "       SUM(CASE WHEN (UPPER(NVL(o.status, '')) = 'COMPLETED' OR UPPER(NVL(o.status, '')) = N'HOÀN THÀNH') THEN o.total_amount ELSE 0 END) as doanh_thu "
+                + "FROM EMPLOYEES e "
+                + "LEFT JOIN ORDERS o ON e.employee_id = o.employee_id AND NVL(o.is_deleted, 0) = 0 "
+                + "       AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "WHERE NVL(e.is_deleted, 0) = 0 "
+                // LUẬT THÉP CỦA ÔNG Ở ĐÂY:
+                + "  AND EXISTS ( "
+                + "      SELECT 1 FROM ACCOUNTS a "
+                + "      JOIN ACCOUNT_ASSIGN_ROLE aar ON a.account_id = aar.account_id "
+                + "      LEFT JOIN USERS u ON a.user_id = u.user_id "
+                + "      WHERE aar.role_id = 'R_STAFF_SALE' "
+                + "        AND NVL(a.is_deleted, 0) = 0 "
+                + "        AND (a.user_id = e.employee_id OR u.full_name = e.employee_name) "
+                + "  ) "
                 + "GROUP BY e.employee_id, e.employee_name "
-                + "ORDER BY doanh_thu DESC";
+                + "ORDER BY doanh_thu DESC, don_thanh_cong DESC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setDate(1, new java.sql.Date(fromDate.getTime()));
@@ -357,13 +380,13 @@ public class StatisticSql {
 
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
-                    String id = rs.getString("employee_id");
-                    String name = rs.getString("employee_name");
-                    int donTC = rs.getInt("don_thanh_cong");
-                    int donHuy = rs.getInt("don_huy");
-                    double doanhThu = rs.getDouble("doanh_thu");
-
-                    rows.add(new Object[]{id, name, donTC, donHuy, currencyFormat.format(doanhThu)});
+                    rows.add(new Object[]{
+                        rs.getString("employee_id"),
+                        rs.getString("employee_name"),
+                        rs.getInt("don_thanh_cong"),
+                        rs.getInt("don_huy"),
+                        currencyFormat.format(rs.getDouble("doanh_thu")) + " VNĐ"
+                    });
                 }
             }
         } catch (SQLException e) {

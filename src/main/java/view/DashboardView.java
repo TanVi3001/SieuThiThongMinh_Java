@@ -55,12 +55,12 @@ public class DashboardView extends JFrame {
         }
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        
+
         // BẢO VỆ LỚP 1: Mở Full màn hình và thiết lập giới hạn thu nhỏ
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         this.setMinimumSize(new Dimension(1100, 700));
         this.setLocationRelativeTo(null);
-        
+
         this.getContentPane().setLayout(new BorderLayout());
 
         mainContentPanel = new JPanel(new BorderLayout());
@@ -76,6 +76,9 @@ public class DashboardView extends JFrame {
             switch (title) {
                 case "Tổng quan":
                     showPanel(new TongQuanPanel());
+                    break;
+                case "Bán hàng":
+                    showPanel(new SellPanel());
                     break;
                 case "Quản lý sản phẩm":
                     showPanel(new ProductView());
@@ -117,16 +120,16 @@ public class DashboardView extends JFrame {
 
     public void showPanel(JPanel childPanel) {
         mainContentPanel.removeAll();
-        
+
         // BẢO VỆ LỚP 2: Chống vỡ các báo cáo và thống kê bằng thanh cuộn
-        childPanel.setMinimumSize(new Dimension(900, 600)); 
-        
+        childPanel.setMinimumSize(new Dimension(900, 600));
+
         JScrollPane scrollPane = new JScrollPane(childPanel);
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        
+
         mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
@@ -175,14 +178,14 @@ public class DashboardView extends JFrame {
                     try {
                         String[] latestData = business.sql.rbac.AccountSql.getInstance().getAccountDetails(currentUser.getAccountId());
                         if (latestData != null) {
-                            String dbRoleId = latestData[4]; 
+                            String dbRoleId = latestData[4];
                             boolean isActive = "0".equals(latestData[5]);
 
                             if (!isActive || !dbRoleId.equals(currentUser.getRoleValue())) {
                                 roleChanged = true;
                             }
                         } else {
-                            roleChanged = true; 
+                            roleChanged = true;
                         }
                     } catch (Exception ex) {
                     }
@@ -208,7 +211,7 @@ public class DashboardView extends JFrame {
                             login.setVisible(true);
                             login.setLocationRelativeTo(null);
 
-                            this.dispose(); 
+                            this.dispose();
                         }
                     });
                 }
