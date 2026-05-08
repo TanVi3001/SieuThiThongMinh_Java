@@ -67,10 +67,26 @@ public class AdminDashboardView extends javax.swing.JFrame {
     public void showPanel(JPanel panel) {
         mainContentPanel.removeAll();
         
+        JPanel panelToDisplay = panel;
+
+        // ========================================================
+        // LOGIC MIỄN TRỪ (BYPASS): 
+        // Bỏ qua Lính gác đối với các trang Tổng quan và Cài đặt cá nhân
+        // ========================================================
+        boolean isBypassed = (panel instanceof view.components.TongQuanPanel) || 
+                             (panel instanceof view.SettingsView) ||
+                             (panel instanceof view.SettingsWarehouseView) ||
+                             (panel instanceof view.SettingsAdminPanel);
+
+        if (!isBypassed) {
+            // Đưa cho Lính gác kiểm tra và khóa nút (Dù Admin full quyền thì vẫn qua cổng cho chuẩn luồng)
+            panelToDisplay = common.security.UIPermissionGuard.protect(panel);
+        }
+
         // BẢO VỆ LỚP 2: Bọc thẻ con vào Thanh cuộn để chống ép bẹp biểu đồ
-        panel.setMinimumSize(new Dimension(900, 600)); // Kích thước an toàn cho thẻ con
+        panelToDisplay.setMinimumSize(new Dimension(900, 600)); // Kích thước an toàn cho thẻ con
         
-        JScrollPane scrollPane = new JScrollPane(panel);
+        JScrollPane scrollPane = new JScrollPane(panelToDisplay);
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Lăn chuột mượt hơn
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
