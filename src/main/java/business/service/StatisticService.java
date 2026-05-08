@@ -32,7 +32,7 @@ public class StatisticService {
             throw new IllegalArgumentException("Vui lòng chọn đầy đủ Từ ngày và Đến ngày.");
         }
         if (fromDate.after(toDate)) {
-            throw new IllegalArgumentException("Từ ngày không được lớn hơn Đến ngày.");
+            throw new IllegalArgumentException("Ngày bắt đầu không thể sau ngày kết thúc.");
         }
     }
 }

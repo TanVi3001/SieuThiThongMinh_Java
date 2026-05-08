@@ -531,132 +531,97 @@ public class SellPanel extends JPanel {
     // PAYMENT
     // =========================================================
     private void processPayment() {
-
+        // 1. Kiểm tra giỏ hàng
         if (modCart.getRowCount() <= 0) {
-
-            JOptionPane.showMessageDialog(this,
-                    "Giỏ hàng đang trống!");
-
+            JOptionPane.showMessageDialog(this, "Giỏ hàng đang trống!");
             return;
         }
 
         try {
+            // =========================================================
+            // 🌟 FIX LỆCH ID: Lấy UserId (Mã EMP...) thay vì AccountId
+            // =========================================================
+            String employeeId = "EMP_DEFAULT";
+            model.account.Account acc = SessionManager.getCurrentUser();
 
-            String employeeId = SessionManager.getCurrentUser() != null
-                    ? SessionManager.getCurrentUser().getAccountId()
-                    : "EMP_DEFAULT";
+            if (acc != null) {
+                // Trong DB của bạn, Account.user_id chính là Employee_id (EMP...)
+                employeeId = acc.getUserId();
+            }
 
+            // Log kiểm tra (Có thể xóa sau khi chạy ổn)
+            System.out.println("DEBUG: Thanh toán hóa đơn bởi Mã NV: " + employeeId);
+
+            // 2. Chuẩn bị thông tin hóa đơn (Order)
             String paymentMethodId = cboPaymentMethod.getSelectedItem() != null
                     ? cboPaymentMethod.getSelectedItem().toString()
                     : "PM_CASH";
 
-            String orderId = OrdersSql.getInstance().generateNextOrderId();
+            String orderId = business.sql.sales_order.OrdersSql.getInstance().generateNextOrderId();
 
-            // =================================================
-            // ORDER
-            // =================================================
             Order order = new Order();
-
             order.setOrderId(orderId);
-            order.setCustomerId(
-                    selectedCustomer != null
-                            ? selectedCustomer.getCustomerId()
-                            : null
-            );
+            order.setCustomerId(selectedCustomer != null ? selectedCustomer.getCustomerId() : null);
 
+            // Gán mã nhân viên chuẩn đã lấy ở trên
             order.setEmployeeId(employeeId);
+
             order.setPaymentMethodId(paymentMethodId);
-            order.setOrderDate(new Date(System.currentTimeMillis()));
+            order.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
             order.setTotalAmount(finalAmountToPay);
+
+            // Trạng thái lưu "Hoàn thành" để khớp với SQL báo cáo
             order.setStatus("Hoàn thành");
             order.setNote("POS bán trực tiếp");
 
-            // =================================================
-            // DETAILS
-            // =================================================
+            // 3. Chuẩn bị danh sách chi tiết hóa đơn (OrderDetails)
             List<OrderDetail> details = new ArrayList<>();
-
             for (int i = 0; i < modCart.getRowCount(); i++) {
-
                 String productId = modCart.getValueAt(i, 0).toString();
-
                 int quantity = (int) modCart.getValueAt(i, 2);
-
                 double price = (double) modCart.getValueAt(i, 3);
 
+                // Tìm unitId từ danh sách sản phẩm đã load
                 Product product = allProducts.stream()
                         .filter(p -> p.getProductId().equals(productId))
                         .findFirst()
                         .orElse(null);
 
-                String unitId = "U_CAI";
+                String unitId = (product != null && product.getBaseUnitId() != null)
+                        ? product.getBaseUnitId() : "U_CAI";
 
-                if (product != null
-                        && product.getBaseUnitId() != null
-                        && !product.getBaseUnitId().isBlank()) {
-
-                    unitId = product.getBaseUnitId();
-                }
-
-                details.add(
-                        new OrderDetail(
-                                orderId,
-                                productId,
-                                quantity,
-                                price,
-                                unitId,
-                                0
-                        )
-                );
+                details.add(new OrderDetail(orderId, productId, quantity, price, unitId, 0));
             }
 
-            // =================================================
-            // EXECUTE PAYMENT
-            // =================================================
+            // 4. Thực hiện gọi Service thanh toán (Database Transaction)
             boolean success = PaymentService.thanhToan(order, details);
 
-            if (!success) {
+            if (success) {
+                // 5. Xử lý sau khi thanh toán thành công
+                JOptionPane.showMessageDialog(this, "✅ Thanh toán thành công!\nMã hóa đơn: " + orderId);
 
-                JOptionPane.showMessageDialog(
-                        this,
-                        "❌ Thanh toán thất bại!",
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE
-                );
+                // Xóa giỏ hàng
+                clearCart();
 
-                return;
+                // Cập nhật lại thông tin khách hàng (điểm thưởng/hạng) nếu có
+                if (selectedCustomer != null) {
+                    selectedCustomer = business.sql.sales_order.CustomersSql.getInstance()
+                            .findByPhone(selectedCustomer.getPhone());
+                    updateCustomerUI();
+                }
+
+                // Tải lại danh sách sản phẩm để cập nhật tồn kho trên giao diện
+                loadProducts();
+
+                // Thông báo Real-time cho các máy khác
+                notifySystemChanged();
+            } else {
+                JOptionPane.showMessageDialog(this, "❌ Thanh toán thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "✅ Thanh toán thành công!\nMã hóa đơn: " + orderId
-            );
-
-            clearCart();
-
-            // Reload customer info
-            if (selectedCustomer != null) {
-
-                selectedCustomer = CustomersSql.getInstance()
-                        .findByPhone(selectedCustomer.getPhone());
-
-                updateCustomerUI();
-            }
-
-            loadProducts();
-
-            notifySystemChanged();
 
         } catch (Exception ex) {
-
             ex.printStackTrace();
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Lỗi hệ thống:\n" + ex.getMessage(),
-                    "Lỗi",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            JOptionPane.showMessageDialog(this, "Lỗi hệ thống: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
     }
 
