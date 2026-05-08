@@ -34,78 +34,167 @@ CREATE TABLE ROLE_GROUPS
 CREATE TABLE ACCOUNTS
 (
     account_id VARCHAR2(50) PRIMARY KEY,
-    user_id    VARCHAR2(50)  NOT NULL,
-    username   VARCHAR2(50)  NOT NULL,
+    user_id    VARCHAR2(50) NOT NULL,
+    username   VARCHAR2(50) NOT NULL,
     password   VARCHAR2(255) NOT NULL,
     status     NVARCHAR2(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_ACCOUNTS_USERS FOREIGN KEY (user_id) REFERENCES USERS (user_id)
+
+    CONSTRAINT FK_ACCOUNTS_USERS
+        FOREIGN KEY (user_id) REFERENCES USERS(user_id)
 );
 
 CREATE TABLE ROLES
 (
     role_id     VARCHAR2(50) PRIMARY KEY,
+    role_name   NVARCHAR2(100),
     function_id VARCHAR2(50) NOT NULL,
+
     can_view    NUMBER(1) DEFAULT 0,
     can_add     NUMBER(1) DEFAULT 0,
     can_edit    NUMBER(1) DEFAULT 0,
     can_delete  NUMBER(1) DEFAULT 0,
     can_export  NUMBER(1) DEFAULT 0,
+
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted  NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_ROLES_FUNCTIONS FOREIGN KEY (function_id) REFERENCES FUNCTIONS (function_id)
+
+    CONSTRAINT FK_ROLES_FUNCTIONS
+        FOREIGN KEY (function_id) REFERENCES FUNCTIONS(function_id)
 );
 
 CREATE TABLE ACCOUNT_ASSIGN_ROLE_GROUP
 (
     account_id    VARCHAR2(50),
     role_group_id VARCHAR2(50),
+
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted    NUMBER(1) DEFAULT 0,
+
     PRIMARY KEY (account_id, role_group_id),
-    CONSTRAINT FK_AARG_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id),
-    CONSTRAINT FK_AARG_ROLE_GROUPS FOREIGN KEY (role_group_id) REFERENCES ROLE_GROUPS (role_group_id)
+
+    CONSTRAINT FK_AARG_ACCOUNTS
+        FOREIGN KEY (account_id) REFERENCES ACCOUNTS(account_id),
+
+    CONSTRAINT FK_AARG_ROLE_GROUPS
+        FOREIGN KEY (role_group_id) REFERENCES ROLE_GROUPS(role_group_id)
 );
 
 CREATE TABLE ROLE_GROUP_ASSIGN_ROLE
 (
     role_group_id VARCHAR2(50),
     role_id       VARCHAR2(50),
+
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted    NUMBER(1) DEFAULT 0,
+
     PRIMARY KEY (role_group_id, role_id),
-    CONSTRAINT FK_RGAR_ROLE_GROUPS FOREIGN KEY (role_group_id) REFERENCES ROLE_GROUPS (role_group_id),
-    CONSTRAINT FK_RGAR_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
+
+    CONSTRAINT FK_RGAR_ROLE_GROUPS
+        FOREIGN KEY (role_group_id) REFERENCES ROLE_GROUPS(role_group_id),
+
+    CONSTRAINT FK_RGAR_ROLES
+        FOREIGN KEY (role_id) REFERENCES ROLES(role_id)
 );
 
 CREATE TABLE ACCOUNT_ASSIGN_ROLE
 (
     account_id VARCHAR2(50),
     role_id    VARCHAR2(50),
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted NUMBER(1) DEFAULT 0,
+
     PRIMARY KEY (account_id, role_id),
-    CONSTRAINT FK_AAR_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id),
-    CONSTRAINT FK_AAR_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
+
+    CONSTRAINT FK_AAR_ACCOUNTS
+        FOREIGN KEY (account_id) REFERENCES ACCOUNTS(account_id),
+
+    CONSTRAINT FK_AAR_ROLES
+        FOREIGN KEY (role_id) REFERENCES ROLES(role_id)
 );
 
 CREATE TABLE TOKENS
 (
     token_id    VARCHAR2(50) PRIMARY KEY,
-    account_id  VARCHAR2(50)  NOT NULL,
+    account_id  VARCHAR2(50) NOT NULL,
     token_value VARCHAR2(500) NOT NULL,
-    expiry_date TIMESTAMP     NOT NULL,
+    expiry_date TIMESTAMP NOT NULL,
+
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_revoked  NUMBER(1) DEFAULT 0, -- Trạng thái hủy token (TrangThaiHuy)
-    is_deleted  NUMBER(1) DEFAULT 0, -- Trạng thái xóa mềm
-    CONSTRAINT FK_TOKENS_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id)
+
+    is_revoked  NUMBER(1) DEFAULT 0,
+    is_deleted  NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_TOKENS_ACCOUNTS
+        FOREIGN KEY (account_id) REFERENCES ACCOUNTS(account_id)
 );
+
+CREATE TABLE LOGIN_HISTORY
+(
+    log_id         VARCHAR2(50) PRIMARY KEY,
+    account_id     VARCHAR2(50) NOT NULL,
+
+    action_type    NVARCHAR2(50),
+    ip_address     VARCHAR2(45),
+    device_info    NVARCHAR2(255),
+
+    login_time     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    status         NVARCHAR2(20),
+    failure_reason NVARCHAR2(255),
+
+    is_deleted     NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_LOG_ACCOUNTS
+        FOREIGN KEY (account_id) REFERENCES ACCOUNTS(account_id)
+);
+
+CREATE INDEX IDX_LOGHIS_ACCOUNT_TIME
+ON LOGIN_HISTORY(account_id, login_time DESC);
+
+CREATE INDEX IDX_LOGHIS_ACTION
+ON LOGIN_HISTORY(action_type);
+
+CREATE TABLE AUDIT_LOG
+(
+    log_id       VARCHAR2(50) PRIMARY KEY,
+    account_id   VARCHAR2(50),
+
+    action_type  VARCHAR2(50) NOT NULL,
+    entity_type  VARCHAR2(50) NOT NULL,
+    entity_id    VARCHAR2(50) NOT NULL,
+
+    old_value    NVARCHAR2(1000),
+    new_value    NVARCHAR2(1000),
+
+    reason       NVARCHAR2(255),
+
+    ip_address   VARCHAR2(45),
+    device_info  NVARCHAR2(255),
+
+    created_at   TIMESTAMP DEFAULT SYSTIMESTAMP,
+    is_deleted   NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_AUDIT_ACCOUNT
+        FOREIGN KEY (account_id) REFERENCES ACCOUNTS(account_id)
+);
+
+CREATE INDEX IDX_AUDIT_CREATED
+ON AUDIT_LOG(created_at DESC);
+
+CREATE INDEX IDX_AUDIT_ACCOUNT
+ON AUDIT_LOG(account_id);
+
+CREATE INDEX IDX_AUDIT_ACTION
+ON AUDIT_LOG(action_type);
+
 -- ==========================================================
 -- 2. HUMAN RESOURCES AND KPI MANAGEMENT
 -- ==========================================================
@@ -124,27 +213,64 @@ CREATE TABLE EMPLOYEES
     employee_id            VARCHAR2(50) PRIMARY KEY,
     employee_name          NVARCHAR2(100),
     hire_date              DATE,
-    salary_coefficient     NUMBER(5, 2),
+
+    salary_coefficient     NUMBER(5,2),
+
     total_completed_orders NUMBER(10) DEFAULT 0,
+
     role_id                VARCHAR2(50),
     shift_id               VARCHAR2(50),
-    is_deleted             NUMBER(1)  DEFAULT 0,
-    CONSTRAINT FK_EMPLOYEES_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id),
-    CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id)
+
+    is_deleted             NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_EMPLOYEES_ROLES
+        FOREIGN KEY (role_id) REFERENCES ROLES(role_id),
+
+    CONSTRAINT FK_EMPLOYEES_SHIFTS
+        FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)
 );
+
+CREATE TABLE ACTIVATION_TOKENS
+(
+    token_id    NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    employee_id VARCHAR2(50) NOT NULL,
+
+    code        VARCHAR2(100) NOT NULL,
+    expires_at  DATE NOT NULL,
+    used_at     DATE,
+
+    created_at  DATE DEFAULT SYSDATE NOT NULL,
+
+    CONSTRAINT UQ_ACTIVATION_CODE UNIQUE(code),
+
+    CONSTRAINT FK_ACTIVATION_EMP
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id)
+);
+
+CREATE INDEX IDX_ACTIVATION_EMP
+ON ACTIVATION_TOKENS(employee_id);
 
 CREATE TABLE ATTENDANCE
 (
     employee_id            VARCHAR2(50),
     shift_id               VARCHAR2(50),
+
     work_date              DATE,
+
     check_in_time          TIMESTAMP,
     check_out_time         TIMESTAMP,
-    attendance_coefficient NUMBER(3, 1),
+
+    attendance_coefficient NUMBER(3,1),
+
     is_deleted             NUMBER(1) DEFAULT 0,
-    PRIMARY KEY (employee_id, shift_id),
-    CONSTRAINT FK_ATTENDANCE_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id),
-    CONSTRAINT FK_ATTENDANCE_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id)
+
+    PRIMARY KEY(employee_id, shift_id),
+
+    CONSTRAINT FK_ATTENDANCE_EMPLOYEES
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id),
+
+    CONSTRAINT FK_ATTENDANCE_SHIFTS
+        FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)
 );
 
 CREATE TABLE KPI_CRITERIA
@@ -152,9 +278,13 @@ CREATE TABLE KPI_CRITERIA
     kpi_id         VARCHAR2(50) PRIMARY KEY,
     criteria_name  NVARCHAR2(100),
     criteria_type  NVARCHAR2(50),
-    weight         NUMBER(3, 2),
+
+    weight         NUMBER(3,2),
+
     recorded_time  TIMESTAMP,
-    minimum_target NUMBER(15, 2),
+
+    minimum_target NUMBER(15,2),
+
     is_deleted     NUMBER(1) DEFAULT 0
 );
 
@@ -162,14 +292,23 @@ CREATE TABLE KPI_EVALUATION
 (
     employee_id       VARCHAR2(50),
     kpi_id            VARCHAR2(50),
+
     evaluation_period VARCHAR2(20),
-    actual_value      NUMBER(15, 2),
-    achieved_score    NUMBER(5, 2),
+
+    actual_value      NUMBER(15,2),
+    achieved_score    NUMBER(5,2),
+
     manager_note      NVARCHAR2(255),
+
     is_deleted        NUMBER(1) DEFAULT 0,
-    PRIMARY KEY (employee_id, kpi_id, evaluation_period),
-    CONSTRAINT FK_EVAL_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id),
-    CONSTRAINT FK_EVAL_KPI FOREIGN KEY (kpi_id) REFERENCES KPI_CRITERIA (kpi_id)
+
+    PRIMARY KEY(employee_id, kpi_id, evaluation_period),
+
+    CONSTRAINT FK_EVAL_EMPLOYEES
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id),
+
+    CONSTRAINT FK_EVAL_KPI
+        FOREIGN KEY (kpi_id) REFERENCES KPI_CRITERIA(kpi_id)
 );
 
 -- ==========================================================
@@ -188,44 +327,82 @@ CREATE TABLE SUPPLIERS
 (
     supplier_id   VARCHAR2(50) PRIMARY KEY,
     supplier_name NVARCHAR2(150) NOT NULL,
+
     email         VARCHAR2(100),
     address       NVARCHAR2(200),
     phone_number  VARCHAR2(20),
+
     is_deleted    NUMBER(1) DEFAULT 0
 );
 
 CREATE TABLE UNITS
 (
-    unit_id    VARCHAR2(50) PRIMARY KEY,
-    unit_name  NVARCHAR2(50) NOT NULL,
-    is_deleted NUMBER(1) DEFAULT 0
+    unit_id     VARCHAR2(50) PRIMARY KEY,
+    unit_name   NVARCHAR2(100) NOT NULL,
+    description NVARCHAR2(255),
+
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    is_deleted  NUMBER(1) DEFAULT 0
 );
 
 CREATE TABLE PRODUCTS
 (
     product_id   VARCHAR2(50) PRIMARY KEY,
     product_name NVARCHAR2(150) NOT NULL,
-    base_price   NUMBER(15, 2),
+
+    base_price   NUMBER(15,2),
+
     category_id  VARCHAR2(50),
     supplier_id  VARCHAR2(50),
     base_unit_id VARCHAR2(50),
+
     is_deleted   NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_PRODUCTS_CATEGORIES FOREIGN KEY (category_id) REFERENCES CATEGORIES (category_id),
-    CONSTRAINT FK_PRODUCTS_SUPPLIERS FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS (supplier_id),
-    CONSTRAINT FK_PRODUCTS_BASE_UNIT FOREIGN KEY (base_unit_id) REFERENCES UNITS (unit_id)
+
+    CONSTRAINT FK_PRODUCTS_CATEGORIES
+        FOREIGN KEY (category_id) REFERENCES CATEGORIES(category_id),
+
+    CONSTRAINT FK_PRODUCTS_SUPPLIERS
+        FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS(supplier_id),
+
+    CONSTRAINT FK_PRODUCTS_BASE_UNIT
+        FOREIGN KEY (base_unit_id) REFERENCES UNITS(unit_id)
 );
+
+CREATE SEQUENCE product_seq
+START WITH 1
+INCREMENT BY 1;
+
+CREATE OR REPLACE TRIGGER trg_product_id
+BEFORE INSERT ON PRODUCTS
+FOR EACH ROW
+WHEN (NEW.product_id IS NULL)
+BEGIN
+    :NEW.product_id := 'SP' || LPAD(product_seq.NEXTVAL, 7, '0');
+END;
+/
 
 CREATE TABLE PRODUCT_UNITS
 (
-    product_id              VARCHAR2(50),
-    unit_id                 VARCHAR2(50),
-    conversion_rate_to_base NUMBER(15, 4) NOT NULL,
+    product_id              VARCHAR2(50) NOT NULL,
+    unit_id                 VARCHAR2(50) NOT NULL,
+
+    conversion_rate_to_base NUMBER(18,4) DEFAULT 1,
+
     is_base_unit            NUMBER(1) DEFAULT 0,
     is_deleted              NUMBER(1) DEFAULT 0,
-    PRIMARY KEY (product_id, unit_id),
-    CONSTRAINT FK_PU_PRODUCTS FOREIGN KEY (product_id) REFERENCES PRODUCTS (product_id),
-    CONSTRAINT FK_PU_UNITS FOREIGN KEY (unit_id) REFERENCES UNITS (unit_id),
-    CONSTRAINT CK_PU_CONVERSION_POSITIVE CHECK (conversion_rate_to_base > 0)
+
+    CONSTRAINT PK_PRODUCT_UNITS
+        PRIMARY KEY(product_id, unit_id),
+
+    CONSTRAINT FK_PU_PRODUCTS
+        FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+
+    CONSTRAINT FK_PU_UNITS
+        FOREIGN KEY (unit_id) REFERENCES UNITS(unit_id),
+
+    CONSTRAINT CK_PU_CONVERSION_POSITIVE
+        CHECK (conversion_rate_to_base > 0)
 );
 
 CREATE TABLE STORES
@@ -241,13 +418,21 @@ CREATE TABLE INVENTORY
 (
     product_id   VARCHAR2(50),
     store_id     VARCHAR2(50),
-    quantity     NUMBER    DEFAULT 0,
+
+    quantity     NUMBER DEFAULT 0,
     unit         NVARCHAR2(50),
+
     last_updated DATE,
+
     is_deleted   NUMBER(1) DEFAULT 0,
-    PRIMARY KEY (product_id, store_id),
-    CONSTRAINT FK_INVENTORY_PRODUCTS FOREIGN KEY (product_id) REFERENCES PRODUCTS (product_id),
-    CONSTRAINT FK_INVENTORY_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
+
+    PRIMARY KEY(product_id, store_id),
+
+    CONSTRAINT FK_INVENTORY_PRODUCTS
+        FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+
+    CONSTRAINT FK_INVENTORY_STORES
+        FOREIGN KEY (store_id) REFERENCES STORES(store_id)
 );
 
 -- ==========================================================
@@ -258,205 +443,344 @@ CREATE TABLE CUSTOMERS
 (
     customer_id   VARCHAR2(50) PRIMARY KEY,
     customer_name NVARCHAR2(100),
+
     role_id       VARCHAR2(50),
-    reward_points NUMBER(10),
+
+    reward_points NUMBER(10) DEFAULT 0,
+
+    -- THÊM MỚI
+    total_spending NUMBER(15,2) DEFAULT 0,
+
     is_deleted    NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_CUSTOMERS_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
+
+    CONSTRAINT FK_CUSTOMERS_ROLES
+        FOREIGN KEY (role_id) REFERENCES ROLES(role_id)
 );
 
 CREATE TABLE PAYMENT_METHODS
 (
     payment_method_id VARCHAR2(50) PRIMARY KEY,
-    is_deleted        NUMBER(1) DEFAULT 0
+
+    -- THÊM MỚI
+    payment_method_name NVARCHAR2(100),
+
+    is_deleted NUMBER(1) DEFAULT 0
 );
 
 CREATE TABLE CASH_PAYMENT
 (
     payment_method_id VARCHAR2(50) PRIMARY KEY,
-    is_deleted        NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_CASH_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id)
+
+    -- THÊM MỚI
+    received_amount NUMBER(15,2),
+    change_amount   NUMBER(15,2),
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_CASH_PM
+        FOREIGN KEY (payment_method_id)
+        REFERENCES PAYMENT_METHODS(payment_method_id)
 );
 
 CREATE TABLE BANK_TRANSFER_PAYMENT
 (
-    payment_method_id     VARCHAR2(50) PRIMARY KEY,
+    payment_method_id VARCHAR2(50) PRIMARY KEY,
+
     bank_name             NVARCHAR2(100),
     transaction_time      TIMESTAMP,
     sender_account_number VARCHAR2(50),
     qr_code               VARCHAR2(255),
-    is_deleted            NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_BT_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id)
+
+    -- THÊM MỚI
+    transaction_code      VARCHAR2(100),
+    transfer_amount       NUMBER(15,2),
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_BT_PM
+        FOREIGN KEY (payment_method_id)
+        REFERENCES PAYMENT_METHODS(payment_method_id)
+);
+
+-- THÊM MỚI
+CREATE TABLE E_WALLET_PAYMENT
+(
+    payment_method_id VARCHAR2(50) PRIMARY KEY,
+
+    wallet_provider  NVARCHAR2(100),
+    wallet_phone     VARCHAR2(20),
+    transaction_code VARCHAR2(100),
+    paid_amount      NUMBER(15,2),
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_EWALLET_PM
+        FOREIGN KEY (payment_method_id)
+        REFERENCES PAYMENT_METHODS(payment_method_id)
 );
 
 CREATE TABLE ORDERS
 (
     order_id          VARCHAR2(50) PRIMARY KEY,
+
     customer_id       VARCHAR2(50),
     payment_method_id VARCHAR2(50),
+
     order_date        DATE,
+
     status            NVARCHAR2(50),
-    total_amount      NUMBER(15, 2),
+
+    total_amount      NUMBER(15,2),
+
+    -- THÊM MỚI
+    discount_amount   NUMBER(15,2) DEFAULT 0,
+    final_amount      NUMBER(15,2),
+
     note              NVARCHAR2(255),
+
     employee_id       VARCHAR2(50),
+
     is_deleted        NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_ORDERS_CUSTOMERS FOREIGN KEY (customer_id) REFERENCES CUSTOMERS (customer_id),
-    CONSTRAINT FK_ORDERS_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id),
-    CONSTRAINT FK_ORDERS_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id)
+
+    CONSTRAINT FK_ORDERS_CUSTOMERS
+        FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(customer_id),
+
+    CONSTRAINT FK_ORDERS_PM
+        FOREIGN KEY (payment_method_id)
+        REFERENCES PAYMENT_METHODS(payment_method_id),
+
+    CONSTRAINT FK_ORDERS_EMPLOYEES
+        FOREIGN KEY (employee_id)
+        REFERENCES EMPLOYEES(employee_id)
 );
 
 CREATE TABLE ORDER_DETAILS
 (
     order_detail_id VARCHAR2(50) PRIMARY KEY,
+
     order_id        VARCHAR2(50),
     product_id      VARCHAR2(50),
+
     quantity        NUMBER(10),
+
     unit_id         VARCHAR2(50),
+
     quantity_base   NUMBER(10),
-    unit_price      NUMBER(15, 2),
+
+    unit_price      NUMBER(15,2),
+
+    -- THÊM MỚI
+    subtotal        NUMBER(15,2),
+
     is_deleted      NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_OD_ORDERS FOREIGN KEY (order_id) REFERENCES ORDERS (order_id),
-    CONSTRAINT FK_OD_PRODUCTS FOREIGN KEY (product_id) REFERENCES PRODUCTS (product_id),
-    CONSTRAINT FK_OD_UNITS FOREIGN KEY (unit_id) REFERENCES UNITS (unit_id)
+
+    CONSTRAINT FK_OD_ORDERS
+        FOREIGN KEY (order_id) REFERENCES ORDERS(order_id),
+
+    CONSTRAINT FK_OD_PRODUCTS
+        FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+
+    CONSTRAINT FK_OD_UNITS
+        FOREIGN KEY (unit_id) REFERENCES UNITS(unit_id)
 );
 
 CREATE TABLE DELIVERY_MANAGEMENT
 (
     delivery_id    VARCHAR2(50) PRIMARY KEY,
+
     order_id       VARCHAR2(50),
     employee_id    VARCHAR2(50),
+
     execution_date DATE,
+
     status         NVARCHAR2(50),
+
     is_deleted     NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_DM_ORDERS FOREIGN KEY (order_id) REFERENCES ORDERS (order_id),
-    CONSTRAINT FK_DM_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id)
+
+    CONSTRAINT FK_DM_ORDERS
+        FOREIGN KEY (order_id) REFERENCES ORDERS(order_id),
+
+    CONSTRAINT FK_DM_EMPLOYEES
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id)
 );
 
 CREATE TABLE ON_SITE_PICKUP
 (
     delivery_id      VARCHAR2(50) PRIMARY KEY,
     counter_position NVARCHAR2(50),
-    is_deleted       NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_OSP_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_OSP_DM
+        FOREIGN KEY (delivery_id)
+        REFERENCES DELIVERY_MANAGEMENT(delivery_id)
 );
 
 CREATE TABLE STORE_PICKUP
 (
     delivery_id        VARCHAR2(50) PRIMARY KEY,
+
     locker_id          VARCHAR2(50),
     pickup_appointment TIMESTAMP,
-    is_deleted         NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_SP_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_SP_DM
+        FOREIGN KEY (delivery_id)
+        REFERENCES DELIVERY_MANAGEMENT(delivery_id)
 );
 
 CREATE TABLE HOME_DELIVERY
 (
-    delivery_id      VARCHAR2(50) PRIMARY KEY,
+    delivery_id VARCHAR2(50) PRIMARY KEY,
+
     delivery_address NVARCHAR2(200),
-    shipping_fee     NUMBER(15, 2),
+    shipping_fee     NUMBER(15,2),
     recipient_phone  VARCHAR2(20),
-    is_deleted       NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_HD_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
+
+    is_deleted NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_HD_DM
+        FOREIGN KEY (delivery_id)
+        REFERENCES DELIVERY_MANAGEMENT(delivery_id)
 );
 
 -- ==========================================================
--- 5. PROMOTION CAMPAIGNS
+-- 5. PROMOTION CAMPAIGNS & APP SETTINGS
 -- ==========================================================
 
 CREATE TABLE PROMOTION_CAMPAIGNS
 (
     campaign_id   VARCHAR2(50) PRIMARY KEY,
     campaign_name NVARCHAR2(150) NOT NULL,
+
     description   NVARCHAR2(255),
+
     start_date    DATE,
     end_date      DATE,
+
     is_deleted    NUMBER(1) DEFAULT 0
 );
 
 CREATE TABLE PROMOTIONS
 (
     promotion_id          VARCHAR2(50) PRIMARY KEY,
+
     promotion_name        NVARCHAR2(150) NOT NULL,
+
     campaign_id           VARCHAR2(50),
+
     application_condition NVARCHAR2(255),
+
     status                NVARCHAR2(50),
+
     order_detail_id       VARCHAR2(50),
-    discount_amount       NUMBER(15, 2),
+
+    discount_amount       NUMBER(15,2),
+
     is_deleted            NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_PROMOTIONS_CAMPAIGNS FOREIGN KEY (campaign_id) REFERENCES PROMOTION_CAMPAIGNS (campaign_id),
-    CONSTRAINT FK_PROMOTIONS_OD FOREIGN KEY (order_detail_id) REFERENCES ORDER_DETAILS (order_detail_id)
+
+    CONSTRAINT FK_PROMOTIONS_CAMPAIGNS
+        FOREIGN KEY (campaign_id)
+        REFERENCES PROMOTION_CAMPAIGNS(campaign_id),
+
+    CONSTRAINT FK_PROMOTIONS_OD
+        FOREIGN KEY (order_detail_id)
+        REFERENCES ORDER_DETAILS(order_detail_id)
 );
 
 CREATE TABLE OTP_STORAGE
 (
     email       VARCHAR2(150) PRIMARY KEY,
     otp_code    VARCHAR2(6) NOT NULL,
-    expiry_time DATE        NOT NULL
+    expiry_time DATE NOT NULL
 );
 
-CREATE TABLE LOGIN_HISTORY
+CREATE TABLE APP_SYNC
 (
-    log_id         VARCHAR2(50) PRIMARY KEY,
-    account_id     VARCHAR2(50) NOT NULL,
-    action_type    NVARCHAR2(50),  -- LOGIN, LOGOUT, FAILED_ATTEMPT
-    ip_address     VARCHAR2(45),   -- Lưu IP (hỗ trợ cả IPv6)
-    device_info    NVARCHAR2(255), -- Ví dụ: Chrome on Windows 11
-    login_time     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status         NVARCHAR2(20),  -- SUCCESS, FAILURE
-    failure_reason NVARCHAR2(255), -- Lưu lý do nếu login thất bại
-    is_deleted     NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_LOG_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id)
+    sync_key       VARCHAR2(50) PRIMARY KEY,
+    version_number NUMBER DEFAULT 0 NOT NULL,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IDX_LOGHIS_ACCOUNT_TIME ON LOGIN_HISTORY (account_id, login_time DESC);
-CREATE INDEX IDX_LOGHIS_ACTION ON LOGIN_HISTORY (action_type);
-
-
-CREATE TABLE AUDIT_LOG (
-    LOG_ID         VARCHAR2(50) PRIMARY KEY,
-    ACCOUNT_ID     VARCHAR2(50),           -- ai thực hiện
-    ACTION_TYPE    VARCHAR2(50) NOT NULL,  -- UPDATE_PRICE, CANCEL_ORDER, CHANGE_ROLE
-    ENTITY_TYPE    VARCHAR2(50) NOT NULL,  -- PRODUCT, ORDER, ACCOUNT
-    ENTITY_ID      VARCHAR2(50) NOT NULL,  -- id đối tượng bị tác động
-    OLD_VALUE      NVARCHAR2(1000),        -- dữ liệu cũ (json/text)
-    NEW_VALUE      NVARCHAR2(1000),        -- dữ liệu mới (json/text)
-    REASON         NVARCHAR2(255),         -- lý do thao tác (nếu có)
-    IP_ADDRESS     VARCHAR2(45),
-    DEVICE_INFO    NVARCHAR2(255),
-    CREATED_AT     TIMESTAMP DEFAULT SYSTIMESTAMP,
-    IS_DELETED     NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_AUDIT_ACCOUNT
-        FOREIGN KEY (ACCOUNT_ID) REFERENCES ACCOUNTS(ACCOUNT_ID)
+CREATE TABLE SYSTEM_CONFIG
+(
+    config_key   VARCHAR2(50) PRIMARY KEY,
+    config_value VARCHAR2(500)
 );
 
-CREATE INDEX IDX_AUDIT_CREATED ON AUDIT_LOG(CREATED_AT DESC);
-CREATE INDEX IDX_AUDIT_ACCOUNT ON AUDIT_LOG(ACCOUNT_ID);
-CREATE INDEX IDX_AUDIT_ACTION  ON AUDIT_LOG(ACTION_TYPE);
+-- ==========================================================
+-- DỮ LIỆU MẪU HỆ THỐNG
+-- ==========================================================
 
-ALTER TABLE ROLES ADD (role_name NVARCHAR2(100));
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_SYS', N'Quản lý hệ thống');
 
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_SYS', N'Quản lý hệ thống');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_STORE', N'Quản lý cửa hàng');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_EMP', N'Quản lý nhân viên');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_MEM', N'Quản lý thành viên');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_PROD', N'Quản lý sản phẩm & Kho');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_ORDER', N'Quản lý hóa đơn & Bán hàng');
-INSERT INTO FUNCTIONS (function_id, function_name) VALUES ('F_RECO', N'Báo cáo & Thống kê');
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_STORE', N'Quản lý cửa hàng');
 
-INSERT INTO ROLES (role_id, role_name, function_id, can_view, can_add, can_edit, can_delete, can_export)
-VALUES ('R_ADMIN_ALL', N'Toàn quyền hệ thống', 'F_SYS', 1, 1, 1, 1, 1);
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_EMP', N'Quản lý nhân viên');
 
--- Store Manager: Quản lý nhân viên và sản phẩm (nhưng không sửa được hệ thống F_SYS)
-INSERT INTO ROLES (role_id, role_name, function_id, can_view, can_add, can_edit, can_delete, can_export)
-VALUES ('R_STORE_MNG', N'Quản lý chi nhánh', 'F_STORE', 1, 1, 1, 1, 1);
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_MEM', N'Quản lý thành viên');
 
--- Employee: Chỉ được bán hàng (Hóa đơn) và Xem sản phẩm
-INSERT INTO ROLES (role_id, role_name, function_id, can_view, can_add, can_edit, can_delete, can_export)
-VALUES ('R_STAFF_SALE', N'Nhân viên bán hàng', 'F_ORDER', 1, 1, 0, 0, 1);
-INSERT INTO ROLES (role_id, role_name, function_id, can_view, can_add, can_edit, can_delete, can_export)
-VALUES ('R_STAFF_VIEW_PROD', N'Xem sản phẩm', 'F_PROD', 1, 0, 0, 0, 0);
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_PROD', N'Quản lý sản phẩm & Kho');
 
-INSERT INTO UNITS (unit_id, unit_name) VALUES ('U_CAI', N'CÃ¡i');
-INSERT INTO UNITS (unit_id, unit_name) VALUES ('U_HOP', N'Há»™p');
-INSERT INTO UNITS (unit_id, unit_name) VALUES ('U_THUNG', N'ThÃ¹ng');
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_ORDER', N'Quản lý hóa đơn & Bán hàng');
+
+INSERT INTO FUNCTIONS(function_id, function_name)
+VALUES ('F_RECO', N'Báo cáo & Thống kê');
+
+
+INSERT INTO UNITS(unit_id, unit_name)
+VALUES ('U_CAI', N'Cái');
+
+INSERT INTO UNITS(unit_id, unit_name)
+VALUES ('U_HOP', N'Hộp');
+
+INSERT INTO UNITS(unit_id, unit_name)
+VALUES ('U_THUNG', N'Thùng');
+
+-- THÊM MỚI: phương thức thanh toán
+INSERT INTO PAYMENT_METHODS(payment_method_id, payment_method_name)
+VALUES ('PM_CASH', N'Tiền mặt');
+
+INSERT INTO PAYMENT_METHODS(payment_method_id, payment_method_name)
+VALUES ('PM_BANK', N'Chuyển khoản');
+
+INSERT INTO PAYMENT_METHODS(payment_method_id, payment_method_name)
+VALUES ('PM_EWALLET', N'Ví điện tử');
+
+COMMIT;
+
+-- ==========================================================
+-- VIEW: HIỆU SUẤT NHÂN VIÊN
+-- ==========================================================
+
+CREATE OR REPLACE VIEW VW_EMPLOYEE_PERFORMANCE AS
+SELECT
+    e.employee_id,
+    e.employee_name,
+
+    COUNT(o.order_id) AS total_orders,
+
+    NVL(SUM(o.final_amount), 0) AS total_revenue,
+
+    ROUND(AVG(o.final_amount), 2) AS avg_order_value
+
+FROM EMPLOYEES e
+
+LEFT JOIN ORDERS o
+    ON e.employee_id = o.employee_id
+    AND NVL(o.is_deleted,0) = 0
+
+WHERE NVL(e.is_deleted,0) = 0
+
+GROUP BY
+    e.employee_id,
+    e.employee_name;
 
 COMMIT;
