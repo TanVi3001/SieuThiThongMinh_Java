@@ -14,6 +14,7 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import common.events.AppEventType;
+import common.security.SecurityGuard;
 
 public class DashboardView extends JFrame {
 
@@ -182,12 +183,18 @@ public class DashboardView extends JFrame {
 
     private void startSessionCheck() {
         sessionTimer = new Timer(2000, e -> {
-            if (isLoggingOut) {
+            // 1. Kiểm tra ngay cờ Global (Nếu SecurityGuard đang đá văng thì Timer nằm im)
+            if (common.security.SecurityGuard.isProcessingLogout() || isLoggingOut) {
                 ((Timer) e.getSource()).stop();
                 return;
             }
 
             new Thread(() -> {
+                // 2. Chặn thêm 1 lớp nữa trong luồng Thread phụ
+                if (common.security.SecurityGuard.isProcessingLogout() || isLoggingOut) {
+                    return;
+                }
+
                 String currentToken = business.service.LoginService.getToken();
                 boolean isValid = business.sql.rbac.TokenSql.getInstance().isTokenValid(currentToken);
 
@@ -208,16 +215,24 @@ public class DashboardView extends JFrame {
                             roleChanged = true;
                         }
                     } catch (Exception ex) {
+                        // Bỏ qua lỗi kết nối DB tạm thời
                     }
                 }
 
                 if (!isValid || roleChanged) {
                     SwingUtilities.invokeLater(() -> {
-                        if (!isLoggingOut) {
+                        // 3. Chặn CÚ CHÓT trước khi bung màn hình Login
+                        if (!isLoggingOut && !common.security.SecurityGuard.isProcessingLogout()) {
+                            // Đánh dấu cờ cục bộ và cờ toàn cục
                             isLoggingOut = true;
+                            common.security.SecurityGuard.setProcessingLogout(true);
+
                             if (sessionTimer != null) {
                                 sessionTimer.stop();
                             }
+
+                            // Đảm bảo dọn sạch các Event Listener ẩn (Zombie Listener)
+                            common.events.EventBus.clearAll();
 
                             JOptionPane.showMessageDialog(this, "Phiên đăng nhập đã hết hạn hoặc Quyền truy cập đã bị thay đổi!\nVui lòng đăng nhập lại.", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
 
@@ -227,9 +242,21 @@ public class DashboardView extends JFrame {
                             }
                             business.service.LoginService.logout();
 
-                            view.LoginView login = new view.LoginView();
-                            login.setVisible(true);
-                            login.setLocationRelativeTo(null);
+                            // Đảm bảo chỉ mở 1 cửa sổ Login duy nhất
+                            java.awt.Window[] windows = java.awt.Window.getWindows();
+                            boolean hasLogin = false;
+                            for (java.awt.Window w : windows) {
+                                if (w instanceof view.LoginView && w.isVisible()) {
+                                    hasLogin = true;
+                                    break;
+                                }
+                            }
+
+                            if (!hasLogin) {
+                                view.LoginView login = new view.LoginView();
+                                login.setVisible(true);
+                                login.setLocationRelativeTo(null);
+                            }
 
                             this.dispose();
                         }

@@ -529,7 +529,15 @@ public class SellPanel extends JPanel {
             String employeeId = "EMP_DEFAULT";
             model.account.Account acc = SessionManager.getCurrentUser();
             if (acc != null) {
-                employeeId = acc.getUserId();
+                // Ưu tiên lấy UserId (Mã EMP), nếu không có thì lấy AccountId (Mã ACC)
+                String uid = acc.getUserId();
+                String aid = acc.getAccountId();
+
+                if (uid != null && !uid.trim().isEmpty() && !uid.equalsIgnoreCase("null")) {
+                    employeeId = uid.trim();
+                } else if (aid != null && !aid.trim().isEmpty() && !aid.equalsIgnoreCase("null")) {
+                    employeeId = aid.trim();
+                }
             }
 
             String pmId = cboPaymentMethod.getSelectedItem() != null ? cboPaymentMethod.getSelectedItem().toString() : "PM_CASH";

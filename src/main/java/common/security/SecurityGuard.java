@@ -12,51 +12,68 @@ import java.awt.Window;
 
 public class SecurityGuard {
 
+    // 🌟 GLOBAL GUARD FLAG: Cờ khóa chống gọi Logout nhiều lần (Chống 2 app, 2 popup)
+    private static volatile boolean isProcessingLogout = false;
+
+    // 👉 THÊM VÀO: Hàm để các file khác có thể ĐỌC được trạng thái cờ
+    public static boolean isProcessingLogout() {
+        return isProcessingLogout;
+    }
+
+    // 👉 ĐÃ SỬA: Hàm để các file khác có thể ĐỔI trạng thái cờ (Xóa cái ném lỗi của IDE đi)
+    public static void setProcessingLogout(boolean value) {
+        isProcessingLogout = value;
+    }
+
     public static void attach(JPanel view) {
+        // Reset cờ mỗi khi gắn guard mới (lúc login vào)
+        isProcessingLogout = false;
+
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            System.out.println("🛡️ [SecurityGuard] Bắt được tín hiệu WebSocket: " + event.getType());
+            // Nếu đang trong quá trình văng acc rồi thì bỏ qua mọi event khác
+            if (isProcessingLogout) {
+                return;
+            }
 
             if (event.getType() == AppEventType.ACCOUNT_SECURITY) {
+                System.out.println("🛡️ [SecurityGuard] Bắt được tín hiệu WebSocket đổi quyền!");
                 verifyCurrentSession(view);
             }
         });
     }
 
     private static void verifyCurrentSession(JPanel view) {
-        Account currentUser = LoginService.getCurrentUser();
-
-        if (currentUser == null) {
-            System.out.println("🛡️ [SecurityGuard] Chưa đăng nhập, không cần check.");
+        if (isProcessingLogout) {
             return;
         }
 
-        // Lấy Account ID thực sự của người dùng.
-        // NẾU CHỖ NÀY BỊ GẠCH ĐỎ: Hãy đổi .getAccountId() thành .getId() hoặc .getUsername() tùy theo ông đang đặt tên hàm trong model Account là gì nhé.
+        Account currentUser = LoginService.getCurrentUser();
+        if (currentUser == null) {
+            return;
+        }
+
         String accId = currentUser.getAccountId();
         String currentRole = currentUser.getRoleId();
-
-        System.out.println("🛡️ [SecurityGuard] Đang check ID: " + accId + " | Role hiện tại trong App: " + currentRole);
 
         new Thread(() -> {
             try {
                 String[] latestData = AccountSql.getInstance().getAccountDetails(accId);
 
                 if (latestData == null) {
-                    System.out.println("🛡️ [SecurityGuard] ❌ Lỗi: Không tìm thấy ID " + accId + " dưới DB! (Truyền sai mã)");
                     return;
                 }
 
-                String dbRoleId = latestData[4]; // Cột Role ID từ DB
-                boolean isActive = "0".equals(latestData[5]); // Trạng thái hoạt động
+                String dbRoleId = latestData[4];
+                boolean isActive = "0".equals(latestData[5]);
 
-                System.out.println("🛡️ [SecurityGuard] Role dưới DB: " + dbRoleId + " | Active: " + isActive);
-
-                // NẾU ROLE DƯỚI DB KHÁC ROLE ĐANG LƯU TRONG APP -> KICK NGAY!
                 if (!isActive || !dbRoleId.equals(currentRole)) {
-                    System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN SAI LỆCH QUYỀN -> KICK VĂNG RA!");
-                    SwingUtilities.invokeLater(() -> forceLogout(view));
-                } else {
-                    System.out.println("🛡️ [SecurityGuard] ✅ Mọi thứ bình thường.");
+                    // 🌟 LOCK NGAY LẬP TỨC: Thằng nào chạy đến đây trước thì set cờ true
+                    // Thằng Timer hay Listener thứ 2 chạy tới sẽ bị chặn đứng
+                    if (!isProcessingLogout) {
+                        isProcessingLogout = true;
+                        System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN ĐỔI QUYỀN -> TIẾN HÀNH KICK!");
+                        SwingUtilities.invokeLater(() -> forceLogout(view));
+                    }
                 }
             } catch (Exception e) {
                 System.err.println("SecurityGuard Error: " + e.getMessage());
@@ -65,22 +82,29 @@ public class SecurityGuard {
     }
 
     private static void forceLogout(JPanel view) {
+        // Chỉ hiện ĐÚNG 1 POPUP
         JOptionPane.showMessageDialog(view,
                 "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\nVui lòng đăng nhập lại để cập nhật!",
                 "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
 
+        // Clear dữ liệu
         LoginService.logout();
-
-        // Dùng try-catch phòng hờ UserSession không tồn tại
         try {
             common.auth.UserSession.getInstance().clear();
+            // CHUẨN BÀI: Dọn dẹp luôn EventBus (Nếu hàm clearAll của bạn có tồn tại, nếu không thì cứ comment lại)
+            // common.events.EventBus.clearAll(); 
         } catch (Exception ignored) {
         }
 
+        // Tắt cửa sổ hiện tại (Dashboard)
         Window window = SwingUtilities.getWindowAncestor(view);
         if (window != null) {
             window.dispose();
         }
-        new LoginView().setVisible(true);
+
+        // Mở ĐÚNG 1 FRAME LOGIN
+        LoginView login = new LoginView();
+        login.setLocationRelativeTo(null);
+        login.setVisible(true);
     }
 }

@@ -2,6 +2,9 @@ package view;
 
 import common.auth.UserSession;
 import common.security.SecurityGuard;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import javax.swing.SwingUtilities;
 
 /**
  *
@@ -9,19 +12,21 @@ import common.security.SecurityGuard;
  */
 public class LoginView extends javax.swing.JFrame {
 
-    private static final java.util.logging.Logger logger = java.util.logging.Logger
-            .getLogger(LoginView.class.getName());
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(LoginView.class.getName());
 
     public LoginView() {
         initComponents();
         this.setLocationRelativeTo(null);
 
-        // Bắt sự kiện bàn phím cho ô Mật khẩu (Nhấn Enter để đăng nhập)
-        txtPassword.addKeyListener(new java.awt.event.KeyAdapter() {
+        // 🌟 FIX LỖI MỞ 2 APP: Chỉ bắt sự kiện Enter ở ô Mật khẩu
+        txtPassword.addKeyListener(new KeyAdapter() {
             @Override
-            public void keyPressed(java.awt.event.KeyEvent evt) {
-                if (evt.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER) {
-                    btnLoginActionPerformed(null);
+            public void keyPressed(KeyEvent evt) {
+                if (evt.getKeyCode() == KeyEvent.VK_ENTER) {
+                    // Nếu nút đăng nhập đang bị khóa (đang load) thì bỏ qua
+                    if (btnLogin.isEnabled()) {
+                        btnLogin.doClick(); // Kích hoạt sự kiện bấm nút chuẩn xác
+                    }
                 }
             }
         });
@@ -32,8 +37,6 @@ public class LoginView extends javax.swing.JFrame {
     private void setupModernUI() {
         // ── 1. Dọn dẹp & set layout tổng ────────────────────────────────────────
         this.getContentPane().removeAll();
-        this.getContentPane().setLayout(null);
-        this.getContentPane().invalidate();
         this.getContentPane().setLayout(new java.awt.BorderLayout());
 
         // ── 2. PANEL TRÁI – minh họa siêu thị tối ───────────────────────────────
@@ -444,7 +447,7 @@ public class LoginView extends javax.swing.JFrame {
         card.add(lblForgot);
 
         // ── Nút Đăng nhập ─────────────────────────────────────────────────────
-        javax.swing.JButton btnGradientLogin = new javax.swing.JButton("Đăng nhập  →") {
+        btnLogin = new javax.swing.JButton("Đăng nhập  →") {
             private boolean hovered = false;
 
             {
@@ -475,15 +478,15 @@ public class LoginView extends javax.swing.JFrame {
                 super.paintComponent(g);
             }
         };
-        btnGradientLogin.setBounds(75, 335, 250, 46);
-        btnGradientLogin.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
-        btnGradientLogin.setForeground(java.awt.Color.WHITE);
-        btnGradientLogin.setContentAreaFilled(false);
-        btnGradientLogin.setBorderPainted(false);
-        btnGradientLogin.setFocusPainted(false);
-        btnGradientLogin.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        btnGradientLogin.addActionListener(evt -> btnLoginActionPerformed(null));
-        card.add(btnGradientLogin);
+        btnLogin.setBounds(75, 335, 250, 46);
+        btnLogin.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+        btnLogin.setForeground(java.awt.Color.WHITE);
+        btnLogin.setContentAreaFilled(false);
+        btnLogin.setBorderPainted(false);
+        btnLogin.setFocusPainted(false);
+        btnLogin.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btnLogin.addActionListener(evt -> btnLoginActionPerformed(null));
+        card.add(btnLogin);
 
         // ── Link "Chưa có tài khoản?" ─────────────────────────────────────────
         javax.swing.JLabel lblRegisterLink = new javax.swing.JLabel("<html><span style='color:#7a8a9a'>Chưa có tài khoản? </span><span style='color:#FF6B35'><u>Đăng ký</u></span></html>");
@@ -547,174 +550,11 @@ public class LoginView extends javax.swing.JFrame {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void initComponents() {
-        java.awt.GridBagConstraints gridBagConstraints;
-
-        LoginView = new javax.swing.JPanel();
-        Login = new javax.swing.JLabel();
-        Username = new javax.swing.JLabel();
-        Password = new javax.swing.JLabel();
         txtUsername = new javax.swing.JTextField();
-        btnLogin = new javax.swing.JButton();
         txtPassword = new javax.swing.JPasswordField();
-        HomePanel = new javax.swing.JPanel();
-        SystemName = new javax.swing.JLabel();
-        Separator = new javax.swing.JSeparator();
-        Greeting = new javax.swing.JLabel();
-        ClassName = new javax.swing.JLabel();
-        IconMarket = new javax.swing.JLabel();
-
+        btnLogin = new javax.swing.JButton();
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        setBackground(new java.awt.Color(0, 0, 102));
-        getContentPane().setLayout(new java.awt.GridBagLayout());
-
-        LoginView.setBackground(new java.awt.Color(255, 255, 255));
-        LoginView.setForeground(new java.awt.Color(255, 255, 255));
-        LoginView.setPreferredSize(new java.awt.Dimension(450, 480));
-        LoginView.setLayout(new java.awt.GridBagLayout());
-
-        Login.setBackground(new java.awt.Color(0, 0, 0));
-        Login.setFont(new java.awt.Font("Segoe UI", 1, 20));
-        Login.setText("ĐĂNG NHẬP");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.gridwidth = 2;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(46, 18, 0, 0);
-        LoginView.add(Login, gridBagConstraints);
-
-        Username.setBackground(new java.awt.Color(0, 0, 0));
-        Username.setFont(new java.awt.Font("Segoe UI", 1, 15));
-        Username.setText("TÀI KHOẢN");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 1;
-        gridBagConstraints.gridwidth = 2;
-        gridBagConstraints.ipady = 3;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(31, 36, 0, 0);
-        LoginView.add(Username, gridBagConstraints);
-
-        Password.setBackground(new java.awt.Color(0, 0, 0));
-        Password.setFont(new java.awt.Font("Segoe UI", 1, 15));
-        Password.setText("MẬT KHẨU");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 3;
-        gridBagConstraints.ipady = 5;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(26, 36, 0, 0);
-        LoginView.add(Password, gridBagConstraints);
-
-        txtUsername.addActionListener(this::txtUsernameActionPerformed);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 1;
-        gridBagConstraints.gridwidth = 3;
-        gridBagConstraints.gridheight = 2;
-        gridBagConstraints.ipadx = 115;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(34, 18, 0, 42);
-        LoginView.add(txtUsername, gridBagConstraints);
-
-        btnLogin.setBackground(new java.awt.Color(44, 62, 80));
-        btnLogin.setFont(new java.awt.Font("Segoe UI", 1, 14));
-        btnLogin.setForeground(new java.awt.Color(255, 255, 255));
-        btnLogin.setText("Đăng nhập");
-        btnLogin.addActionListener(this::btnLoginActionPerformed);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 4;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(32, 37, 28, 0);
-        LoginView.add(btnLogin, gridBagConstraints);
-
-        txtPassword.addActionListener(this::txtPasswordActionPerformed);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 3;
-        gridBagConstraints.gridwidth = 3;
-        gridBagConstraints.ipadx = 115;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(30, 18, 0, 42);
-        LoginView.add(txtPassword, gridBagConstraints);
-
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.ipadx = 129;
-        gridBagConstraints.ipady = 64;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(0, 6, 0, 0);
-        getContentPane().add(LoginView, gridBagConstraints);
-
-        HomePanel.setBackground(new java.awt.Color(236, 240, 241));
-        HomePanel.setForeground(new java.awt.Color(255, 255, 255));
-        HomePanel.setLayout(new java.awt.GridBagLayout());
-
-        SystemName.setFont(new java.awt.Font("Segoe UI", 1, 17));
-        SystemName.setForeground(new java.awt.Color(44, 62, 80));
-        SystemName.setText("HỆ THỐNG QUẢN LÝ SIÊU THỊ ");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.gridwidth = 5;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(110, 6, 0, 39);
-        HomePanel.add(SystemName, gridBagConstraints);
-
-        Separator.setForeground(new java.awt.Color(0, 0, 0));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 2;
-        gridBagConstraints.gridwidth = 4;
-        gridBagConstraints.ipadx = 218;
-        gridBagConstraints.ipady = 12;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(18, 88, 0, 0);
-        HomePanel.add(Separator, gridBagConstraints);
-
-        Greeting.setFont(new java.awt.Font("Segoe UI", 1, 12));
-        Greeting.setForeground(new java.awt.Color(44, 62, 80));
-        Greeting.setText("Chào mừng đến với hệ thống!");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 3;
-        gridBagConstraints.gridwidth = 2;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(12, 16, 0, 0);
-        HomePanel.add(Greeting, gridBagConstraints);
-
-        ClassName.setFont(new java.awt.Font("Segoe UI", 1, 11));
-        ClassName.setForeground(new java.awt.Color(44, 62, 80));
-        ClassName.setText("Nhóm 12 - IS216.Q22");
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 4;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(6, 44, 108, 0);
-        HomePanel.add(ClassName, gridBagConstraints);
-
-        // Đã xóa (comment) dòng IconMarket gọi file ảnh cũ bị lỗi
-        // IconMarket.setIcon(new javax.swing.ImageIcon(getClass().getResource("/view/image/supermarket (2).png"))); 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.gridheight = 2;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(80, 32, 0, 0);
-        HomePanel.add(IconMarket, gridBagConstraints);
-
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.ipady = -2;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        getContentPane().add(HomePanel, gridBagConstraints);
-
-        pack();
     }
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {
@@ -727,7 +567,7 @@ public class LoginView extends javax.swing.JFrame {
             return;
         }
 
-        // Khóa nút để tránh nhấn nhiều lần gây đơ
+        // Khóa nút để tránh nhấn nhiều lần gây đơ và MỞ 2 APP
         btnLogin.setEnabled(false);
 
         // CHẠY LUỒNG RIÊNG ĐỂ UI KHÔNG BỊ TREO
@@ -735,7 +575,7 @@ public class LoginView extends javax.swing.JFrame {
             try {
                 model.account.Account acc = business.service.LoginService.authenticate(user, pass);
 
-                java.awt.EventQueue.invokeLater(() -> {
+                SwingUtilities.invokeLater(() -> {
                     if (acc != null) {
                         common.auth.UserSession.getInstance().createUserSession(
                                 acc.getAccountId(), acc.getUsername(), acc.getRoleValue());
@@ -747,30 +587,27 @@ public class LoginView extends javax.swing.JFrame {
                         } else {
                             new DashboardView().setVisible(true);
                         }
-                        this.dispose();
+                        this.dispose(); // Đóng LoginView
                     } else {
                         javax.swing.JOptionPane.showMessageDialog(this, "Sai tài khoản hoặc mật khẩu!");
-                        btnLogin.setEnabled(true);
+                        btnLogin.setEnabled(true); // Mở khóa nút nếu đăng nhập xịt
                     }
                 });
             } catch (Exception e) {
-                java.awt.EventQueue.invokeLater(() -> {
+                SwingUtilities.invokeLater(() -> {
                     javax.swing.JOptionPane.showMessageDialog(this, "Lỗi kết nối DB: " + e.getMessage());
                     btnLogin.setEnabled(true);
                 });
             } finally {
-                // FIX BUG java.util.Arrays
+                // Xóa pass khỏi bộ nhớ để bảo mật
                 java.util.Arrays.fill(passwordChars, '\0');
             }
         }).start();
     }
 
+    // 🌟 FIX LỖI SỰ KIỆN: Khi ấn Enter ở ô Username thì nhảy xuống ô Password, không đăng nhập luôn!
     private void txtUsernameActionPerformed(java.awt.event.ActionEvent evt) {
         txtPassword.requestFocus();
-        btnLoginActionPerformed(evt);
-    }
-
-    private void txtPasswordActionPerformed(java.awt.event.ActionEvent evt) {
     }
 
     public static void main(String args[]) {
@@ -794,18 +631,7 @@ public class LoginView extends javax.swing.JFrame {
         });
     }
 
-    private javax.swing.JLabel ClassName;
-    private javax.swing.JLabel Greeting;
-    private javax.swing.JPanel HomePanel;
-    private javax.swing.JLabel IconMarket;
-    private javax.swing.JLabel Login;
-    private javax.swing.JPanel LoginView;
-    private javax.swing.JLabel Password;
-    private javax.swing.JSeparator Separator;
-    private javax.swing.JLabel SystemName;
-    private javax.swing.JLabel Username;
     private javax.swing.JButton btnLogin;
     private javax.swing.JPasswordField txtPassword;
     private javax.swing.JTextField txtUsername;
-
 }

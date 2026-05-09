@@ -35,7 +35,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private Map<String, JRadioButton> radioMap = new HashMap<>();
     private ButtonGroup roleGroup;
-    
+
     // --- Các biến khai báo thêm để xử lý Logic Ẩn/Hiện Thẻ ---
     private JPanel roleCardsContainer;
     private Map<String, JPanel> roleCardMap = new HashMap<>();
@@ -214,9 +214,17 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         cbDept.addActionListener(e -> loadData.run());
 
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { loadData.run(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                loadData.run();
+            }
+
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                loadData.run();
+            }
+
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                loadData.run();
+            }
         });
 
         loadData.run();
@@ -290,7 +298,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 if ("Quản trị viên".equals(role)) {
                     // NẾU LÀ ADMIN: Chỉ add duy nhất thẻ Quản trị viên và khóa lại
                     roleCardsContainer.add(roleCardMap.get("Quản trị viên"));
-                    
+
                     radioMap.get("Quản trị viên").setEnabled(false);
                     btnSaveRole.setEnabled(false); // Không cho lưu
                 } else {
@@ -351,24 +359,44 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         gbcInfo.fill = GridBagConstraints.HORIZONTAL;
         gbcInfo.anchor = GridBagConstraints.WEST;
 
-        gbcInfo.gridy = 0; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 0;
+        gbcInfo.insets = new Insets(0, 0, 15, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Người dùng đã chọn", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedUser, gbcInfo);
 
-        gbcInfo.gridy = 1; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 1;
+        gbcInfo.insets = new Insets(0, 0, 15, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Email", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedEmail, gbcInfo);
 
-        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 2;
+        gbcInfo.insets = new Insets(0, 0, 15, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Phòng ban", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedDept, gbcInfo);
 
-        gbcInfo.gridy = 3; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 3;
+        gbcInfo.insets = new Insets(0, 0, 0, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 0, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 0, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(pnlCurrRole, gbcInfo);
 
         centerPanel.add(infoGrid);
@@ -443,44 +471,30 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             }
 
             String newRoleId = selectedModel.getActionCommand();
-
             boolean success = business.sql.rbac.AccountSql.getInstance().updateAccountRole(selectedAccountId, newRoleId);
 
             if (success) {
-                // =========================================================
-                // 1. GHI LẠI NHẬT KÝ KIỂM TOÁN (AUDIT LOG) NGAY LẬP TỨC
-                // =========================================================
+                // 1. Ghi log
                 business.service.AuditLogService.logAction(
-                    "CẬP NHẬT", 
-                    "ACCOUNTS", 
-                    selectedAccountId, 
-                    selectedOldRole,
-                    newRoleId,
-                    "Admin thay đổi quyền nhân viên"
+                        "CẬP NHẬT", "ACCOUNTS", selectedAccountId, selectedOldRole, newRoleId, "Admin thay đổi quyền nhân viên"
                 );
-                // =========================================================
 
+                // 2. HIỆN ĐÚNG 1 THÔNG BÁO DUY NHẤT Ở ĐÂY
                 JOptionPane.showMessageDialog(this, "Cập nhật phân quyền thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
 
+                // 3. Bắn tín hiệu đồng bộ ngầm (Không đẻ thêm popup)
                 AppDataChangedEvent securityEvent = new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED");
-
                 try {
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                    common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED"); 
-                    System.out.println("Đã bắn tín hiệu bảo mật qua WebSocket.");
-                } catch (Exception ex) {
-                    System.err.println("Cảnh báo: Không thể gửi qua WebSocket - " + ex.getMessage());
-                }
-
-                try {
+                    common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED");
                     EventBus.publish(securityEvent);
-                    System.out.println("Đã bắn tín hiệu bảo mật qua EventBus cục bộ.");
                 } catch (Exception ex) {
-                    System.err.println("Cảnh báo: Không thể gửi qua EventBus - " + ex.getMessage());
+                    System.err.println("Lỗi đồng bộ: " + ex.getMessage());
                 }
 
+                // 4. Reset giao diện mượt mà (Không bị giật tab)
                 selectedAccountId = "";
-                setupModernLayout();
+                initTableData();
                 this.revalidate();
                 this.repaint();
             } else {
@@ -742,14 +756,11 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     private void setupRealtimeSync() {
-        try {
-            EventBus.subscribe(AppDataChangedEvent.class, event -> {
-                if (event.getType() == AppEventType.ACCOUNT_SECURITY) {
-                    SwingUtilities.invokeLater(() -> initTableData());
-                }
-            });
-        } catch (Exception e) {
-            System.err.println("Lỗi real-time màn hình Phân quyền: " + e.getMessage());
-        }
+        EventBus.subscribe(AppDataChangedEvent.class, event -> {
+            // TÌM VÀ XÓA NGAY DÒNG JOptionPane Ở ĐÂY (NẾU CÓ)
+            // Chỉ để trống hoặc cập nhật ngầm thôi:
+            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                // Không làm gì gây ra popup hay giật màn hình ở đây cả
+            }
+        });
     }
 }
