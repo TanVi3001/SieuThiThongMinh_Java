@@ -4,24 +4,44 @@
 -- ==========================================
 
 -- 1. TẠO CỬA HÀNG (STORES)
-INSERT INTO STORES (store_id, store_name, address, is_deleted) 
-VALUES ('ST001', N'Siêu thị Trung tâm UIT', N'Làng Đại học Thủ Đức', 0);
+-- 2. Thêm Cửa hàng mặc định (Để không bị lỗi khóa ngoại khi nạp vào KHO)
+INSERT INTO STORES (store_id, email, address, phone_number)
+VALUES ('ST01', 'contact@smartmart.vn', 'Dĩ An, Bình Dương', '0123456789');
 
 -- 2. TẠO NHÀ CUNG CẤP CHUẨN (SUPPLIERS)
-INSERT INTO SUPPLIERS (supplier_id, supplier_name, is_deleted) VALUES ('SUP001', N'Công ty CP Hàng Tiêu Dùng Masan', 0);
-INSERT INTO SUPPLIERS (supplier_id, supplier_name, is_deleted) VALUES ('SUP002', N'Tập đoàn Suntory PepsiCo', 0);
-INSERT INTO SUPPLIERS (supplier_id, supplier_name, is_deleted) VALUES ('SUP003', N'Unilever Việt Nam', 0);
-INSERT INTO SUPPLIERS (supplier_id, supplier_name, is_deleted) VALUES ('SUP004', N'Vinafood 1', 0);
+-- 3. Thêm Nhà cung cấp mặc định (Để code Java có chỗ bám vào)
+INSERT INTO SUPPLIERS (supplier_id, supplier_name)
+VALUES ('SUP_01', 'Nhà cung cấp Tổng hợp');
+
+-- 4. Thêm Đơn vị tính mặc định
+INSERT INTO UNITS (unit_id, unit_name)
+VALUES ('UN_01', 'Đơn vị tiêu chuẩn');
+
+-- 5. LƯU LẠI
+COMMIT;
+
 
 -- 3. TẠO DANH MỤC THỰC TẾ (CATEGORIES) - Đúng scope của Vĩ
-INSERT INTO CATEGORIES (category_id, category_name, description, is_deleted) 
-VALUES ('CAT001', N'Thực phẩm khô', N'Gạo, mì, đường, gia vị', 0);
+-- ==========================================================
+-- RẢI DỮ LIỆU GỐC (CHUẨN THEO ẢNH CỦA BẠN)
+-- ==========================================================
 
-INSERT INTO CATEGORIES (category_id, category_name, description, is_deleted) 
-VALUES ('CAT002', N'Đồ uống & Giải khát', N'Nước suối, nước ngọt, trà', 0);
+-- 1. Thêm 5 Danh mục (Chuẩn 100% theo ảnh)
+INSERT INTO CATEGORIES (category_id, category_name, description)
+VALUES ('CAT001', 'Các loại mì', 'Cung cấp các loại mì');
 
-INSERT INTO CATEGORIES (category_id, category_name, description, is_deleted) 
-VALUES ('CAT003', N'Hàng tiêu dùng cá nhân', N'Dầu gội, sữa tắm, kem đánh răng', 0);
+INSERT INTO CATEGORIES (category_id, category_name, description)
+VALUES ('CAT002', 'Đồ uống', 'Nước giải khát');
+
+INSERT INTO CATEGORIES (category_id, category_name, description)
+VALUES ('CAT003', 'Hóa mỹ phẩm', 'Sản phẩm chăm sóc cá nhân');
+
+INSERT INTO CATEGORIES (category_id, category_name, description)
+VALUES ('CAT004', 'Bánh kẹo', 'Bánh kẹo và đồ ăn vặt');
+
+INSERT INTO CATEGORIES (category_id, category_name, description)
+VALUES ('CAT005', 'Thực phẩm tươi sống', 'Thực phẩm tươi sống các loại');
+
 
 -- CHỐT SỔ (BẮT BUỘC)
 COMMIT;
