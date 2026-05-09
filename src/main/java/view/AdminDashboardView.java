@@ -37,6 +37,9 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 case "Quản lý chi nhánh":
                     showPanel(new view.StoreManagementPanel()); 
                     break;
+                case "Quản lý khuyến mãi":
+                    showPanel(new view.PromotionManagementPanel());
+                    break;
                 case "Quản lý cửa hàng trưởng":
                     showPanel(new view.ManagerManagementView());
                     break;

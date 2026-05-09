@@ -56,6 +56,7 @@ public class AdminSidebar extends JPanel {
         // ĐÃ THÊM MỤC QUẢN LÝ CHI NHÁNH LÊN ĐẦU TIÊN
         // =========================================================
         addMenuItem("Quản lý chi nhánh", IconHelper.dashboard(20)); 
+        addMenuItem("Quản lý khuyến mãi", IconHelper.coupon(20));
         addMenuItem("Quản lý cửa hàng trưởng", IconHelper.employee(20));
         addMenuItem("Quản lý tài khoản", IconHelper.employee(20)); 
         addMenuItem("Quản lý phân quyền", IconHelper.customer(20));
