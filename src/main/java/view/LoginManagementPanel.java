@@ -7,11 +7,13 @@ import java.awt.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import view.components.IconHelper;
+import com.toedter.calendar.JDateChooser; // Gọi thư viện JDateChooser giống bên OrderView
 
 public class LoginManagementPanel extends JPanel {
 
@@ -30,9 +32,13 @@ public class LoginManagementPanel extends JPanel {
     private JTextField txtSearch;
     private JComboBox<String> cbFilterStatus;
     
-    // --- KHAI BÁO CÁC Ô THỐNG KÊ ---
+    // --- THAY THẾ BẰNG JDATECHOOSER ---
+    private JDateChooser dcFromDate, dcToDate;
+    
     private JLabel lblTotalLogins, lblFailedLogins, lblActiveSessions;
     private JButton btnRefresh;
+    
+    private final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
 
     public LoginManagementPanel() {
         setLayout(new BorderLayout(20, 20));
@@ -41,14 +47,12 @@ public class LoginManagementPanel extends JPanel {
 
         initUI();
         initEvents();
-        loadLoginData("", "Tất cả");
-        
-        // Nhận tín hiệu nếu có ai đó vừa đăng nhập/đăng xuất
+        loadLoginData("", "Tất cả", "", "");
         setupRealtimeSync();
     }
 
     private void initUI() {
-        // ── 1. HEADER & THỐNG KÊ AN NINH ──────────────────────────────────
+        // ── 1. HEADER ────────────────────────────────────────────────────────
         JPanel topContainer = new JPanel(new BorderLayout(0, 15));
         topContainer.setOpaque(false);
 
@@ -57,21 +61,19 @@ public class LoginManagementPanel extends JPanel {
         JLabel lblTitle = new JLabel("Giám Sát Truy Cập (Login History)");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(textDark);
-        JLabel lblSub = new JLabel("Theo dõi lịch sử đăng nhập, địa chỉ IP và phát hiện các nỗ lực truy cập bất thường");
+        JLabel lblSub = new JLabel("Theo dõi lịch sử đăng nhập, địa chỉ IP và phát hiện truy cập bất thường");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblSub.setForeground(textGray);
         titlePanel.add(lblTitle);
         titlePanel.add(lblSub);
         
-        // Thẻ thống kê nhanh
         JPanel statsPanel = new JPanel(new GridLayout(1, 3, 20, 0));
         statsPanel.setOpaque(false);
-        
         lblTotalLogins = new JLabel("0", SwingConstants.CENTER);
         lblFailedLogins = new JLabel("0", SwingConstants.CENTER);
         lblActiveSessions = new JLabel("0", SwingConstants.CENTER);
         
-        statsPanel.add(createStatCard("Lượt Truy Cập (Hôm nay)", lblTotalLogins, primaryBlue));
+        statsPanel.add(createStatCard("Lượt Truy Cập", lblTotalLogins, primaryBlue));
         statsPanel.add(createStatCard("Đang Online", lblActiveSessions, successGreen));
         statsPanel.add(createStatCard("Cảnh Báo (Sai Pass)", lblFailedLogins, dangerRed));
 
@@ -79,219 +81,181 @@ public class LoginManagementPanel extends JPanel {
         topContainer.add(statsPanel, BorderLayout.EAST);
         add(topContainer, BorderLayout.NORTH);
 
-        // ── 2. MAIN CONTENT (FULL BẢNG) ───────────────────────────────────
+        // ── 2. MAIN CONTENT ──────────────────────────────────────────────────
         RoundedPanel mainCard = new RoundedPanel(20, cardWhite);
         mainCard.setLayout(new BorderLayout(0, 15));
         mainCard.setBorder(new EmptyBorder(20, 25, 20, 25));
 
-        // Tool bar tìm kiếm và lọc
-        JPanel toolBar = new JPanel(new BorderLayout());
+        JPanel toolBar = new JPanel(new BorderLayout(0, 10));
         toolBar.setOpaque(false);
-        
-        JLabel lblListTitle = new JLabel("Nhật ký hệ thống");
+        JLabel lblListTitle = new JLabel("Nhật ký phiên làm việc");
         lblListTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         lblListTitle.setForeground(textDark);
         
-        JPanel searchBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        searchBox.setOpaque(false);
+        JPanel rightFilterContainer = new JPanel(new GridLayout(2, 1, 0, 8));
+        rightFilterContainer.setOpaque(false);
         
+        // Hàng 1: Search + Status
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        row1.setOpaque(false);
         cbFilterStatus = new JComboBox<>(new String[]{"Tất cả", "Thành công", "Sai mật khẩu", "Tài khoản bị khóa"});
-        cbFilterStatus.setPreferredSize(new Dimension(150, 38));
+        cbFilterStatus.setPreferredSize(new Dimension(160, 38));
         cbFilterStatus.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         
         txtSearch = createTextField("Tra ID, IP, Mã phiên...");
-        txtSearch.setPreferredSize(new Dimension(220, 38));
+        txtSearch.setPreferredSize(new Dimension(240, 38));
         
-        btnRefresh = createCustomButton("Làm mới", primaryBlue, Color.WHITE, null);
-        btnRefresh.setPreferredSize(new Dimension(100, 38));
+        row1.add(cbFilterStatus); 
+        row1.add(txtSearch);
         
-        searchBox.add(cbFilterStatus);
-        searchBox.add(txtSearch);
-        searchBox.add(btnRefresh);
+        // Hàng 2: JDateChooser
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        row2.setOpaque(false);
         
+        // Khởi tạo và làm đẹp dcFromDate
+        dcFromDate = new JDateChooser();
+        dcFromDate.setDateFormatString("dd/MM/yyyy");
+        dcFromDate.setPreferredSize(new Dimension(160, 38));
+        JTextField fromEditor = (JTextField) dcFromDate.getDateEditor().getUiComponent();
+        fromEditor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        fromEditor.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 8), new EmptyBorder(5, 5, 5, 5)));
+        
+        // Khởi tạo và làm đẹp dcToDate
+        dcToDate = new JDateChooser();
+        dcToDate.setDateFormatString("dd/MM/yyyy");
+        dcToDate.setPreferredSize(new Dimension(160, 38));
+        JTextField toEditor = (JTextField) dcToDate.getDateEditor().getUiComponent();
+        toEditor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        toEditor.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 8), new EmptyBorder(5, 5, 5, 5)));
+        
+        btnRefresh = createCustomButton("Lọc / Làm mới", primaryBlue, Color.WHITE, IconHelper.refresh(16));
+        btnRefresh.setPreferredSize(new Dimension(140, 38));
+        
+        row2.add(new JLabel("Từ ngày:")); row2.add(dcFromDate);
+        row2.add(new JLabel("Đến ngày:")); row2.add(dcToDate);
+        row2.add(btnRefresh);
+        
+        rightFilterContainer.add(row1);
+        rightFilterContainer.add(row2);
         toolBar.add(lblListTitle, BorderLayout.WEST);
-        toolBar.add(searchBox, BorderLayout.EAST);
+        toolBar.add(rightFilterContainer, BorderLayout.EAST);
 
-        // Table
         tableModel = new DefaultTableModel(new Object[]{
-            "Mã Phiên (Session)", "Tài Khoản", "IP Address", "Thời Gian Đăng Nhập", "Thời Gian Đăng Xuất", "Trạng Thái"
-        }, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
-        };
+            "Mã Phiên", "Tài Khoản", "IP Address", "Thời Gian Vào", "Thời Gian Ra", "Trạng Thái"
+        }, 0) { @Override public boolean isCellEditable(int r, int c) { return false; } };
         tblLoginLogs = new JTable(tableModel);
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblLoginLogs);
         scrollPane.setBorder(BorderFactory.createLineBorder(borderGray));
         scrollPane.getViewport().setBackground(Color.WHITE);
-
         mainCard.add(toolBar, BorderLayout.NORTH);
         mainCard.add(scrollPane, BorderLayout.CENTER);
-
         add(mainCard, BorderLayout.CENTER);
-    }
-    
-    private JPanel createStatCard(String title, JLabel valueLabel, Color accentColor) {
-        RoundedPanel card = new RoundedPanel(15, cardWhite);
-        card.setLayout(new BorderLayout());
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 4, 0, 0, accentColor), 
-            new EmptyBorder(10, 15, 10, 15)
-        ));
-        card.setPreferredSize(new Dimension(180, 65));
-        
-        JLabel lblTitle = new JLabel(title);
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        lblTitle.setForeground(textGray);
-        
-        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        valueLabel.setForeground(textDark);
-        
-        card.add(lblTitle, BorderLayout.NORTH);
-        card.add(valueLabel, BorderLayout.CENTER);
-        return card;
     }
 
     private void initEvents() {
-        btnRefresh.addActionListener(e -> doSearch());
+        btnRefresh.addActionListener(e -> {
+            // Xóa bộ lọc ngày khi bấm Làm mới
+            dcFromDate.setDate(null);
+            dcToDate.setDate(null);
+            txtSearch.setText("");
+            cbFilterStatus.setSelectedIndex(0);
+            doSearch();
+        });
         
         cbFilterStatus.addActionListener(e -> doSearch());
+        txtSearch.addActionListener(e -> doSearch());
 
-        txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { doSearch(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { doSearch(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { doSearch(); }
+        // Bắt sự kiện chọn ngày của JDateChooser để tự động tìm kiếm
+        dcFromDate.addPropertyChangeListener("date", evt -> {
+            if (evt.getNewValue() != null) doSearch();
+        });
+        
+        dcToDate.addPropertyChangeListener("date", evt -> {
+            if (evt.getNewValue() != null) doSearch();
         });
     }
-    
+
     private void doSearch() {
         String keyword = txtSearch.getText().trim();
         String status = cbFilterStatus.getSelectedItem().toString();
-        loadLoginData(keyword, status);
+        
+        String fromDateStr = "";
+        if (dcFromDate.getDate() != null) {
+            fromDateStr = sdf.format(dcFromDate.getDate());
+        }
+        
+        String toDateStr = "";
+        if (dcToDate.getDate() != null) {
+            toDateStr = sdf.format(dcToDate.getDate());
+        }
+
+        loadLoginData(keyword, status, fromDateStr, toDateStr);
     }
 
-    // =========================================================================
-    // KẾT NỐI BẢNG LICHSUDANGNHAP
-    // =========================================================================
-    private void loadLoginData(String keyword, String statusFilter) {
+    private void loadLoginData(String keyword, String statusFilter, String fromDate, String toDate) {
         tableModel.setRowCount(0);
         int total = 0, failed = 0, active = 0;
         
-        // Truy vấn dựa trên bảng LICHSUDANGNHAP
-        String sql = "SELECT MAPHIEN, MATAIKHOAN, DIACHIIP, " +
-                     "TO_CHAR(THOIGIANDANGNHAP, 'DD/MM/YYYY HH24:MI:SS') as TGIN, " +
-                     "TO_CHAR(THOIGIANDANGXUAT, 'DD/MM/YYYY HH24:MI:SS') as TGOUT, " +
-                     "TRANGTHAI " +
-                     "FROM LICHSUDANGNHAP " +
-                     "WHERE (LOWER(MAPHIEN) LIKE LOWER(?) OR LOWER(MATAIKHOAN) LIKE LOWER(?) OR DIACHIIP LIKE ?) ";
-                     
-        if (!statusFilter.equals("Tất cả")) {
-            sql += " AND TRANGTHAI = '" + statusFilter + "' ";
-        }
-        sql += " ORDER BY THOIGIANDANGNHAP DESC";
+        StringBuilder sql = new StringBuilder(
+            "SELECT MAPHIEN, MATAIKHOAN, DIACHIIP, " +
+            "TO_CHAR(THOIGIANDANGNHAP, 'DD/MM/YYYY HH24:MI:SS') as TGIN, " +
+            "TO_CHAR(THOIGIANDANGXUAT, 'DD/MM/YYYY HH24:MI:SS') as TGOUT, " +
+            "TRANGTHAI FROM LICHSUDANGNHAP " +
+            "WHERE (LOWER(MAPHIEN) LIKE LOWER(?) OR LOWER(MATAIKHOAN) LIKE LOWER(?) OR DIACHIIP LIKE ?) "
+        );
+
+        if (!statusFilter.equals("Tất cả")) sql.append(" AND TRANGTHAI = ? ");
+        if (!fromDate.isEmpty()) sql.append(" AND THOIGIANDANGNHAP >= TO_DATE(?, 'DD/MM/YYYY') ");
+        if (!toDate.isEmpty()) sql.append(" AND THOIGIANDANGNHAP <= TO_DATE(? || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS') ");
+
+        sql.append(" ORDER BY THOIGIANDANGNHAP DESC");
 
         try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, "%" + keyword + "%");
-            ps.setString(2, "%" + keyword + "%");
-            ps.setString(3, "%" + keyword + "%");
+             PreparedStatement ps = con.prepareStatement(sql.toString())) {
+            
+            int p = 1;
+            ps.setString(p++, "%" + keyword + "%");
+            ps.setString(p++, "%" + keyword + "%");
+            ps.setString(p++, "%" + keyword + "%");
+            if (!statusFilter.equals("Tất cả")) ps.setString(p++, statusFilter);
+            if (!fromDate.isEmpty()) ps.setString(p++, fromDate);
+            if (!toDate.isEmpty()) ps.setString(p++, toDate);
             
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String maphien = rs.getString("MAPHIEN");
-                    String tk = rs.getString("MATAIKHOAN");
-                    String ip = rs.getString("DIACHIIP");
-                    String timeIn = rs.getString("TGIN");
                     String timeOut = rs.getString("TGOUT");
-                    String tt = rs.getString("TRANGTHAI");
+                    if (timeOut == null) timeOut = "Đang hoạt động";
+                    String st = rs.getString("TRANGTHAI");
+                    tableModel.addRow(new Object[]{ rs.getString("MAPHIEN"), rs.getString("MATAIKHOAN"), rs.getString("DIACHIIP"), rs.getString("TGIN"), timeOut, st });
                     
-                    if (timeOut == null || timeOut.isEmpty()) timeOut = "Đang hoạt động";
-                    
-                    tableModel.addRow(new Object[]{ maphien, tk, ip, timeIn, timeOut, tt });
-                    
-                    // Thống kê nhanh
                     total++;
-                    if ("Sai mật khẩu".equalsIgnoreCase(tt) || "Tài khoản bị khóa".equalsIgnoreCase(tt)) failed++;
-                    if ("Đang hoạt động".equals(timeOut) && "Thành công".equalsIgnoreCase(tt)) active++;
+                    if (st.contains("Sai") || st.contains("khóa")) failed++;
+                    if (timeOut.equals("Đang hoạt động") && st.equals("Thành công")) active++;
                 }
             }
-            
-            // Cập nhật thẻ Dashboard
-            lblTotalLogins.setText(String.valueOf(total));
-            lblFailedLogins.setText(String.valueOf(failed));
-            lblActiveSessions.setText(String.valueOf(active));
-            
         } catch (Exception e) {
-            System.err.println("Lỗi tải danh sách Đăng nhập: " + e.getMessage());
-            
-            // Dữ liệu Fake để test giao diện nếu bác chưa tạo bảng LICHSUDANGNHAP
-            if (tableModel.getRowCount() == 0) {
-                tableModel.addRow(new Object[]{"SS_83749", "EMP1717830", "192.168.1.45", "10/05/2026 08:30:15", "Đang hoạt động", "Thành công"});
-                tableModel.addRow(new Object[]{"SS_83750", "admin_tong", "192.168.1.12", "10/05/2026 09:15:00", "10/05/2026 11:20:00", "Thành công"});
-                tableModel.addRow(new Object[]{"SS_83751", "EMP992211", "113.190.23.5", "10/05/2026 14:02:11", "N/A", "Sai mật khẩu"});
-                
-                lblTotalLogins.setText("3");
-                lblFailedLogins.setText("1");
-                lblActiveSessions.setText("1");
+            Object[][] fakeData = {
+                {"SS_83749", "EMP1717830", "192.168.1.45", "10/05/2026 08:30:15", "Đang hoạt động", "Thành công"},
+                {"SS_83750", "admin_tong", "192.168.1.12", "05/05/2026 09:15:00", "05/05/2026 11:20:00", "Thành công"},
+                {"SS_83751", "EMP992211", "113.190.23.5", "10/05/2026 14:02:11", "N/A", "Sai mật khẩu"}
+            };
+            for (Object[] r : fakeData) {
+                if ((statusFilter.equals("Tất cả") || r[5].equals(statusFilter)) && 
+                    (keyword.isEmpty() || r[1].toString().contains(keyword))) {
+                    tableModel.addRow(r);
+                    total++;
+                    if (r[5].toString().contains("Sai")) failed++;
+                }
             }
         }
+        lblTotalLogins.setText(String.valueOf(total));
+        lblFailedLogins.setText(String.valueOf(failed));
+        lblActiveSessions.setText(String.valueOf(active));
     }
 
-    private void setupTableStyle() {
-        tblLoginLogs.setRowHeight(38);
-        tblLoginLogs.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        tblLoginLogs.setShowVerticalLines(false);
-        tblLoginLogs.setSelectionBackground(new Color(237, 242, 255));
-        tblLoginLogs.setSelectionForeground(textDark);
-        tblLoginLogs.getTableHeader().setReorderingAllowed(false);
-
-        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
-        headerRenderer.setBackground(textDark);
-        headerRenderer.setForeground(Color.WHITE);
-        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        for (int i = 0; i < tblLoginLogs.getColumnCount(); i++) {
-            tblLoginLogs.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
-        }
-        
-        // Đổi màu chữ cột Trạng thái cho sinh động
-        DefaultTableCellRenderer statusRenderer = new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                String status = String.valueOf(value);
-                if (status.equalsIgnoreCase("Sai mật khẩu") || status.equalsIgnoreCase("Tài khoản bị khóa")) {
-                    setForeground(dangerRed);
-                    setFont(new Font("Segoe UI", Font.BOLD, 14));
-                } else if (status.equalsIgnoreCase("Thành công")) {
-                    setForeground(successGreen);
-                    setFont(new Font("Segoe UI", Font.BOLD, 14));
-                } else {
-                    setForeground(textDark);
-                }
-                return c;
-            }
-        };
-        tblLoginLogs.getColumnModel().getColumn(5).setCellRenderer(statusRenderer);
-    }
-    
-    private void setupRealtimeSync() {
-        try {
-            EventBus.subscribe(AppDataChangedEvent.class, event -> {
-                // Lắng nghe sự kiện login/logout
-                if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType().name().equals("LOGIN_HISTORY")) {
-                    SwingUtilities.invokeLater(() -> doSearch());
-                }
-            });
-        } catch (Exception e) {
-            System.err.println("Lỗi real-time màn hình Login History: " + e.getMessage());
-        }
-    }
-
-    // =========================================================================
-    // CÁC HÀM TIỆN ÍCH UI
-    // =========================================================================
+    // --- CÁC LỚP TIỆN ÍCH UI ---
     private JTextField createTextField(String placeholder) {
         JTextField txt = new JTextField();
         txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -302,7 +266,7 @@ public class LoginManagementPanel extends JPanel {
 
     private JButton createCustomButton(String t, Color bg, Color fg, ImageIcon icon) {
         JButton btn = new JButton(t);
-        if (icon != null) btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(16, 16, 1)));
+        if (icon != null) btn.setIcon(icon);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setForeground(fg); btn.setBackground(bg);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); btn.setFocusPainted(false); btn.setBorderPainted(false); btn.setContentAreaFilled(false);
@@ -315,6 +279,45 @@ public class LoginManagementPanel extends JPanel {
             }
         });
         return btn;
+    }
+
+    private JPanel createStatCard(String title, JLabel valueLabel, Color accentColor) {
+        RoundedPanel card = new RoundedPanel(15, cardWhite);
+        card.setLayout(new BorderLayout());
+        card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, accentColor), new EmptyBorder(10, 15, 10, 15)));
+        JLabel lblT = new JLabel(title); lblT.setFont(new Font("Segoe UI", Font.BOLD, 12)); lblT.setForeground(textGray);
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24)); valueLabel.setForeground(textDark);
+        card.add(lblT, BorderLayout.NORTH); card.add(valueLabel, BorderLayout.CENTER);
+        return card;
+    }
+
+    private void setupTableStyle() {
+        tblLoginLogs.setRowHeight(38);
+        tblLoginLogs.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tblLoginLogs.setShowVerticalLines(false);
+        tblLoginLogs.setSelectionBackground(new Color(237, 242, 255));
+        tblLoginLogs.getTableHeader().setBackground(textDark);
+        tblLoginLogs.getTableHeader().setForeground(Color.WHITE);
+        tblLoginLogs.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
+        
+        DefaultTableCellRenderer statusRenderer = new DefaultTableCellRenderer() {
+            @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
+                Component comp = super.getTableCellRendererComponent(t, v, s, f, r, c);
+                String val = String.valueOf(v);
+                if (val.contains("Sai") || val.contains("khóa")) setForeground(dangerRed);
+                else if (val.equals("Thành công")) setForeground(successGreen);
+                else setForeground(textDark);
+                setFont(new Font("Segoe UI", Font.BOLD, 14));
+                return comp;
+            }
+        };
+        tblLoginLogs.getColumnModel().getColumn(5).setCellRenderer(statusRenderer);
+    }
+
+    private void setupRealtimeSync() {
+        EventBus.subscribe(AppDataChangedEvent.class, e -> {
+            if (e.getType() == AppEventType.ACCOUNT_SECURITY) SwingUtilities.invokeLater(this::doSearch);
+        });
     }
 
     class RoundedPanel extends JPanel {
