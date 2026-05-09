@@ -171,24 +171,32 @@ public class EmployeeSql implements SqlInterface<Employee> {
     }
 
     @Override
-    public ArrayList<Employee> selectAll() {
-        ArrayList<Employee> list = new ArrayList<>();
+    public List<Employee> selectAll() {
+        List<Employee> list = new ArrayList<>();
+        // 🌟 SỬ DỤNG LEFT JOIN VÀ CASE WHEN ĐỂ TỰ ĐỊNH NGHĨA TRẠNG THÁI
         String sql = "SELECT e.*, "
-                + "NVL(e.role_id, 'Chưa phân bổ') AS actual_role, "
-                + "CASE WHEN a.user_id IS NULL THEN 'Chưa cấp' ELSE 'Đã cấp' END AS acc_status "
+                + "CASE WHEN a.user_id IS NOT NULL THEN a.status ELSE N'Chưa cấp' END as account_status "
                 + "FROM EMPLOYEES e "
                 + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
                 + "WHERE e.is_deleted = 0";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+
             while (rs.next()) {
-                Employee emp = map(rs);
-                emp.setRole(rs.getString("actual_role"));
-                emp.setRoleId(rs.getString("actual_role"));
-                emp.setAccountStatus(rs.getString("acc_status"));
+                Employee emp = new Employee();
+                emp.setEmployeeId(rs.getString("employee_id"));
+                emp.setEmployeeName(rs.getString("employee_name"));
+                emp.setPhone(rs.getString("phone"));
+                emp.setEmail(rs.getString("email"));
+                emp.setGender(rs.getString("gender"));
+                emp.setRole(rs.getString("role_id"));
+
+                // 🌟 Lấy trạng thái đã được xử lý từ SQL (Đã cấp / Chưa cấp)
+                emp.setAccountStatus(rs.getString("account_status"));
+
                 list.add(emp);
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
         }
         return list;
@@ -265,26 +273,33 @@ public class EmployeeSql implements SqlInterface<Employee> {
         e.setEmployeeName(rs.getString("employee_name"));
         try {
             e.setHireDate(rs.getDate("hire_date"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         try {
             e.setSalaryCoefficient(rs.getBigDecimal("salary_coefficient"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         try {
             e.setTotalCompletedOrders(rs.getInt("total_completed_orders"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         try {
             e.setShiftId(rs.getString("shift_id"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         e.setIsDeleted(rs.getInt("is_deleted"));
         try {
             e.setPhone(rs.getString("phone"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         try {
             e.setEmail(rs.getString("email"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         try {
             e.setGender(rs.getString("gender"));
-        } catch (SQLException ignored) {}
+        } catch (SQLException ignored) {
+        }
         return e;
     }
 
@@ -331,5 +346,29 @@ public class EmployeeSql implements SqlInterface<Employee> {
         log.setIpAddress("local");
         log.setDeviceInfo(System.getProperty("os.name") + " | Java " + System.getProperty("java.version"));
         business.sql.rbac.AuditLogSql.getInstance().insertWithConn(con, log);
+    }
+
+    public boolean existsByEmailGlobal(String email, String excludeId) {
+        // 🛑 CHÚ Ý: Không có điều kiện is_deleted = 0 ở đây để quét toàn bộ CSDL
+        String sql = "SELECT COUNT(*) FROM EMPLOYEES WHERE UPPER(email) = UPPER(?)";
+        if (excludeId != null) {
+            sql += " AND employee_id <> ?";
+        }
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, email.trim());
+            if (excludeId != null) {
+                pst.setString(2, excludeId);
+            }
+
+            try (java.sql.ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (java.sql.SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }

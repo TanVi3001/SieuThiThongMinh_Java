@@ -41,30 +41,30 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
      * @throws java.sql.SQLException
      */
     public int insertWithConn(Connection con, OrderDetail ct) throws SQLException {
-    // FIX: Thêm cột order_detail_id vào câu lệnh SQL
-    String sql = "INSERT INTO ORDER_DETAILS (order_detail_id, order_id, product_id, quantity, unit_price, unit_id, quantity_base) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        // FIX: Thêm cột order_detail_id vào câu lệnh SQL
+        String sql = "INSERT INTO ORDER_DETAILS (order_detail_id, order_id, product_id, quantity, unit_price, unit_id, quantity_base) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-    try (PreparedStatement pst = con.prepareStatement(sql)) {
-        // Tự động tạo một cái mã ID ngẫu nhiên (ví dụ: DET-12345...)
-        String randomId = "DET-" + java.util.UUID.randomUUID().toString().substring(0, 8);
-        
-        pst.setString(1, randomId); // Điền vào cột order_detail_id
-        pst.setString(2, ct.getOrderId());
-        pst.setString(3, ct.getProductId());
-        pst.setInt(4, ct.getQuantity());
-        pst.setDouble(5, ct.getUnitPrice());
-        pst.setString(6, ct.getUnitId());
-        pst.setInt(7, ct.getQuantityInBaseUnit());
+        try (PreparedStatement pst = con.prepareStatement(sql)) {
+            // Tự động tạo một cái mã ID ngẫu nhiên (ví dụ: DET-12345...)
+            String randomId = "DET-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
-        return pst.executeUpdate();
-    } catch (SQLException e) {
-        if (e.getErrorCode() == 904) {
-            return insertLegacyWithConn(con, ct);
+            pst.setString(1, randomId); // Điền vào cột order_detail_id
+            pst.setString(2, ct.getOrderId());
+            pst.setString(3, ct.getProductId());
+            pst.setInt(4, ct.getQuantity());
+            pst.setDouble(5, ct.getUnitPrice());
+            pst.setString(6, ct.getUnitId());
+            pst.setInt(7, ct.getQuantityInBaseUnit());
+
+            return pst.executeUpdate();
+        } catch (SQLException e) {
+            if (e.getErrorCode() == 904) {
+                return insertLegacyWithConn(con, ct);
+            }
+            throw e;
         }
-        throw e;
     }
-}
 
     private int insertLegacyWithConn(Connection con, OrderDetail ct) throws SQLException {
         String sql = "INSERT INTO ORDER_DETAILS (order_detail_id, order_id, product_id, quantity, unit_price) "
@@ -128,8 +128,7 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
                 + "WHERE od.order_id = ? AND NVL(od.is_deleted, 0) = 0 "
                 + "ORDER BY od.order_detail_id";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, orderId);
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
@@ -166,8 +165,7 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
                 + "WHERE od.order_id = ? AND NVL(od.is_deleted, 0) = 0 "
                 + "ORDER BY od.order_detail_id";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, orderId);
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
@@ -192,34 +190,32 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
     }
 
     @Override
-public ArrayList<OrderDetail> selectAll() {
-    ArrayList<OrderDetail> ds = new ArrayList<>();
-    String sql = "SELECT * FROM ORDER_DETAILS";
+    public ArrayList<OrderDetail> selectAll() {
+        ArrayList<OrderDetail> ds = new ArrayList<>();
+        String sql = "SELECT * FROM ORDER_DETAILS";
 
-    try (Connection con = common.db.DatabaseConnection.getConnection();
-         PreparedStatement pst = con.prepareStatement(sql);
-         ResultSet rs = pst.executeQuery()) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
 
-        while (rs.next()) {
-            // Vì các trường trong Model là final, ta phải lấy dữ liệu ra biến tạm trước
-            String oId = rs.getString("order_id");
-            String pId = rs.getString("product_id");
-            int qty = rs.getInt("quantity");
-            double price = rs.getDouble("unit_price");
-            String unitId = getNullableString(rs, "unit_id");
-            int qtyBase = getNullableInt(rs, "quantity_base");
+            while (rs.next()) {
+                // Vì các trường trong Model là final, ta phải lấy dữ liệu ra biến tạm trước
+                String oId = rs.getString("order_id");
+                String pId = rs.getString("product_id");
+                int qty = rs.getInt("quantity");
+                double price = rs.getDouble("unit_price");
+                String unitId = getNullableString(rs, "unit_id");
+                int qtyBase = getNullableInt(rs, "quantity_base");
 
-            // Sau đó truyền tất cả vào Constructor duy nhất của OrderDetail
-            OrderDetail ct = new OrderDetail(oId, pId, qty, price, unitId, qtyBase);
-            
-            ds.add(ct);
+                // Sau đó truyền tất cả vào Constructor duy nhất của OrderDetail
+                OrderDetail ct = new OrderDetail(oId, pId, qty, price, unitId, qtyBase);
+
+                ds.add(ct);
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi tại OrderDetailsSql.selectAll: " + e.getMessage());
+            e.printStackTrace();
         }
-    } catch (SQLException e) {
-        System.err.println("Lỗi tại OrderDetailsSql.selectAll: " + e.getMessage());
-        e.printStackTrace();
+        return ds;
     }
-    return ds;
-}
 
     @Override
     public int update(OrderDetail t) {

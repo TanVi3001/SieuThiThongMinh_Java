@@ -60,7 +60,7 @@ public class AccountActivationSql {
             ps.setString(2, userId);
             ps.setString(3, username);
             ps.setString(4, bcryptPasswordHash);
-            ps.setString(5, "Hoạt động");
+            ps.setString(5, "Đã cấp");
             int affected = ps.executeUpdate();
             return (affected == 1) ? accountId : null;
         }

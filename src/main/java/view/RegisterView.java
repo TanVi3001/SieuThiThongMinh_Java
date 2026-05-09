@@ -2,19 +2,22 @@ package view;
 
 import business.api.AccountActivationAPI;
 import model.account.ActivationEmployeeInfo;
-import common.realtime.RealtimeClient; // THÊM IMPORT
-import common.events.EventBus; // THÊM IMPORT
-import common.events.AppEventType; // THÊM IMPORT
-import common.events.AppDataChangedEvent; // THÊM IMPORT
+import common.realtime.RealtimeClient;
+import common.events.EventBus;
+import common.events.AppEventType;
+import common.events.AppDataChangedEvent;
+import business.service.EmailService; // 🌟 Import dịch vụ mail của bạn
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Random;
 
 public class RegisterView extends javax.swing.JFrame {
 
     private JTextField txtCode, txtFullName, txtEmail, txtPhone, txtUsername;
     private JPasswordField txtPass;
     private JButton btnCheck, btnReg;
+    private JLabel lblResendEmail;
     private JLabel[] labels = new JLabel[6];
 
     private static final java.util.logging.Logger logger
@@ -89,6 +92,20 @@ public class RegisterView extends javax.swing.JFrame {
         btnCheck.setBounds(100, 220, 250, 45);
         cardPanel.add(btnCheck);
 
+        // 🌟 NÚT: CẬP NHẬT LẠI EMAIL VÀ GỬI MÃ MỚI
+        lblResendEmail = new JLabel("<html><u>Sai Email? Cập nhật & Gửi lại mã</u></html>", SwingConstants.CENTER);
+        lblResendEmail.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblResendEmail.setForeground(new Color(67, 97, 238));
+        lblResendEmail.setBounds(100, 275, 250, 20);
+        lblResendEmail.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        lblResendEmail.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                handleChangeEmailAndResend();
+            }
+        });
+        cardPanel.add(lblResendEmail);
+
         btnReg = createButton("HOÀN TẤT KÍCH HOẠT");
         btnReg.setBackground(new Color(0, 168, 140));
         btnReg.setBounds(100, startY + (6 * gap), 250, 48);
@@ -148,6 +165,7 @@ public class RegisterView extends javax.swing.JFrame {
 
         btnReg.setVisible(false);
         btnCheck.setVisible(true);
+        lblResendEmail.setVisible(true);
         txtCode.setEditable(true);
         txtCode.setBackground(Color.WHITE);
     }
@@ -189,9 +207,99 @@ public class RegisterView extends javax.swing.JFrame {
         }
 
         btnCheck.setVisible(false);
+        lblResendEmail.setVisible(false);
         btnReg.setVisible(true);
         txtUsername.requestFocus();
     }
+
+    // =========================================================================
+    // 🌟 TEST CASE 1 & 2: CẬP NHẬT MAIL, GỬI LẠI MÃ VÀ KHÓA TÀI KHOẢN ĐÃ CẤP
+    // =========================================================================
+    private void handleChangeEmailAndResend() {
+        JTextField txtU = new JTextField();
+        JTextField txtE = new JTextField();
+        Object[] msg = {
+            "Nhập Tên Đăng Nhập (Do quản lý cấp):", txtU,
+            "Nhập Email mới muốn nhận mã:", txtE
+        };
+
+        int option = JOptionPane.showConfirmDialog(this, msg, "Cập nhật Email & Nhận mã mới", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (option == JOptionPane.OK_OPTION) {
+            String username = txtU.getText().trim();
+            String newEmail = txtE.getText().trim();
+
+            if (username.isEmpty() || newEmail.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Vui lòng nhập đầy đủ thông tin!", "Lỗi", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            if (isEmailDuplicated(newEmail)) {
+                JOptionPane.showMessageDialog(this, "Email này đã tồn tại trên hệ thống (Kể cả tài khoản đang bị khóa)!\nChỉ khi Admin xóa cứng tài khoản cũ thì mới được sử dụng lại Email này.", "Lỗi trùng Email", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            String newOtpCode = String.format("%06d", new java.util.Random().nextInt(999999));
+            boolean success = updateEmailAndIssueNewOTP(username, newEmail, newOtpCode);
+
+            if (success) {
+                // 🌟 ĐÃ FIX: Chạy luồng phụ (Thread) để gọi EmailService, tránh làm đơ giao diện khi đợi gửi mail
+                new Thread(() -> {
+                    boolean mailSent = business.service.EmailService.sendActivationEmail(newEmail, username, newOtpCode);
+                    if (!mailSent) {
+                        System.err.println("❌ Không thể gửi mail tới: " + newEmail);
+                    }
+                }).start();
+
+                JOptionPane.showMessageDialog(this, "Đã cập nhật Email và gửi mã OTP mới thành công!\nVui lòng kiểm tra hộp thư của bạn.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Tên đăng nhập không tồn tại, đang bị khóa hoặc tài khoản này ĐÃ ĐƯỢC KÍCH HOẠT trước đó!", "Từ chối", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private boolean isEmailDuplicated(String email) {
+        // Query toàn bộ bảng ACCOUNTS, không lọc is_deleted
+        String sql = "SELECT COUNT(*) FROM ACCOUNTS WHERE email = ?";
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean updateEmailAndIssueNewOTP(String username, String newEmail, String newOtpCode) {
+        // 🔒 LOCK LOGIC: Chỉ Update nếu is_active = 0 và is_deleted = 0
+        String sql = "UPDATE ACCOUNTS SET email = ?, otp_code = ?, updated_at = CURRENT_TIMESTAMP "
+                + "WHERE username = ? AND NVL(is_active, 0) = 0 AND NVL(is_deleted, 0) = 0";
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, newEmail);
+            ps.setString(2, newOtpCode);
+            ps.setString(3, username);
+
+            int rows = ps.executeUpdate();
+
+            // Nếu update được bảng ACCOUNTS, phải đồng bộ sang bảng EMPLOYEES luôn để dữ liệu khớp
+            if (rows > 0) {
+                String sqlSyncEmp = "UPDATE EMPLOYEES SET email = ? WHERE employee_id = (SELECT user_id FROM ACCOUNTS WHERE username = ?)";
+                try (java.sql.PreparedStatement ps2 = con.prepareStatement(sqlSyncEmp)) {
+                    ps2.setString(1, newEmail);
+                    ps2.setString(2, username);
+                    ps2.executeUpdate();
+                }
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    // =========================================================================
 
     private void initEvents() {
         btnCheck.addActionListener(e -> {
@@ -231,24 +339,10 @@ public class RegisterView extends javax.swing.JFrame {
 
             btnReg.setEnabled(false);
             try {
-                // 1. Gọi API Kích hoạt tài khoản
                 activationAPI.activate(code, user, pass);
-
-                // =========================================================
-                // 2. THÊM MỚI: BẮN TÍN HIỆU REAL-TIME CHO MANAGER
-                // =========================================================
-                try {
-                    // Thông báo bảo mật để các máy khác cập nhật danh sách tài khoản
-                    RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                    // Thông báo nhân viên thay đổi để cập nhật bảng hồ sơ
-                    RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                    // Cập nhật giao diện cục bộ (nếu cần)
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "REGISTER_SUCCESS"));
-                } catch (Exception ex) {
-                    System.err.println("Real-time sync failed: " + ex.getMessage());
-                }
-                // =========================================================
+                RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+                EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "REGISTER_SUCCESS"));
 
                 JOptionPane.showMessageDialog(this, "Kích hoạt thành công! Đăng nhập ngay.");
                 new LoginView().setVisible(true);
@@ -287,4 +381,5 @@ public class RegisterView extends javax.swing.JFrame {
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         pack();
     }
+
 }
