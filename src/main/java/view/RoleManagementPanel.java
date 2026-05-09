@@ -137,12 +137,11 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         try (Connection con = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
              
-            boolean hasChanges = false; // Biến cờ để biết có gì mới không
+            boolean hasChanges = false;
 
             for (RoleMatrixItem item : roleDataList) {
                 if ("R_ADMIN_ALL".equals(item.roleId)) continue; 
 
-                // CHỈ LƯU VÀ GHI LOG NẾU CHECKBOX CÓ SỰ THAY ĐỔI
                 if (item.isChanged()) {
                     ps.setInt(1, item.canView ? 1 : 0);
                     ps.setInt(2, item.canAdd ? 1 : 0);
@@ -153,9 +152,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                     ps.addBatch();
                     hasChanges = true;
                     
-                    // =========================================================
-                    // GHI AUDIT LOG CHI TIẾT SỰ THAY ĐỔI
-                    // =========================================================
                     business.service.AuditLogService.logAction(
                         "CẬP NHẬT", 
                         "ROLES", 
@@ -165,7 +161,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                         "Admin tinh chỉnh quyền hạn trên Ma trận"
                     );
                     
-                    // Reset lại bộ nhớ sau khi lưu
                     item.updateOriginals();
                 }
             }
@@ -173,7 +168,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             if (hasChanges) {
                 ps.executeBatch();
                 
-                // Bắn tín hiệu chốt đơn
                 try {
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                     EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
@@ -181,7 +175,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
                 JOptionPane.showMessageDialog(this, "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             } else {
-                // Nếu bấm lưu mà không tích đổi gì cả thì báo nhẹ
                 JOptionPane.showMessageDialog(this, "Không có sự thay đổi nào để lưu.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             }
             
@@ -229,9 +222,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         int rowIndex = 1;
         for (RoleMatrixItem item : roleDataList) {
             
-            // ===============================================================
-            // ĐỒNG BỘ TÊN GIAO DIỆN CHUẨN 4 ROLES DỰA TRÊN ROLE_ID TỪ DB
-            // ===============================================================
             String displayRoleName = item.roleName; 
             if ("R_ADMIN_ALL".equals(item.roleId)) {
                 displayRoleName = "Quản trị viên";
@@ -259,6 +249,32 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 if ("R_ADMIN_ALL".equals(item.roleId)) lblRole.setForeground(new Color(220, 53, 69)); 
                 lblRole.setBorder(new EmptyBorder(12, 10, 12, 0));
                 cellRole.add(lblRole, BorderLayout.CENTER);
+
+                // ===============================================================
+                // KHÔI PHỤC NÚT XÓA: CHỈ HIỆN KHI KHÔNG PHẢI LÀ ADMIN
+                // ===============================================================
+                if (!"R_ADMIN_ALL".equals(item.roleId)) {
+                    JButton btnDeleteRole = new JButton();
+                    try {
+                        btnDeleteRole.setIcon(view.components.IconHelper.delete(18));
+                    } catch (Exception ex) {
+                        btnDeleteRole.setText("❌");
+                        btnDeleteRole.setForeground(Color.RED);
+                    }
+                    btnDeleteRole.setBorderPainted(false);
+                    btnDeleteRole.setContentAreaFilled(false);
+                    btnDeleteRole.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                    btnDeleteRole.setToolTipText("Xóa vai trò này (Xóa mềm)");
+
+                    // Gắn sự kiện xóa
+                    final String finalRoleId = item.roleId;
+                    final String finalRoleName = displayRoleName;
+                    btnDeleteRole.addActionListener(e -> handleDeleteRole(finalRoleId, finalRoleName));
+
+                    cellRole.add(btnDeleteRole, BorderLayout.EAST);
+                }
+                // ===============================================================
+
                 tablePanel.add(cellRole, gbc);
 
                 boolean isAdmin = "R_ADMIN_ALL".equals(item.roleId);
@@ -323,12 +339,78 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         return container;
     }
 
+    // =========================================================================
+    // LOGIC XỬ LÝ XÓA MỀM (SOFT DELETE) KÈM XÁC THỰC MẬT KHẨU
+    // =========================================================================
+    private void handleDeleteRole(String roleId, String roleName) {
+        JPasswordField pf = new JPasswordField();
+        int okCxl = JOptionPane.showConfirmDialog(
+            this, 
+            new Object[]{"Vui lòng nhập mật khẩu Quản trị viên để xác nhận xóa vai trò [" + roleName + "]:", pf}, 
+            "Xác thực bảo mật", 
+            JOptionPane.OK_CANCEL_OPTION, 
+            JOptionPane.WARNING_MESSAGE
+        );
+
+        if (okCxl == JOptionPane.OK_OPTION) {
+            String password = new String(pf.getPassword());
+
+            // 🔥 BẠN CẦN CHỈNH SỬA HÀM NÀY ĐỂ KHỚP VỚI CÁCH MÃ HÓA PASSWORD CỦA BẠN (VD: BCrypt)
+            if (verifyAdminPassword(password)) {
+                String sql = "UPDATE ROLES SET is_deleted = 1 WHERE role_id = ?";
+                
+                try (Connection con = common.db.DatabaseConnection.getConnection();
+                     PreparedStatement ps = con.prepareStatement(sql)) {
+                    
+                    ps.setString(1, roleId);
+                    ps.executeUpdate();
+
+                    // Ghi vào Audit Log
+                    business.service.AuditLogService.logAction(
+                        "XÓA", 
+                        "ROLES", 
+                        roleId, 
+                        roleName, 
+                        "Đã đưa vào thùng rác (Xóa mềm)", 
+                        "Admin xác thực mật khẩu và xóa vai trò"
+                    );
+
+                    JOptionPane.showMessageDialog(this, "Đã xóa vai trò [" + roleName + "] thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // Kéo dữ liệu mới và báo tin cho các panel khác
+                    loadDataFromDB();
+                    try {
+                        common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                        EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_DELETED"));
+                    } catch (Exception ignored) {}
+
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Lỗi khi xóa vai trò: " + ex.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác! Từ chối thao tác.", "Lỗi bảo mật", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private boolean verifyAdminPassword(String inputPassword) {
+        // Lấy thông tin user hiện tại
+        model.account.Account currentUser = business.service.LoginService.getCurrentUser();
+        
+        if (currentUser != null && currentUser.getPassword() != null) {
+            // Tạm thời mình dùng phép so sánh String bình thường.
+            // Nếu Database của bạn lưu mã hóa (như BCrypt hay MD5), bạn hãy thay đổi dòng return dưới đây nhé!
+            // VD BCrypt: return org.mindrot.jbcrypt.BCrypt.checkpw(inputPassword, currentUser.getPassword());
+            return currentUser.getPassword().equals(inputPassword); 
+        }
+        return false;
+    }
+    // =========================================================================
+
     class RoleMatrixItem {
         String roleId;
         String roleName;
         boolean canView, canAdd, canEdit, canDelete, canExport;
-        
-        // --- THÊM BIẾN LƯU BẢN GỐC ĐỂ SO SÁNH ---
         boolean oldView, oldAdd, oldEdit, oldDelete, oldExport;
 
         public RoleMatrixItem(String roleId, String roleName, boolean view, boolean add, boolean edit, boolean del, boolean exp) {
@@ -340,7 +422,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             this.canDelete = del;
             this.canExport = exp;
             
-            // Lưu lại hiện trạng khi vừa load từ DB lên
             this.oldView = view;
             this.oldAdd = add;
             this.oldEdit = edit;
@@ -348,13 +429,11 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             this.oldExport = exp;
         }
 
-        // Hàm kiểm tra xem Admin có thực sự sửa quyền của Role này không?
         public boolean isChanged() {
             return canView != oldView || canAdd != oldAdd || canEdit != oldEdit || 
                    canDelete != oldDelete || canExport != oldExport;
         }
 
-        // Dịch các Checkbox thành chuỗi Tiếng Việt dễ đọc
         public String getPermissionsString(boolean v, boolean a, boolean e, boolean d, boolean x) {
             java.util.List<String> list = new java.util.ArrayList<>();
             if (v) list.add("Xem");
@@ -373,7 +452,6 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             return getPermissionsString(canView, canAdd, canEdit, canDelete, canExport);
         }
 
-        // Cập nhật lại bản gốc sau khi đã lưu thành công
         public void updateOriginals() {
             oldView = canView; oldAdd = canAdd; oldEdit = canEdit; 
             oldDelete = canDelete; oldExport = canExport;
