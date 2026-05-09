@@ -34,6 +34,9 @@ public class AdminDashboardView extends javax.swing.JFrame {
         // NỐI CÁC MỤC MENU VỚI PANEL TƯƠNG ỨNG
         adminSidebar.setMenuClickListener(title -> {
             switch (title) {
+                case "Quản lý chi nhánh":
+                    showPanel(new view.StoreManagementPanel()); 
+                    break;
                 case "Quản lý cửa hàng trưởng":
                     showPanel(new view.ManagerManagementView());
                     break;

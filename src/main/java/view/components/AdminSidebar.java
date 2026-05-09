@@ -52,7 +52,10 @@ public class AdminSidebar extends JPanel {
         menuPanel.setBackground(Color.WHITE);
         menuPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
 
-        // ĐÃ THÊM MỤC QUẢN LÝ CỬA HÀNG TRƯỞNG
+        // =========================================================
+        // ĐÃ THÊM MỤC QUẢN LÝ CHI NHÁNH LÊN ĐẦU TIÊN
+        // =========================================================
+        addMenuItem("Quản lý chi nhánh", IconHelper.dashboard(20)); 
         addMenuItem("Quản lý cửa hàng trưởng", IconHelper.employee(20));
         addMenuItem("Quản lý tài khoản", IconHelper.employee(20)); 
         addMenuItem("Quản lý phân quyền", IconHelper.customer(20));
