@@ -128,3 +128,17 @@ LEFT JOIN ORDERS o ON c.customer_id = o.customer_id AND o.is_deleted = 0
 WHERE c.is_deleted = 0
 GROUP BY c.customer_id, c.customer_name, c.phone, c.email, c.address;
 -- Thêm rank cho customer --
+
+
+-- 
+-- Đổi các trạng thái đã active thành "Đã cấp"
+UPDATE ACCOUNTS 
+SET status = N'Đã cấp' 
+WHERE UPPER(status) IN ('HOẠT ĐỘNG', 'ACTIVE', 'COMPLETED');
+
+-- Đổi các trạng thái chưa active thành "Chưa cấp"
+UPDATE ACCOUNTS 
+SET status = N'Chưa cấp' 
+WHERE UPPER(status) IN ('CHỜ KÍCH HOẠT', 'PENDING');
+
+COMMIT;
