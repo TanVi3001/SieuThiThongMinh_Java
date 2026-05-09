@@ -214,27 +214,28 @@ public class StatisticSql {
     public List<Object[]> getProductReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
 
-        // SQL: Lấy tất cả sản phẩm và tính tổng số lượng bán + doanh thu từ chi tiết hóa đơn
+        // 🌟 SQL ĐÃ SỬA: JOIN VỚI BẢNG INVENTORY ĐỂ LẤY SỐ LƯỢNG TỒN KHO 🌟
         String sql = "SELECT p.product_id, p.product_name, "
                 + "    NVL(sold.total_qty, 0) as qty_sold, "
                 + "    NVL(sold.total_revenue, 0) as revenue, "
-                + "    p.quantity as current_stock "
+                + "    NVL(i.quantity, 0) as current_stock " // Lấy quantity từ bảng INVENTORY
                 + "FROM PRODUCTS p "
+                + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id " // Join thêm bảng kho
                 + "LEFT JOIN ( "
                 + "    SELECT d.product_id, "
                 + "           SUM(d.quantity) as total_qty, "
-                + "           SUM(d.quantity * d.price) as total_revenue "
+                + "           SUM(d.quantity * d.unit_price) as total_revenue "
                 + "    FROM ORDER_DETAILS d "
                 + "    INNER JOIN ORDERS o ON d.order_id = o.order_id "
                 + "    WHERE NVL(o.is_deleted, 0) = 0 "
-                + "      AND (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') "
+                + "      AND (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành' OR UPPER(o.status) = 'COMPLETED') "
                 + "      AND o.order_date >= ? AND o.order_date < (? + 1) "
                 + "    GROUP BY d.product_id "
                 + ") sold ON p.product_id = sold.product_id "
                 + "WHERE NVL(p.is_deleted, 0) = 0 "
                 + "ORDER BY qty_sold DESC, revenue DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
             pst.setDate(1, new java.sql.Date(fromDate.getTime()));
             pst.setDate(2, new java.sql.Date(toDate.getTime()));
@@ -242,11 +243,11 @@ public class StatisticSql {
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
                     rows.add(new Object[]{
-                        rs.getString(1), // Mã SP
-                        rs.getString(2), // Tên SP
-                        rs.getInt(3), // Số lượng đã bán
-                        rs.getDouble(4), // Doanh thu mang lại
-                        rs.getInt(5) // Tồn kho hiện tại
+                        rs.getString("product_id"),
+                        rs.getString("product_name"),
+                        rs.getInt("qty_sold"),
+                        rs.getDouble("revenue"),
+                        rs.getInt("current_stock")
                     });
                 }
             }
@@ -260,8 +261,7 @@ public class StatisticSql {
     public List<Object[]> getEmployeeReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
 
-        // Câu SQL mới: Dùng LEFT JOIN bên trong Subquery để xử lý ID 
-        // Tránh lỗi ORA-22818 (không cho dùng subquery trong GROUP BY)
+        // 🌟 Bổ sung: Bắt thêm điều kiện a.status = 'Đã cấp' cho tương thích với update mới
         String sql = "SELECT e.employee_id, e.employee_name, "
                 + "    NVL(agg.don_thanh_cong, 0), "
                 + "    NVL(agg.don_huy, 0), "
@@ -271,21 +271,21 @@ public class StatisticSql {
                 + "LEFT JOIN ( "
                 + "    SELECT "
                 + "        NVL(a_ref.user_id, o.employee_id) as final_emp_id, "
-                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') THEN 1 END) as don_thanh_cong, "
-                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HỦY%' OR o.status = N'Đã hủy') THEN 1 END) as don_huy, "
-                + "        SUM(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') THEN o.total_amount ELSE 0 END) as doanh_thu "
+                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành' OR UPPER(o.status) = 'COMPLETED') THEN 1 END) as don_thanh_cong, "
+                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HỦY%' OR o.status = N'Đã hủy' OR UPPER(o.status) = 'CANCELLED') THEN 1 END) as don_huy, "
+                + "        SUM(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành' OR UPPER(o.status) = 'COMPLETED') THEN o.total_amount ELSE 0 END) as doanh_thu "
                 + "    FROM ORDERS o "
-                + "    LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id " // Bắc cầu qua đây
+                + "    LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id "
                 + "    WHERE NVL(o.is_deleted, 0) = 0 "
                 + "      AND o.order_date >= ? AND o.order_date < (? + 1) "
                 + "    GROUP BY NVL(a_ref.user_id, o.employee_id) "
                 + ") agg ON e.employee_id = agg.final_emp_id "
                 + "WHERE NVL(e.is_deleted, 0) = 0 "
                 + "  AND e.role_id = 'R_STAFF_SALE' "
-                + "  AND (UPPER(a.status) LIKE '%HOẠT ĐỘNG%' OR a.status = N'Hoạt động') "
+                + "  AND (UPPER(a.status) LIKE '%HOẠT ĐỘNG%' OR a.status = N'Hoạt động' OR a.status = N'Đã cấp') " // Bổ sung Đã cấp
                 + "ORDER BY doanh_thu DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
             pst.setDate(1, new java.sql.Date(fromDate.getTime()));
             pst.setDate(2, new java.sql.Date(toDate.getTime()));

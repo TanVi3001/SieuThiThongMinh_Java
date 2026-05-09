@@ -45,7 +45,6 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 con.commit();
                 return rows;
             } catch (Exception e) {
-                // Bật còi báo động lỗi
                 System.err.println("=== LỖI KHI THÊM NHÂN VIÊN ===");
                 e.printStackTrace();
                 con.rollback();
@@ -129,6 +128,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     @Override
     public int delete(String id) {
+        // Xóa mềm: set is_deleted = 1
         String sql = "UPDATE EMPLOYEES SET is_deleted = 1 WHERE employee_id = ? AND is_deleted = 0";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             con.setAutoCommit(false);
@@ -173,9 +173,9 @@ public class EmployeeSql implements SqlInterface<Employee> {
     @Override
     public List<Employee> selectAll() {
         List<Employee> list = new ArrayList<>();
-        // 🌟 SỬ DỤNG LEFT JOIN VÀ CASE WHEN ĐỂ TỰ ĐỊNH NGHĨA TRẠNG THÁI
+        // 🌟 SỬ DỤNG LEFT JOIN KẾT HỢP NVL ĐỂ TRÁNH LỖI NULL
         String sql = "SELECT e.*, "
-                + "CASE WHEN a.user_id IS NOT NULL THEN a.status ELSE N'Chưa cấp' END as account_status "
+                + "NVL(a.status, N'Chưa cấp') as account_status "
                 + "FROM EMPLOYEES e "
                 + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
                 + "WHERE e.is_deleted = 0";
@@ -190,10 +190,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 emp.setEmail(rs.getString("email"));
                 emp.setGender(rs.getString("gender"));
                 emp.setRole(rs.getString("role_id"));
-
-                // 🌟 Lấy trạng thái đã được xử lý từ SQL (Đã cấp / Chưa cấp)
                 emp.setAccountStatus(rs.getString("account_status"));
-
                 list.add(emp);
             }
         } catch (SQLException e) {
@@ -204,9 +201,10 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     public ArrayList<Employee> search(String keyword) {
         ArrayList<Employee> list = new ArrayList<>();
+        // 🌟 ĐỒNG BỘ ALIAS (account_status) VÀ NVL
         String sql = "SELECT e.*, "
-                + "NVL(e.role_id, 'Chưa phân bổ') AS actual_role, "
-                + "CASE WHEN a.user_id IS NULL THEN 'Chưa cấp' ELSE 'Đã cấp' END AS acc_status "
+                + "NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
+                + "NVL(a.status, N'Chưa cấp') AS account_status "
                 + "FROM EMPLOYEES e "
                 + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
                 + "WHERE e.is_deleted = 0 AND (LOWER(e.employee_name) LIKE ? OR e.phone LIKE ?)";
@@ -220,7 +218,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                     Employee emp = map(rs);
                     emp.setRole(rs.getString("actual_role"));
                     emp.setRoleId(rs.getString("actual_role"));
-                    emp.setAccountStatus(rs.getString("acc_status"));
+                    emp.setAccountStatus(rs.getString("account_status"));
                     list.add(emp);
                 }
             }
@@ -249,8 +247,9 @@ public class EmployeeSql implements SqlInterface<Employee> {
     @Override
     public List<Employee> selectByCondition(String condition) {
         ArrayList<Employee> list = new ArrayList<>();
-        String sql = "SELECT e.*, NVL(e.role_id, 'Chưa phân bổ') AS actual_role, "
-                + "CASE WHEN a.user_id IS NULL THEN 'Chưa cấp' ELSE 'Đã cấp' END AS acc_status "
+        // 🌟 ĐỒNG BỘ ALIAS VÀ NVL
+        String sql = "SELECT e.*, NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
+                + "NVL(a.status, N'Chưa cấp') AS account_status "
                 + "FROM EMPLOYEES e LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
                 + "WHERE e.is_deleted = 0 " + (condition == null ? "" : condition);
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
@@ -258,7 +257,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 Employee emp = map(rs);
                 emp.setRole(rs.getString("actual_role"));
                 emp.setRoleId(rs.getString("actual_role"));
-                emp.setAccountStatus(rs.getString("acc_status"));
+                emp.setAccountStatus(rs.getString("account_status"));
                 list.add(emp);
             }
         } catch (SQLException e) {
