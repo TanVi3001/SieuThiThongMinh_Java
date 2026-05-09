@@ -203,6 +203,10 @@ public class IconHelper {
         return load("save-money.png", size);
     }
     
+    public static ImageIcon history(int size) {
+        return load("history.png", size);
+    }
+    
     public static ImageIcon accessDenied(int size) {
         ImageIcon originalIcon = load("access_denied_icon.png", size);
         if (originalIcon == null) return null;

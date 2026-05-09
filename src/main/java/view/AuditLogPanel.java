@@ -64,8 +64,9 @@ public class AuditLogPanel extends JPanel {
         txtSearch = createTextField("Tìm kiếm theo tài khoản hoặc IP...");
         txtSearch.setPreferredSize(new Dimension(280, 40));
 
+        // 🔥 ĐÃ GỠ BỎ "ĐĂNG NHẬP", "ĐĂNG XUẤT" KHỎI BỘ LỌC
         cbActionType = new JComboBox<>(new String[]{
-            "Tất cả Hành động", "THÊM MỚI", "CẬP NHẬT", "XÓA", "ĐĂNG NHẬP", "ĐĂNG XUẤT", "XUẤT FILE"
+            "Tất cả Hành động", "THÊM MỚI", "CẬP NHẬT", "XÓA", "XUẤT FILE"
         });
         cbActionType.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbActionType.setPreferredSize(new Dimension(180, 40));
@@ -91,7 +92,7 @@ public class AuditLogPanel extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // 🔥 CỘT SỐ 7: LÀ CỘT ẨN DÙNG ĐỂ CHỨA DỮ LIỆU ĐẦY ĐỦ CHO POPUP
+        // CỘT SỐ 7: LÀ CỘT ẨN DÙNG ĐỂ CHỨA DỮ LIỆU ĐẦY ĐỦ CHO POPUP
         tableModel = new DefaultTableModel(new Object[]{
             "Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "Mã Đối tượng (ID)", "Chi tiết thay đổi", "FullDetails"
         }, 0) {
@@ -158,7 +159,7 @@ public class AuditLogPanel extends JPanel {
     }
 
     // =====================================================================
-    // 🔥 NÂNG CẤP GIAO DIỆN POPUP CHI TIẾT
+    // NÂNG CẤP GIAO DIỆN POPUP CHI TIẾT
     // =====================================================================
     private void showLogDetailDialog() {
         int row = tblLogs.getSelectedRow();
@@ -233,7 +234,7 @@ public class AuditLogPanel extends JPanel {
         int selectedRow = tblLogs.getSelectedRow();
         tableModel.setRowCount(0);
 
-        // Đã bổ sung thêm a.REASON để kéo lý do từ DB lên
+        // 🔥 CHỈ LẤY CÁC LOG KHÔNG PHẢI LÀ ĐĂNG NHẬP/ĐĂNG XUẤT
         StringBuilder sql = new StringBuilder(
             "SELECT TO_CHAR(a.CREATED_AT, 'DD/MM/YYYY HH24:MI:SS') AS log_time, " +
             "acc.username, a.IP_ADDRESS, a.ACTION_TYPE, a.ENTITY_TYPE, a.ENTITY_ID, " +
@@ -248,7 +249,7 @@ public class AuditLogPanel extends JPanel {
             "END) AS target_name " +
             "FROM AUDIT_LOG a " +
             "LEFT JOIN ACCOUNTS acc ON a.ACCOUNT_ID = acc.ACCOUNT_ID " +
-            "WHERE a.IS_DELETED = 0 "
+            "WHERE a.IS_DELETED = 0 AND UPPER(a.ACTION_TYPE) NOT IN ('ĐĂNG NHẬP', 'ĐĂNG XUẤT') "
         );
 
         if (actionFilter != null && !actionFilter.equals("Tất cả Hành động")) {
@@ -299,7 +300,6 @@ public class AuditLogPanel extends JPanel {
                                   "🔹 Quyền hạn trước đó:\n   " + oldValue + "\n\n" +
                                   "💡 Ghi chú:\n   " + reason;
                                   
-                // 🔥 NẾU LÀ CÁC CẬP NHẬT KHÁC (Đổi chức vụ, đổi thông tin...) THÌ DÙNG MẪU NÀY
                 } else if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
                     details = "Cập nhật [" + targetName + "]: " + oldValue + " sang " + newValue; 
                     fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n" +
@@ -324,7 +324,6 @@ public class AuditLogPanel extends JPanel {
                                   "💡 Lý do / Ghi chú:\n   " + reason;
                 }
 
-                // Chú ý: Có truyền thêm fullDetails vào cột số 7
                 tableModel.addRow(new Object[]{time, user, ip, action, entity, entityId, details, fullDetails});
             }
             

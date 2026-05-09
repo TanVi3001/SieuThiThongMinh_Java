@@ -49,6 +49,9 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 case "Quản lý phân quyền":
                     showPanel(new view.RoleManagementPanel());
                     break;
+                case "Lịch sử truy cập":
+                    showPanel(new view.LoginManagementPanel());
+                    break;
                 case "Nhật ký hệ thống":
                     showPanel(new AuditLogPanel()); 
                     break;

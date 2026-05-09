@@ -60,6 +60,7 @@ public class AdminSidebar extends JPanel {
         addMenuItem("Quản lý cửa hàng trưởng", IconHelper.employee(20));
         addMenuItem("Quản lý tài khoản", IconHelper.employee(20)); 
         addMenuItem("Quản lý phân quyền", IconHelper.customer(20));
+        addMenuItem("Lịch sử truy cập", IconHelper.history(20));
         addMenuItem("Nhật ký hệ thống", IconHelper.barChart(20));
         addMenuItem("Cài đặt", IconHelper.settings(20));
 
