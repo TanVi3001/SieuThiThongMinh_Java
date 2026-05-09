@@ -36,7 +36,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     private Map<String, JRadioButton> radioMap = new HashMap<>();
     private ButtonGroup roleGroup;
 
-    // --- Các biến khai báo thêm để xử lý Logic Ẩn/Hiện Thẻ ---
     private JPanel roleCardsContainer;
     private Map<String, JPanel> roleCardMap = new HashMap<>();
     private JButton btnSaveRole;
@@ -167,67 +166,16 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         listItems.setLayout(new BoxLayout(listItems, BoxLayout.Y_AXIS));
         listItems.setBackground(cardWhite);
 
-        java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
+        initTableData();
 
-        Runnable loadData = () -> {
-            listItems.removeAll();
-            String selectedRole = (String) cbRole.getSelectedItem();
-            String selectedDept = (String) cbDept.getSelectedItem();
-            String searchText = txtSearch.getText().toLowerCase().trim();
-
-            for (String[] acc : listAcc) {
-                String accountId = acc[0];
-                String username = acc[1];
-                String fullName = acc[2];
-                String email = acc[3];
-                String roleId = acc[4];
-                boolean isActive = "0".equals(acc[5]);
-
-                String displayRole = "Nhân viên bán hàng";
-                if ("R_ADMIN_ALL".equals(roleId)) {
-                    displayRole = "Quản trị viên";
-                } else if ("R_STORE_MNG".equals(roleId)) {
-                    displayRole = "Quản lý cửa hàng";
-                } else if ("R_STAFF_STOCK".equals(roleId)) {
-                    displayRole = "Nhân viên kho";
-                }
-
-                String displayName = (fullName == null || fullName.isEmpty()) ? username : fullName;
-                String displayEmail = (email == null || email.isEmpty()) ? "Chưa có email" : email;
-
-                boolean matchRole = "Tất cả vai trò".equals(selectedRole) || displayRole.equals(selectedRole);
-                String dept = "Chưa phân bổ";
-                boolean matchDept = "Tất cả phòng ban".equals(selectedDept) || dept.equals(selectedDept);
-                boolean matchSearch = searchText.isEmpty()
-                        || displayName.toLowerCase().contains(searchText)
-                        || displayEmail.toLowerCase().contains(searchText);
-
-                if (matchRole && matchDept && matchSearch) {
-                    listItems.add(createAccountRow(accountId, displayName, displayEmail, dept, displayRole, isActive));
-                }
-            }
-            listItems.revalidate();
-            listItems.repaint();
-        };
-
-        cbRole.addActionListener(e -> loadData.run());
-        cbDept.addActionListener(e -> loadData.run());
+        cbRole.addActionListener(e -> initTableData());
+        cbDept.addActionListener(e -> initTableData());
 
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
-
-            public void removeUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
-
-            public void changedUpdate(javax.swing.event.DocumentEvent e) {
-                loadData.run();
-            }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
         });
-
-        loadData.run();
 
         JScrollPane scroll = new JScrollPane(listItems);
         scroll.setBorder(null);
@@ -290,19 +238,14 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 pnlCurrRole.revalidate();
                 pnlCurrRole.repaint();
 
-                // =========================================================================
-                // LOGIC THAY ĐỔI GIAO DIỆN ĐỘNG THEO YÊU CẦU
-                // =========================================================================
-                roleCardsContainer.removeAll(); // Xóa sạch các thẻ cũ trên màn hình
+                roleCardsContainer.removeAll(); 
 
                 if ("Quản trị viên".equals(role)) {
-                    // NẾU LÀ ADMIN: Chỉ add duy nhất thẻ Quản trị viên và khóa lại
                     roleCardsContainer.add(roleCardMap.get("Quản trị viên"));
 
                     radioMap.get("Quản trị viên").setEnabled(false);
-                    btnSaveRole.setEnabled(false); // Không cho lưu
+                    btnSaveRole.setEnabled(false); 
                 } else {
-                    // NẾU KHÔNG PHẢI ADMIN: Add 3 thẻ nhân viên vào (Giấu thẻ Admin đi)
                     roleCardsContainer.add(roleCardMap.get("Quản lý cửa hàng"));
                     roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
                     roleCardsContainer.add(roleCardMap.get("Nhân viên bán hàng"));
@@ -312,12 +255,11 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     radioMap.get("Quản lý cửa hàng").setEnabled(true);
                     radioMap.get("Nhân viên bán hàng").setEnabled(true);
                     radioMap.get("Nhân viên kho").setEnabled(true);
-                    btnSaveRole.setEnabled(true); // Cho phép lưu
+                    btnSaveRole.setEnabled(true); 
                 }
 
                 roleCardsContainer.revalidate();
                 roleCardsContainer.repaint();
-                // =========================================================================
 
                 if (radioMap.containsKey(role)) {
                     radioMap.get(role).setSelected(true);
@@ -410,24 +352,25 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         roleCardsContainer.setBackground(cardWhite);
         roleCardsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // 🔥 FIX 1: Chuẩn hóa lại ID của Nhân viên kho thành "R_STAFF_STOCK" HOẶC "R_STAFF_VIEW_PROD" 
+        // tùy thuộc vào việc hệ thống DB đang lưu mã nào. Mình để R_STAFF_VIEW_PROD vì nó phổ biến hơn trong Oracle.
         String[][] activeRoles = {
             {"R_ADMIN_ALL", "Quản trị viên", "Toàn quyền quản lý hệ thống, nhân sự và thiết lập."},
             {"R_STORE_MNG", "Quản lý cửa hàng", "Quản lý hoạt động cửa hàng, xem báo cáo."},
             {"R_STAFF_SALE", "Nhân viên bán hàng", "Truy cập màn hình POS, tạo hóa đơn và thanh toán."},
-            {"R_STAFF_STOCK", "Nhân viên kho", "Quản lý sản phẩm, lập phiếu nhập và tồn kho."}
+            {"R_STAFF_VIEW_PROD", "Nhân viên kho", "Quản lý sản phẩm, lập phiếu nhập và tồn kho."}
         };
 
         for (String[] roleInfo : activeRoles) {
             JRadioButton rb = new JRadioButton();
-            rb.setActionCommand(roleInfo[0]);
-            radioMap.put(roleInfo[1], rb);
+            rb.setActionCommand(roleInfo[0]); // ActionCommand chứa ID Role chuẩn
+            radioMap.put(roleInfo[1], rb); // Map chứa Tên Role hiển thị
 
             JPanel card = createRoleCard(roleInfo[1], roleInfo[2], roleGroup, rb);
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
             roleCardMap.put(roleInfo[1], card);
         }
 
-        // Khởi tạo mặc định: Hiển thị 3 role bình thường (Chưa chọn ai thì ẩn Admin)
         roleCardsContainer.add(roleCardMap.get("Quản lý cửa hàng"));
         roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
         roleCardsContainer.add(roleCardMap.get("Nhân viên bán hàng"));
@@ -474,15 +417,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             boolean success = business.sql.rbac.AccountSql.getInstance().updateAccountRole(selectedAccountId, newRoleId);
 
             if (success) {
-                // 1. Ghi log
                 business.service.AuditLogService.logAction(
                         "CẬP NHẬT", "ACCOUNTS", selectedAccountId, selectedOldRole, newRoleId, "Admin thay đổi quyền nhân viên"
                 );
 
-                // 2. HIỆN ĐÚNG 1 THÔNG BÁO DUY NHẤT Ở ĐÂY
                 JOptionPane.showMessageDialog(this, "Cập nhật phân quyền thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
 
-                // 3. Bắn tín hiệu đồng bộ ngầm (Không đẻ thêm popup)
                 AppDataChangedEvent securityEvent = new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED");
                 try {
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
@@ -492,11 +432,16 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     System.err.println("Lỗi đồng bộ: " + ex.getMessage());
                 }
 
-                // 4. Reset giao diện mượt mà (Không bị giật tab)
+                // 🔥 FIX 2: Xóa bỏ dữ liệu đang chọn tạm thời và tải lại bảng ngay lập tức
                 selectedAccountId = "";
-                initTableData();
-                this.revalidate();
-                this.repaint();
+                lblSelectedUser.setText("-");
+                lblSelectedEmail.setText("-");
+                lblSelectedDept.setText("-");
+                pnlCurrRole.removeAll();
+                pnlCurrRole.repaint();
+                roleGroup.clearSelection();
+                
+                initTableData(); 
             } else {
                 JOptionPane.showMessageDialog(this, "Cập nhật thất bại. Vui lòng kiểm tra lại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
@@ -619,16 +564,16 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         return btn;
     }
 
+    // 🔥 FIX 3: TÁCH HÀM LOAD DATA ĐỂ GỌI TRỰC TIẾP, KHÔNG DÙNG RUNNABLE CHO MỤC ĐÍCH SAVE NỮA
     private void initTableData() {
-        if (listItems == null) {
-            return;
-        }
+        if (listItems == null) return;
+        
         listItems.removeAll();
 
         java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
-        String selectedRoleFilter = (String) cbRole.getSelectedItem();
-        String selectedDeptFilter = (String) cbDept.getSelectedItem();
-        String searchText = txtSearch.getText().toLowerCase().trim();
+        String selectedRoleFilter = (cbRole != null && cbRole.getSelectedItem() != null) ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
+        String selectedDeptFilter = (cbDept != null && cbDept.getSelectedItem() != null) ? cbDept.getSelectedItem().toString() : "Tất cả phòng ban";
+        String searchText = (txtSearch != null) ? txtSearch.getText().toLowerCase().trim() : "";
 
         for (String[] acc : listAcc) {
             String roleId = acc[4];
@@ -637,7 +582,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 displayRole = "Quản trị viên";
             } else if ("R_STORE_MNG".equals(roleId)) {
                 displayRole = "Quản lý cửa hàng";
-            } else if ("R_STAFF_STOCK".equals(roleId)) {
+            } else if ("R_STAFF_STOCK".equals(roleId) || "R_STAFF_VIEW_PROD".equals(roleId)) { // BAO TRỌN CẢ 2 MÃ ĐỀ PHÒNG DB
                 displayRole = "Nhân viên kho";
             }
 
@@ -653,6 +598,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 listItems.add(createAccountRow(acc[0], displayName, displayEmail, dept, displayRole, "0".equals(acc[5])));
             }
         }
+        
         listItems.revalidate();
         listItems.repaint();
     }
@@ -757,9 +703,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private void setupRealtimeSync() {
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            // TÌM VÀ XÓA NGAY DÒNG JOptionPane Ở ĐÂY (NẾU CÓ)
-            // Chỉ để trống hoặc cập nhật ngầm thôi:
-            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                // Không làm gì gây ra popup hay giật màn hình ở đây cả
+            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                
+                // Không làm gì gây ra popup hay giật màn hình ở đây cả
             }
         });
     }
