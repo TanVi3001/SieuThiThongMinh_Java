@@ -196,6 +196,8 @@ public class StatisticSql {
                 + "FROM ORDERS WHERE NVL(is_deleted, 0) = 0 AND (UPPER(status) = 'COMPLETED' OR UPPER(status) = N'HOÀN THÀNH') "
                 + "AND order_date >= ? AND order_date < (? + 1) GROUP BY TRUNC(order_date) ORDER BY TRUNC(order_date) DESC";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            System.out.println("DEBUG - From Date: " + new java.sql.Date(fromDate.getTime()));
+            System.out.println("DEBUG - To Date: " + new java.sql.Date(toDate.getTime()));
             pst.setDate(1, new java.sql.Date(fromDate.getTime()));
             pst.setDate(2, new java.sql.Date(toDate.getTime()));
             try (ResultSet rs = pst.executeQuery()) {
@@ -211,52 +213,26 @@ public class StatisticSql {
 
     public List<Object[]> getProductReport(java.util.Date fromDate, java.util.Date toDate) {
         List<Object[]> rows = new ArrayList<>();
-        String sql = "SELECT p.product_id, p.product_name, SUM(od.quantity) as sl, SUM(od.quantity * od.unit_price) as dt, "
-                + "(SELECT NVL(SUM(quantity), 0) FROM INVENTORY WHERE product_id = p.product_id AND is_deleted = 0) as ton "
-                + "FROM PRODUCTS p LEFT JOIN ORDER_DETAILS od ON p.product_id = od.product_id AND od.is_deleted = 0 "
-                + "LEFT JOIN ORDERS o ON od.order_id = o.order_id AND NVL(o.is_deleted, 0) = 0 AND (UPPER(status) = 'COMPLETED' OR UPPER(status) = N'HOÀN THÀNH') "
-                + "AND o.order_date >= ? AND o.order_date < (? + 1) WHERE NVL(p.is_deleted, 0) = 0 "
-                + "GROUP BY p.product_id, p.product_name ORDER BY sl DESC";
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setDate(1, new java.sql.Date(fromDate.getTime()));
-            pst.setDate(2, new java.sql.Date(toDate.getTime()));
-            try (ResultSet rs = pst.executeQuery()) {
-                while (rs.next()) {
-                    rows.add(new Object[]{rs.getString(1), rs.getString(2), rs.getInt(3), rs.getDouble(4), rs.getInt(5)});
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return rows;
-    }
 
-    public List<Object[]> getEmployeeReport(java.util.Date fromDate, java.util.Date toDate) {
-        List<Object[]> rows = new ArrayList<>();
-
-        // Sử dụng INNER JOIN để lọc những người có tài khoản
-        // Thêm điều kiện lọc a.status để ẩn nhân viên "Chưa cấp"
-        String sql = "SELECT e.employee_id, e.employee_name, "
-                + "    NVL(agg.don_thanh_cong, 0), "
-                + "    NVL(agg.don_huy, 0), "
-                + "    NVL(agg.doanh_thu, 0) "
-                + "FROM EMPLOYEES e "
-                + "INNER JOIN ACCOUNTS a ON e.employee_id = a.user_id "
+        // SQL: Lấy tất cả sản phẩm và tính tổng số lượng bán + doanh thu từ chi tiết hóa đơn
+        String sql = "SELECT p.product_id, p.product_name, "
+                + "    NVL(sold.total_qty, 0) as qty_sold, "
+                + "    NVL(sold.total_revenue, 0) as revenue, "
+                + "    p.quantity as current_stock "
+                + "FROM PRODUCTS p "
                 + "LEFT JOIN ( "
-                + "    SELECT employee_id, "
-                + "           COUNT(CASE WHEN (status = N'Hoàn thành') THEN 1 END) as don_thanh_cong, "
-                + "           COUNT(CASE WHEN (status = N'Đã hủy') THEN 1 END) as don_huy, "
-                + "           SUM(CASE WHEN (status = N'Hoàn thành') THEN total_amount ELSE 0 END) as doanh_thu "
-                + "    FROM ORDERS "
-                + "    WHERE is_deleted = 0 "
-                + "      AND order_date >= ? AND order_date < (? + 1) "
-                + "    GROUP BY employee_id "
-                + ") agg ON e.employee_id = agg.employee_id "
-                + "WHERE e.is_deleted = 0 "
-                + "  AND a.is_deleted = 0 "
-                + "  AND e.role_id = 'R_STAFF_SALE' "
-                + "  AND a.status = N'Đã cấp' " // <--- LỌC CHỈ HIỆN NHÂN VIÊN ĐÃ CẤP TÀI KHOẢN
-                + "ORDER BY doanh_thu DESC, don_thanh_cong DESC";
+                + "    SELECT d.product_id, "
+                + "           SUM(d.quantity) as total_qty, "
+                + "           SUM(d.quantity * d.price) as total_revenue "
+                + "    FROM ORDER_DETAILS d "
+                + "    INNER JOIN ORDERS o ON d.order_id = o.order_id "
+                + "    WHERE NVL(o.is_deleted, 0) = 0 "
+                + "      AND (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') "
+                + "      AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "    GROUP BY d.product_id "
+                + ") sold ON p.product_id = sold.product_id "
+                + "WHERE NVL(p.is_deleted, 0) = 0 "
+                + "ORDER BY qty_sold DESC, revenue DESC";
 
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
@@ -266,15 +242,67 @@ public class StatisticSql {
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
                     rows.add(new Object[]{
-                        rs.getString(1), // Mã NV
-                        rs.getString(2), // Tên NV
-                        rs.getInt(3), // Đơn hoàn thành
-                        rs.getInt(4), // Đơn bị hủy
-                        rs.getDouble(5) // Doanh thu
+                        rs.getString(1), // Mã SP
+                        rs.getString(2), // Tên SP
+                        rs.getInt(3), // Số lượng đã bán
+                        rs.getDouble(4), // Doanh thu mang lại
+                        rs.getInt(5) // Tồn kho hiện tại
                     });
                 }
             }
         } catch (Exception e) {
+            System.err.println("❌ Lỗi báo cáo hàng hóa: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return rows;
+    }
+
+    public List<Object[]> getEmployeeReport(java.util.Date fromDate, java.util.Date toDate) {
+        List<Object[]> rows = new ArrayList<>();
+
+        // Câu SQL mới: Dùng LEFT JOIN bên trong Subquery để xử lý ID 
+        // Tránh lỗi ORA-22818 (không cho dùng subquery trong GROUP BY)
+        String sql = "SELECT e.employee_id, e.employee_name, "
+                + "    NVL(agg.don_thanh_cong, 0), "
+                + "    NVL(agg.don_huy, 0), "
+                + "    NVL(agg.doanh_thu, 0) "
+                + "FROM EMPLOYEES e "
+                + "INNER JOIN ACCOUNTS a ON e.employee_id = a.user_id "
+                + "LEFT JOIN ( "
+                + "    SELECT "
+                + "        NVL(a_ref.user_id, o.employee_id) as final_emp_id, "
+                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') THEN 1 END) as don_thanh_cong, "
+                + "        COUNT(CASE WHEN (UPPER(o.status) LIKE '%HỦY%' OR o.status = N'Đã hủy') THEN 1 END) as don_huy, "
+                + "        SUM(CASE WHEN (UPPER(o.status) LIKE '%HOÀN THÀNH%' OR o.status = N'Hoàn thành') THEN o.total_amount ELSE 0 END) as doanh_thu "
+                + "    FROM ORDERS o "
+                + "    LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id " // Bắc cầu qua đây
+                + "    WHERE NVL(o.is_deleted, 0) = 0 "
+                + "      AND o.order_date >= ? AND o.order_date < (? + 1) "
+                + "    GROUP BY NVL(a_ref.user_id, o.employee_id) "
+                + ") agg ON e.employee_id = agg.final_emp_id "
+                + "WHERE NVL(e.is_deleted, 0) = 0 "
+                + "  AND e.role_id = 'R_STAFF_SALE' "
+                + "  AND (UPPER(a.status) LIKE '%HOẠT ĐỘNG%' OR a.status = N'Hoạt động') "
+                + "ORDER BY doanh_thu DESC";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setDate(1, new java.sql.Date(fromDate.getTime()));
+            pst.setDate(2, new java.sql.Date(toDate.getTime()));
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(new Object[]{
+                        rs.getString(1),
+                        rs.getString(2),
+                        rs.getInt(3),
+                        rs.getInt(4),
+                        rs.getDouble(5)
+                    });
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Lỗi báo cáo: " + e.getMessage());
             e.printStackTrace();
         }
         return rows;

@@ -33,6 +33,7 @@ import javax.swing.JTextField;
 import common.events.EventBus;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
+import java.util.Calendar;
 
 public class OrderView extends javax.swing.JPanel {
 
@@ -226,6 +227,12 @@ public class OrderView extends javax.swing.JPanel {
         dcFromDate = new JDateChooser();
         dcToDate = new JDateChooser();
 
+        // ----> ĐOẠN CODE THÊM VÀO ĐỂ HIỆN NGÀY <----
+        Calendar cal = Calendar.getInstance();
+        cal.set(2020, Calendar.JANUARY, 1);
+        dcFromDate.setDate(cal.getTime()); // Ô Từ Ngày hiện mùng 1/1/2020
+        dcToDate.setDate(new Date());      // Ô Đến Ngày hiện Hôm nay
+        // -------------------------------------------
         dcFromDate.setDateFormatString("dd/MM/yyyy");
         dcToDate.setDateFormatString("dd/MM/yyyy");
 
@@ -258,8 +265,12 @@ public class OrderView extends javax.swing.JPanel {
         btnFilterDate.addActionListener(e -> filterByDate());
 
         btnResetFilter.addActionListener(e -> {
-            dcFromDate.setDate(null);
-            dcToDate.setDate(null);
+            // ----> SỬA LẠI THÀNH RESET VỀ NGÀY MẶC ĐỊNH <----
+            Calendar resetCal = Calendar.getInstance();
+            resetCal.set(2020, Calendar.JANUARY, 1);
+            dcFromDate.setDate(resetCal.getTime());
+            dcToDate.setDate(new Date());
+
             cbStatus.setSelectedItem(STATUS_ALL);
             loadDataToTable();
         });
@@ -307,7 +318,14 @@ public class OrderView extends javax.swing.JPanel {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc!");
             return;
         }
-
+// 🌟 THÊM ĐIỀU KIỆN CHẶN Ở ĐÂY: Từ ngày phải <= Đến ngày
+        if (from.after(to)) {
+            JOptionPane.showMessageDialog(this,
+                    "Lỗi: 'Từ ngày' không được lớn hơn 'Đến ngày'!",
+                    "Sai ngày tháng",
+                    JOptionPane.WARNING_MESSAGE);
+            return; // Dừng lại, không cho chạy vòng lặp lọc bên dưới nữa
+        }
         try {
             List<Order> allOrders = OrdersSql.getInstance().selectAll();
             java.util.ArrayList<Order> filtered = new java.util.ArrayList<>();
@@ -346,15 +364,35 @@ public class OrderView extends javax.swing.JPanel {
 
     private void loadDataToTable() {
         try {
-            String role = business.service.SessionManager.getCurrentUser().getRoleId();
-            String empId = business.service.SessionManager.getCurrentUser().getAccountId();
+            List<Order> list = OrdersSql.getInstance().selectAll();
 
-            List<Order> list = OrdersSql.getInstance().selectAll(role, empId);
+            // fallback nếu DB trả null / rỗng
+            if (list == null || list.isEmpty()) {
+                list = OrdersSql.getInstance().selectByCondition("Hoàn thành");
+            }
+
             fillTable(list);
+
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Lỗi tải danh sách đơn hàng: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Lỗi tải danh sách hóa đơn: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
+        addAncestorListener(new javax.swing.event.AncestorListener() {
+            @Override
+            public void ancestorAdded(javax.swing.event.AncestorEvent event) {
+                loadDataToTable();
+            }
+
+            @Override
+            public void ancestorRemoved(javax.swing.event.AncestorEvent event) {
+            }
+
+            @Override
+            public void ancestorMoved(javax.swing.event.AncestorEvent event) {
+            }
+        });
     }
 
     private void fillTable(List<Order> list) {
