@@ -9,8 +9,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import model.order.Order;
+import model.order.OrderDetail;
+import common.exception.ConcurrentCheckoutException;
 
 public class OrdersSql implements SqlInterface<Order> {
 
@@ -555,5 +559,81 @@ public class OrdersSql implements SqlInterface<Order> {
         }
 
         return list;
+    }
+
+    // Nằm trong OrderService.java hoặc OrdersSql.java
+    public boolean processCheckoutSecure(Order order, List<OrderDetail> details) throws ConcurrentCheckoutException {
+        String insertOrderSql = "INSERT INTO ORDERS (order_id, employee_id, customer_id, total_amount, status, order_date) VALUES (?, ?, ?, ?, 'COMPLETED', SYSDATE)";
+        String insertDetailSql = "INSERT INTO ORDER_DETAILS (order_detail_id, order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?)";
+        // 🌟 ATOMIC UPDATE TRÊN BẢNG INVENTORY: Tuyệt đối không để âm kho
+        String updateStockSql = "UPDATE INVENTORY SET quantity = quantity - ? WHERE product_id = ? AND quantity >= ?";
+
+        // Dùng để lấy số lượng thực tế trả về cho user nếu thất bại
+        String checkStockSql = "SELECT quantity FROM INVENTORY WHERE product_id = ?";
+
+        try (Connection con = DatabaseConnection.getConnection()) {
+            con.setAutoCommit(false); // Bắt đầu Transaction
+
+            try (PreparedStatement psOrder = con.prepareStatement(insertOrderSql); PreparedStatement psDetail = con.prepareStatement(insertDetailSql); PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql); PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
+
+                // 1. Tạo hóa đơn
+                psOrder.setString(1, order.getOrderId());
+                // ... set các tham số khác cho Order ...
+                psOrder.executeUpdate();
+
+                Map<String, Integer> failedItems = new HashMap<>();
+
+                // 2. Xử lý từng sản phẩm trong giỏ
+                for (OrderDetail d : details) {
+                    // Trừ kho an toàn
+                    psUpdateStock.setInt(1, d.getQuantity());
+                    psUpdateStock.setString(2, d.getProductId());
+                    psUpdateStock.setInt(3, d.getQuantity()); // ĐK: Tồn kho phải >= SL Yêu cầu
+
+                    int updatedRows = psUpdateStock.executeUpdate();
+
+                    if (updatedRows == 0) {
+                        // ❌ THẤT BẠI: Sản phẩm này đã bị ai đó mua hết hoặc không đủ
+                        // Truy vấn tồn thực tế hiện tại để báo cho user
+                        psCheckStock.setString(1, d.getProductId());
+                        try (ResultSet rs = psCheckStock.executeQuery()) {
+                            if (rs.next()) {
+                                failedItems.put(d.getProductId(), rs.getInt("quantity"));
+                            } else {
+                                failedItems.put(d.getProductId(), 0); // Không tìm thấy kho
+                            }
+                        }
+                    } else {
+                        // ✔ THÀNH CÔNG: Thêm vào Order Details
+                        psDetail.setString(1, "OD" + System.nanoTime()); // Tạo ID tự động
+                        psDetail.setString(2, order.getOrderId());
+                        psDetail.setString(3, d.getProductId());
+                        psDetail.setInt(4, d.getQuantity());
+                        psDetail.setDouble(5, d.getUnitPrice());
+                        psDetail.addBatch();
+                    }
+                }
+
+                // 3. Nếu có bất kỳ item nào lỗi -> HỦY BỎ TOÀN BỘ
+                if (!failedItems.isEmpty()) {
+                    con.rollback(); // Khôi phục lại trạng thái kho ban đầu
+                    throw new ConcurrentCheckoutException(failedItems); // Ném lỗi cho UI bắt
+                }
+
+                // Nếu mọi thứ OK -> Lưu Database
+                psDetail.executeBatch();
+                con.commit();
+                return true;
+
+            } catch (SQLException e) {
+                con.rollback();
+                e.printStackTrace();
+            } finally {
+                con.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }
