@@ -18,7 +18,6 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import model.order.Customer;
 import view.components.IconHelper;
-import business.sql.sales_order.CustomersSql;
 
 public class CustomerView extends JPanel {
 
@@ -73,7 +72,7 @@ public class CustomerView extends JPanel {
             List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
             for (Customer c : list) {
                 if (c.getCustomerName() != null && !c.getCustomerName().isEmpty()) {
-                    String phone = c.getPhone() != null ? c.getPhone() : "N/A";
+                    String phone = c.getPhone() != null ? maskPhone(c.getPhone()) : "N/A"; // LÀM MỜ LUÔN SĐT Ở SUGGESTION
                     customerSearchList.add(c.getCustomerName() + " - " + phone);
                 }
             }
@@ -208,8 +207,9 @@ public class CustomerView extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
+        // 🔥 THÊM CỘT ẨN "RawId" (Cột 7) VÀ "RawPhone" (Cột 8)
         tableModel = new DefaultTableModel(
-                new Object[]{"Mã KH", "Tên khách hàng", "SĐT", "Email", "Địa chỉ", "Tổng chi", "Hạng"}, 0
+                new Object[]{"Mã KH", "Tên khách hàng", "SĐT", "Email", "Địa chỉ", "Tổng chi", "Hạng", "RawId", "RawPhone"}, 0
         ) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -218,6 +218,11 @@ public class CustomerView extends JPanel {
         };
 
         tblCustomers = new JTable(tableModel);
+        
+        // Ẩn 2 cột chứa dữ liệu gốc
+        tblCustomers.removeColumn(tblCustomers.getColumnModel().getColumn(8)); // Giấu RawPhone
+        tblCustomers.removeColumn(tblCustomers.getColumnModel().getColumn(7)); // Giấu RawId
+        
         tblCustomers.setRowHeight(35);
         tblCustomers.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         tblCustomers.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -244,12 +249,14 @@ public class CustomerView extends JPanel {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 int row = tblCustomers.getSelectedRow();
+                int modelRow = tblCustomers.convertRowIndexToModel(row);
                 if (row >= 0) {
-                    txtId.setText(tblCustomers.getValueAt(row, 0).toString());
-                    txtName.setText(tblCustomers.getValueAt(row, 1).toString());
-                    txtPhone.setText(tblCustomers.getValueAt(row, 2).toString());
-                    txtEmail.setText(String.valueOf(tblCustomers.getValueAt(row, 3)));
-                    txtAddress.setText(String.valueOf(tblCustomers.getValueAt(row, 4)));
+                    // 🔥 LẤY LẠI MÃ VÀ SĐT GỐC TỪ CỘT ẨN
+                    txtId.setText(tableModel.getValueAt(modelRow, 7).toString()); // RawId
+                    txtName.setText(tableModel.getValueAt(modelRow, 1).toString());
+                    txtPhone.setText(tableModel.getValueAt(modelRow, 8).toString()); // RawPhone
+                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 3)));
+                    txtAddress.setText(String.valueOf(tableModel.getValueAt(modelRow, 4)));
                 }
             }
         });
@@ -260,10 +267,10 @@ public class CustomerView extends JPanel {
             if (c == null) {
                 return;
             }
-            c.setCustomerId("CUS" + System.currentTimeMillis()); // Generate Fake ID (Bên Oracle thường dùng Sequence)
+            c.setCustomerId("CUS" + System.currentTimeMillis()); // Generate Fake ID 
 
             try {
-                if (CustomersSql.getInstance().insert(c) > 0) { // Tuỳ theo cấu trúc hàm Insert của nhóm ông
+                if (CustomersSql.getInstance().insert(c) > 0) { 
                     SyncVersionDao.bumpVersion("CUSTOMERS");
                     RealtimeClient.send("CUSTOMERS_CHANGED");
 
@@ -396,13 +403,15 @@ public class CustomerView extends JPanel {
                         || phone.contains(keyword)) {
 
                     tableModel.addRow(new Object[]{
-                        c.getCustomerId(),
+                        maskSensitiveInfo(c.getCustomerId()), // Ẩn Mã
                         c.getCustomerName(),
-                        c.getPhone(),
+                        maskPhone(c.getPhone()), // Ẩn SĐT
                         c.getEmail(),
                         c.getAddress(),
                         String.format("%,.0f VNĐ", c.getTotalSpending()),
-                        c.getMemberRank()
+                        c.getMemberRank(),
+                        c.getCustomerId(), // Cột 7: Mã Gốc
+                        c.getPhone() // Cột 8: SĐT Gốc
                     });
                 }
             }
@@ -418,15 +427,15 @@ public class CustomerView extends JPanel {
             List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
             for (Customer c : list) {
                 tableModel.addRow(new Object[]{
-                    c.getCustomerId(),
+                    maskSensitiveInfo(c.getCustomerId()), // 🔥 GỌI HÀM LÀM MỜ MÃ
                     c.getCustomerName(),
-                    c.getPhone(),
+                    maskPhone(c.getPhone()), // 🔥 GỌI HÀM LÀM MỜ SĐT
                     c.getEmail(),
                     c.getAddress(),
-                    // 🌟 Hiển thị tiền định dạng chuẩn VNĐ
                     String.format("%,.0f VNĐ", c.getTotalSpending()),
-                    // 🌟 Gọi hàm tính hạng tự động từ model
-                    c.getMemberRank()
+                    c.getMemberRank(),
+                    c.getCustomerId(), // CỘT SỐ 7: MÃ GỐC
+                    c.getPhone() // CỘT SỐ 8: SĐT GỐC
                 });
             }
         } catch (Exception e) {
@@ -437,6 +446,41 @@ public class CustomerView extends JPanel {
     public void refreshTable() {
         loadAutoCompleteData();
         loadCustomerData();
+    }
+    
+    // =========================================================================
+    // HÀM TIỆN ÍCH: LÀM MỜ THÔNG TIN NHẠY CẢM (MASKING)
+    // =========================================================================
+    private String maskSensitiveInfo(String info) {
+        if (info == null || info.isEmpty()) {
+            return "Chưa có dữ liệu";
+        }
+        
+        // Cấu trúc ID thường (CUS17178...)
+        if (info.length() > 6) { 
+            String visiblePart = info.substring(0, 6);
+            StringBuilder hiddenPart = new StringBuilder();
+            for (int i = 6; i < info.length(); i++) {
+                hiddenPart.append("*");
+            }
+            return visiblePart + hiddenPart.toString();
+        }
+        return info; 
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.isEmpty() || phone.length() < 8) {
+            return "Chưa có dữ liệu";
+        }
+        // VD: 0987654321 -> 098****321
+        int len = phone.length();
+        String start = phone.substring(0, 3);
+        String end = phone.substring(len - 3);
+        StringBuilder masked = new StringBuilder();
+        for (int i = 3; i < len - 3; i++) {
+            masked.append("*");
+        }
+        return start + masked.toString() + end;
     }
 
     private void styleSearchBox(JComboBox<String> cb) {

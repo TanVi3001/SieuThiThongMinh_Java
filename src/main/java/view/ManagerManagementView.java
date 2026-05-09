@@ -72,8 +72,7 @@ public class ManagerManagementView extends JPanel {
             EventBus.subscribe(AppDataChangedEvent.class, event -> {
                 if (event.getType() == AppEventType.ACCOUNT_SECURITY
                         || event.getType() == AppEventType.EMPLOYEES) {
-                    // 🌟 FIX GIẬT LAG: Phải bỏ vào invokeLater để Swing vẽ lại bảng mượt mà
-                    SwingUtilities.invokeLater(this::loadDataToTable);
+                    loadDataToTable();
                 }
             });
         } catch (Exception e) {
@@ -85,9 +84,6 @@ public class ManagerManagementView extends JPanel {
         managerNameList.clear();
         try {
             List<Employee> list = employeeSql.selectAll();
-            if (list == null) {
-                return;
-            }
             for (Employee e : list) {
                 String r = e.getRole() != null ? e.getRole().toUpperCase() : "";
                 String rId = e.getRoleId() != null ? e.getRoleId().toUpperCase() : "";
@@ -208,13 +204,19 @@ public class ManagerManagementView extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã QL", "Họ và tên", "Số ĐT", "Email", "Cấp tài khoản", "Giới tính"}, 0) {
+        // 🔥 THÊM CỘT ẨN "RawPhone" CHỨA SĐT GỐC VÀO CỘT SỐ 8
+        tableModel = new DefaultTableModel(new Object[]{"Mã QL", "Họ và tên", "Số ĐT", "Email", "Cấp tài khoản", "Giới tính", "RawEmail", "RawId", "RawPhone"}, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
                 return false;
             }
         };
         tblManagers = new JTable(tableModel);
+        
+        // Ẩn 3 cột chứa dữ liệu gốc
+        tblManagers.removeColumn(tblManagers.getColumnModel().getColumn(8)); // Giấu RawPhone
+        tblManagers.removeColumn(tblManagers.getColumnModel().getColumn(7)); // Giấu RawId
+        tblManagers.removeColumn(tblManagers.getColumnModel().getColumn(6)); // Giấu RawEmail
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblManagers);
@@ -384,6 +386,7 @@ public class ManagerManagementView extends JPanel {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(this.c);
+            g2.setStroke(new BasicStroke(1.2f));
             g2.drawRoundRect(x, y, w - 1, h - 1, r, r);
             g2.dispose();
         }
@@ -404,14 +407,15 @@ public class ManagerManagementView extends JPanel {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 int row = tblManagers.getSelectedRow();
+                int modelRow = tblManagers.convertRowIndexToModel(row);
                 if (row >= 0) {
-                    txtId.setText(String.valueOf(tblManagers.getValueAt(row, 0)));
-                    txtName.setText(String.valueOf(tblManagers.getValueAt(row, 1)));
-                    txtPhone.setText(String.valueOf(tblManagers.getValueAt(row, 2)));
-                    txtEmail.setText(String.valueOf(tblManagers.getValueAt(row, 3)));
+                    // LẤY LẠI DỮ LIỆU GỐC TỪ CÁC CỘT ẨN
+                    txtId.setText(String.valueOf(tableModel.getValueAt(modelRow, 7))); // Mã QL gốc
+                    txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, 1)));
+                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 8))); // SĐT gốc
+                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 6))); // Email gốc
 
-                    // 🌟 BẢO MẬT: KHÓA EMAIL NẾU ĐÃ CẤP TÀI KHOẢN 🌟
-                    String accStatus = String.valueOf(tblManagers.getValueAt(row, 4));
+                    String accStatus = String.valueOf(tableModel.getValueAt(modelRow, 4));
                     boolean isActivated = accStatus != null && accStatus.trim().equalsIgnoreCase("Đã cấp");
 
                     if (isActivated) {
@@ -422,7 +426,7 @@ public class ManagerManagementView extends JPanel {
                         txtEmail.setToolTipText(null);
                     }
 
-                    String gender = String.valueOf(tblManagers.getValueAt(row, 5));
+                    String gender = String.valueOf(tableModel.getValueAt(modelRow, 5));
                     rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
                     rdoFemale.setSelected("Nữ".equalsIgnoreCase(gender));
                 }
@@ -524,13 +528,11 @@ public class ManagerManagementView extends JPanel {
             String accStatus = "";
             try {
                 List<Employee> list = employeeSql.selectAll();
-                if (list != null) {
-                    for (Employee ex : list) {
-                        if (ex.getEmployeeId().equals(id)) {
-                            oldEmail = ex.getEmail() != null ? ex.getEmail() : "";
-                            accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : "";
-                            break;
-                        }
+                for (Employee ex : list) {
+                    if (ex.getEmployeeId().equals(id)) {
+                        oldEmail = ex.getEmail() != null ? ex.getEmail() : "";
+                        accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : "";
+                        break;
                     }
                 }
             } catch (Exception ex) {
@@ -568,6 +570,7 @@ public class ManagerManagementView extends JPanel {
                 RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
 
                 if (emailChanged && !isActivated) {
+
                     try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET email = ? WHERE user_id = ?")) {
                         ps.setString(1, emp.getEmail());
                         ps.setString(2, emp.getEmployeeId());
@@ -656,9 +659,6 @@ public class ManagerManagementView extends JPanel {
 
     private void updateTable(List<Employee> list) {
         tableModel.setRowCount(0);
-        if (list == null) {
-            return;
-        }
         for (Employee emp : list) {
             String role = emp.getRole() != null ? emp.getRole().trim().toUpperCase() : "";
             String roleId = emp.getRoleId() != null ? emp.getRoleId().trim().toUpperCase() : "";
@@ -667,15 +667,61 @@ public class ManagerManagementView extends JPanel {
                     || role.contains("QUẢN LÝ") || roleId.contains("QUẢN LÝ")) {
 
                 tableModel.addRow(new Object[]{
-                    emp.getEmployeeId(),
+                    maskSensitiveInfo(emp.getEmployeeId()), 
                     emp.getEmployeeName(),
-                    emp.getPhone(),
-                    emp.getEmail(),
-                    emp.getAccountStatus(),
-                    emp.getGender()
+                    maskPhone(emp.getPhone()), // 🔥 HIỂN THỊ SĐT ĐÃ CHE LÊN BẢNG
+                    maskSensitiveInfo(emp.getEmail()), 
+                    emp.getAccountStatus(), 
+                    emp.getGender(),
+                    emp.getEmail(), // CỘT 6: EMAIL GỐC
+                    emp.getEmployeeId(), // CỘT 7: MÃ GỐC 
+                    emp.getPhone() // CỘT 8: SĐT GỐC ĐỂ DÙNG KHI CLICK ĐÚP
                 });
             }
         }
+    }
+
+    // =========================================================================
+    // HÀM TIỆN ÍCH: LÀM MỜ THÔNG TIN NHẠY CẢM (MASKING)
+    // =========================================================================
+    private String maskSensitiveInfo(String info) {
+        if (info == null || info.isEmpty() || info.equals("Chưa có email")) {
+            return "Chưa có dữ liệu";
+        }
+        
+        int atIndex = info.indexOf("@");
+        if (atIndex > 0) { // Nếu là email
+            String localPart = info.substring(0, atIndex);
+            String domainPart = info.substring(atIndex);
+            if (localPart.length() > 3) {
+                return localPart.substring(0, 3) + "***" + domainPart;
+            } else {
+                return "***" + domainPart;
+            }
+        } else if (info.length() > 6) { // Nếu là Mã NV
+            String visiblePart = info.substring(0, 6);
+            StringBuilder hiddenPart = new StringBuilder();
+            for (int i = 6; i < info.length(); i++) {
+                hiddenPart.append("*");
+            }
+            return visiblePart + hiddenPart.toString();
+        }
+        return info; 
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.isEmpty() || phone.length() < 8) {
+            return "Chưa có dữ liệu";
+        }
+        // VD: 0987654321 -> 098****321
+        int len = phone.length();
+        String start = phone.substring(0, 3);
+        String end = phone.substring(len - 3);
+        StringBuilder masked = new StringBuilder();
+        for (int i = 3; i < len - 3; i++) {
+            masked.append("*");
+        }
+        return start + masked.toString() + end;
     }
 
     private Employee getManagerFromForm() {
@@ -755,9 +801,6 @@ public class ManagerManagementView extends JPanel {
     private boolean isPhoneDuplicate(String phone, String excludeId) {
         try {
             List<Employee> list = employeeSql.selectAll();
-            if (list == null) {
-                return false;
-            }
             for (Employee e : list) {
                 if (e.getPhone() != null && e.getPhone().equals(phone)) {
                     if (excludeId != null && e.getEmployeeId().equals(excludeId)) {

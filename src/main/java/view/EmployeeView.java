@@ -220,8 +220,8 @@ public class EmployeeView extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // 🔥 THÊM CỘT SỐ 7 ĐỂ CHỨA MÃ NV GỐC
-        tableModel = new DefaultTableModel(new Object[]{"Mã NV", "Tên nhân viên", "Số ĐT", "Email", "Cấp tài khoản", "Chức vụ", "Giới tính", "RawId"}, 0) {
+        // 🔥 THÊM CỘT ẨN "RawPhone" CHỨA SĐT GỐC VÀO CỘT SỐ 9
+        tableModel = new DefaultTableModel(new Object[]{"Mã NV", "Tên nhân viên", "Số ĐT", "Email", "Cấp tài khoản", "Chức vụ", "Giới tính", "RawEmail", "RawId", "RawPhone"}, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
                 return false;
@@ -229,8 +229,10 @@ public class EmployeeView extends JPanel {
         };
         tblEmployees = new JTable(tableModel);
         
-        // Ẩn cột số 7 đi
-        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(7));
+        // Ẩn 3 cột chứa dữ liệu gốc
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(9)); // Giấu RawPhone
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(8)); // Giấu RawId
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(7)); // Giấu RawEmail
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblEmployees);
@@ -257,11 +259,12 @@ public class EmployeeView extends JPanel {
                         clearForm();
                         return;
                     }
-                    // LẤY LẠI MÃ NV GỐC TỪ CỘT SỐ 7
-                    txtId.setText(String.valueOf(tableModel.getValueAt(modelRow, 7)));
+                    
+                    // LẤY LẠI DỮ LIỆU GỐC TỪ CÁC CỘT ẨN
+                    txtId.setText(String.valueOf(tableModel.getValueAt(modelRow, 8))); // Mã NV gốc
                     txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, 1)));
-                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 2)));
-                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 3))); // Lấy trực tiếp cột hiển thị
+                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 9))); // SĐT gốc
+                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 7))); // Email gốc
 
                     String status = String.valueOf(tableModel.getValueAt(modelRow, 4));
                     boolean isActivated = status != null && status.trim().equalsIgnoreCase("Đã cấp");
@@ -540,28 +543,38 @@ public class EmployeeView extends JPanel {
         list.sort((e1, e2) -> Integer.compare(getRoleRank(e1.getRole()), getRoleRank(e2.getRole())));
         for (Employee emp : list) {
             tableModel.addRow(new Object[]{
-                maskSensitiveInfo(emp.getEmployeeId()), // HIỂN THỊ MÃ ĐÃ CHE LÊN BẢNG
+                maskSensitiveInfo(emp.getEmployeeId()), 
                 emp.getEmployeeName(), 
-                emp.getPhone(),
-                emp.getEmail(), 
+                maskPhone(emp.getPhone()), // 🔥 HIỂN THỊ SĐT ĐÃ CHE LÊN BẢNG
+                maskSensitiveInfo(emp.getEmail()), 
                 emp.getAccountStatus(), 
                 emp.getRole(), 
                 emp.getGender(),
-                emp.getEmployeeId() // CỘT SỐ 7: MÃ GỐC ĐỂ DÙNG KHI CLICK ĐÚP
+                emp.getEmail(), // CỘT 7: EMAIL GỐC
+                emp.getEmployeeId(), // CỘT 8: MÃ GỐC 
+                emp.getPhone() // CỘT 9: SĐT GỐC ĐỂ DÙNG KHI CLICK ĐÚP
             });
         }
     }
 
     // =========================================================================
-    // HÀM TIỆN ÍCH: LÀM MỜ THÔNG TIN NHẠY CẢM (MASKING MÃ ID)
+    // HÀM TIỆN ÍCH: LÀM MỜ THÔNG TIN NHẠY CẢM
     // =========================================================================
     private String maskSensitiveInfo(String info) {
-        if (info == null || info.isEmpty()) {
+        if (info == null || info.isEmpty() || info.equals("Chưa có email")) {
             return "Chưa có dữ liệu";
         }
         
-        // Cấu trúc của bác là EMP + Timestamp (EMP17178...)
-        if (info.length() > 6) { 
+        int atIndex = info.indexOf("@");
+        if (atIndex > 0) { // Nếu là email
+            String localPart = info.substring(0, atIndex);
+            String domainPart = info.substring(atIndex);
+            if (localPart.length() > 3) {
+                return localPart.substring(0, 3) + "***" + domainPart;
+            } else {
+                return "***" + domainPart;
+            }
+        } else if (info.length() > 6) { // Nếu là Mã NV
             String visiblePart = info.substring(0, 6);
             StringBuilder hiddenPart = new StringBuilder();
             for (int i = 6; i < info.length(); i++) {
@@ -570,6 +583,21 @@ public class EmployeeView extends JPanel {
             return visiblePart + hiddenPart.toString();
         }
         return info; 
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.isEmpty() || phone.length() < 8) {
+            return "Chưa có dữ liệu";
+        }
+        // VD: 0987654321 -> 098****321
+        int len = phone.length();
+        String start = phone.substring(0, 3);
+        String end = phone.substring(len - 3);
+        StringBuilder masked = new StringBuilder();
+        for (int i = 3; i < len - 3; i++) {
+            masked.append("*");
+        }
+        return start + masked.toString() + end;
     }
 
     private int getRoleRank(String role) {
