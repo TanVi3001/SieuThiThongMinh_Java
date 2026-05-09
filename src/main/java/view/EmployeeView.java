@@ -52,17 +52,13 @@ public class EmployeeView extends JPanel {
         setBackground(bgLight);
         setBorder(new EmptyBorder(20, 30, 20, 30));
 
-        // Khởi tạo danh sách vai trò cố định
         roleList.add("R_STAFF_SALE");
         roleList.add("R_STAFF_VIEW_PROD");
 
         initUI();
         initEvents();
 
-        // Nạp dữ liệu lần đầu
         refreshAllData();
-
-        // ĐĂNG KÝ REAL-TIME
         setupRealtimeSync();
     }
 
@@ -70,12 +66,11 @@ public class EmployeeView extends JPanel {
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e.getType() == AppEventType.EMPLOYEES || e.getType() == AppEventType.ACCOUNT_SECURITY) {
                 System.out.println("🛡️ [EmployeeView] Detecting data changes, refreshing UI...");
-                refreshAllData(); // Gọi hàm làm mới toàn bộ
+                refreshAllData(); 
             }
         });
     }
 
-    // Hàm này dùng để nạp lại cả Bảng và Danh sách tìm kiếm
     private void refreshAllData() {
         SwingUtilities.invokeLater(() -> {
             loadDataToTable();
@@ -90,7 +85,7 @@ public class EmployeeView extends JPanel {
 
         employeeNameList.clear();
         cbSearch.removeAllItems();
-        cbSearch.addItem(""); // Item trống mặc định
+        cbSearch.addItem(""); 
 
         try {
             List<Employee> list = employeeSql.selectAll();
@@ -115,7 +110,6 @@ public class EmployeeView extends JPanel {
     }
 
     private void initUI() {
-        // --- HEADER ---
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setOpaque(false);
 
@@ -156,11 +150,9 @@ public class EmployeeView extends JPanel {
         headerPanel.add(toolPanel, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
-        // --- BỐ CỤC CHÍNH ---
         JPanel centerPanel = new JPanel(new BorderLayout(25, 0));
         centerPanel.setOpaque(false);
 
-        // FORM BÊN TRÁI
         RoundedPanel formCard = new RoundedPanel(20, cardWhite);
         formCard.setPreferredSize(new Dimension(360, 0));
         formCard.setLayout(new GridBagLayout());
@@ -224,18 +216,21 @@ public class EmployeeView extends JPanel {
         gbc.gridy = y++;
         formCard.add(btnGrid, gbc);
 
-        // BẢNG BÊN PHẢI
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã NV", "Tên nhân viên", "Số ĐT", "Email", "Cấp tài khoản", "Chức vụ", "Giới tính"}, 0) {
+        // 🔥 THÊM CỘT SỐ 7 ĐỂ CHỨA MÃ NV GỐC
+        tableModel = new DefaultTableModel(new Object[]{"Mã NV", "Tên nhân viên", "Số ĐT", "Email", "Cấp tài khoản", "Chức vụ", "Giới tính", "RawId"}, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
                 return false;
             }
         };
         tblEmployees = new JTable(tableModel);
+        
+        // Ẩn cột số 7 đi
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(7));
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblEmployees);
@@ -249,49 +244,46 @@ public class EmployeeView extends JPanel {
     }
 
     private void initEvents() {
-        // --- 1. SỰ KIỆN CLICK BẢNG ---
         tblEmployees.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 int row = tblEmployees.getSelectedRow();
+                int modelRow = tblEmployees.convertRowIndexToModel(row);
                 if (row >= 0) {
-                    String role = String.valueOf(tblEmployees.getValueAt(row, 5));
-                    // Bảo vệ tài khoản cấp cao
+                    String role = String.valueOf(tableModel.getValueAt(modelRow, 5));
                     if (role.contains("ADMIN") || role.contains("MNG") || role.contains("Quản")) {
                         JOptionPane.showMessageDialog(EmployeeView.this, "⚠️ Bạn không có quyền thao tác trên hồ sơ cấp quản lý!");
                         tblEmployees.clearSelection();
                         clearForm();
                         return;
                     }
-                    txtId.setText(String.valueOf(tblEmployees.getValueAt(row, 0)));
-                    txtName.setText(String.valueOf(tblEmployees.getValueAt(row, 1)));
-                    txtPhone.setText(String.valueOf(tblEmployees.getValueAt(row, 2)));
-                    txtEmail.setText(String.valueOf(tblEmployees.getValueAt(row, 3)));
+                    // LẤY LẠI MÃ NV GỐC TỪ CỘT SỐ 7
+                    txtId.setText(String.valueOf(tableModel.getValueAt(modelRow, 7)));
+                    txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, 1)));
+                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 2)));
+                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 3))); // Lấy trực tiếp cột hiển thị
 
-                    // 🌟 BẢO MẬT: KHÓA EMAIL NẾU ĐÃ CẤP TÀI KHOẢN 🌟
-                    String status = String.valueOf(tblEmployees.getValueAt(row, 4));
-                    // Check đúng chữ "Đã cấp" theo DataGrip của bạn
+                    String status = String.valueOf(tableModel.getValueAt(modelRow, 4));
                     boolean isActivated = status != null && status.trim().equalsIgnoreCase("Đã cấp");
 
                     if (isActivated) {
-                        txtEmail.setEnabled(false); // Xám xịt ô Email
+                        txtEmail.setEnabled(false); 
                         txtEmail.setToolTipText("Tài khoản đã được cấp, không thể thay đổi Email.");
                     } else {
-                        txtEmail.setEnabled(true); // Trắng sáng bình thường
+                        txtEmail.setEnabled(true); 
                         txtEmail.setToolTipText(null);
                     }
 
                     JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
                     roleEditor.setText(role);
 
-                    String gender = String.valueOf(tblEmployees.getValueAt(row, 6));
+                    String gender = String.valueOf(tableModel.getValueAt(modelRow, 6));
                     rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
                     rdoFemale.setSelected("Nữ".equalsIgnoreCase(gender));
                 }
             }
         });
 
-        // --- 2. THÊM MỚI (CÓ REAL-TIME & GỬI MAIL CHUẨN XÁC) ---
         btnAdd.addActionListener(e -> {
             Employee emp = getEmployeeFromForm();
             if (emp == null) {
@@ -316,13 +308,11 @@ public class EmployeeView extends JPanel {
                 RealtimeClient.send("EMPLOYEES_CHANGED");
 
                 try {
-                    // Khởi tạo mã Token trong DB
                     new ActivationTokenService().issueToken(emp.getEmployeeId());
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
 
-                // 🌟 FIX: LẤY MÃ TOKEN THỰC TẾ TỪ DATABASE ĐỂ GỬI MAIL
                 String actualToken = emp.getEmployeeId();
                 String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
                 try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
@@ -337,7 +327,7 @@ public class EmployeeView extends JPanel {
 
                 final String email = emp.getEmail();
                 final String name = emp.getEmployeeName();
-                final String code = actualToken; // Đã truyền đúng mã Token
+                final String code = actualToken; 
 
                 new Thread(() -> {
                     boolean ok = business.service.EmailService.sendActivationEmail(email, name, code);
@@ -355,7 +345,6 @@ public class EmployeeView extends JPanel {
             }
         });
 
-        // --- 3. CẬP NHẬT (ĐỒNG BỘ ACCOUNTS & GỬI LẠI MÃ MỚI) ---
         btnUpdate.addActionListener(e -> {
             String id = txtId.getText();
             if (id.isEmpty() || id.startsWith("Mã")) {
@@ -384,7 +373,6 @@ public class EmployeeView extends JPanel {
             boolean isActivated = accStatus.equalsIgnoreCase("Đã cấp");
             boolean emailChanged = !oldEmail.equalsIgnoreCase(emp.getEmail());
 
-            // 🌟 BẢO MẬT: CHẶN ĐỔI EMAIL NẾU ĐÃ CẤP 🌟
             if (emailChanged && isActivated) {
                 JOptionPane.showMessageDialog(this, "Tài khoản của nhân viên này ĐÃ ĐƯỢC CẤP!\nNghiêm cấm thay đổi Email để bảo mật.", "Bảo mật tài khoản", JOptionPane.ERROR_MESSAGE);
                 txtEmail.setText(oldEmail);
@@ -406,10 +394,8 @@ public class EmployeeView extends JPanel {
             if (employeeSql.update(emp) > 0) {
                 RealtimeClient.send("EMPLOYEES_CHANGED");
 
-                // 🌟 NẾU EMAIL BỊ THAY ĐỔI & CHƯA CẤP -> ĐỒNG BỘ VÀO BẢNG ACCOUNTS VÀ GỬI LẠI MÃ 🌟
                 if (emailChanged && !isActivated) {
 
-                    // a. Đồng bộ Email sang bảng ACCOUNTS để RegisterView nhận diện được
                     try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET email = ? WHERE user_id = ?")) {
                         ps.setString(1, emp.getEmail());
                         ps.setString(2, emp.getEmployeeId());
@@ -418,13 +404,11 @@ public class EmployeeView extends JPanel {
                         System.err.println("Lỗi đồng bộ email sang Accounts: " + ex.getMessage());
                     }
 
-                    // b. Reset mã Token mới
                     try {
                         new ActivationTokenService().issueToken(emp.getEmployeeId());
                     } catch (Exception ex) {
                     }
 
-                    // c. Lấy Mã Kích Hoạt (Token) thực tế từ Database để gửi mail
                     String actualToken = emp.getEmployeeId();
                     String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
                     try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
@@ -437,7 +421,6 @@ public class EmployeeView extends JPanel {
                     } catch (Exception ex) {
                     }
 
-                    // d. Gửi Email
                     final String emailToSend = emp.getEmail();
                     final String nameToSend = emp.getEmployeeName();
                     final String codeToSend = actualToken;
@@ -463,7 +446,6 @@ public class EmployeeView extends JPanel {
             }
         });
 
-        // --- 4. XÓA (REAL-TIME) ---
         btnDelete.addActionListener(e -> {
             String id = txtId.getText();
             if (id.isEmpty()) {
@@ -507,7 +489,6 @@ public class EmployeeView extends JPanel {
             return null;
         }
 
-        // --- KIỂM TRA ĐỊNH DẠNG REGEX EMAIL & PHONE ---
         if (!isValidEmail(email)) {
             JOptionPane.showMessageDialog(this,
                     "Email không hợp lệ!\n- Vui lòng kiểm tra lại khoảng trắng, ký tự đặc biệt.",
@@ -540,9 +521,8 @@ public class EmployeeView extends JPanel {
         txtName.setText("");
         txtPhone.setText("");
 
-        // Mở khóa lại ô email khi tạo form mới
         txtEmail.setText("");
-        txtEmail.setEnabled(true); // 🌟 Ép nó trắng lại bình thường
+        txtEmail.setEnabled(true); 
         txtEmail.setToolTipText(null);
 
         btngGender.clearSelection();
@@ -560,10 +540,36 @@ public class EmployeeView extends JPanel {
         list.sort((e1, e2) -> Integer.compare(getRoleRank(e1.getRole()), getRoleRank(e2.getRole())));
         for (Employee emp : list) {
             tableModel.addRow(new Object[]{
-                emp.getEmployeeId(), emp.getEmployeeName(), emp.getPhone(),
-                emp.getEmail(), emp.getAccountStatus(), emp.getRole(), emp.getGender()
+                maskSensitiveInfo(emp.getEmployeeId()), // HIỂN THỊ MÃ ĐÃ CHE LÊN BẢNG
+                emp.getEmployeeName(), 
+                emp.getPhone(),
+                emp.getEmail(), 
+                emp.getAccountStatus(), 
+                emp.getRole(), 
+                emp.getGender(),
+                emp.getEmployeeId() // CỘT SỐ 7: MÃ GỐC ĐỂ DÙNG KHI CLICK ĐÚP
             });
         }
+    }
+
+    // =========================================================================
+    // HÀM TIỆN ÍCH: LÀM MỜ THÔNG TIN NHẠY CẢM (MASKING MÃ ID)
+    // =========================================================================
+    private String maskSensitiveInfo(String info) {
+        if (info == null || info.isEmpty()) {
+            return "Chưa có dữ liệu";
+        }
+        
+        // Cấu trúc của bác là EMP + Timestamp (EMP17178...)
+        if (info.length() > 6) { 
+            String visiblePart = info.substring(0, 6);
+            StringBuilder hiddenPart = new StringBuilder();
+            for (int i = 6; i < info.length(); i++) {
+                hiddenPart.append("*");
+            }
+            return visiblePart + hiddenPart.toString();
+        }
+        return info; 
     }
 
     private int getRoleRank(String role) {
@@ -579,7 +585,6 @@ public class EmployeeView extends JPanel {
         return 3;
     }
 
-    // --- CÁC HÀM STYLING GIAO DIỆN ---
     private void styleComboBox(JComboBox<String> cb, String placeholder) {
         cb.setPreferredSize(new Dimension(280, 38));
         cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -689,7 +694,6 @@ public class EmployeeView extends JPanel {
         return gbc;
     }
 
-    // --- SUPPORT CLASSES ---
     class RoundedPanel extends JPanel {
 
         private int r;
@@ -742,9 +746,6 @@ public class EmployeeView extends JPanel {
         }
     }
 
-    // =========================================================================
-    // CÁC HÀM HELPER: KIỂM TRA BẢO MẬT DỮ LIỆU EMAIL & PHONE
-    // =========================================================================
     private boolean isValidEmail(String email) {
         if (email == null || email.isEmpty()) {
             return false;
@@ -757,7 +758,6 @@ public class EmployeeView extends JPanel {
     }
 
     private boolean isEmailDuplicate(String email, String excludeEmpId) {
-        // Thay vì load danh sách rồi dùng for-each, gọi thẳng DB check toàn cục
         return employeeSql.existsByEmailGlobal(email, excludeEmpId);
     }
 
