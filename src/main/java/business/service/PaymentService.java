@@ -215,18 +215,20 @@ public class PaymentService {
             }
 
             // =========================================================
-            // 3. UPDATE STATUS
+            // 3. UPDATE STATUS (Sửa lại an toàn tuyệt đối cho Oracle)
             // =========================================================
+            String oldNote = order.getNote() == null ? "" : order.getNote();
+            String newNote = oldNote + " | Lý do hủy: " + reason;
+
             String sqlUpdateStatus
                     = "UPDATE ORDERS "
-                    + "SET status = 'Đã hủy', "
-                    + "note = NVL(note, '') || ?, "
-                    + "updated_at = CURRENT_TIMESTAMP "
+                    + "SET status = N'Đã hủy', "
+                    + "note = ? "
                     + "WHERE order_id = ?";
 
             try (PreparedStatement ps = con.prepareStatement(sqlUpdateStatus)) {
 
-                ps.setString(1, " | Lý do hủy: " + reason);
+                ps.setString(1, newNote);
                 ps.setString(2, orderId);
 
                 int row = ps.executeUpdate();

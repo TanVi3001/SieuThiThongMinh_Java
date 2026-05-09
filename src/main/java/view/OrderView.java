@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JPanel.java to edit this template
- */
 package view;
 
 import business.sql.sales_order.OrderDetailsSql;
@@ -29,11 +25,15 @@ import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.JTextField;
 
-// IMPORT THÊM CÁC CLASS EVENT ĐỂ LÀM REALTIME
 import common.events.EventBus;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
+import java.awt.GridBagConstraints;
+import java.awt.Insets;
 import java.util.Calendar;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.SwingWorker;
 
 public class OrderView extends javax.swing.JPanel {
 
@@ -43,10 +43,13 @@ public class OrderView extends javax.swing.JPanel {
     private JDateChooser dcToDate;
     private javax.swing.JButton btnFilterDate;
     private javax.swing.JButton btnResetFilter;
+    private String userRole;
+    private String empId;
 
     public OrderView() {
         if (business.service.SessionManager.getCurrentUser() != null) {
             this.userRole = business.service.SessionManager.getCurrentUser().getRoleId();
+            // TRẢ LẠI ID GỐC CỦA BẠN ĐỂ TRÁNH LỖI CANCEL
             this.empId = business.service.SessionManager.getCurrentUser().getAccountId();
         } else {
             this.userRole = "R_ADMIN_ALL";
@@ -57,15 +60,11 @@ public class OrderView extends javax.swing.JPanel {
         setupModernUI();
         initTableModel();
         initStatusFilter();
+
         loadDataToTable();
 
-        // =========================================================
-        // TÍNH NĂNG REAL-TIME (Lắng nghe sự kiện từ EventBus)
-        // =========================================================
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            // Nếu có sự kiện thay đổi dữ liệu liên quan đến HÓA ĐƠN (ORDERS)
             if (event.getType() == AppEventType.ORDERS) {
-                // Tự động tải lại bảng dữ liệu mượt mà
                 System.out.println("Đã nhận tín hiệu Real-time: " + event.getMessage());
                 loadDataToTable();
             }
@@ -227,12 +226,11 @@ public class OrderView extends javax.swing.JPanel {
         dcFromDate = new JDateChooser();
         dcToDate = new JDateChooser();
 
-        // ----> ĐOẠN CODE THÊM VÀO ĐỂ HIỆN NGÀY <----
         Calendar cal = Calendar.getInstance();
         cal.set(2020, Calendar.JANUARY, 1);
-        dcFromDate.setDate(cal.getTime()); // Ô Từ Ngày hiện mùng 1/1/2020
-        dcToDate.setDate(new Date());      // Ô Đến Ngày hiện Hôm nay
-        // -------------------------------------------
+        dcFromDate.setDate(cal.getTime());
+        dcToDate.setDate(new Date());
+
         dcFromDate.setDateFormatString("dd/MM/yyyy");
         dcToDate.setDateFormatString("dd/MM/yyyy");
 
@@ -265,7 +263,6 @@ public class OrderView extends javax.swing.JPanel {
         btnFilterDate.addActionListener(e -> filterByDate());
 
         btnResetFilter.addActionListener(e -> {
-            // ----> SỬA LẠI THÀNH RESET VỀ NGÀY MẶC ĐỊNH <----
             Calendar resetCal = Calendar.getInstance();
             resetCal.set(2020, Calendar.JANUARY, 1);
             dcFromDate.setDate(resetCal.getTime());
@@ -318,15 +315,17 @@ public class OrderView extends javax.swing.JPanel {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc!");
             return;
         }
-// 🌟 THÊM ĐIỀU KIỆN CHẶN Ở ĐÂY: Từ ngày phải <= Đến ngày
+
         if (from.after(to)) {
             JOptionPane.showMessageDialog(this,
                     "Lỗi: 'Từ ngày' không được lớn hơn 'Đến ngày'!",
                     "Sai ngày tháng",
                     JOptionPane.WARNING_MESSAGE);
-            return; // Dừng lại, không cho chạy vòng lặp lọc bên dưới nữa
+            return;
         }
+
         try {
+            // SỬA Ở ĐÂY: DÙNG HÀM selectAll() GỐC ĐỂ KHÔNG BỊ MẤT ĐƠN CỦA NHÂN VIÊN
             List<Order> allOrders = OrdersSql.getInstance().selectAll();
             java.util.ArrayList<Order> filtered = new java.util.ArrayList<>();
 
@@ -363,45 +362,38 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private void loadDataToTable() {
-        try {
-            List<Order> list = OrdersSql.getInstance().selectAll();
-
-            // fallback nếu DB trả null / rỗng
-            if (list == null || list.isEmpty()) {
-                list = OrdersSql.getInstance().selectByCondition("Hoàn thành");
-            }
-
-            fillTable(list);
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Lỗi tải danh sách hóa đơn: " + ex.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-        addAncestorListener(new javax.swing.event.AncestorListener() {
+        new SwingWorker<List<Order>, Void>() {
             @Override
-            public void ancestorAdded(javax.swing.event.AncestorEvent event) {
-                loadDataToTable();
+            protected List<Order> doInBackground() throws Exception {
+                // SỬA Ở ĐÂY: DÙNG HÀM selectAll() GỐC CỦA BẠN ĐỂ LẤY TOÀN BỘ ĐƠN
+                List<Order> list = OrdersSql.getInstance().selectAll();
+                if (list == null || list.isEmpty()) {
+                    list = OrdersSql.getInstance().selectByCondition("Hoàn thành");
+                }
+                return list;
             }
 
             @Override
-            public void ancestorRemoved(javax.swing.event.AncestorEvent event) {
+            protected void done() {
+                try {
+                    fillTable(get());
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
             }
-
-            @Override
-            public void ancestorMoved(javax.swing.event.AncestorEvent event) {
-            }
-        });
+        }.execute();
     }
 
     private void fillTable(List<Order> list) {
+        if (list == null) {
+            return;
+        }
         DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
         model.setRowCount(0);
         for (Order o : list) {
             model.addRow(new Object[]{
                 o.getOrderId(),
-                o.getCustomerId(),
+                o.getCustomerId() != null ? o.getCustomerId() : "Khách vãng lai",
                 o.getOrderDate(),
                 moneyFormat.format(o.getTotalAmount()) + " đ",
                 o.getStatus()
@@ -568,7 +560,7 @@ public class OrderView extends javax.swing.JPanel {
         pnTop.setPreferredSize(new java.awt.Dimension(342, 60));
         pnTop.setLayout(new java.awt.GridBagLayout());
 
-        Status.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
+        Status.setFont(new java.awt.Font("Segoe UI", 1, 12));
         Status.setText("Trạng thái");
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -608,7 +600,7 @@ public class OrderView extends javax.swing.JPanel {
         pnButton.setPreferredSize(new java.awt.Dimension(358, 70));
         pnButton.setLayout(new java.awt.GridBagLayout());
 
-        btnDetail.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
+        btnDetail.setFont(new java.awt.Font("Segoe UI", 1, 12));
         btnDetail.setText("Xem chi tiết");
         btnDetail.addActionListener(this::btnDetailActionPerformed);
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -618,7 +610,7 @@ public class OrderView extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(5, 44, 12, 0);
         pnButton.add(btnDetail, gridBagConstraints);
 
-        btnUpdate.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
+        btnUpdate.setFont(new java.awt.Font("Segoe UI", 1, 12));
         btnUpdate.setText("Cập nhật trạng thái");
         btnUpdate.addActionListener(this::btnUpdateActionPerformed);
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -628,7 +620,7 @@ public class OrderView extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(5, 6, 12, 0);
         pnButton.add(btnUpdate, gridBagConstraints);
 
-        btnIssueAnInvoice.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
+        btnIssueAnInvoice.setFont(new java.awt.Font("Segoe UI", 1, 12));
         btnIssueAnInvoice.setForeground(new java.awt.Color(204, 0, 0));
         btnIssueAnInvoice.setText("Xuất hóa đơn");
         btnIssueAnInvoice.addActionListener(this::btnIssueAnInvoiceActionPerformed);
@@ -647,6 +639,59 @@ public class OrderView extends javax.swing.JPanel {
         }
     }// </editor-fold>                        
 
+    // 🌟 HÀM XÁC THỰC MẬT KHẨU (SUDO MODE)
+    private boolean requirePassword(String actionName) {
+        javax.swing.JPasswordField pf = new javax.swing.JPasswordField();
+        Object[] message = {
+            "Thao tác [" + actionName + "] yêu cầu xác thực bảo mật.",
+            "Vui lòng nhập mật khẩu tài khoản của bạn để tiếp tục:",
+            pf
+        };
+
+        int option = JOptionPane.showConfirmDialog(
+                this, message, "Xác thực bảo mật",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE
+        );
+
+        if (option != JOptionPane.OK_OPTION) {
+            return false;
+        }
+
+        String enteredPass = new String(pf.getPassword());
+        if (enteredPass.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Mật khẩu không được để trống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        try {
+            model.account.Account user = business.service.SessionManager.getCurrentUser();
+            if (user == null || user.getUsername() == null) {
+                JOptionPane.showMessageDialog(this, "Không xác định được tài khoản hiện tại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            String hashFromDb = null;
+            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
+                ps.setString(1, user.getUsername());
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        hashFromDb = rs.getString("password");
+                    }
+                }
+            }
+
+            if (common.utils.PasswordUtils.checkPassword(enteredPass, hashFromDb)) {
+                return true;
+            } else {
+                JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác!", "Từ chối truy cập", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Lỗi hệ thống khi xác thực: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
     private void btnUpdateActionPerformed(java.awt.event.ActionEvent evt) {
 
         int row = getSelectedModelRow();
@@ -657,6 +702,11 @@ public class OrderView extends javax.swing.JPanel {
 
         String orderId = jTable1.getModel().getValueAt(row, 0).toString();
         String currentStatus = jTable1.getModel().getValueAt(row, 4).toString();
+
+        if (currentStatus.equals("Đã hủy")) {
+            JOptionPane.showMessageDialog(this, "Đơn hàng này đã bị hủy, không thể thay đổi trạng thái!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
         String[] statuses = {
             "Đang xử lý",
@@ -674,13 +724,18 @@ public class OrderView extends javax.swing.JPanel {
                 currentStatus
         );
 
-        if (newStatus == null) {
+        if (newStatus == null || newStatus.equals(currentStatus)) {
             return;
         }
 
         try {
             if (newStatus.equals("Đã hủy")) {
-                String reason = JOptionPane.showInputDialog(this, "Nhập lý do hủy đơn:");
+
+                if (!requirePassword("Hủy hóa đơn")) {
+                    return;
+                }
+
+                String reason = JOptionPane.showInputDialog(this, "Xác thực thành công!\nNhập lý do hủy đơn (Bắt buộc):");
 
                 if (reason == null || reason.trim().isEmpty()) {
                     return;
@@ -701,10 +756,15 @@ public class OrderView extends javax.swing.JPanel {
                     JOptionPane.showMessageDialog(this, "Cập nhật thất bại!");
                 }
             }
-            // Đánh thức EventBus để các màn hình khác (Dashboard, Report...) cũng tự reload
+
+            try {
+                common.sync.SyncVersionDao.bumpVersion("ORDERS");
+                common.realtime.RealtimeClient.send("ORDERS_CHANGED");
+            } catch (Exception ignored) {
+            }
+
             EventBus.publish(new AppDataChangedEvent(AppEventType.ORDERS, "Cập nhật trạng thái bill"));
 
-            // Reload lại chính bảng hiện tại
             loadDataToTable();
 
         } catch (Exception ex) {
@@ -761,8 +821,7 @@ public class OrderView extends javax.swing.JPanel {
     private javax.swing.JPanel pnButton;
     private javax.swing.JPanel pnTop;
     private javax.swing.JScrollPane tbOrder;
-    private String userRole;
-    private String empId;
+
     // --------------------------------------------------------
     // End of variables declaration                   
 }

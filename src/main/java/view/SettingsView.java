@@ -15,28 +15,26 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-// A2/A3: EventBus
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
 
 public class SettingsView extends JPanel {
 
-    // ── Màu sắc & Font chuẩn Modern UI ─────────────────────────────────────────
     private static final Color BG_PAGE = new Color(248, 249, 252);
     private static final Color BG_WHITE = Color.WHITE;
-    private static final Color BG_SIDEBAR = new Color(30, 41, 59);   // slate-800
-    private static final Color BG_SIDEBAR_HV = new Color(51, 65, 85);   // slate-700
-    private static final Color BG_TAB_ACTIVE = new Color(99, 102, 241);   // indigo-500
+    private static final Color BG_SIDEBAR = new Color(30, 41, 59);
+    private static final Color BG_SIDEBAR_HV = new Color(51, 65, 85);
+    private static final Color BG_TAB_ACTIVE = new Color(99, 102, 241);
     private static final Color COLOR_PRIMARY = new Color(99, 102, 241);
-    private static final Color COLOR_PRIMARY_DK = new Color(67, 56, 202);   // indigo-700
-    private static final Color COLOR_TEXT = new Color(15, 23, 42);   // slate-900
-    private static final Color COLOR_MUTED = new Color(100, 116, 139);  // slate-500
-    private static final Color COLOR_BORDER = new Color(226, 232, 240);  // slate-200
-    private static final Color COLOR_HINT = new Color(148, 163, 184);  // slate-400
+    private static final Color COLOR_PRIMARY_DK = new Color(67, 56, 202);
+    private static final Color COLOR_TEXT = new Color(15, 23, 42);
+    private static final Color COLOR_MUTED = new Color(100, 116, 139);
+    private static final Color COLOR_BORDER = new Color(226, 232, 240);
+    private static final Color COLOR_HINT = new Color(148, 163, 184);
     private static final Color SB_TEXT = new Color(226, 232, 240);
     private static final Color SB_MUTED = new Color(148, 163, 184);
-    private static final Color SB_INDICATOR = new Color(199, 210, 254);  // indigo-200
+    private static final Color SB_INDICATOR = new Color(199, 210, 254);
 
     private static final Font FONT_LABEL = new Font("Segoe UI", Font.PLAIN, 14);
     private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 14);
@@ -48,7 +46,6 @@ public class SettingsView extends JPanel {
     private static final int TAB_APPEARANCE = 1;
     private static final int TAB_SECURITY = 2;
 
-    // ── Khởi tạo sẵn Components chống lỗi NullPointer ──────────────────────────
     private final JTextField txtStoreName = new JTextField();
     private final JTextField txtAddress = new JTextField();
     private final JTextField txtPhone = new JTextField();
@@ -59,26 +56,18 @@ public class SettingsView extends JPanel {
     private final JPasswordField txtNewPass = new JPasswordField();
     private final JPasswordField txtConfirmPass = new JPasswordField();
 
-    // ── Layout Control ─────────────────────────────────────────────────────────
     private int selectedTab = TAB_STORE;
     private CardLayout cardLayout;
     private JPanel contentArea;
     private JPanel[] tabItems;
-
-    // A2: subscription handle để tránh leak (nếu bạn có lifecycle close)
     private AutoCloseable dataChangedSub;
 
-    // ══════════════════════════════════════════════════════════════════════════
     public SettingsView() {
         initUI();
         loadCurrentSettings();
-        setupEventBus(); // A2: subscribe
+        setupEventBus();
     }
 
-    /**
-     * A2: Subscribe EventBus để SettingsView tự reload khi có thay đổi từ luồng
-     * khác/màn khác.
-     */
     private void setupEventBus() {
         dataChangedSub = EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e == null) {
@@ -86,10 +75,8 @@ public class SettingsView extends JPanel {
             }
 
             if (e.getType() == AppEventType.SYSTEM_CONFIG) {
-                // Có ai đó update config -> reload lại UI config
                 loadCurrentSettings();
             } else if (e.getType() == AppEventType.ACCOUNT_SECURITY) {
-                // Có ai đó đổi mật khẩu -> clear ô password cho an toàn
                 txtOldPass.setText("");
                 txtNewPass.setText("");
                 txtConfirmPass.setText("");
@@ -97,10 +84,6 @@ public class SettingsView extends JPanel {
         });
     }
 
-    /**
-     * Nếu app bạn có chỗ "dispose" panel thì gọi hàm này để unsubscribe. Không
-     * bắt buộc, nhưng tốt để tránh leak nếu panel bị tạo/hủy nhiều lần.
-     */
     public void disposeView() {
         if (dataChangedSub != null) {
             try {
@@ -111,7 +94,6 @@ public class SettingsView extends JPanel {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     private void initUI() {
         setLayout(new BorderLayout());
         setBackground(BG_PAGE);
@@ -142,7 +124,6 @@ public class SettingsView extends JPanel {
         switchTab(TAB_STORE);
     }
 
-    // HÀM QUAN TRỌNG NHẤT: Bọc form lại, ép nó trải dài 100% ngang và neo lên sát mép trên
     private JScrollPane wrapScrollResponsive(JPanel content) {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(BG_WHITE);
@@ -165,7 +146,6 @@ public class SettingsView extends JPanel {
         return sp;
     }
 
-    // ── Thanh công cụ phía trên ────────────────────────────────────────────────
     private JPanel createTopBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(BG_WHITE);
@@ -210,7 +190,6 @@ public class SettingsView extends JPanel {
         return bar;
     }
 
-    // ── Thanh Sidebar bóng đêm bên trái ────────────────────────────────────────
     private JPanel createSidebar() {
         JPanel panel = new JPanel();
         panel.setPreferredSize(new Dimension(270, 0));
@@ -436,9 +415,6 @@ public class SettingsView extends JPanel {
         cardLayout.show(contentArea, "TAB_" + idx);
     }
 
-    // ═════════════════════════════════════════════════════════════════════════=
-    // TAB 1: THÔNG TIN CỬA HÀNG
-    // ═════════════════════════════════════════════════════════════════════════=
     private JPanel buildStoreTab() {
         JPanel root = tabRoot();
         root.add(tabHeader("Thông tin Cửa hàng", "Hiển thị trên hóa đơn và báo cáo xuất từ hệ thống"));
@@ -463,9 +439,6 @@ public class SettingsView extends JPanel {
         return root;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════=
-    // TAB 2: GIAO DIỆN HỆ THỐNG
-    // ═════════════════════════════════════════════════════════════════════════=
     private JPanel buildAppearanceTab() {
         JPanel root = tabRoot();
         root.add(tabHeader("Giao diện hệ thống", "Tùy chỉnh chế độ hiển thị Sáng/Tối cho ứng dụng"));
@@ -484,9 +457,6 @@ public class SettingsView extends JPanel {
         return root;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════=
-    // TAB 3: BẢO MẬT & TÀI KHOẢN
-    // ═════════════════════════════════════════════════════════════════════════=
     private JPanel buildSecurityTab() {
         JPanel root = tabRoot();
         root.add(tabHeader("Bảo mật & Tài khoản", "Đổi mật khẩu bảo vệ tài khoản (Để trống nếu không thay đổi)"));
@@ -511,9 +481,6 @@ public class SettingsView extends JPanel {
         return root;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════=
-    // UI HELPERS
-    // ═════════════════════════════════════════════════════════════════════════=
     private JPanel tabRoot() {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
@@ -650,9 +617,6 @@ public class SettingsView extends JPanel {
         return btn;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════=
-    // DATABASE (Oracle)
-    // ═════════════════════════════════════════════════════════════════════════=
     private void loadCurrentSettings() {
         boolean hasData = false;
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT config_key, config_value FROM SYSTEM_CONFIG"); ResultSet rs = ps.executeQuery()) {
@@ -710,27 +674,23 @@ public class SettingsView extends JPanel {
     }
 
     private void onSave() {
-        // 1) Save config
         saveConfigToDB("store_name", txtStoreName.getText().trim());
         saveConfigToDB("store_address", txtAddress.getText().trim());
         saveConfigToDB("store_phone", txtPhone.getText().trim());
         saveConfigToDB("theme_mode", themeComboBox.getSelectedIndex() == 1 ? "Dark" : "Light");
 
-        // A3: publish config updated (cho các màn khác reload ngay)
         EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "SYSTEM_CONFIG updated"));
 
         String oldPass = new String(txtOldPass.getPassword());
         String newPass = new String(txtNewPass.getPassword());
         String confirmPass = new String(txtConfirmPass.getPassword());
 
-        // Nếu user không muốn đổi pass -> ok
         if (newPass.isEmpty() && oldPass.isEmpty() && confirmPass.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Đã lưu thiết lập hệ thống thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
-        // Nếu có nhập mật khẩu mới -> bắt buộc nhập đủ
         if (newPass.isEmpty() || confirmPass.isEmpty() || oldPass.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Vui lòng nhập đầy đủ mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu!",
@@ -752,7 +712,6 @@ public class SettingsView extends JPanel {
             return;
         }
 
-        // 2) Lấy hash trong DB
         String hashFromDb = null;
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND is_deleted = 0")) {
             ps.setString(1, user.getUsername());
@@ -768,7 +727,6 @@ public class SettingsView extends JPanel {
             return;
         }
 
-        // 3) Verify mật khẩu cũ đúng chuẩn BCrypt
         if (!common.utils.PasswordUtils.checkPassword(oldPass, hashFromDb)) {
             JOptionPane.showMessageDialog(this,
                     "Mật khẩu hiện tại không đúng!",
@@ -776,7 +734,6 @@ public class SettingsView extends JPanel {
             return;
         }
 
-        // 4) Update mật khẩu mới (hash 1 lần)
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(
                 "UPDATE ACCOUNTS SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?")) {
 
@@ -792,7 +749,6 @@ public class SettingsView extends JPanel {
                 return;
             }
 
-            // A3: publish password updated cho các màn khác tự refresh/clear cache
             EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "Password updated for " + user.getUsername()));
 
         } catch (Exception e) {
@@ -801,7 +757,6 @@ public class SettingsView extends JPanel {
                     "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
             return;
         } finally {
-            // clear input pass
             txtOldPass.setText("");
             txtNewPass.setText("");
             txtConfirmPass.setText("");
