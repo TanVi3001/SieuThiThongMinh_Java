@@ -410,8 +410,8 @@ public class AccountSql implements SqlInterface<Account> {
                 + "LEFT JOIN ACCOUNT_ASSIGN_ROLE_GROUP aarg "
                 + "       ON a.account_id = aarg.account_id AND NVL(aarg.is_deleted, 0) = 0 "
                 + "LEFT JOIN ROLE_GROUPS rg "
-                + "       ON aarg.role_group_id = rg.role_group_id AND NVL(rg.is_deleted, 0) = 0 "
-                + "WHERE a.is_deleted = 0";
+                + "       ON aarg.role_group_id = rg.role_group_id AND NVL(rg.is_deleted, 0) = 0 ";
+                // BỎ HẲN DÒNG WHERE a.is_deleted = 0 Ở ĐÂY ĐỂ LẤY CẢ TÀI KHOẢN BỊ KHÓA
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
 

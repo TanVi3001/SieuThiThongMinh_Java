@@ -8,6 +8,8 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.HashMap;
 import java.util.Map;
 import common.realtime.*;
@@ -74,7 +76,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         JLabel title = new JLabel("Phân Quyền Tài Khoản");
         title.setFont(new Font("Segoe UI", Font.BOLD, 26));
         title.setForeground(textDark);
-        JLabel subtitle = new JLabel("Gán hoặc cập nhật quyền hạn cho tài khoản người dùng");
+        JLabel subtitle = new JLabel("Gán quyền hạn và Khóa/Mở khóa tài khoản hệ thống");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subtitle.setForeground(textGray);
         titlePanel.add(title);
@@ -147,16 +149,18 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         topSection.add(lblList, BorderLayout.NORTH);
         topSection.add(filterPanel, BorderLayout.CENTER);
 
-        JPanel tableHeader = new JPanel(new GridLayout(1, 4, 10, 0));
+        // 🔥 NÂNG CẤP LÊN 5 CỘT
+        JPanel tableHeader = new JPanel(new GridLayout(1, 5, 10, 0));
         tableHeader.setBackground(new Color(248, 249, 252));
         tableHeader.setBorder(BorderFactory.createCompoundBorder(
                 new RoundBorder(borderGray, 10), new EmptyBorder(10, 15, 10, 15)
         ));
-        String[] headers = {"Tài khoản", "Phòng ban", "Vai trò hiện tại", "Trạng thái"};
+        String[] headers = {"Tài khoản", "Phòng ban", "Vai trò hiện tại", "Trạng thái", "Khóa / Mở"};
         for (String h : headers) {
             JLabel l = new JLabel(h);
             l.setFont(new Font("Segoe UI", Font.BOLD, 12));
             l.setForeground(textGray);
+            if (h.equals("Khóa / Mở")) l.setHorizontalAlignment(SwingConstants.CENTER);
             tableHeader.add(l);
         }
         topSection.add(tableHeader, BorderLayout.SOUTH);
@@ -187,7 +191,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     private JPanel createAccountRow(String accountId, String name, String email, String dept, String role, boolean isActive) {
-        JPanel row = new JPanel(new GridLayout(1, 4, 10, 0));
+        JPanel row = new JPanel(new GridLayout(1, 5, 10, 0));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
         row.setBackground(cardWhite);
         row.setBorder(BorderFactory.createCompoundBorder(
@@ -217,16 +221,76 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         pnlRoleBadge.add(createBadge(role));
         row.add(pnlRoleBadge);
 
-        String colorHex = isActive ? "#10B981" : "#A3AED0";
-        String statusText = isActive ? "Hoạt động" : "Vô hiệu hóa";
+        String colorHex = isActive ? "#10B981" : "#EF4444";
+        String statusText = isActive ? "Hoạt động" : "Bị khóa";
         JLabel lblStatus = new JLabel("<html><span style='color:" + colorHex + "; font-size:14px;'>●</span> <span style='color:#2B3674;'>" + statusText + "</span></html>");
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         row.add(lblStatus);
+
+        // 🔥 THÊM CÔNG TẮC TOGGLE Ở CỘT 5
+        JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
+        pnlToggle.setBackground(cardWhite);
+        ToggleSwitch toggleBtn = new ToggleSwitch(isActive);
+        
+        // Cấm khóa Admin
+        if ("Quản trị viên".equals(role)) {
+            toggleBtn.setEnabled(false);
+            toggleBtn.setToolTipText("Không thể khóa tài khoản Quản trị viên.");
+        }
+        
+        // Sự kiện gạt công tắc
+        toggleBtn.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (!toggleBtn.isEnabled()) return;
+
+                boolean nextState = !toggleBtn.isOn();
+                String actionName = nextState ? "Mở khóa" : "Khóa";
+                String confirmMsg = nextState ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + name + "]?" 
+                                              : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị văng ra và không thể đăng nhập.";
+                
+                int confirm = JOptionPane.showConfirmDialog(null, confirmMsg, "Xác nhận " + actionName, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                
+                if (confirm == JOptionPane.YES_OPTION) {
+                    try (Connection con = common.db.DatabaseConnection.getConnection();
+                         PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET is_deleted = ? WHERE account_id = ?")) {
+                        
+                        ps.setInt(1, nextState ? 0 : 1);
+                        ps.setString(2, accountId);
+                        int updated = ps.executeUpdate();
+                        
+                        if (updated > 0) {
+                            toggleBtn.setOn(nextState);
+                            
+                            business.service.AuditLogService.logAction(
+                                "CẬP NHẬT", "ACCOUNTS", accountId, 
+                                nextState ? "Bị khóa" : "Hoạt động", 
+                                nextState ? "Hoạt động" : "Bị khóa", 
+                                "Admin " + actionName.toLowerCase() + " tài khoản"
+                            );
+                            
+                            common.sync.SyncVersionDao.bumpVersion("EMPLOYEES");
+                            RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                            EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "TOGGLE_LOCK"));
+                            
+                            initTableData(); // Refresh UI
+                        }
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(null, "Lỗi khi cập nhật trạng thái: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
+        });
+        
+        pnlToggle.add(toggleBtn);
+        row.add(pnlToggle);
 
         row.setCursor(new Cursor(Cursor.HAND_CURSOR));
         row.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (e.getSource() instanceof ToggleSwitch) return; // Bỏ qua nếu bấm vào Toggle
+
                 selectedAccountId = accountId;
                 selectedOldRole = role;
                 lblSelectedUser.setText(name);
@@ -242,7 +306,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
                 if ("Quản trị viên".equals(role)) {
                     roleCardsContainer.add(roleCardMap.get("Quản trị viên"));
-
                     radioMap.get("Quản trị viên").setEnabled(false);
                     btnSaveRole.setEnabled(false); 
                 } else {
@@ -301,44 +364,24 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         gbcInfo.fill = GridBagConstraints.HORIZONTAL;
         gbcInfo.anchor = GridBagConstraints.WEST;
 
-        gbcInfo.gridy = 0;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 0; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Người dùng đã chọn", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedUser, gbcInfo);
 
-        gbcInfo.gridy = 1;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 1; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Email", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedEmail, gbcInfo);
 
-        gbcInfo.gridy = 2;
-        gbcInfo.insets = new Insets(0, 0, 15, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Phòng ban", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedDept, gbcInfo);
 
-        gbcInfo.gridy = 3;
-        gbcInfo.insets = new Insets(0, 0, 0, 20);
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 3; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 0, 0);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 0, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(pnlCurrRole, gbcInfo);
 
         centerPanel.add(infoGrid);
@@ -352,8 +395,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         roleCardsContainer.setBackground(cardWhite);
         roleCardsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // 🔥 FIX 1: Chuẩn hóa lại ID của Nhân viên kho thành "R_STAFF_STOCK" HOẶC "R_STAFF_VIEW_PROD" 
-        // tùy thuộc vào việc hệ thống DB đang lưu mã nào. Mình để R_STAFF_VIEW_PROD vì nó phổ biến hơn trong Oracle.
         String[][] activeRoles = {
             {"R_ADMIN_ALL", "Quản trị viên", "Toàn quyền quản lý hệ thống, nhân sự và thiết lập."},
             {"R_STORE_MNG", "Quản lý cửa hàng", "Quản lý hoạt động cửa hàng, xem báo cáo."},
@@ -363,8 +404,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
         for (String[] roleInfo : activeRoles) {
             JRadioButton rb = new JRadioButton();
-            rb.setActionCommand(roleInfo[0]); // ActionCommand chứa ID Role chuẩn
-            radioMap.put(roleInfo[1], rb); // Map chứa Tên Role hiển thị
+            rb.setActionCommand(roleInfo[0]); 
+            radioMap.put(roleInfo[1], rb); 
 
             JPanel card = createRoleCard(roleInfo[1], roleInfo[2], roleGroup, rb);
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -432,7 +473,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     System.err.println("Lỗi đồng bộ: " + ex.getMessage());
                 }
 
-                // 🔥 FIX 2: Xóa bỏ dữ liệu đang chọn tạm thời và tải lại bảng ngay lập tức
                 selectedAccountId = "";
                 lblSelectedUser.setText("-");
                 lblSelectedEmail.setText("-");
@@ -564,13 +604,13 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         return btn;
     }
 
-    // 🔥 FIX 3: TÁCH HÀM LOAD DATA ĐỂ GỌI TRỰC TIẾP, KHÔNG DÙNG RUNNABLE CHO MỤC ĐÍCH SAVE NỮA
     private void initTableData() {
         if (listItems == null) return;
-        
         listItems.removeAll();
 
+        // 🌟 LOAD TẤT CẢ (KỂ CẢ TÀI KHOẢN BỊ KHÓA)
         java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
+        
         String selectedRoleFilter = (cbRole != null && cbRole.getSelectedItem() != null) ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
         String selectedDeptFilter = (cbDept != null && cbDept.getSelectedItem() != null) ? cbDept.getSelectedItem().toString() : "Tất cả phòng ban";
         String searchText = (txtSearch != null) ? txtSearch.getText().toLowerCase().trim() : "";
@@ -578,24 +618,24 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         for (String[] acc : listAcc) {
             String roleId = acc[4];
             String displayRole = "Nhân viên bán hàng";
-            if ("R_ADMIN_ALL".equals(roleId)) {
-                displayRole = "Quản trị viên";
-            } else if ("R_STORE_MNG".equals(roleId)) {
-                displayRole = "Quản lý cửa hàng";
-            } else if ("R_STAFF_STOCK".equals(roleId) || "R_STAFF_VIEW_PROD".equals(roleId)) { // BAO TRỌN CẢ 2 MÃ ĐỀ PHÒNG DB
-                displayRole = "Nhân viên kho";
-            }
+            if ("R_ADMIN_ALL".equals(roleId)) displayRole = "Quản trị viên";
+            else if ("R_STORE_MNG".equals(roleId)) displayRole = "Quản lý cửa hàng";
+            else if ("R_STAFF_STOCK".equals(roleId) || "R_STAFF_VIEW_PROD".equals(roleId)) displayRole = "Nhân viên kho";
 
             String displayName = (acc[2] == null || acc[2].isEmpty()) ? acc[1] : acc[2];
             String displayEmail = (acc[3] == null || acc[3].isEmpty()) ? "Chưa có email" : acc[3];
             String dept = "Chưa phân bổ";
+
+            // 🔥 TRẠNG THÁI HOẠT ĐỘNG: Lấy đúng từ cột is_deleted (0: Hoạt động, 1: Bị khóa)
+            boolean isActive = "0".equals(acc[5]); 
 
             boolean matchRole = "Tất cả vai trò".equals(selectedRoleFilter) || displayRole.equals(selectedRoleFilter);
             boolean matchDept = "Tất cả phòng ban".equals(selectedDeptFilter) || dept.equals(selectedDeptFilter);
             boolean matchSearch = searchText.isEmpty() || displayName.toLowerCase().contains(searchText) || displayEmail.toLowerCase().contains(searchText);
 
             if (matchRole && matchDept && matchSearch) {
-                listItems.add(createAccountRow(acc[0], displayName, displayEmail, dept, displayRole, "0".equals(acc[5])));
+                // Thêm vào danh sách bất kể isActive là true hay false
+                listItems.add(createAccountRow(acc[0], displayName, displayEmail, dept, displayRole, isActive));
             }
         }
         
@@ -604,7 +644,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     class RoundedPanel extends JPanel {
-
         private int radius;
         private Color bgColor;
 
@@ -626,7 +665,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     class RoundBorder implements javax.swing.border.Border {
-
         private Color color;
         private int radius;
         private boolean fillBg = false;
@@ -657,18 +695,13 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         }
 
         @Override
-        public Insets getBorderInsets(Component c) {
-            return new Insets(1, 1, 1, 1);
-        }
+        public Insets getBorderInsets(Component c) { return new Insets(1, 1, 1, 1); }
 
         @Override
-        public boolean isBorderOpaque() {
-            return false;
-        }
+        public boolean isBorderOpaque() { return false; }
     }
 
     class DashedBorder implements javax.swing.border.Border {
-
         private Color color;
         private int thickness;
         private int dashLength;
@@ -691,21 +724,57 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         }
 
         @Override
-        public Insets getBorderInsets(Component c) {
-            return new Insets(thickness, thickness, thickness, thickness);
-        }
+        public Insets getBorderInsets(Component c) { return new Insets(thickness, thickness, thickness, thickness); }
 
         @Override
-        public boolean isBorderOpaque() {
-            return false;
-        }
+        public boolean isBorderOpaque() { return false; }
     }
 
     private void setupRealtimeSync() {
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
             if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                
-                // Không làm gì gây ra popup hay giật màn hình ở đây cả
+                // Không popup, cập nhật ngầm
             }
         });
+    }
+
+    // =========================================================================
+    // 🔥 NÚT CÔNG TẮC (TOGGLE SWITCH) KIỂU IOS
+    // =========================================================================
+    class ToggleSwitch extends JComponent {
+        private boolean on;
+        
+        public ToggleSwitch(boolean on) {
+            this.on = on;
+            setPreferredSize(new Dimension(46, 24));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+        }
+        
+        public boolean isOn() { return on; }
+        
+        public void setOn(boolean on) { 
+            this.on = on; 
+            repaint(); 
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            if (on) {
+                g2.setColor(new Color(16, 185, 129)); // Màu Xanh lá (Hoạt động)
+                g2.fillRoundRect(0, 0, 46, 24, 24, 24);
+                g2.setColor(Color.WHITE);
+                g2.fillOval(24, 2, 20, 20); // Dịch núm xoay sang phải
+            } else {
+                g2.setColor(new Color(203, 213, 225)); // Màu Xám (Bị Khóa)
+                if (!isEnabled()) g2.setColor(new Color(241, 245, 249)); // Mờ đi nếu bị Disable (Admin)
+                g2.fillRoundRect(0, 0, 46, 24, 24, 24);
+                g2.setColor(Color.WHITE);
+                g2.fillOval(2, 2, 20, 20); // Dịch núm xoay sang trái
+            }
+            g2.dispose();
+        }
     }
 }
