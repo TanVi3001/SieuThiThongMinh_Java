@@ -39,6 +39,7 @@ import common.events.EventBus;
 import common.realtime.RealtimeClient;
 import common.sync.SyncVersionDao;
 
+
 public class ProductView extends JPanel {
 
     private final Color bgLight = new Color(244, 246, 250);
@@ -986,80 +987,15 @@ public class ProductView extends JPanel {
         }
     }
 
-    private void handleImportCSV() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Chọn file CSV sản phẩm để nhập vào hệ thống");
-
-        FileNameExtensionFilter filter = new FileNameExtensionFilter("File dữ liệu CSV (*.csv)", "csv");
-        fileChooser.setFileFilter(filter);
-
-        int userSelection = fileChooser.showOpenDialog(this);
-
-        if (userSelection == JFileChooser.APPROVE_OPTION) {
-            File fileToImport = fileChooser.getSelectedFile();
-            int successCount = 0;
-            int failCount = 0;
-
-            try (BufferedReader br = new BufferedReader(new FileReader(fileToImport, StandardCharsets.UTF_8))) {
-                String line;
-                boolean isHeader = true;
-
-                while ((line = br.readLine()) != null) {
-                    if (isHeader) {
-                        isHeader = false;
-                        continue;
-                    }
-
-                    String[] data = line.split(",");
-
-                    if (data.length >= 5) {
-                        try {
-                            Product p = new Product();
-                            p.setProductId(data[0].trim());
-                            p.setProductName(data[1].trim());
-                            p.setBasePrice(new BigDecimal(data[2].trim()));
-                            p.setQuantity(Integer.parseInt(data[3].trim()));
-                            p.setCategoryId(data[4].trim());
-
-                            p.setSupplierId("SUP001");
-                            p.setStoreId("ST001");
-                            p.setUnit("Cái");
-
-                            if (ProductsSql.getInstance().insert(p)) {
-                                successCount++;
-                            } else {
-                                failCount++;
-                            }
-                        } catch (Exception ex) {
-                            failCount++;
-                            System.err.println("Lỗi dòng dữ liệu: " + line);
-                        }
-                    }
-                }
-
-                JOptionPane.showMessageDialog(this,
-                        "Quá trình nhập dữ liệu kết thúc!\n"
-                        + "Thành công: " + successCount + " sản phẩm\n"
-                        + "Thất bại: " + failCount + " (Có thể trùng mã hoặc sai định dạng)",
-                        "Thông báo Import", JOptionPane.INFORMATION_MESSAGE);
-
-                if (successCount > 0) {
-                    SyncVersionDao.bumpVersion("PRODUCTS");
-                    SyncVersionDao.bumpVersion("INVENTORY");
-
-                    // REALTIME
-                    RealtimeClient.send("PRODUCTS_CHANGED");
-                    RealtimeClient.send("INVENTORY_CHANGED");
-                }
-
-                loadDataToTable();
-
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this, "Không thể đọc file: " + e.getMessage(), "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
-                e.printStackTrace();
-            }
-        }
+    private void handleImportCSV() {        // Lấy frame cha chứa View này
+        JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        
+        // Gọi Dialog Import chuyên dụng mà chúng ta đã sửa (có ProgressBar chạy ngầm)
+        // Truyền 'this' (ProductView) vào để Dialog có thể gọi refresh bảng sau khi xong
+        ImportProductDialog dialog = new ImportProductDialog(topFrame, this);
+        dialog.setVisible(true);
     }
+    
 
     private void styleSearchBox(JComboBox<String> cb, String placeholder) {
         cb.setEditable(true);

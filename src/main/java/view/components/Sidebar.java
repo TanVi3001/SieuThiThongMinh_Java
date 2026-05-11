@@ -65,7 +65,7 @@ public class Sidebar extends JPanel {
 
         // CHỈ STAFF SALE MỚI THẤY NÚT BÁN HÀNG (Dùng Icon Cart hoặc Barcode)
         if (isSale) {
-            addMenuItem("Bán hàng", IconHelper.product(20)); 
+            addMenuItem("Bán hàng", IconHelper.product(20));
         }
 
         // Ai cũng thấy Sản phẩm (Dùng Icon Box/Inventory)
@@ -113,6 +113,58 @@ public class Sidebar extends JPanel {
         if (!menuItems.isEmpty()) {
             menuItems.get(0).setActive(true);
         }
+    }
+
+    // Trong lớp Sidebar.java, tạo một hàm buildMenuItem
+    private JPanel createMenuItem(String title, String iconPath, boolean isActive) {
+        JPanel itemPanel = new JPanel(new BorderLayout(15, 0)); // Gap giữa Icon và Text là 15px
+        itemPanel.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20)); // Căn lề chuẩn
+        itemPanel.setOpaque(true);
+
+        // Bo góc nhẹ cho item
+        itemPanel.putClientProperty("FlatLaf.style", "arc: 12");
+
+        JLabel lblIcon = new JLabel(new ImageIcon(iconPath));
+        JLabel lblTitle = new JLabel(title);
+        lblTitle.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+
+        itemPanel.add(lblIcon, BorderLayout.WEST);
+        itemPanel.add(lblTitle, BorderLayout.CENTER);
+
+        // Xử lý Active và Normal state
+        Color activeColor = new Color(230, 235, 255); // Xanh nhạt highlight
+        Color hoverColor = new Color(240, 240, 240); // Xám nhạt khi hover
+        Color defaultColor = Color.WHITE; // Màu nền Sidebar
+
+        if (isActive) {
+            itemPanel.setBackground(activeColor);
+            lblTitle.setForeground(new Color(40, 90, 255)); // Đổi màu chữ xanh
+        } else {
+            itemPanel.setBackground(defaultColor);
+            lblTitle.setForeground(new Color(80, 80, 80));
+        }
+
+        // Xử lý Hover
+        itemPanel.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                if (!isActive) {
+                    itemPanel.setBackground(hoverColor);
+                }
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                if (!isActive) {
+                    itemPanel.setBackground(defaultColor);
+                }
+            }
+
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                // Cập nhật lại toàn bộ Sidebar để đổi isActive, sau đó gọi callback
+                // menuClickListener.onMenuClick(title);
+            }
+        });
+
+        return itemPanel;
     }
 
     public interface MenuClickListener {

@@ -1,6 +1,6 @@
 package view;
 
-import service.ProductImportService;
+import business.service.ProductImportService;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
