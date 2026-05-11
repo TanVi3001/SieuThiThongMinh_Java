@@ -4,15 +4,19 @@ import common.events.AppDataChangedEvent;
 import common.events.EventBus;
 import view.components.TongQuanPanel;
 import view.components.Sidebar;
+
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Component; // Thêm cái này
+import java.awt.Component;
+import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+
 import common.events.AppEventType;
 import common.security.SecurityGuard;
 
@@ -24,6 +28,9 @@ public class DashboardView extends JFrame {
     private boolean isLoggingOut = false;
     private JPanel mainContentPanel;
 
+    // Màu nền chuẩn cho UI hiện đại (Trắng xám nhẹ)
+    private final Color BACKGROUND_COLOR = new Color(245, 245, 247);
+
     private String currentMenu = "Tổng quan";
 
     public DashboardView() {
@@ -33,7 +40,7 @@ public class DashboardView extends JFrame {
         common.security.SecurityGuard.attach(mainContentPanel);
 
         // =========================================================
-        // 🌟 BẮT SÓNG REAL-TIME TỪ TỔNG ĐÀI
+        // 🌟 BẮT SÓNG REAL-TIME TỪ TỔNG ĐÀI (GIỮ NGUYÊN 100%)
         // =========================================================
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             SwingUtilities.invokeLater(() -> {
@@ -62,7 +69,6 @@ public class DashboardView extends JFrame {
                 }
             });
         });
-
     }
 
     private void setupUI() {
@@ -78,15 +84,19 @@ public class DashboardView extends JFrame {
         }
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         this.setMinimumSize(new Dimension(1100, 700));
         this.setLocationRelativeTo(null);
 
+        // Sử dụng BorderLayout chuẩn chỉ
         this.getContentPane().setLayout(new BorderLayout());
 
+        // Panel chứa nội dung chính
         mainContentPanel = new JPanel(new BorderLayout());
-        mainContentPanel.setBackground(new java.awt.Color(245, 245, 247));
+        mainContentPanel.setBackground(BACKGROUND_COLOR);
+
+        // Tạo khoảng trống (margin) giữa Sidebar và Content để UI bớt ngộp
+        mainContentPanel.setBorder(BorderFactory.createEmptyBorder(15, 20, 20, 20));
 
         String roleForSidebar = common.auth.UserSession.getInstance().getUserRole();
         boolean isStaff = "R_STAFF_SALE".equals(roleForSidebar);
@@ -134,9 +144,11 @@ public class DashboardView extends JFrame {
             }
         });
 
+        // Bố trí Sidebar bên trái và Content ở giữa
         this.getContentPane().add(newSidebar, BorderLayout.WEST);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
+        // Hiển thị mặc định
         showPanel(new TongQuanPanel());
     }
 
@@ -144,12 +156,20 @@ public class DashboardView extends JFrame {
         mainContentPanel.removeAll();
 
         childPanel.setMinimumSize(new Dimension(900, 600));
+        // Đảm bảo các panel con có màu nền đồng nhất với khung chính
+        childPanel.setBackground(BACKGROUND_COLOR);
 
         JScrollPane scrollPane = new JScrollPane(childPanel);
-        scrollPane.setBorder(null);
+
+        // CÁC THIẾT LẬP FLATLAF CHO SCROLLPANE:
+        scrollPane.setBorder(BorderFactory.createEmptyBorder()); // Xóa viền thô cứng
+        scrollPane.getViewport().setBackground(BACKGROUND_COLOR); // Đồng bộ nền Viewport
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+        // Bo góc cho thanh cuộn (Tùy chọn hiển thị mượt hơn trong FlatLaf)
+        scrollPane.getVerticalScrollBar().putClientProperty("ScrollBar.showButtons", false);
 
         mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
@@ -183,14 +203,12 @@ public class DashboardView extends JFrame {
 
     private void startSessionCheck() {
         sessionTimer = new Timer(2000, e -> {
-            // 1. Kiểm tra ngay cờ Global (Nếu SecurityGuard đang đá văng thì Timer nằm im)
             if (common.security.SecurityGuard.isProcessingLogout() || isLoggingOut) {
                 ((Timer) e.getSource()).stop();
                 return;
             }
 
             new Thread(() -> {
-                // 2. Chặn thêm 1 lớp nữa trong luồng Thread phụ
                 if (common.security.SecurityGuard.isProcessingLogout() || isLoggingOut) {
                     return;
                 }
@@ -221,9 +239,7 @@ public class DashboardView extends JFrame {
 
                 if (!isValid || roleChanged) {
                     SwingUtilities.invokeLater(() -> {
-                        // 3. Chặn CÚ CHÓT trước khi bung màn hình Login
                         if (!isLoggingOut && !common.security.SecurityGuard.isProcessingLogout()) {
-                            // Đánh dấu cờ cục bộ và cờ toàn cục
                             isLoggingOut = true;
                             common.security.SecurityGuard.setProcessingLogout(true);
 
@@ -231,7 +247,6 @@ public class DashboardView extends JFrame {
                                 sessionTimer.stop();
                             }
 
-                            // Đảm bảo dọn sạch các Event Listener ẩn (Zombie Listener)
                             common.events.EventBus.clearAll();
 
                             JOptionPane.showMessageDialog(this, "Phiên đăng nhập đã hết hạn hoặc Quyền truy cập đã bị thay đổi!\nVui lòng đăng nhập lại.", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
@@ -242,7 +257,6 @@ public class DashboardView extends JFrame {
                             }
                             business.service.LoginService.logout();
 
-                            // Đảm bảo chỉ mở 1 cửa sổ Login duy nhất
                             java.awt.Window[] windows = java.awt.Window.getWindows();
                             boolean hasLogin = false;
                             for (java.awt.Window w : windows) {
@@ -271,6 +285,7 @@ public class DashboardView extends JFrame {
     public static void main(String args[]) {
         System.setProperty("sun.java2d.uiScale", "1.5");
         try {
+            // Khuyến nghị dùng FlatMacLightLaf hoặc FlatIntelliJLaf để có độ mượt và bóng bẩy hơn FlatLightLaf cơ bản
             com.formdev.flatlaf.FlatLightLaf.setup();
         } catch (Exception ex) {
             logger.log(java.util.logging.Level.SEVERE, null, ex);
