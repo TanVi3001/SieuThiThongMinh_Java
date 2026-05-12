@@ -35,6 +35,9 @@ public class UnifiedSettingsPanel extends JPanel {
     private static final Color COLOR_NAV_ACTIVE = new Color(30, 41, 59);
     private static final Color COLOR_NAV_BORDER = new Color(51, 65, 85);
     private static final Color COLOR_NAV_BADGE = new Color(59, 130, 246);
+    private static final Color COLOR_NAV_BADGE_THEME = new Color(34, 197, 94);
+    private static final Color COLOR_NAV_BADGE_SECURITY = new Color(245, 158, 11);
+    private static final Color COLOR_NAV_BADGE_EMAIL = new Color(168, 85, 247);
 
     private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
     private static final Font FONT_SECTION = new Font("Segoe UI", Font.BOLD, 15);
@@ -159,9 +162,9 @@ public class UnifiedSettingsPanel extends JPanel {
         nav.add(hint);
         nav.add(Box.createVerticalStrut(18));
 
-        btnStore = createNavButton("Thông tin cửa hàng", STORE_KEY, "01");
-        btnTheme = createNavButton("Giao diện", THEME_KEY, "02");
-        btnSecurity = createNavButton("Bảo mật", SECURITY_KEY, "03");
+        btnStore = createNavButton("Thông tin cửa hàng", STORE_KEY, "T", COLOR_NAV_BADGE);
+        btnTheme = createNavButton("Giao diện", THEME_KEY, "G", COLOR_NAV_BADGE_THEME);
+        btnSecurity = createNavButton("Bảo mật", SECURITY_KEY, "B", COLOR_NAV_BADGE_SECURITY);
         nav.add(btnStore);
         nav.add(Box.createVerticalStrut(12));
         nav.add(btnTheme);
@@ -170,7 +173,7 @@ public class UnifiedSettingsPanel extends JPanel {
 
         if (isAdminOrWarehouse()) {
             nav.add(Box.createVerticalStrut(12));
-            btnEmail = createNavButton("Email", EMAIL_KEY, "04");
+            btnEmail = createNavButton("Email", EMAIL_KEY, "E", COLOR_NAV_BADGE_EMAIL);
             nav.add(btnEmail);
         }
 
@@ -226,7 +229,7 @@ public class UnifiedSettingsPanel extends JPanel {
         return btn;
     }
 
-    private JButton createNavButton(String text, String sectionKey, String badgeText) {
+    private JButton createNavButton(String text, String sectionKey, String badgeText, Color badgeColor) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_NAV);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
@@ -238,104 +241,116 @@ public class UnifiedSettingsPanel extends JPanel {
         btn.setBackground(COLOR_NAV);
         btn.setForeground(COLOR_NAV_TEXT);
         btn.setAlignmentX(Component.LEFT_ALIGNMENT);
-        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setIcon(createBadgeIcon(badgeText, COLOR_NAV_BADGE));
+        btn.setIcon(createBadgeIcon(badgeText, badgeColor));
         btn.setIconTextGap(12);
+        btn.setRolloverEnabled(false);
         btn.addActionListener(e -> showSection(sectionKey));
         return btn;
     }
 
     private JPanel buildStoreSection() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_PANEL);
-        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
-
-        panel.add(sectionHeader("Thông tin cửa hàng", "Hiển thị trên hóa đơn và báo cáo"));
+        JPanel card = createContentCard("Thông tin cửa hàng", "Hiển thị trên hóa đơn và báo cáo");
 
         txtStoreName = new JTextField();
         txtStoreAddress = new JTextField();
         txtStorePhone = new JTextField();
 
-        panel.add(fieldRow("Tên siêu thị/Cửa hàng", txtStoreName));
-        panel.add(Box.createVerticalStrut(16));
-        panel.add(fieldRow("Địa chỉ", txtStoreAddress));
-        panel.add(Box.createVerticalStrut(16));
-        panel.add(fieldRow("Số điện thoại", txtStorePhone));
+        card.add(fieldRow("Tên siêu thị/Cửa hàng", txtStoreName));
+        card.add(Box.createVerticalStrut(14));
+        card.add(fieldRow("Địa chỉ", txtStoreAddress));
+        card.add(Box.createVerticalStrut(14));
+        card.add(fieldRow("Số điện thoại", txtStorePhone));
 
-        panel.add(Box.createVerticalGlue());
-        return panel;
+        card.add(Box.createVerticalGlue());
+        return card;
     }
 
     private JPanel buildThemeSection() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_PANEL);
-        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
-
-        panel.add(sectionHeader("Giao diện hệ thống", "Chọn chế độ hiển thị Sáng hoặc Tối"));
+        JPanel card = createContentCard("Giao diện hệ thống", "Chọn chế độ hiển thị Sáng hoặc Tối");
 
         cbTheme = new JComboBox<>(new String[]{"☀️ Sáng (Light Mode)", "🌙 Tối (Dark Mode)"});
         cbTheme.setFont(FONT_TEXT);
         cbTheme.addActionListener(e -> applyTheme());
 
-        panel.add(fieldRow("Chế độ giao diện", cbTheme));
-        panel.add(Box.createVerticalGlue());
-        return panel;
+        card.add(fieldRow("Chế độ giao diện", cbTheme));
+        card.add(Box.createVerticalGlue());
+        return card;
     }
 
     private JPanel buildSecuritySection() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_PANEL);
-        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
-
-        panel.add(sectionHeader("Bảo mật tài khoản", "Đổi mật khẩu để bảo vệ tài khoản"));
+        JPanel card = createContentCard("Bảo mật tài khoản", "Đổi mật khẩu để bảo vệ tài khoản");
 
         lblUsername = new JLabel("Tài khoản: " + getCurrentUsername());
         lblUsername.setFont(FONT_TEXT);
         lblUsername.setForeground(COLOR_MUTED);
-        panel.add(lblUsername);
-        panel.add(Box.createVerticalStrut(20));
+        card.add(lblUsername);
+        card.add(Box.createVerticalStrut(16));
 
         txtOldPass = new JPasswordField();
         txtNewPass = new JPasswordField();
         txtConfirmPass = new JPasswordField();
 
-        panel.add(fieldRow("Mật khẩu hiện tại", txtOldPass));
-        panel.add(Box.createVerticalStrut(16));
-        panel.add(fieldRow("Mật khẩu mới", txtNewPass));
-        panel.add(Box.createVerticalStrut(16));
-        panel.add(fieldRow("Xác nhận mật khẩu mới", txtConfirmPass));
+        card.add(fieldRow("Mật khẩu hiện tại", txtOldPass));
+        card.add(Box.createVerticalStrut(14));
+        card.add(fieldRow("Mật khẩu mới", txtNewPass));
+        card.add(Box.createVerticalStrut(14));
+        card.add(fieldRow("Xác nhận mật khẩu mới", txtConfirmPass));
 
-        panel.add(Box.createVerticalGlue());
-        return panel;
+        card.add(Box.createVerticalGlue());
+        return card;
     }
 
     private JPanel buildEmailSection() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_PANEL);
-        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
-
-        panel.add(sectionHeader("Cấu hình Email", "Thiết lập gửi email từ hệ thống"));
+        JPanel card = createContentCard("Cấu hình Email", "Thiết lập gửi email từ hệ thống");
 
         txtEmailSender = new JTextField();
         txtAppPassword = new JPasswordField();
 
-        panel.add(fieldRow("Email gửi", txtEmailSender));
-        panel.add(Box.createVerticalStrut(16));
-        panel.add(fieldRow("App Password / API Key", txtAppPassword));
+        card.add(fieldRow("Email gửi", txtEmailSender));
+        card.add(Box.createVerticalStrut(14));
+        card.add(fieldRow("App Password / API Key", txtAppPassword));
 
         JLabel hint = new JLabel("💡 Để trống để bỏ qua cấu hình email");
         hint.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         hint.setForeground(COLOR_MUTED);
-        panel.add(Box.createVerticalStrut(12));
-        panel.add(hint);
+        hint.setBorder(new EmptyBorder(10, 2, 0, 0));
+        card.add(hint);
 
-        panel.add(Box.createVerticalGlue());
-        return panel;
+        card.add(Box.createVerticalGlue());
+        return card;
+    }
+
+    private JPanel createContentCard(String title, String subtitle) {
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(BG_PANEL);
+        card.setBorder(new EmptyBorder(0, 0, 0, 0));
+
+        JPanel header = new JPanel();
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.setBackground(new Color(248, 250, 252));
+        header.setBorder(new CompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_BORDER),
+                new EmptyBorder(0, 0, 14, 0)
+        ));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(FONT_SECTION);
+        titleLabel.setForeground(COLOR_TEXT);
+
+        JLabel subtitleLabel = new JLabel(subtitle);
+        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitleLabel.setForeground(COLOR_MUTED);
+
+        header.add(titleLabel);
+        header.add(Box.createVerticalStrut(4));
+        header.add(subtitleLabel);
+
+        card.add(header);
+        card.add(Box.createVerticalStrut(18));
+        return card;
     }
 
     private JPanel sectionHeader(String title, String subtitle) {
@@ -581,6 +596,11 @@ public class UnifiedSettingsPanel extends JPanel {
         activeSection = sectionKey;
         cardLayout.show(cardPanel, sectionKey);
         updateNavState();
+
+        if (cardPanel != null) {
+            cardPanel.revalidate();
+            cardPanel.repaint();
+        }
     }
 
     private void updateNavState() {
@@ -607,13 +627,15 @@ public class UnifiedSettingsPanel extends JPanel {
     }
 
     private Icon createBadgeIcon(String text, Color background) {
-        int size = 22;
+        int size = 24;
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setColor(background);
-            g.fillOval(0, 0, size - 1, size - 1);
+            g.setColor(new Color(background.getRed(), background.getGreen(), background.getBlue(), 220));
+            g.fillRoundRect(0, 0, size - 1, size - 1, 10, 10);
+            g.setColor(new Color(255, 255, 255, 45));
+            g.drawRoundRect(1, 1, size - 3, size - 3, 8, 8);
             g.setColor(Color.WHITE);
             g.setFont(new Font("Segoe UI", Font.BOLD, 11));
             FontMetrics fm = g.getFontMetrics();
