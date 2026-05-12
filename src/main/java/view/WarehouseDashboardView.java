@@ -45,7 +45,7 @@ public class WarehouseDashboardView extends JFrame {
                     showPanel(new CategoryTaxView()); 
                     break;
                 case "Cài đặt":
-                    showPanel(new SettingsWarehouseView()); 
+                    showPanel(new view.components.UnifiedSettingsPanel()); 
                     break;
                 case "Đăng xuất":
                     handleLogout();
@@ -72,9 +72,7 @@ public class WarehouseDashboardView extends JFrame {
         // Bỏ qua Lính gác đối với các trang Tổng quan và Cài đặt cá nhân
         // ========================================================
         boolean isBypassed = (panel instanceof view.components.TongQuanPanel) || 
-                             (panel instanceof view.SettingsView) ||
-                             (panel instanceof view.SettingsWarehouseView) ||
-                             (panel instanceof view.SettingsAdminPanel);
+                     (panel instanceof view.components.UnifiedSettingsPanel);
 
         if (!isBypassed) {
             // Nếu không thuộc diện miễn trừ -> Đưa cho Lính gác kiểm tra và khóa nút

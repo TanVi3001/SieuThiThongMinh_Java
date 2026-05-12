@@ -136,7 +136,7 @@ public class DashboardView extends JFrame {
                     }
                     break;
                 case "Cài đặt":
-                    showPanel(new view.SettingsView());
+                    showPanel(new view.components.UnifiedSettingsPanel());
                     break;
                 case "Đăng xuất":
                     handleLogout();

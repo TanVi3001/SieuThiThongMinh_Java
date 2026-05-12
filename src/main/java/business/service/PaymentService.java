@@ -413,6 +413,13 @@ public class PaymentService {
 
                 // Nếu mọi thứ hoàn hảo -> Lưu dữ liệu vĩnh viễn
                 psDetail.executeBatch();
+
+                if (order.getCustomerId() != null
+                        && !order.getCustomerId().trim().isEmpty()) {
+
+                    CustomersSql.getInstance().updateCustomerAfterPayment(con, order);
+                }
+
                 con.commit();
                 return true;
 

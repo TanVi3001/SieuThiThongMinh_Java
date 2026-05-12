@@ -56,7 +56,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
                     showPanel(new AuditLogPanel()); 
                     break;
                 case "Cài đặt":
-                    showPanel(new SettingsAdminPanel()); 
+                    showPanel(new view.components.UnifiedSettingsPanel()); 
                     break;
                 case "Đăng xuất":
                     handleLogout();
@@ -83,9 +83,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
         // Bỏ qua Lính gác đối với các trang Tổng quan và Cài đặt cá nhân
         // ========================================================
         boolean isBypassed = (panel instanceof view.components.TongQuanPanel) || 
-                             (panel instanceof view.SettingsView) ||
-                             (panel instanceof view.SettingsWarehouseView) ||
-                             (panel instanceof view.SettingsAdminPanel);
+                     (panel instanceof view.components.UnifiedSettingsPanel);
 
         if (!isBypassed) {
             // Đưa cho Lính gác kiểm tra và khóa nút (Dù Admin full quyền thì vẫn qua cổng cho chuẩn luồng)
