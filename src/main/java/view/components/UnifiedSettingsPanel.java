@@ -17,31 +17,47 @@ import java.awt.*;
 import java.sql.*;
 
 /**
- * Unified Settings Panel - Đơn giản, dễ dàng, tự động chuyển đổi theo role
+ * Unified Settings Panel - menu bên trái, nội dung bên phải
  */
 public class UnifiedSettingsPanel extends JPanel {
 
-    private static final Color BG_LIGHT = new Color(248, 249, 252);
-    private static final Color BG_WHITE = Color.WHITE;
-    private static final Color COLOR_PRIMARY = new Color(99, 102, 241);
+    private static final Color BG_APP = new Color(241, 245, 249);
+    private static final Color BG_PANEL = Color.WHITE;
+    private static final Color COLOR_PRIMARY = new Color(79, 70, 229);
+    private static final Color COLOR_PRIMARY_SOFT = new Color(224, 231, 255);
     private static final Color COLOR_TEXT = new Color(15, 23, 42);
     private static final Color COLOR_MUTED = new Color(100, 116, 139);
     private static final Color COLOR_BORDER = new Color(226, 232, 240);
-    private static final Color COLOR_SUCCESS = new Color(34, 197, 94);
-    private static final Color COLOR_ERROR = new Color(239, 68, 68);
+    private static final Color COLOR_NAV = new Color(248, 250, 252);
 
     private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
+    private static final Font FONT_SECTION = new Font("Segoe UI", Font.BOLD, 15);
+    private static final Font FONT_NAV = new Font("Segoe UI", Font.PLAIN, 14);
     private static final Font FONT_LABEL = new Font("Segoe UI", Font.BOLD, 13);
     private static final Font FONT_TEXT = new Font("Segoe UI", Font.PLAIN, 14);
 
-    // UI Components
-    private JTabbedPane tabbedPane;
-    private JTextField txtStoreName, txtStoreAddress, txtStorePhone;
+    private static final String STORE_KEY = "store";
+    private static final String THEME_KEY = "theme";
+    private static final String SECURITY_KEY = "security";
+    private static final String EMAIL_KEY = "email";
+
+    private JTextField txtStoreName;
+    private JTextField txtStoreAddress;
+    private JTextField txtStorePhone;
     private JComboBox<String> cbTheme;
-    private JPasswordField txtOldPass, txtNewPass, txtConfirmPass;
+    private JPasswordField txtOldPass;
+    private JPasswordField txtNewPass;
+    private JPasswordField txtConfirmPass;
     private JTextField txtEmailSender;
     private JPasswordField txtAppPassword;
-    private JLabel lblUsername, lblRole;
+
+    private JPanel cardPanel;
+    private CardLayout cardLayout;
+    private JButton btnStore;
+    private JButton btnTheme;
+    private JButton btnSecurity;
+    private JButton btnEmail;
+    private String activeSection = STORE_KEY;
 
     private AutoCloseable eventSub;
 
@@ -49,48 +65,22 @@ public class UnifiedSettingsPanel extends JPanel {
         initUI();
         loadSettings();
         setupEventBus();
+        showSection(STORE_KEY);
     }
 
     private void initUI() {
         setLayout(new BorderLayout());
-        setBackground(BG_LIGHT);
+        setBackground(BG_APP);
 
-        // ========== Top Bar ==========
         add(createTopBar(), BorderLayout.NORTH);
-
-        // ========== Main Content ==========
-        JPanel main = new JPanel(new BorderLayout());
-        main.setBackground(BG_LIGHT);
-        main.setBorder(new EmptyBorder(20, 20, 20, 20));
-
-        tabbedPane = new JTabbedPane();
-        tabbedPane.setTabPlacement(JTabbedPane.TOP);
-        tabbedPane.setFont(FONT_TEXT);
-        tabbedPane.setBackground(BG_WHITE);
-
-        // Tab 1: Thông tin cửa hàng
-        tabbedPane.addTab("🏢 Thông tin", buildStoreTab());
-
-        // Tab 2: Giao diện
-        tabbedPane.addTab("🎨 Giao diện", buildThemeTab());
-
-        // Tab 3: Bảo mật
-        tabbedPane.addTab("🔐 Bảo mật", buildSecurityTab());
-
-        // Tab 4: Email (nếu là admin)
-        if (isAdminOrWarehouse()) {
-            tabbedPane.addTab("📧 Email", buildEmailTab());
-        }
-
-        main.add(tabbedPane, BorderLayout.CENTER);
-        add(main, BorderLayout.CENTER);
+        add(createBody(), BorderLayout.CENTER);
     }
 
     private JPanel createTopBar() {
         JPanel bar = new JPanel(new BorderLayout());
-        bar.setBackground(BG_WHITE);
+        bar.setBackground(BG_PANEL);
         bar.setBorder(new MatteBorder(0, 0, 1, 0, COLOR_BORDER));
-        bar.setPreferredSize(new Dimension(0, 60));
+        bar.setPreferredSize(new Dimension(0, 64));
 
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
         left.setOpaque(false);
@@ -98,30 +88,161 @@ public class UnifiedSettingsPanel extends JPanel {
         JLabel title = new JLabel("⚙️ Cài đặt hệ thống");
         title.setFont(FONT_TITLE);
         title.setForeground(COLOR_TEXT);
-        left.add(title);
+
+        JLabel subtitle = new JLabel("Chọn chức năng bên trái, xem nội dung bên phải");
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitle.setForeground(COLOR_MUTED);
+
+        JPanel titleWrap = new JPanel();
+        titleWrap.setLayout(new BoxLayout(titleWrap, BoxLayout.Y_AXIS));
+        titleWrap.setOpaque(false);
+        titleWrap.add(title);
+        titleWrap.add(subtitle);
+
+        left.add(titleWrap);
 
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 12));
         right.setOpaque(false);
 
-        JButton btnSave = createButton("Lưu cài đặt", true);
-        btnSave.addActionListener(e -> saveSettings());
-
-        JButton btnRefresh = createButton("Làm mới", false);
+        JButton btnRefresh = createActionButton("Làm mới", false);
         btnRefresh.addActionListener(e -> loadSettings());
+
+        JButton btnSave = createActionButton("Lưu cài đặt", true);
+        btnSave.addActionListener(e -> saveSettings());
 
         right.add(btnRefresh);
         right.add(btnSave);
 
-        bar.add(left, BorderLayout.CENTER);
+        bar.add(left, BorderLayout.WEST);
         bar.add(right, BorderLayout.EAST);
         return bar;
     }
 
-    private JPanel buildStoreTab() {
+    private JPanel createBody() {
+        JPanel body = new JPanel(new BorderLayout(16, 0));
+        body.setBackground(BG_APP);
+        body.setBorder(new EmptyBorder(16, 16, 16, 16));
+
+        body.add(createNavPanel(), BorderLayout.WEST);
+        body.add(createContentShell(), BorderLayout.CENTER);
+        return body;
+    }
+
+    private JPanel createNavPanel() {
+        JPanel nav = new JPanel();
+        nav.setPreferredSize(new Dimension(240, 0));
+        nav.setBackground(COLOR_NAV);
+        nav.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
+                new EmptyBorder(18, 14, 18, 14)
+        ));
+        nav.setLayout(new BoxLayout(nav, BoxLayout.Y_AXIS));
+
+        JLabel group = new JLabel("Chức năng");
+        group.setFont(FONT_SECTION);
+        group.setForeground(COLOR_TEXT);
+        group.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel hint = new JLabel("Chọn mục để hiển thị thông tin");
+        hint.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        hint.setForeground(COLOR_MUTED);
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        nav.add(group);
+        nav.add(Box.createVerticalStrut(4));
+        nav.add(hint);
+        nav.add(Box.createVerticalStrut(18));
+
+        btnStore = createNavButton("🏢 Thông tin cửa hàng", STORE_KEY);
+        btnTheme = createNavButton("🎨 Giao diện", THEME_KEY);
+        btnSecurity = createNavButton("🔐 Bảo mật", SECURITY_KEY);
+        nav.add(btnStore);
+        nav.add(Box.createVerticalStrut(10));
+        nav.add(btnTheme);
+        nav.add(Box.createVerticalStrut(10));
+        nav.add(btnSecurity);
+
+        if (isAdminOrWarehouse()) {
+            nav.add(Box.createVerticalStrut(10));
+            btnEmail = createNavButton("📧 Email", EMAIL_KEY);
+            nav.add(btnEmail);
+        }
+
+        nav.add(Box.createVerticalGlue());
+
+        JLabel note = new JLabel("Màu xanh là mục đang chọn");
+        note.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        note.setForeground(COLOR_MUTED);
+        note.setAlignmentX(Component.LEFT_ALIGNMENT);
+        nav.add(note);
+
+        return nav;
+    }
+
+    private JPanel createContentShell() {
+        JPanel shell = new JPanel(new BorderLayout());
+        shell.setBackground(BG_APP);
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setBackground(BG_PANEL);
+        content.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
+                new EmptyBorder(22, 24, 24, 24)
+        ));
+
+        cardLayout = new CardLayout();
+        cardPanel = new JPanel(cardLayout);
+        cardPanel.setBackground(BG_PANEL);
+
+        cardPanel.add(buildStoreSection(), STORE_KEY);
+        cardPanel.add(buildThemeSection(), THEME_KEY);
+        cardPanel.add(buildSecuritySection(), SECURITY_KEY);
+        if (isAdminOrWarehouse()) {
+            cardPanel.add(buildEmailSection(), EMAIL_KEY);
+        }
+
+        content.add(cardPanel, BorderLayout.CENTER);
+        shell.add(content, BorderLayout.CENTER);
+        return shell;
+    }
+
+    private JButton createActionButton(String text, boolean primary) {
+        JButton btn = new JButton(text);
+        btn.setFont(FONT_TEXT);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, primary ? COLOR_PRIMARY : COLOR_BORDER),
+                new EmptyBorder(8, 16, 8, 16)
+        ));
+        btn.setBackground(primary ? COLOR_PRIMARY : BG_PANEL);
+        btn.setForeground(primary ? Color.WHITE : COLOR_TEXT);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private JButton createNavButton(String text, String sectionKey) {
+        JButton btn = new JButton(text);
+        btn.setFont(FONT_NAV);
+        btn.setHorizontalAlignment(SwingConstants.LEFT);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
+                new EmptyBorder(12, 14, 12, 14)
+        ));
+        btn.setBackground(BG_PANEL);
+        btn.setForeground(COLOR_TEXT);
+        btn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.addActionListener(e -> showSection(sectionKey));
+        return btn;
+    }
+
+    private JPanel buildStoreSection() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
-        panel.setBorder(new EmptyBorder(30, 40, 30, 40));
+        panel.setBackground(BG_PANEL);
+        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
         panel.add(sectionHeader("Thông tin cửa hàng", "Hiển thị trên hóa đơn và báo cáo"));
 
@@ -139,11 +260,11 @@ public class UnifiedSettingsPanel extends JPanel {
         return panel;
     }
 
-    private JPanel buildThemeTab() {
+    private JPanel buildThemeSection() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
-        panel.setBorder(new EmptyBorder(30, 40, 30, 40));
+        panel.setBackground(BG_PANEL);
+        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
         panel.add(sectionHeader("Giao diện hệ thống", "Chọn chế độ hiển thị Sáng hoặc Tối"));
 
@@ -156,11 +277,11 @@ public class UnifiedSettingsPanel extends JPanel {
         return panel;
     }
 
-    private JPanel buildSecurityTab() {
+    private JPanel buildSecuritySection() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
-        panel.setBorder(new EmptyBorder(30, 40, 30, 40));
+        panel.setBackground(BG_PANEL);
+        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
         panel.add(sectionHeader("Bảo mật tài khoản", "Đổi mật khẩu để bảo vệ tài khoản"));
 
@@ -184,11 +305,11 @@ public class UnifiedSettingsPanel extends JPanel {
         return panel;
     }
 
-    private JPanel buildEmailTab() {
+    private JPanel buildEmailSection() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
-        panel.setBorder(new EmptyBorder(30, 40, 30, 40));
+        panel.setBackground(BG_PANEL);
+        panel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
         panel.add(sectionHeader("Cấu hình Email", "Thiết lập gửi email từ hệ thống"));
 
@@ -212,11 +333,12 @@ public class UnifiedSettingsPanel extends JPanel {
     private JPanel sectionHeader(String title, String subtitle) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
+        panel.setBackground(BG_PANEL);
         panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setBorder(new EmptyBorder(0, 0, 18, 0));
 
         JLabel lTitle = new JLabel(title);
-        lTitle.setFont(FONT_TITLE);
+        lTitle.setFont(FONT_SECTION);
         lTitle.setForeground(COLOR_TEXT);
 
         JLabel lSub = new JLabel(subtitle);
@@ -226,7 +348,7 @@ public class UnifiedSettingsPanel extends JPanel {
         panel.add(lTitle);
         panel.add(Box.createVerticalStrut(4));
         panel.add(lSub);
-        panel.add(Box.createVerticalStrut(20));
+        panel.add(Box.createVerticalStrut(12));
 
         return panel;
     }
@@ -234,7 +356,7 @@ public class UnifiedSettingsPanel extends JPanel {
     private JPanel fieldRow(String label, JComponent component) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_WHITE);
+        panel.setBackground(BG_PANEL);
         panel.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
 
@@ -261,9 +383,9 @@ public class UnifiedSettingsPanel extends JPanel {
                 BorderFactory.createLineBorder(COLOR_BORDER),
                 new EmptyBorder(8, 12, 8, 12)
         ));
-        c.setBackground(BG_WHITE);
+        c.setBackground(BG_PANEL);
         if (c instanceof JComboBox) {
-            ((JComboBox<?>) c).setBackground(BG_WHITE);
+            ((JComboBox<?>) c).setBackground(BG_PANEL);
         }
     }
 
@@ -276,9 +398,12 @@ public class UnifiedSettingsPanel extends JPanel {
         if (isPrimary) {
             btn.setBackground(COLOR_PRIMARY);
             btn.setForeground(Color.WHITE);
-            btn.setBorder(BorderFactory.createRaisedBevelBorder());
+            btn.setBorder(BorderFactory.createCompoundBorder(
+                    new MatteBorder(1, 1, 1, 1, COLOR_PRIMARY),
+                    new EmptyBorder(8, 14, 8, 14)
+            ));
         } else {
-            btn.setBackground(BG_WHITE);
+            btn.setBackground(BG_PANEL);
             btn.setForeground(COLOR_TEXT);
             btn.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
         }
@@ -310,7 +435,9 @@ public class UnifiedSettingsPanel extends JPanel {
                         cbTheme.setSelectedIndex("Dark".equals(val) ? 1 : 0);
                         break;
                     case "email_sender":
-                        txtEmailSender.setText(val != null ? val : "");
+                        if (txtEmailSender != null) {
+                            txtEmailSender.setText(val != null ? val : "");
+                        }
                         break;
                 }
             }
@@ -440,6 +567,35 @@ public class UnifiedSettingsPanel extends JPanel {
         } catch (Exception e) {
             showMessage("❌ Lỗi thay đổi giao diện: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void showSection(String sectionKey) {
+        activeSection = sectionKey;
+        cardLayout.show(cardPanel, sectionKey);
+        updateNavState();
+    }
+
+    private void updateNavState() {
+        styleNavButton(btnStore, STORE_KEY);
+        styleNavButton(btnTheme, THEME_KEY);
+        styleNavButton(btnSecurity, SECURITY_KEY);
+        if (btnEmail != null) {
+            styleNavButton(btnEmail, EMAIL_KEY);
+        }
+    }
+
+    private void styleNavButton(JButton button, String sectionKey) {
+        if (button == null) {
+            return;
+        }
+
+        boolean active = sectionKey.equals(activeSection);
+        button.setBackground(active ? COLOR_PRIMARY_SOFT : BG_PANEL);
+        button.setForeground(active ? COLOR_PRIMARY : COLOR_TEXT);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, active ? COLOR_PRIMARY : COLOR_BORDER),
+                new EmptyBorder(12, 14, 12, 14)
+        ));
     }
 
     private String getCurrentUsername() {
