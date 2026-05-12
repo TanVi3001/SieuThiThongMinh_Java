@@ -14,6 +14,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.sql.*;
 
 /**
@@ -28,7 +29,12 @@ public class UnifiedSettingsPanel extends JPanel {
     private static final Color COLOR_TEXT = new Color(15, 23, 42);
     private static final Color COLOR_MUTED = new Color(100, 116, 139);
     private static final Color COLOR_BORDER = new Color(226, 232, 240);
-    private static final Color COLOR_NAV = new Color(248, 250, 252);
+    private static final Color COLOR_NAV = new Color(15, 23, 42);
+    private static final Color COLOR_NAV_TEXT = new Color(248, 250, 252);
+    private static final Color COLOR_NAV_MUTED = new Color(148, 163, 184);
+    private static final Color COLOR_NAV_ACTIVE = new Color(30, 41, 59);
+    private static final Color COLOR_NAV_BORDER = new Color(51, 65, 85);
+    private static final Color COLOR_NAV_BADGE = new Color(59, 130, 246);
 
     private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
     private static final Font FONT_SECTION = new Font("Segoe UI", Font.BOLD, 15);
@@ -80,7 +86,7 @@ public class UnifiedSettingsPanel extends JPanel {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(BG_PANEL);
         bar.setBorder(new MatteBorder(0, 0, 1, 0, COLOR_BORDER));
-        bar.setPreferredSize(new Dimension(0, 64));
+        bar.setPreferredSize(new Dimension(0, 58));
 
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
         left.setOpaque(false);
@@ -119,9 +125,9 @@ public class UnifiedSettingsPanel extends JPanel {
     }
 
     private JPanel createBody() {
-        JPanel body = new JPanel(new BorderLayout(16, 0));
+        JPanel body = new JPanel(new BorderLayout(18, 0));
         body.setBackground(BG_APP);
-        body.setBorder(new EmptyBorder(16, 16, 16, 16));
+        body.setBorder(new EmptyBorder(14, 14, 14, 14));
 
         body.add(createNavPanel(), BorderLayout.WEST);
         body.add(createContentShell(), BorderLayout.CENTER);
@@ -130,22 +136,22 @@ public class UnifiedSettingsPanel extends JPanel {
 
     private JPanel createNavPanel() {
         JPanel nav = new JPanel();
-        nav.setPreferredSize(new Dimension(240, 0));
+        nav.setPreferredSize(new Dimension(270, 0));
         nav.setBackground(COLOR_NAV);
         nav.setBorder(BorderFactory.createCompoundBorder(
-                new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
-                new EmptyBorder(18, 14, 18, 14)
+            new MatteBorder(1, 1, 1, 1, COLOR_NAV_BORDER),
+            new EmptyBorder(18, 16, 18, 16)
         ));
         nav.setLayout(new BoxLayout(nav, BoxLayout.Y_AXIS));
 
         JLabel group = new JLabel("Chức năng");
         group.setFont(FONT_SECTION);
-        group.setForeground(COLOR_TEXT);
+        group.setForeground(COLOR_NAV_TEXT);
         group.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel hint = new JLabel("Chọn mục để hiển thị thông tin");
         hint.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        hint.setForeground(COLOR_MUTED);
+        hint.setForeground(COLOR_NAV_MUTED);
         hint.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         nav.add(group);
@@ -153,18 +159,18 @@ public class UnifiedSettingsPanel extends JPanel {
         nav.add(hint);
         nav.add(Box.createVerticalStrut(18));
 
-        btnStore = createNavButton("🏢 Thông tin cửa hàng", STORE_KEY);
-        btnTheme = createNavButton("🎨 Giao diện", THEME_KEY);
-        btnSecurity = createNavButton("🔐 Bảo mật", SECURITY_KEY);
+        btnStore = createNavButton("Thông tin cửa hàng", STORE_KEY, "01");
+        btnTheme = createNavButton("Giao diện", THEME_KEY, "02");
+        btnSecurity = createNavButton("Bảo mật", SECURITY_KEY, "03");
         nav.add(btnStore);
-        nav.add(Box.createVerticalStrut(10));
+        nav.add(Box.createVerticalStrut(12));
         nav.add(btnTheme);
-        nav.add(Box.createVerticalStrut(10));
+        nav.add(Box.createVerticalStrut(12));
         nav.add(btnSecurity);
 
         if (isAdminOrWarehouse()) {
-            nav.add(Box.createVerticalStrut(10));
-            btnEmail = createNavButton("📧 Email", EMAIL_KEY);
+            nav.add(Box.createVerticalStrut(12));
+            btnEmail = createNavButton("Email", EMAIL_KEY, "04");
             nav.add(btnEmail);
         }
 
@@ -172,7 +178,7 @@ public class UnifiedSettingsPanel extends JPanel {
 
         JLabel note = new JLabel("Màu xanh là mục đang chọn");
         note.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-        note.setForeground(COLOR_MUTED);
+        note.setForeground(COLOR_NAV_MUTED);
         note.setAlignmentX(Component.LEFT_ALIGNMENT);
         nav.add(note);
 
@@ -187,7 +193,7 @@ public class UnifiedSettingsPanel extends JPanel {
         content.setBackground(BG_PANEL);
         content.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
-                new EmptyBorder(22, 24, 24, 24)
+            new EmptyBorder(24, 28, 28, 28)
         ));
 
         cardLayout = new CardLayout();
@@ -220,20 +226,22 @@ public class UnifiedSettingsPanel extends JPanel {
         return btn;
     }
 
-    private JButton createNavButton(String text, String sectionKey) {
+    private JButton createNavButton(String text, String sectionKey, String badgeText) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_NAV);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createCompoundBorder(
-                new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
+                new MatteBorder(1, 1, 1, 1, COLOR_NAV_BORDER),
                 new EmptyBorder(12, 14, 12, 14)
         ));
-        btn.setBackground(BG_PANEL);
-        btn.setForeground(COLOR_TEXT);
+        btn.setBackground(COLOR_NAV);
+        btn.setForeground(COLOR_NAV_TEXT);
         btn.setAlignmentX(Component.LEFT_ALIGNMENT);
         btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setIcon(createBadgeIcon(badgeText, COLOR_NAV_BADGE));
+        btn.setIconTextGap(12);
         btn.addActionListener(e -> showSection(sectionKey));
         return btn;
     }
@@ -590,12 +598,32 @@ public class UnifiedSettingsPanel extends JPanel {
         }
 
         boolean active = sectionKey.equals(activeSection);
-        button.setBackground(active ? COLOR_PRIMARY_SOFT : BG_PANEL);
-        button.setForeground(active ? COLOR_PRIMARY : COLOR_TEXT);
+        button.setBackground(active ? COLOR_NAV_ACTIVE : COLOR_NAV);
+        button.setForeground(active ? Color.WHITE : COLOR_NAV_TEXT);
         button.setBorder(BorderFactory.createCompoundBorder(
-                new MatteBorder(1, 1, 1, 1, active ? COLOR_PRIMARY : COLOR_BORDER),
+                new MatteBorder(1, 1, 1, 1, active ? COLOR_PRIMARY : COLOR_NAV_BORDER),
                 new EmptyBorder(12, 14, 12, 14)
         ));
+    }
+
+    private Icon createBadgeIcon(String text, Color background) {
+        int size = 22;
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(background);
+            g.fillOval(0, 0, size - 1, size - 1);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            FontMetrics fm = g.getFontMetrics();
+            int x = (size - fm.stringWidth(text)) / 2;
+            int y = ((size - fm.getHeight()) / 2) + fm.getAscent() - 1;
+            g.drawString(text, x, y);
+        } finally {
+            g.dispose();
+        }
+        return new ImageIcon(image);
     }
 
     private String getCurrentUsername() {
