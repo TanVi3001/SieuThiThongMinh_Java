@@ -11,6 +11,7 @@ import common.utils.PasswordUtils;
 import model.account.Account;
 
 import javax.swing.*;
+import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
@@ -38,6 +39,7 @@ public class UnifiedSettingsPanel extends JPanel {
     private static final Color COLOR_NAV_BADGE_THEME = new Color(34, 197, 94);
     private static final Color COLOR_NAV_BADGE_SECURITY = new Color(245, 158, 11);
     private static final Color COLOR_NAV_BADGE_EMAIL = new Color(168, 85, 247);
+    private static final Color COLOR_NAV_HOVER = new Color(23, 37, 84);
 
     private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
     private static final Font FONT_SECTION = new Font("Segoe UI", Font.BOLD, 15);
@@ -245,7 +247,24 @@ public class UnifiedSettingsPanel extends JPanel {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setIcon(createBadgeIcon(badgeText, badgeColor));
         btn.setIconTextGap(12);
-        btn.setRolloverEnabled(false);
+        btn.setRolloverEnabled(true);
+        btn.setContentAreaFilled(true);
+        btn.setOpaque(true);
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (!sectionKey.equals(activeSection)) {
+                    btn.setBackground(COLOR_NAV_HOVER);
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (!sectionKey.equals(activeSection)) {
+                    btn.setBackground(COLOR_NAV);
+                }
+            }
+        });
         btn.addActionListener(e -> showSection(sectionKey));
         return btn;
     }
@@ -336,6 +355,12 @@ public class UnifiedSettingsPanel extends JPanel {
                 new EmptyBorder(0, 0, 14, 0)
         ));
 
+        JPanel accent = new JPanel();
+        accent.setBackground(COLOR_PRIMARY);
+        accent.setPreferredSize(new Dimension(0, 4));
+        accent.setMaximumSize(new Dimension(Integer.MAX_VALUE, 4));
+        accent.setMinimumSize(new Dimension(0, 4));
+
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(FONT_SECTION);
         titleLabel.setForeground(COLOR_TEXT);
@@ -348,8 +373,9 @@ public class UnifiedSettingsPanel extends JPanel {
         header.add(Box.createVerticalStrut(4));
         header.add(subtitleLabel);
 
+        card.add(accent);
         card.add(header);
-        card.add(Box.createVerticalStrut(18));
+        card.add(Box.createVerticalStrut(16));
         return card;
     }
 
@@ -624,6 +650,7 @@ public class UnifiedSettingsPanel extends JPanel {
                 new MatteBorder(1, 1, 1, 1, active ? COLOR_PRIMARY : COLOR_NAV_BORDER),
                 new EmptyBorder(12, 14, 12, 14)
         ));
+        button.setFont(active ? FONT_NAV.deriveFont(Font.BOLD) : FONT_NAV);
     }
 
     private Icon createBadgeIcon(String text, Color background) {
