@@ -3,6 +3,8 @@ target/
 .m2/
 *.class
 HELP.md
+mvnw/
+mvnw.cmd
 
 # --- NETBEANS ---
 /nbproject/private/
