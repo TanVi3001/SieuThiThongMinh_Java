@@ -1,5 +1,6 @@
 package view;
 
+import business.sql.sales_order.DeliveryManagementSql;
 import model.order.Order;
 import model.order.Customer;
 import java.awt.*;
@@ -28,7 +29,7 @@ public class OrderDetailDialog extends JDialog {
 
     public OrderDetailDialog(Frame parent, Order order, Customer customer, List<Map<String, Object>> details) {
         super(parent, "Chi Tiết Hóa Đơn: " + order.getOrderId(), true);
-        setSize(850, 780);
+        setSize(850, 850); // Tăng height lên một chút để nhét thêm thẻ Giao Hàng
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
@@ -55,6 +56,10 @@ public class OrderDetailDialog extends JDialog {
 
         // --- THÔNG TIN KHÁCH HÀNG & ƯU ĐÃI ---
         pnlBody.add(createInfoGrid(customer, order));
+        pnlBody.add(Box.createVerticalStrut(15));
+
+        // --- 🌟 THÔNG TIN GIAO HÀNG ĐƯỢC NHÚNG VÀO ĐÂY ---
+        pnlBody.add(createDeliveryCard(order.getOrderId()));
         pnlBody.add(Box.createVerticalStrut(20));
 
         // --- BẢNG SẢN PHẨM ---
@@ -64,7 +69,11 @@ public class OrderDetailDialog extends JDialog {
         // --- TỔNG KẾT ---
         pnlBody.add(createSummaryPanel());
 
-        add(pnlBody, BorderLayout.CENTER);
+        // Bọc phần thân vào JScrollPane để chống vỡ khung nếu dữ liệu dài
+        JScrollPane scrollPane = new JScrollPane(pnlBody);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrollPane, BorderLayout.CENTER);
 
         // --- NÚT ĐÓNG / LƯU ---
         add(createActionButtons(), BorderLayout.SOUTH);
@@ -178,6 +187,65 @@ public class OrderDetailDialog extends JDialog {
         return pnl;
     }
 
+    // =========================================================================
+    // 🔥 HÀM MỚI ĐƯỢC THÊM VÀO ĐỂ HIỂN THỊ GIAO HÀNG
+    // =========================================================================
+    private JPanel createDeliveryCard(String orderId) {
+        JPanel card = new JPanel(new BorderLayout(10, 10));
+        card.setBackground(Color.WHITE);
+        card.setBorder(TitledBorder("THÔNG TIN GIAO NHẬN"));
+        
+        // Gọi SQL lấy data
+        Map<String, String> data = null;
+        try {
+            data = DeliveryManagementSql.getInstance().getDeliveryInfoByOrderId(orderId);
+        } catch (Exception e) {
+            System.err.println("Lỗi hoặc chưa có hàm SQL Giao hàng: " + e.getMessage());
+        }
+
+        if (data == null || data.isEmpty()) {
+            JPanel emptyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            emptyPanel.setBackground(Color.WHITE);
+            emptyPanel.add(new JLabel("<html><i>Đơn hàng này mua trực tiếp, không sử dụng dịch vụ giao nhận.</i></html>"));
+            card.add(emptyPanel, BorderLayout.CENTER);
+            return card;
+        }
+
+        JPanel grid = new JPanel(new GridBagLayout());
+        grid.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 20);
+
+        String loai = data.get("loai_giao_hang");
+        String status = data.get("status") != null ? data.get("status") : "Đang chờ xử lý";
+
+        // Dòng 1: Hình thức và Trạng thái
+        gbc.gridy = 0; gbc.gridx = 0;
+        grid.add(new JLabel("<html><span style='color:#718096;'>Hình thức:</span> <b>" + loai + "</b></html>"), gbc);
+        
+        gbc.gridx = 1;
+        grid.add(new JLabel("<html><span style='color:#718096;'>Trạng thái:</span> <b style='color:#E63946;'>" + status + "</b></html>"), gbc);
+
+        // Dòng 2: Phân loại theo Schema để hiện trường thích hợp
+        gbc.gridy = 1; gbc.gridx = 0; gbc.gridwidth = 2;
+        if ("Giao hàng tận nơi".equals(loai)) {
+            String feeStr = (data.get("fee") != null) ? df.format(Double.parseDouble(data.get("fee"))) : "0 đ";
+            String shipInfo = "📍 Địa chỉ: <b>" + data.get("address") + "</b><br>📞 SĐT nhận: " + data.get("phone") + " &nbsp;&nbsp;|&nbsp;&nbsp; 💰 Phí ship: <b style='color:#10B981;'>" + feeStr + "</b>";
+            grid.add(new JLabel("<html>" + shipInfo + "</html>"), gbc);
+            
+        } else if ("Lấy tại tủ khóa".equals(loai)) {
+            grid.add(new JLabel("<html>📦 Mã tủ Locker: <b style='color:#365CF5;'>" + data.get("locker") + "</b> &nbsp;&nbsp;|&nbsp;&nbsp; ⏰ Giờ hẹn lấy: <b>" + data.get("time") + "</b></html>"), gbc);
+            
+        } else if ("Nhận tại quầy".equals(loai)) {
+            grid.add(new JLabel("<html>🏪 Vị trí quầy tiếp nhận: <b style='color:#365CF5;'>" + data.get("counter") + "</b></html>"), gbc);
+        }
+
+        card.add(grid, BorderLayout.CENTER);
+        return card;
+    }
+
     private JScrollPane createProductTable(List<Map<String, Object>> details) {
         String[] cols = {"Mã SP", "Tên Sản Phẩm", "SL", "Đơn Giá", "Thành Tiền"};
         
@@ -200,7 +268,6 @@ public class OrderDetailDialog extends JDialog {
             try { dPrice = Double.parseDouble(price.toString()); } catch (Exception e) {}
             try { dTotal = Double.parseDouble(total.toString()); } catch (Exception e) {}
 
-            // Truyền trực tiếp số liệu Double vào bảng để tính toán cho chuẩn
             modOrderDetail.addRow(new Object[]{pId, pName != null ? pName : pId, qty, dPrice, dTotal});
         }
 
@@ -214,7 +281,7 @@ public class OrderDetailDialog extends JDialog {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 if (value instanceof Number) {
-                    value = df.format(value); // Ép hiển thị thành dạng 100,000 đ
+                    value = df.format(value);
                 }
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 setHorizontalAlignment(JLabel.RIGHT);
@@ -255,11 +322,8 @@ public class OrderDetailDialog extends JDialog {
                         return;
                     }
 
-                    // Tự động tính: Thành Tiền = Đơn Giá * Số Lượng Mới
                     double price = Double.parseDouble(modOrderDetail.getValueAt(row, 3).toString());
                     modOrderDetail.setValueAt(price * newQty, row, 4);
-
-                    // Tự động Cập nhật tổng
                     calculateOrderTotal();
 
                 } catch (Exception ex) {
@@ -268,7 +332,9 @@ public class OrderDetailDialog extends JDialog {
             }
         });
 
-        return new JScrollPane(table);
+        JScrollPane sp = new JScrollPane(table);
+        sp.setPreferredSize(new Dimension(0, 250)); // Set cứng chiều cao bảng để nhường chỗ cho các thẻ trên
+        return sp;
     }
 
     private JPanel createSummaryPanel() {
@@ -311,13 +377,11 @@ public class OrderDetailDialog extends JDialog {
         pnl.add(lbl3, gbc);
         gbc.gridx = 1; pnl.add(lblTotalPayVal, gbc);
 
-        // Tính toán khởi tạo
         calculateOrderTotal();
 
         return pnl;
     }
 
-    // 🌟 HÀM XỬ LÝ TỰ ĐỘNG TÍNH LẠI TỔNG TIỀN THEO BẢNG
     private void calculateOrderTotal() {
         double subTotal = 0;
         for (int i = 0; i < modOrderDetail.getRowCount(); i++) {
@@ -348,10 +412,8 @@ public class OrderDetailDialog extends JDialog {
         btnSave.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnSave.addActionListener(e -> {
             JOptionPane.showMessageDialog(this, "Tính năng lưu thay đổi đơn hàng đang được phát triển!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
-            // TODO: Ở đây bạn sẽ gọi OrdersSql.getInstance().updateOrder(...)
         });
 
-        // Chỉ hiện nút lưu nếu đơn chưa bị hủy
         if (!isCancelled) {
             pnl.add(btnSave);
         }
@@ -378,9 +440,6 @@ public class OrderDetailDialog extends JDialog {
         }
     }
 
-    // =========================================================
-    // CUSTOM CELL EDITOR (NÚT TĂNG GIẢM TRONG BẢNG)
-    // =========================================================
     class SpinnerEditor extends DefaultCellEditor {
         private JSpinner spinner;
         public SpinnerEditor() {

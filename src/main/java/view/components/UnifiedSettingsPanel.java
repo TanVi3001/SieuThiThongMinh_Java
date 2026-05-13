@@ -301,7 +301,7 @@ public class UnifiedSettingsPanel extends JPanel {
     private JPanel buildSecuritySection() {
         JPanel card = createContentCard("Bảo mật tài khoản", "Đổi mật khẩu để bảo vệ tài khoản");
 
-        lblUsername = new JLabel("Tài khoản: " + getCurrentUsername());
+        JLabel lblUsername = new JLabel("Tài khoản: " + getCurrentUsername());
         lblUsername.setFont(FONT_TEXT);
         lblUsername.setForeground(COLOR_MUTED);
         card.add(lblUsername);
