@@ -3,7 +3,7 @@ target/
 .m2/
 *.class
 HELP.md
-mvnw/
+mvnw
 mvnw.cmd
 
 # --- NETBEANS ---
