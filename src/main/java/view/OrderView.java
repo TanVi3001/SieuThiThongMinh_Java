@@ -30,9 +30,12 @@ import javax.swing.JTextField;
 import common.events.EventBus;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
+import common.report.ReportViewer;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
+import java.nio.file.Paths;
 import java.util.Calendar;
+import java.util.HashMap;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.SwingWorker;
@@ -740,10 +743,21 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         try {
-            exportInvoice(orderId.trim());
+            openSalesInvoiceReport(orderId.trim());
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi khi xuất hóa đơn: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void openSalesInvoiceReport(String orderId) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("ORDER_ID", orderId);
+
+        String reportPath = Paths.get(
+                "src", "main", "resources", "reports", "SalesInvoiceReport.jrxml"
+        ).toAbsolutePath().toString();
+
+        ReportViewer.showReport(reportPath, params);
     }
 
     // Variables declaration
