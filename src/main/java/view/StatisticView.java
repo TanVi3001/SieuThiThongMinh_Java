@@ -3,6 +3,8 @@ package view;
 import business.service.StatisticService;
 import com.toedter.calendar.JDateChooser;
 import view.components.IconHelper;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -20,14 +22,16 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
 
 /**
- * StatisticView - Power BI style dashboard for Smart Supermarket.
- * Giữ logic lấy dữ liệu qua StatisticService, chỉ refactor phần UI/UX.
+ * StatisticView - Power BI style dashboard for Smart Supermarket. Giữ logic lấy
+ * dữ liệu qua StatisticService, chỉ refactor phần UI/UX.
  */
 public class StatisticView extends JPanel {
 
@@ -218,7 +222,11 @@ public class StatisticView extends JPanel {
         gbc.fill = GridBagConstraints.BOTH;
         gbc.insets = new Insets(0, 0, 0, 14);
 
-        JPanel chartCard = createTitledCard("Doanh thu theo ngày", "Line chart realtime theo khoảng lọc", IconHelper.lineChart(18));
+        JPanel chartCard = createTitledCard(
+                "Doanh thu theo tháng",
+                "Tổng hợp doanh thu theo từng tháng trong khoảng lọc",
+                IconHelper.lineChart(18)
+        );
         revenueChart = new MiniLineChartPanel();
         chartCard.add(revenueChart, BorderLayout.CENTER);
 
@@ -254,7 +262,7 @@ public class StatisticView extends JPanel {
         tblKpi.getColumnModel().getColumn(4).setCellRenderer(new StatusRenderer());
         tblKpi.getColumnModel().getColumn(5).setCellRenderer(new TrendRenderer());
 
-        modRevenue = new DefaultTableModel(new Object[]{"Ngày giao dịch", "Tổng đơn", "Doanh thu thực tế"}, 0) {
+        modRevenue = new DefaultTableModel(new Object[]{"Tháng", "Tổng đơn", "Doanh thu thực tế"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -355,10 +363,19 @@ public class StatisticView extends JPanel {
             @Override
             protected ReportData doInBackground() throws Exception {
                 ReportData data = new ReportData();
+
+                // Dữ liệu chính vẫn theo đúng khoảng lọc người dùng chọn
                 data.revenueRows = statisticService.getRevenueReport(fromDate, toDate);
+                data.monthlyRevenueRows = aggregateRevenueByMonth(data.revenueRows);
                 data.productRows = statisticService.getProductReport(fromDate, toDate);
                 data.employeeRows = statisticService.getEmployeeReport(fromDate, toDate);
                 data.staffKpis = buildStaffKpis(data.employeeRows);
+
+                // Dữ liệu riêng cho biểu đồ tháng:
+                // Nếu khoảng lọc chỉ có 1 tháng, tự lấy thêm các tháng trước để có line chart đẹp
+                Date chartFromDate = getMonthlyChartFromDate(fromDate, toDate);
+                data.chartRevenueRows = statisticService.getRevenueReport(chartFromDate, toDate);
+
                 return data;
             }
 
@@ -384,7 +401,7 @@ public class StatisticView extends JPanel {
     }
 
     private void renderReport(ReportData data) {
-        fillRevenueTable(data.revenueRows);
+        fillRevenueTable(data.monthlyRevenueRows);
         fillProductTable(data.productRows);
         fillKpiTable(data.staffKpis);
         updateSummaryCards(data);
@@ -418,12 +435,12 @@ public class StatisticView extends JPanel {
         modKpi.setRowCount(0);
         for (StaffKpi kpi : staffKpis) {
             modKpi.addRow(new Object[]{
-                    kpi.name,
-                    kpi.score,
-                    formatCurrency(kpi.revenue),
-                    kpi.completedOrders,
-                    kpi.status,
-                    kpi.trend
+                kpi.name,
+                kpi.score,
+                formatCurrency(kpi.revenue),
+                kpi.completedOrders,
+                kpi.status,
+                kpi.trend
             });
         }
     }
@@ -431,9 +448,13 @@ public class StatisticView extends JPanel {
     private void updateSummaryCards(ReportData data) {
         int totalOrders = 0;
         double totalRevenue = 0;
-        for (Object[] row : data.revenueRows) {
-            if (row.length > 1) totalOrders += (int) Math.round(toDouble(row[1]));
-            if (row.length > 2) totalRevenue += toDouble(row[2]);
+        for (Object[] row : data.monthlyRevenueRows) {
+            if (row.length > 1) {
+                totalOrders += (int) Math.round(toDouble(row[1]));
+            }
+            if (row.length > 2) {
+                totalRevenue += toDouble(row[2]);
+            }
         }
 
         double avgKpi = 0;
@@ -459,12 +480,38 @@ public class StatisticView extends JPanel {
     }
 
     private void updateCharts(ReportData data) {
-        List<Double> points = new ArrayList<>();
-        List<String> labels = new ArrayList<>();
-        for (Object[] row : data.revenueRows) {
-            labels.add(String.valueOf(row.length > 0 ? row[0] : ""));
-            points.add(row.length > 2 ? toDouble(row[2]) : 0);
+        Date chartFromDate = getMonthlyChartFromDate(
+                dpFromDate.getDate(),
+                dpToDate.getDate()
+        );
+
+        Map<String, Double> monthlyRevenue = initMonthBuckets(
+                chartFromDate,
+                dpToDate.getDate()
+        );
+
+        // Dùng chartRevenueRows để chart luôn có nhiều tháng,
+        // không bị cụt thành 1 điểm khi lọc trong cùng 1 tháng.
+        List<Object[]> sourceRows = data.chartRevenueRows != null && !data.chartRevenueRows.isEmpty()
+                ? data.chartRevenueRows
+                : data.revenueRows;
+
+        for (Object[] row : sourceRows) {
+            Object dateValue = row.length > 0 ? row[0] : null;
+            double revenue = row.length > 2 ? toDouble(row[2]) : 0;
+
+            String monthKey = getMonthKey(dateValue);
+
+            if (!monthlyRevenue.containsKey(monthKey)) {
+                monthlyRevenue.put(monthKey, 0.0);
+            }
+
+            monthlyRevenue.put(monthKey, monthlyRevenue.get(monthKey) + revenue);
         }
+
+        List<String> labels = new ArrayList<>(monthlyRevenue.keySet());
+        List<Double> points = new ArrayList<>(monthlyRevenue.values());
+
         revenueChart.setData(points, labels);
         topStaffPanel.setStaff(data.staffKpis);
     }
@@ -472,14 +519,20 @@ public class StatisticView extends JPanel {
     private void updateInsights(ReportData data) {
         double totalRevenue = 0;
         int totalOrders = 0;
-        for (Object[] row : data.revenueRows) {
-            if (row.length > 1) totalOrders += (int) Math.round(toDouble(row[1]));
-            if (row.length > 2) totalRevenue += toDouble(row[2]);
+        for (Object[] row : data.monthlyRevenueRows) {
+            if (row.length > 1) {
+                totalOrders += (int) Math.round(toDouble(row[1]));
+            }
+            if (row.length > 2) {
+                totalRevenue += toDouble(row[2]);
+            }
         }
 
         StaffKpi best = data.staffKpis.isEmpty() ? null : data.staffKpis.get(0);
         for (StaffKpi k : data.staffKpis) {
-            if (best == null || k.score > best.score) best = k;
+            if (best == null || k.score > best.score) {
+                best = k;
+            }
         }
 
         lblInsight1.setText("Doanh thu kỳ này đạt " + formatCurrency(totalRevenue) + ", ghi nhận " + totalOrders + " đơn hàng hoàn thành.");
@@ -490,7 +543,9 @@ public class StatisticView extends JPanel {
     private String buildRiskInsight(List<StaffKpi> staffKpis) {
         int low = 0;
         for (StaffKpi kpi : staffKpis) {
-            if (kpi.score < 60) low++;
+            if (kpi.score < 60) {
+                low++;
+            }
         }
         if (staffKpis.isEmpty()) {
             return "Gợi ý: cần phát sinh thêm dữ liệu bán hàng để dashboard phân tích chính xác hơn.";
@@ -512,6 +567,146 @@ public class StatisticView extends JPanel {
         btnExportExcel.setEnabled(!loading);
         btnExportPDF.setEnabled(!loading);
         btnFilter.setText(loading ? "Đang tải..." : "Lọc dữ liệu");
+    }
+
+    // =========================================================
+    // MONTHLY REVENUE TRANSFORM
+    // =========================================================
+    private Date getMonthlyChartFromDate(Date fromDate, Date toDate) {
+        if (fromDate == null || toDate == null) {
+            return fromDate;
+        }
+
+        Calendar start = Calendar.getInstance();
+        start.setTime(fromDate);
+        start.set(Calendar.DAY_OF_MONTH, 1);
+
+        Calendar end = Calendar.getInstance();
+        end.setTime(toDate);
+        end.set(Calendar.DAY_OF_MONTH, 1);
+
+        int monthCount = 0;
+        Calendar tmp = (Calendar) start.clone();
+
+        while (!tmp.after(end)) {
+            monthCount++;
+            tmp.add(Calendar.MONTH, 1);
+        }
+
+        // Nếu khoảng lọc dưới 6 tháng thì chart tự mở rộng về 6 tháng gần nhất
+        if (monthCount < 6) {
+            Calendar chartStart = Calendar.getInstance();
+            chartStart.setTime(toDate);
+            chartStart.set(Calendar.DAY_OF_MONTH, 1);
+            chartStart.add(Calendar.MONTH, -5);
+            return chartStart.getTime();
+        }
+
+        return start.getTime();
+    }
+
+    private List<Object[]> aggregateRevenueByMonth(List<Object[]> dailyRows) {
+        Map<String, double[]> monthlyValues = new TreeMap<>();
+        Map<String, String> monthlyLabels = new TreeMap<>();
+
+        SimpleDateFormat displayFormat = new SimpleDateFormat("MM/yyyy");
+
+        for (Object[] row : dailyRows) {
+            if (row == null || row.length < 3) {
+                continue;
+            }
+
+            Date parsedDate = parseRevenueDate(row[0]);
+            String sortKey;
+            String displayLabel;
+
+            if (parsedDate != null) {
+                sortKey = new SimpleDateFormat("yyyy-MM").format(parsedDate);
+                displayLabel = displayFormat.format(parsedDate);
+            } else {
+                displayLabel = normalizeMonthText(row[0]);
+                sortKey = buildFallbackMonthSortKey(displayLabel);
+            }
+
+            double orders = row.length > 1 ? toDouble(row[1]) : 0;
+            double revenue = row.length > 2 ? toDouble(row[2]) : 0;
+
+            double[] values = monthlyValues.getOrDefault(sortKey, new double[]{0, 0});
+            values[0] += orders;
+            values[1] += revenue;
+
+            monthlyValues.put(sortKey, values);
+            monthlyLabels.put(sortKey, displayLabel);
+        }
+
+        List<Object[]> monthlyRows = new ArrayList<>();
+        for (Map.Entry<String, double[]> entry : monthlyValues.entrySet()) {
+            monthlyRows.add(new Object[]{
+                monthlyLabels.get(entry.getKey()),
+                (int) Math.round(entry.getValue()[0]),
+                entry.getValue()[1]
+            });
+        }
+
+        return monthlyRows;
+    }
+
+    private Date parseRevenueDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Date) {
+            return (Date) value;
+        }
+
+        String raw = String.valueOf(value).trim();
+        String[] patterns = {
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "MM/yyyy",
+            "M/yyyy"
+        };
+
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(pattern);
+                sdf.setLenient(false);
+                return sdf.parse(raw);
+            } catch (Exception ignored) {
+            }
+        }
+
+        return null;
+    }
+
+    private String normalizeMonthText(Object value) {
+        if (value == null) {
+            return "Không rõ";
+        }
+
+        String raw = String.valueOf(value).trim();
+        if (raw.matches("\\d{1,2}/\\d{4}")) {
+            String[] parts = raw.split("/");
+            int month = Integer.parseInt(parts[0]);
+            return String.format("%02d/%s", month, parts[1]);
+        }
+
+        return raw;
+    }
+
+    private String buildFallbackMonthSortKey(String monthLabel) {
+        try {
+            if (monthLabel.matches("\\d{2}/\\d{4}")) {
+                String[] parts = monthLabel.split("/");
+                return parts[1] + "-" + parts[0];
+            }
+        } catch (Exception ignored) {
+        }
+
+        return monthLabel;
     }
 
     // =========================================================
@@ -546,24 +741,32 @@ public class StatisticView extends JPanel {
     // =========================================================
     private void exportActiveTableAsCsv(ActionEvent e) {
         JTable table = getActiveTable();
-        if (table == null) return;
+        if (table == null) {
+            return;
+        }
 
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Xuất dữ liệu Excel/CSV");
         chooser.setSelectedFile(new File("bao_cao_thong_ke.csv"));
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
 
         try (PrintWriter out = new PrintWriter(new FileWriter(chooser.getSelectedFile(), false))) {
             for (int c = 0; c < table.getColumnCount(); c++) {
                 out.print(escapeCsv(table.getColumnName(c)));
-                if (c < table.getColumnCount() - 1) out.print(",");
+                if (c < table.getColumnCount() - 1) {
+                    out.print(",");
+                }
             }
             out.println();
 
             for (int r = 0; r < table.getRowCount(); r++) {
                 for (int c = 0; c < table.getColumnCount(); c++) {
                     out.print(escapeCsv(String.valueOf(table.getValueAt(r, c))));
-                    if (c < table.getColumnCount() - 1) out.print(",");
+                    if (c < table.getColumnCount() - 1) {
+                        out.print(",");
+                    }
                 }
                 out.println();
             }
@@ -575,7 +778,9 @@ public class StatisticView extends JPanel {
 
     private void printActiveTable() {
         JTable table = getActiveTable();
-        if (table == null) return;
+        if (table == null) {
+            return;
+        }
         try {
             boolean ok = table.print(JTable.PrintMode.FIT_WIDTH);
             if (ok) {
@@ -588,13 +793,19 @@ public class StatisticView extends JPanel {
 
     private JTable getActiveTable() {
         int index = detailTabs != null ? detailTabs.getSelectedIndex() : 0;
-        if (index == 1) return tblRevenue;
-        if (index == 2) return tblProducts;
+        if (index == 1) {
+            return tblRevenue;
+        }
+        if (index == 2) {
+            return tblProducts;
+        }
         return tblKpi;
     }
 
     private String escapeCsv(String s) {
-        if (s == null) return "";
+        if (s == null) {
+            return "";
+        }
         return "\"" + s.replace("\"", "\"\"") + "\"";
     }
 
@@ -699,8 +910,12 @@ public class StatisticView extends JPanel {
     }
 
     private double toDouble(Object value) {
-        if (value == null) return 0;
-        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
         try {
             return Double.parseDouble(value.toString().replace("đ", "").replace(".", "").replace(",", "").trim());
         } catch (Exception e) {
@@ -708,10 +923,70 @@ public class StatisticView extends JPanel {
         }
     }
 
+    private Map<String, Double> initMonthBuckets(Date fromDate, Date toDate) {
+        Map<String, Double> result = new LinkedHashMap<>();
+
+        if (fromDate == null || toDate == null) {
+            return result;
+        }
+
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(fromDate);
+        cal.set(Calendar.DAY_OF_MONTH, 1);
+
+        Calendar end = Calendar.getInstance();
+        end.setTime(toDate);
+        end.set(Calendar.DAY_OF_MONTH, 1);
+
+        SimpleDateFormat fmt = new SimpleDateFormat("MM/yyyy");
+
+        while (!cal.after(end)) {
+            result.put(fmt.format(cal.getTime()), 0.0);
+            cal.add(Calendar.MONTH, 1);
+        }
+
+        return result;
+    }
+
+    private String getMonthKey(Object dateValue) {
+        if (dateValue == null) {
+            return "Không rõ";
+        }
+
+        if (dateValue instanceof Date) {
+            return new SimpleDateFormat("MM/yyyy").format((Date) dateValue);
+        }
+
+        String raw = dateValue.toString().trim();
+
+        String[] patterns = {
+            "yyyy-MM-dd",
+            "yyyy-MM-dd HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "MM/yyyy"
+        };
+
+        for (String pattern : patterns) {
+            try {
+                Date parsed = new SimpleDateFormat(pattern).parse(raw);
+                return new SimpleDateFormat("MM/yyyy").format(parsed);
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (raw.length() >= 7 && raw.charAt(4) == '-') {
+            return raw.substring(5, 7) + "/" + raw.substring(0, 4);
+        }
+
+        return raw;
+    }
+
     // =========================================================
     // RENDERERS
     // =========================================================
     class ZebraRenderer extends DefaultTableCellRenderer {
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -723,6 +998,7 @@ public class StatisticView extends JPanel {
     }
 
     class CenterRenderer extends ZebraRenderer {
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -732,6 +1008,7 @@ public class StatisticView extends JPanel {
     }
 
     class RightRenderer extends ZebraRenderer {
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -741,6 +1018,7 @@ public class StatisticView extends JPanel {
     }
 
     class KpiScoreRenderer extends DefaultTableCellRenderer {
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             int score = (int) Math.round(toDouble(value));
@@ -758,44 +1036,65 @@ public class StatisticView extends JPanel {
                 label.setForeground(dangerRed);
                 label.setBackground(new Color(254, 226, 226));
             }
-            if (isSelected) label.setBackground(new Color(219, 234, 254));
+            if (isSelected) {
+                label.setBackground(new Color(219, 234, 254));
+            }
             return label;
         }
     }
 
     class StatusRenderer extends KpiBadgeRenderer {
+
         @Override
         protected Color getBadgeBg(String value) {
-            if (value.contains("Tốt")) return new Color(220, 252, 231);
-            if (value.contains("Đạt")) return new Color(254, 243, 199);
+            if (value.contains("Tốt")) {
+                return new Color(220, 252, 231);
+            }
+            if (value.contains("Đạt")) {
+                return new Color(254, 243, 199);
+            }
             return new Color(254, 226, 226);
         }
 
         @Override
         protected Color getBadgeFg(String value) {
-            if (value.contains("Tốt")) return successGreen;
-            if (value.contains("Đạt")) return new Color(146, 64, 14);
+            if (value.contains("Tốt")) {
+                return successGreen;
+            }
+            if (value.contains("Đạt")) {
+                return new Color(146, 64, 14);
+            }
             return dangerRed;
         }
     }
 
     class TrendRenderer extends KpiBadgeRenderer {
+
         @Override
         protected Color getBadgeBg(String value) {
-            if (value.contains("Tăng")) return new Color(220, 252, 231);
-            if (value.contains("Ổn")) return new Color(219, 234, 254);
+            if (value.contains("Tăng")) {
+                return new Color(220, 252, 231);
+            }
+            if (value.contains("Ổn")) {
+                return new Color(219, 234, 254);
+            }
             return new Color(254, 226, 226);
         }
 
         @Override
         protected Color getBadgeFg(String value) {
-            if (value.contains("Tăng")) return successGreen;
-            if (value.contains("Ổn")) return primaryBlue;
+            if (value.contains("Tăng")) {
+                return successGreen;
+            }
+            if (value.contains("Ổn")) {
+                return primaryBlue;
+            }
             return dangerRed;
         }
     }
 
     abstract class KpiBadgeRenderer extends DefaultTableCellRenderer {
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             String text = value == null ? "" : value.toString();
@@ -810,6 +1109,7 @@ public class StatisticView extends JPanel {
         }
 
         protected abstract Color getBadgeBg(String value);
+
         protected abstract Color getBadgeFg(String value);
     }
 
@@ -817,6 +1117,7 @@ public class StatisticView extends JPanel {
     // CUSTOM COMPONENTS
     // =========================================================
     class RoundedCardPanel extends JPanel {
+
         private final int radius;
         private final Color bg;
         private final boolean shadow;
@@ -846,6 +1147,7 @@ public class StatisticView extends JPanel {
     }
 
     class RoundedButton extends JButton {
+
         private final Color bg;
 
         RoundedButton(String text, Color bg, Color fg) {
@@ -872,6 +1174,7 @@ public class StatisticView extends JPanel {
     }
 
     class SummaryCard extends RoundedCardPanel {
+
         JLabel valueLabel;
         JLabel deltaLabel;
 
@@ -914,6 +1217,7 @@ public class StatisticView extends JPanel {
     }
 
     class MiniLineChartPanel extends JPanel {
+
         private List<Double> points = new ArrayList<>();
         private List<String> labels = new ArrayList<>();
 
@@ -931,15 +1235,22 @@ public class StatisticView extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
             int w = getWidth();
             int h = getHeight();
-            int left = 55, right = 24, top = 20, bottom = 42;
+
+            int left = 65;
+            int right = 35;
+            int top = 24;
+            int bottom = 54;
+
             int chartW = Math.max(1, w - left - right);
             int chartH = Math.max(1, h - top - bottom);
 
+            // Grid ngang
             g2.setColor(new Color(241, 245, 249));
             for (int i = 0; i <= 4; i++) {
                 int y = top + i * chartH / 4;
@@ -949,60 +1260,170 @@ public class StatisticView extends JPanel {
             if (points.isEmpty()) {
                 g2.setColor(textGray);
                 g2.setFont(boldFont);
+
                 String msg = "Chưa có dữ liệu doanh thu trong khoảng lọc";
-                g2.drawString(msg, left + chartW / 2 - g2.getFontMetrics().stringWidth(msg) / 2, top + chartH / 2);
+                int msgX = left + chartW / 2 - g2.getFontMetrics().stringWidth(msg) / 2;
+                int msgY = top + chartH / 2;
+
+                g2.drawString(msg, msgX, msgY);
                 g2.dispose();
                 return;
             }
 
             double max = 0;
-            for (double p : points) max = Math.max(max, p);
-            if (max <= 0) max = 1;
-
-            Path2D path = new Path2D.Double();
-            for (int i = 0; i < points.size(); i++) {
-                double x = left + (points.size() == 1 ? chartW / 2.0 : i * chartW / (double) (points.size() - 1));
-                double y = top + chartH - (points.get(i) / max) * chartH;
-                if (i == 0) path.moveTo(x, y);
-                else path.lineTo(x, y);
+            for (double p : points) {
+                max = Math.max(max, p);
             }
 
+            if (max <= 0) {
+                max = 1;
+            }
+
+            Path2D path = new Path2D.Double();
+
+            for (int i = 0; i < points.size(); i++) {
+                double x = left + (points.size() == 1
+                        ? chartW / 2.0
+                        : i * chartW / (double) (points.size() - 1));
+
+                double y = top + chartH - (points.get(i) / max) * chartH;
+
+                if (i == 0) {
+                    path.moveTo(x, y);
+                } else {
+                    path.lineTo(x, y);
+                }
+            }
+
+            // Fill nhẹ dưới line cho giống dashboard
+            Path2D area = new Path2D.Double(path);
+            double lastX = left + (points.size() == 1
+                    ? chartW / 2.0
+                    : (points.size() - 1) * chartW / (double) (points.size() - 1));
+            double firstX = left + (points.size() == 1 ? chartW / 2.0 : 0);
+
+            area.lineTo(lastX, top + chartH);
+            area.lineTo(firstX, top + chartH);
+            area.closePath();
+
+            g2.setColor(new Color(primaryBlue.getRed(), primaryBlue.getGreen(), primaryBlue.getBlue(), 28));
+            g2.fill(area);
+
+            // Vẽ line
             g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             g2.setColor(primaryBlue);
             g2.draw(path);
 
-            g2.setStroke(new BasicStroke(1f));
+            // Vẽ điểm
+            g2.setStroke(new BasicStroke(1.4f));
             for (int i = 0; i < points.size(); i++) {
-                int x = (int) (left + (points.size() == 1 ? chartW / 2.0 : i * chartW / (double) (points.size() - 1)));
+                int x = (int) (left + (points.size() == 1
+                        ? chartW / 2.0
+                        : i * chartW / (double) (points.size() - 1)));
+
                 int y = (int) (top + chartH - (points.get(i) / max) * chartH);
+
                 g2.setColor(Color.WHITE);
                 g2.fillOval(x - 5, y - 5, 10, 10);
+
                 g2.setColor(primaryBlue);
                 g2.drawOval(x - 5, y - 5, 10, 10);
             }
 
+            // Label trục Y
             g2.setFont(new Font("Segoe UI", Font.PLAIN, 11));
             g2.setColor(textGray);
-            g2.drawString("0", 8, top + chartH + 4);
-            g2.drawString(formatShortCurrency(max), 8, top + 4);
-            if (!labels.isEmpty()) {
-                g2.drawString(String.valueOf(labels.get(0)), left, h - 12);
-                String last = String.valueOf(labels.get(labels.size() - 1));
-                g2.drawString(last, left + chartW - g2.getFontMetrics().stringWidth(last), h - 12);
-            }
+            g2.drawString("0", 12, top + chartH + 4);
+            g2.drawString(formatShortCurrency(max), 12, top + 4);
+
+            // Label trục X: vẽ theo tháng, không cắt cụt 05/2026 thành 05/20
+            drawMonthLabels(g2, left, chartW, h);
 
             g2.dispose();
         }
 
+        private void drawMonthLabels(Graphics2D g2, int left, int chartW, int h) {
+            if (labels.isEmpty()) {
+                return;
+            }
+
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            g2.setColor(textGray);
+
+            FontMetrics fm = g2.getFontMetrics();
+            int n = labels.size();
+
+            if (n == 1) {
+                String label = shortenMonthLabel(String.valueOf(labels.get(0)));
+                int x = left + chartW / 2 - fm.stringWidth(label) / 2;
+                g2.drawString(label, x, h - 16);
+                return;
+            }
+
+            // Nếu nhiều tháng quá thì giảm số label để không bị đè chữ
+            int step = 1;
+            if (n > 8) {
+                step = 2;
+            }
+            if (n > 14) {
+                step = 3;
+            }
+
+            for (int i = 0; i < n; i++) {
+                boolean shouldDraw = i == 0 || i == n - 1 || i % step == 0;
+                if (!shouldDraw) {
+                    continue;
+                }
+
+                String label = shortenMonthLabel(String.valueOf(labels.get(i)));
+
+                int x = (int) (left + i * chartW / (double) (n - 1));
+                int textW = fm.stringWidth(label);
+
+                if (i == 0) {
+                    g2.drawString(label, x, h - 16);
+                } else if (i == n - 1) {
+                    g2.drawString(label, x - textW, h - 16);
+                } else {
+                    g2.drawString(label, x - textW / 2, h - 16);
+                }
+            }
+        }
+
+        private String shortenMonthLabel(String label) {
+            if (label == null) {
+                return "";
+            }
+
+            label = label.trim();
+
+            // 05/2026 -> 05/26
+            if (label.length() == 7 && label.contains("/")) {
+                return label.substring(0, 3) + label.substring(5);
+            }
+
+            return label;
+        }
+
         private String formatShortCurrency(double value) {
-            if (value >= 1_000_000_000) return String.format("%.1f tỷ", value / 1_000_000_000d);
-            if (value >= 1_000_000) return String.format("%.1f tr", value / 1_000_000d);
-            if (value >= 1_000) return String.format("%.0f k", value / 1_000d);
+            if (value >= 1_000_000_000) {
+                return String.format("%.1f tỷ", value / 1_000_000_000d);
+            }
+
+            if (value >= 1_000_000) {
+                return String.format("%.1f tr", value / 1_000_000d);
+            }
+
+            if (value >= 1_000) {
+                return String.format("%.0f k", value / 1_000d);
+            }
+
             return String.format("%.0f", value);
         }
     }
 
     class TopStaffPanel extends JPanel {
+
         private List<StaffKpi> staff = new ArrayList<>();
 
         TopStaffPanel() {
@@ -1074,13 +1495,17 @@ public class StatisticView extends JPanel {
     // DATA HOLDERS
     // =========================================================
     static class ReportData {
+
         List<Object[]> revenueRows = new ArrayList<>();
+        List<Object[]> chartRevenueRows = new ArrayList<>(); // Dữ liệu riêng cho chart theo tháng
+        List<Object[]> monthlyRevenueRows = new ArrayList<>();
         List<Object[]> productRows = new ArrayList<>();
         List<Object[]> employeeRows = new ArrayList<>();
         List<StaffKpi> staffKpis = new ArrayList<>();
     }
 
     static class StaffKpi {
+
         String name;
         int score;
         double revenue;
