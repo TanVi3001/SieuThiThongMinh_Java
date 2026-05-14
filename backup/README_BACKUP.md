@@ -18,9 +18,9 @@ Thư mục này dùng để lưu file backup database và hướng dẫn restore
 ## 2. Thông tin database demo
 
 ```text
-Oracle User: SMART_SUPERMARKET
-Password: 123456
-Host: localhost
+Oracle User: system
+Password: Admin123
+Host: localhost(hoặc địa chỉ IP máy của mình để chạy real-time)
 Port: 1521
 SID/Service: xe hoặc XEPDB1
 ```
@@ -28,7 +28,7 @@ SID/Service: xe hoặc XEPDB1
 URL Java thường dùng:
 
 ```text
-jdbc:oracle:thin:@localhost:1521:xe
+jdbc:oracle:thin:@localhost:1521:orcl
 ```
 
 hoặc:
@@ -48,9 +48,9 @@ jdbc:oracle:thin:@//localhost:1521/XEPDB1
 ```sql
 DROP USER SMART_SUPERMARKET CASCADE;
 
-CREATE USER SMART_SUPERMARKET IDENTIFIED BY 123456;
+CREATE USER system IDENTIFIED BY Admin123;
 GRANT CONNECT, RESOURCE TO SMART_SUPERMARKET;
-ALTER USER SMART_SUPERMARKET QUOTA UNLIMITED ON USERS;
+ALTER USER system QUOTA UNLIMITED ON USERS;
 ```
 
 Nếu chưa từng tạo user thì có thể bỏ dòng `DROP USER`.
