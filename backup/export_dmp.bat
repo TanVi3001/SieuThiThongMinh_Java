@@ -1,11 +1,16 @@
 @echo off
 REM Export Oracle database demo for Smart Supermarket
-REM Make sure C:\oracle_backup exists before running this file.
 
-if not exist C:\oracle_backup mkdir C:\oracle_backup
+expdp system/Admin123@//10.0.232.16:1521/ORCL DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=smart_supermarket_demo.dmp LOGFILE=smart_supermarket_export.log REUSE_DUMPFILES=Y
 
-expdp SMART_SUPERMARKET/123456 DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=smart_supermarket_demo.dmp LOGFILE=smart_supermarket_export.log REUSE_DUMPFILES=Y
+if errorlevel 1 (
+    echo.
+    echo EXPORT FAILED. Please check Oracle service name, username/password, or DATA_PUMP_DIR_SMART.
+    pause
+    exit /b 1
+)
 
 echo.
-echo Export finished. Check file: C:\oracle_backup\smart_supermarket_demo.dmp
+echo Export success.
+echo Check file in Oracle DIRECTORY path.
 pause
