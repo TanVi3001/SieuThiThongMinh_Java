@@ -197,4 +197,25 @@ public class AuditLogSql implements SqlInterface<AuditLog> {
 
         this.insert(audit);
     }
+    
+    // =========================================================================
+    // HÀM TIỆN ÍCH GHI LOG HỆ THỐNG TỰ ĐỘNG (Static method)
+    // =========================================================================
+    public static void logSystemEvent(String actionType, String entityType, String entityId, 
+                                      String oldValue, String newValue, String reason) {
+        AuditLog audit = new AuditLog();
+        // Mặc định gán người thực hiện là SYSTEM (hệ thống) vì đây là các tác vụ chạy ngầm
+        audit.setAccountId("SYSTEM"); 
+        audit.setActionType(actionType);
+        audit.setEntityType(entityType);
+        audit.setEntityId(entityId);
+        audit.setOldValue(oldValue);
+        audit.setNewValue(newValue);
+        audit.setReason(reason);
+        audit.setIpAddress("localhost");
+        audit.setDeviceInfo("System Automated Task");
+
+        // Gọi hàm insert của chính class này để lưu xuống Database
+        getInstance().insert(audit);
+    }
 }
