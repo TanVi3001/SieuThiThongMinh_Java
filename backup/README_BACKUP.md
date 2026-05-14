@@ -6,127 +6,118 @@ Thư mục này dùng để lưu file backup database và hướng dẫn restore
 
 | File | Mục đích |
 |---|---|
-| `README_BACKUP.md` | Hướng dẫn restore/backup ngắn gọn |
-| `export_dmp.bat` | Lệnh export database Oracle ra file `.dmp` |
-| `import_dmp.bat` | Lệnh import file `.dmp` vào Oracle |
-| `smart_supermarket_demo.dmp` | File dump database demo, tạo sau khi chạy `export_dmp.bat` |
-
-> Lưu ý: file `.dmp` thật cần được export từ máy có Oracle Database đang chứa dữ liệu demo.
+| `README_BACKUP.md` | Hướng dẫn backup/restore ngắn gọn |
+| `export_dmp.bat` | Export database Oracle ra file `.dmp` |
+| `import_dmp.bat` | Import file `.dmp` vào Oracle |
+| `SMART_SUPERMARKET_DEMO.DMP` | File dump database demo |
 
 ---
 
-## 2. Thông tin database demo
+## 2. Thông tin database đang dùng
 
 ```text
 Oracle User: system
-Password: Admin123
-Host: localhost(hoặc địa chỉ IP máy của mình để chạy real-time)
+Password: mật khẩu Oracle của máy demo
+Host: localhost hoặc IP máy chạy Oracle
 Port: 1521
-SID/Service: xe hoặc XEPDB1
+Service/SID: orcl
 ```
 
-URL Java thường dùng:
+URL JDBC trong Java:
 
 ```text
 jdbc:oracle:thin:@localhost:1521:orcl
 ```
 
-hoặc:
+Nếu chạy realtime qua LAN, thay `localhost` bằng IP máy chủ Oracle, ví dụ:
 
 ```text
-jdbc:oracle:thin:@//localhost:1521/XEPDB1
+jdbc:oracle:thin:@10.0.232.16:1521:orcl
 ```
 
 ---
 
-## 3. Restore database bằng DataGrip
+## 3. Tạo Oracle Directory trong DataGrip
 
-### Bước 1: Tạo user Oracle
-
-Đăng nhập Oracle bằng user `system`, mở SQL Console trong DataGrip và chạy:
+Đăng nhập DataGrip bằng user `system`, mở SQL Console và chạy:
 
 ```sql
-DROP USER SMART_SUPERMARKET CASCADE;
-
-CREATE USER system IDENTIFIED BY Admin123;
-GRANT CONNECT, RESOURCE TO SMART_SUPERMARKET;
-ALTER USER system QUOTA UNLIMITED ON USERS;
+CREATE OR REPLACE DIRECTORY DATA_PUMP_DIR_SMART
+AS 'E:\JAVA\DoAnFinal\SieuThiThongMinh_Java\backup';
 ```
 
-Nếu chưa từng tạo user thì có thể bỏ dòng `DROP USER`.
-
----
-
-### Bước 2: Tạo thư mục dump cho Oracle
-
-Trên Windows tạo thư mục:
-
-```text
-C:\oracle_backup
-```
-
-Trong DataGrip, đăng nhập bằng `system` và chạy:
+Kiểm tra lại:
 
 ```sql
-CREATE OR REPLACE DIRECTORY DATA_PUMP_DIR_SMART AS 'C:\oracle_backup';
-GRANT READ, WRITE ON DIRECTORY DATA_PUMP_DIR_SMART TO SMART_SUPERMARKET;
+SELECT directory_name, directory_path
+FROM all_directories
+WHERE directory_name = 'DATA_PUMP_DIR_SMART';
 ```
+
+> Lưu ý: đường dẫn trên phải tồn tại trên máy đang chạy Oracle Database.
 
 ---
 
-### Bước 3: Copy file dump
+## 4. Export database ra file DMP
 
-Copy file:
-
-```text
-backup/smart_supermarket_demo.dmp
-```
-
-vào thư mục:
-
-```text
-C:\oracle_backup\smart_supermarket_demo.dmp
-```
-
----
-
-### Bước 4: Import database
-
-Mở CMD tại Windows và chạy:
-
-```bat
-impdp SMART_SUPERMARKET/123456 DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=smart_supermarket_demo.dmp LOGFILE=smart_supermarket_import.log TABLE_EXISTS_ACTION=REPLACE
-```
-
-Hoặc chạy trực tiếp file:
-
-```text
-backup/import_dmp.bat
-```
-
----
-
-## 4. Export database ra file dmp
-
-Sau khi dữ liệu demo đã ổn định, chạy file:
+Chạy file:
 
 ```text
 backup/export_dmp.bat
 ```
 
-File `.dmp` sẽ được tạo tại:
+Hoặc chạy trực tiếp bằng CMD:
 
-```text
-C:\oracle_backup\smart_supermarket_demo.dmp
+```bat
+expdp system/<DB_PASSWORD>@//localhost:1521/orcl DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=SMART_SUPERMARKET_DEMO.DMP LOGFILE=smart_supermarket_export.log REUSE_DUMPFILES=Y
 ```
 
-Sau đó copy file này vào thư mục `backup/` của project nếu muốn nộp kèm.
+Nếu Oracle nằm trên máy khác trong LAN, đổi `localhost` thành IP máy đó:
+
+```bat
+expdp system/<DB_PASSWORD>@//10.0.232.16:1521/orcl DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=SMART_SUPERMARKET_DEMO.DMP LOGFILE=smart_supermarket_export.log REUSE_DUMPFILES=Y
+```
+
+Sau khi export thành công, trong thư mục `backup/` sẽ có:
+
+```text
+SMART_SUPERMARKET_DEMO.DMP
+smart_supermarket_export.log
+```
 
 ---
 
-## 5. Kiểm tra nhanh sau khi restore
+## 5. Import database từ file DMP
 
-Sau khi import xong, mở DataGrip bằng user `SMART_SUPERMARKET` và chạy:
+Đảm bảo file này đã nằm trong thư mục `backup/`:
+
+```text
+SMART_SUPERMARKET_DEMO.DMP
+```
+
+Sau đó chạy file:
+
+```text
+backup/import_dmp.bat
+```
+
+Hoặc chạy trực tiếp bằng CMD:
+
+```bat
+impdp system/<DB_PASSWORD>@//localhost:1521/orcl DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=SMART_SUPERMARKET_DEMO.DMP LOGFILE=smart_supermarket_import.log TABLE_EXISTS_ACTION=REPLACE
+```
+
+Nếu dùng IP máy chủ Oracle:
+
+```bat
+impdp system/<DB_PASSWORD>@//10.0.232.16:1521/orcl DIRECTORY=DATA_PUMP_DIR_SMART DUMPFILE=SMART_SUPERMARKET_DEMO.DMP LOGFILE=smart_supermarket_import.log TABLE_EXISTS_ACTION=REPLACE
+```
+
+---
+
+## 6. Kiểm tra nhanh sau khi import
+
+Mở DataGrip bằng user `system` và chạy:
 
 ```sql
 SELECT COUNT(*) FROM PRODUCTS;
@@ -141,14 +132,14 @@ Nếu các bảng đều có dữ liệu thì có thể chạy app Java.
 
 ---
 
-## 6. Chạy project Java
+## 7. Chạy project Java
 
 Kiểm tra file kết nối database trong project, ví dụ `DatabaseConnection.java`:
 
-```java
+```text
 jdbc:oracle:thin:@localhost:1521:orcl
 system
-Admin123
+mật khẩu Oracle của máy demo
 ```
 
 Sau đó mở NetBeans:
@@ -159,8 +150,10 @@ Clean and Build → Run Project
 
 ---
 
-## 7. Ghi chú
+## 8. Ghi chú
 
-- File `.dmp` không nên chỉnh sửa bằng tay.
-- Nếu import lỗi do khác SID/Service, kiểm tra lại Oracle đang dùng `xe` hay `XEPDB1`.
-- Nếu muốn tạo database từ SQL thay vì `.dmp`, có thể dùng thêm các file schema/seed SQL nếu nhóm có chuẩn bị riêng.
+- Project hiện đang backup theo user `system` và service `orcl`.
+- File `.dmp` không chỉnh sửa bằng tay.
+- Nếu import/export lỗi `ORA-12514`, kiểm tra lại service name `orcl`.
+- Nếu lỗi `DATA_PUMP_DIR_SMART is invalid`, chạy lại bước tạo Oracle Directory trong DataGrip.
+- Nếu chạy realtime qua nhiều máy, các máy client cần trỏ JDBC URL về IP máy chủ Oracle.
