@@ -284,6 +284,7 @@ public class ManagerManagementView extends JPanel {
         btnAdd.addActionListener(e -> {
             Employee emp = getManagerFromForm();
             if (emp == null) return;
+            
             if (isEmailDuplicate(emp.getEmail(), null)) {
                 JOptionPane.showMessageDialog(this, "Email này đã tồn tại trên hệ thống (Kể cả bị xóa mềm)!\nVui lòng dùng email khác cho Quản lý mới.", "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
                 txtEmail.requestFocus(); return;
@@ -295,46 +296,76 @@ public class ManagerManagementView extends JPanel {
 
             emp.setEmployeeId("MNG" + System.currentTimeMillis());
 
+            // THÊM CỜ BÁO LỖI (ELSE) ĐỂ BÁC BIẾT NÓ BỊ GÌ
             if (employeeSql.insert(emp) > 0) {
-                SyncVersionDao.bumpVersion("EMPLOYEES"); RealtimeClient.send("EMPLOYEES_CHANGED"); RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                try { new ActivationTokenService().issueToken(emp.getEmployeeId()); } catch (Exception ex) { logger.severe("Lỗi tạo mã: " + ex.getMessage()); }
+                SyncVersionDao.bumpVersion("EMPLOYEES"); 
+                RealtimeClient.send("EMPLOYEES_CHANGED"); 
+                RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                
+                try { 
+                    new ActivationTokenService().issueToken(emp.getEmployeeId()); 
+                } catch (Exception ex) { 
+                    logger.severe("Lỗi tạo mã: " + ex.getMessage()); 
+                }
 
                 String actualToken = emp.getEmployeeId();
                 String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
+                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); 
+                     java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
                     ps.setString(1, emp.getEmployeeId());
-                    try (java.sql.ResultSet rs = ps.executeQuery()) { if (rs.next()) actualToken = rs.getString("token"); }
+                    try (java.sql.ResultSet rs = ps.executeQuery()) { 
+                        if (rs.next()) actualToken = rs.getString("token"); 
+                    }
                 } catch (Exception ex) {}
 
-                final String finalEmail = emp.getEmail(); final String finalName = emp.getEmployeeName(); final String activationCode = actualToken;
+                final String finalEmail = emp.getEmail(); 
+                final String finalName = emp.getEmployeeName(); 
+                final String activationCode = actualToken;
+                
                 new Thread(() -> {
                     boolean mailSent = EmailService.sendActivationEmail(finalEmail, finalName, activationCode);
                     SwingUtilities.invokeLater(() -> {
-                        if (mailSent) JOptionPane.showMessageDialog(this, "Cấp tài khoản Quản lý thành công!\nHệ thống đã gửi Mã Kích Hoạt đến email: " + finalEmail, "Thành công", JOptionPane.INFORMATION_MESSAGE);
-                        else JOptionPane.showMessageDialog(this, "Hồ sơ đã thêm nhưng không thể gửi email. Vui lòng kiểm tra lại cấu hình mạng/SMTP!", "Cảnh báo Email", JOptionPane.WARNING_MESSAGE);
+                        if (mailSent) {
+                            JOptionPane.showMessageDialog(this, "Cấp tài khoản Quản lý thành công!\nHệ thống đã gửi Mã Kích Hoạt đến email: " + finalEmail, "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                        } else {
+                            JOptionPane.showMessageDialog(this, "Hồ sơ đã thêm nhưng không thể gửi email. Vui lòng kiểm tra lại cấu hình mạng/SMTP!", "Cảnh báo Email", JOptionPane.WARNING_MESSAGE);
+                        }
                     });
                 }).start();
 
-                if (!managerNameList.contains(emp.getEmployeeName())) { managerNameList.add(emp.getEmployeeName()); cbSearch.addItem(emp.getEmployeeName()); }
-                loadDataToTable(); clearForm();
+                if (!managerNameList.contains(emp.getEmployeeName())) { 
+                    managerNameList.add(emp.getEmployeeName()); 
+                    cbSearch.addItem(emp.getEmployeeName()); 
+                }
+                loadDataToTable(); 
+                clearForm();
+            } else {
+                // ĐÂY LÀ CHỖ HIỆN LỖI NẾU INSERT THẤT BẠI
+                JOptionPane.showMessageDialog(this, "❌ Cấp tài khoản thất bại!\nOracle Database từ chối thêm dữ liệu. Vui lòng kiểm tra màn hình Output (Log) của NetBeans để xem lỗi chi tiết (VD: Lỗi khóa ngoại).", "Lỗi Cơ Sở Dữ Liệu", JOptionPane.ERROR_MESSAGE);
             }
         });
 
         btnUpdate.addActionListener(e -> {
             String displayedId = txtId.getText().trim();
-            if (displayedId.isEmpty() || displayedId.startsWith("Mã")) { JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn Quản lý trong bảng để cập nhật!"); return; }
+            if (displayedId.isEmpty() || displayedId.startsWith("Mã")) { 
+                JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn Quản lý trong bảng để cập nhật!"); 
+                return; 
+            }
             
             // TRẢ LẠI MÃ GỐC ĐỂ CẬP NHẬT
             String idToUpdate = currentSelectedRawId;
             
-            Employee emp = getManagerFromForm(); if (emp == null) return;
+            Employee emp = getManagerFromForm(); 
+            if (emp == null) return;
 
             String oldEmail = ""; String accStatus = "";
             try {
                 List<Employee> list = employeeSql.selectAll();
                 for (Employee ex : list) {
                     if (ex.getEmployeeId().equals(idToUpdate)) {
-                        oldEmail = ex.getEmail() != null ? ex.getEmail() : ""; accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : ""; break;
+                        oldEmail = ex.getEmail() != null ? ex.getEmail() : ""; 
+                        accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : ""; 
+                        break;
                     }
                 }
             } catch (Exception ex) {}
@@ -344,7 +375,8 @@ public class ManagerManagementView extends JPanel {
 
             if (emailChanged && isActivated) {
                 JOptionPane.showMessageDialog(this, "Tài khoản của quản lý này ĐÃ ĐƯỢC CẤP!\nNghiêm cấm thay đổi Email để bảo mật.", "Bảo mật tài khoản", JOptionPane.ERROR_MESSAGE);
-                txtEmail.setText(oldEmail); return;
+                txtEmail.setText(oldEmail); 
+                return;
             }
 
             if (isEmailDuplicate(emp.getEmail(), idToUpdate)) {
@@ -358,23 +390,34 @@ public class ManagerManagementView extends JPanel {
 
             emp.setEmployeeId(idToUpdate);
             if (employeeSql.update(emp) > 0) {
-                SyncVersionDao.bumpVersion("EMPLOYEES"); RealtimeClient.send("EMPLOYEES_CHANGED"); RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                SyncVersionDao.bumpVersion("EMPLOYEES"); 
+                RealtimeClient.send("EMPLOYEES_CHANGED"); 
+                RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
 
                 if (emailChanged && !isActivated) {
-                    try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET email = ? WHERE user_id = ?")) {
-                        ps.setString(1, emp.getEmail()); ps.setString(2, emp.getEmployeeId()); ps.executeUpdate();
+                    try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); 
+                         java.sql.PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET email = ? WHERE user_id = ?")) {
+                        ps.setString(1, emp.getEmail()); 
+                        ps.setString(2, emp.getEmployeeId()); 
+                        ps.executeUpdate();
                     } catch (Exception ex) {}
 
                     try { new ActivationTokenService().issueToken(emp.getEmployeeId()); } catch (Exception ex) {}
 
                     String actualToken = emp.getEmployeeId();
                     String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
-                    try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
+                    try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); 
+                         java.sql.PreparedStatement ps = con.prepareStatement(sqlToken)) {
                         ps.setString(1, emp.getEmployeeId());
-                        try (java.sql.ResultSet rs = ps.executeQuery()) { if (rs.next()) actualToken = rs.getString("token"); }
+                        try (java.sql.ResultSet rs = ps.executeQuery()) { 
+                            if (rs.next()) actualToken = rs.getString("token"); 
+                        }
                     } catch (Exception ex) {}
 
-                    final String emailToSend = emp.getEmail(); final String nameToSend = emp.getEmployeeName(); final String codeToSend = actualToken;
+                    final String emailToSend = emp.getEmail(); 
+                    final String nameToSend = emp.getEmployeeName(); 
+                    final String codeToSend = actualToken;
+                    
                     new Thread(() -> {
                         boolean ok = EmailService.sendActivationEmail(emailToSend, nameToSend, codeToSend);
                         SwingUtilities.invokeLater(() -> {
@@ -385,7 +428,11 @@ public class ManagerManagementView extends JPanel {
                 } else {
                     JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
                 }
-                loadDataToTable(); clearForm();
+                loadDataToTable(); 
+                clearForm();
+            } else {
+                // ĐÂY LÀ CHỖ HIỆN LỖI NẾU UPDATE THẤT BẠI
+                JOptionPane.showMessageDialog(this, "❌ Cập nhật thất bại!\nOracle Database từ chối sửa dữ liệu. Vui lòng kiểm tra màn hình Output của NetBeans để xem lỗi chi tiết.", "Lỗi Cơ Sở Dữ Liệu", JOptionPane.ERROR_MESSAGE);
             }
         });
 

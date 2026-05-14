@@ -18,13 +18,17 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     @Override
     public int insert(Employee t) {
-        // FIX LỖI: Thêm hire_date (SYSDATE) và salary_coefficient (1.0)
+        int res = 0;
+        // Bơm tự động: hire_date (SYSDATE) và salary_coefficient (1.0) để thỏa mãn Schema mới
         String sql = "INSERT INTO EMPLOYEES (employee_id, employee_name, phone, email, role_id, gender, hire_date, salary_coefficient, is_deleted) "
-                + "VALUES (?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            con.setAutoCommit(false);
+                   + "VALUES (?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
+        try (Connection con = DatabaseConnection.getConnection(); 
+             PreparedStatement pst = con.prepareStatement(sql)) {
+            
+            con.setAutoCommit(false); // Bắt đầu giao dịch an toàn
             try {
-                String roleId = t.getRoleId() != null ? t.getRoleId() : t.getRole();
+                // Ưu tiên lấy RoleId, nếu không có thì lấy Role name
+                String roleId = (t.getRoleId() != null && !t.getRoleId().isEmpty()) ? t.getRoleId() : t.getRole();
 
                 pst.setString(1, t.getEmployeeId());
                 pst.setString(2, t.getEmployeeName());
@@ -33,30 +37,30 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 pst.setString(5, roleId);
                 pst.setString(6, t.getGender());
 
-                int rows = pst.executeUpdate();
-                if (rows > 0) {
-                    String newValue = joinPairs(
-                            pair("employee_name", t.getEmployeeName()), pair("phone", t.getPhone()),
-                            pair("email", t.getEmail()), pair("role_id", roleId),
-                            pair("gender", t.getGender()), pair("is_deleted", 0)
-                    );
-                    logAuditWithConn(con, "CREATE_EMPLOYEE", "EMPLOYEE", t.getEmployeeId(), null, newValue, "Tao moi nhan vien");
+                res = pst.executeUpdate();
+                
+                // Ghi Audit Log nếu Insert thành công (Nếu hệ thống bác có Audit Log)
+                if (res > 0) {
+                    try {
+                        String newValue = "{employee_name:" + t.getEmployeeName() + ", phone:" + t.getPhone() + ", email:" + t.getEmail() + "}";
+                        business.sql.rbac.AuditLogSql.logSystemEvent("CREATE", "EMPLOYEE", t.getEmployeeId(), null, newValue, "Tạo mới tài khoản Quản lý cửa hàng");
+                    } catch (Exception e) {
+                        System.err.println("Cảnh báo: Không thể ghi Audit Log cho chức năng tạo nhân viên.");
+                    }
                 }
-                con.commit();
-                return rows;
+                
+                con.commit(); // Chốt giao dịch
             } catch (Exception e) {
-                System.err.println("=== LỖI KHI THÊM NHÂN VIÊN ===");
+                con.rollback(); // Hoàn tác nếu có lỗi
+                System.err.println("❌ LỖI KHI INSERT EMPLOYEE: " + e.getMessage());
                 e.printStackTrace();
-                con.rollback();
-                return 0;
             } finally {
                 con.setAutoCommit(true);
             }
-        } catch (SQLException e) {
-            System.err.println("=== LỖI KẾT NỐI KHI THÊM NHÂN VIÊN ===");
+        } catch (Exception e) {
             e.printStackTrace();
-            return 0;
         }
+        return res;
     }
 
     @Override
