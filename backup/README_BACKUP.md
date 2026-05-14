@@ -146,9 +146,9 @@ Nếu các bảng đều có dữ liệu thì có thể chạy app Java.
 Kiểm tra file kết nối database trong project, ví dụ `DatabaseConnection.java`:
 
 ```java
-jdbc:oracle:thin:@localhost:1521:xe
-SMART_SUPERMARKET
-123456
+jdbc:oracle:thin:@localhost:1521:orcl
+system
+Admin123
 ```
 
 Sau đó mở NetBeans:
