@@ -145,7 +145,7 @@ public class StatisticView extends JPanel {
         alignColumn(tblEmployees, 2, SwingConstants.CENTER);
         alignColumn(tblEmployees, 3, SwingConstants.CENTER);
         alignColumn(tblEmployees, 4, SwingConstants.RIGHT);
-        tabbedPane.addTab("Hiệu Suất Nhân Viên", createTabPanel(tblEmployees));
+        tabbedPane.addTab("Hiệu Suất Nhân Viên", createTabPanel(new EmployeePerformancePanel()));
 
         add(tabbedPane, BorderLayout.CENTER);
     }
@@ -273,6 +273,14 @@ public class StatisticView extends JPanel {
         sp.setBorder(BorderFactory.createEmptyBorder());
         sp.getViewport().setBackground(Color.WHITE);
         p.add(sp, BorderLayout.CENTER);
+        return p;
+    }
+
+    private JPanel createTabPanel(JComponent component) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(Color.WHITE);
+        p.setBorder(new EmptyBorder(10, 10, 10, 10));
+        p.add(component, BorderLayout.CENTER);
         return p;
     }
 

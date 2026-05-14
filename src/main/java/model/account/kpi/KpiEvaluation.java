@@ -3,9 +3,12 @@ package model.account.kpi;
 public class KpiEvaluation {
     private String employeeId;
     private String kpiId;
+    private String criteriaName;
     private String evaluationPeriod;
+    private double minimumTarget;
     private double actualValue;
     private double achievedScore;
+    private String evaluationStatus;
     private String managerNote;
     private int isDeleted;
 
@@ -40,12 +43,28 @@ public class KpiEvaluation {
         this.kpiId = kpiId;
     }
 
+    public String getCriteriaName() {
+        return criteriaName;
+    }
+
+    public void setCriteriaName(String criteriaName) {
+        this.criteriaName = criteriaName;
+    }
+
     public String getEvaluationPeriod() {
         return evaluationPeriod;
     }
 
     public void setEvaluationPeriod(String evaluationPeriod) {
         this.evaluationPeriod = evaluationPeriod;
+    }
+
+    public double getMinimumTarget() {
+        return minimumTarget;
+    }
+
+    public void setMinimumTarget(double minimumTarget) {
+        this.minimumTarget = minimumTarget;
     }
 
     public double getActualValue() {
@@ -62,6 +81,14 @@ public class KpiEvaluation {
 
     public void setAchievedScore(double achievedScore) {
         this.achievedScore = achievedScore;
+    }
+
+    public String getEvaluationStatus() {
+        return evaluationStatus;
+    }
+
+    public void setEvaluationStatus(String evaluationStatus) {
+        this.evaluationStatus = evaluationStatus;
     }
 
     public String getManagerNote() {
