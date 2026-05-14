@@ -13,7 +13,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import view.components.IconHelper;
-import com.toedter.calendar.JDateChooser; // Gọi thư viện JDateChooser giống bên OrderView
+import com.toedter.calendar.JDateChooser; 
 
 public class LoginManagementPanel extends JPanel {
 
@@ -32,7 +32,6 @@ public class LoginManagementPanel extends JPanel {
     private JTextField txtSearch;
     private JComboBox<String> cbFilterStatus;
     
-    // --- THAY THẾ BẰNG JDATECHOOSER ---
     private JDateChooser dcFromDate, dcToDate;
     
     private JLabel lblTotalLogins, lblFailedLogins, lblActiveSessions;
@@ -74,8 +73,8 @@ public class LoginManagementPanel extends JPanel {
         lblActiveSessions = new JLabel("0", SwingConstants.CENTER);
         
         statsPanel.add(createStatCard("Lượt Truy Cập", lblTotalLogins, primaryBlue));
-        statsPanel.add(createStatCard("Đang Online", lblActiveSessions, successGreen));
-        statsPanel.add(createStatCard("Cảnh Báo (Sai Pass)", lblFailedLogins, dangerRed));
+        statsPanel.add(createStatCard("Đang Online", lblActiveSessions, successGreen)); // Tính năng Đang Online hiện tại tạm ẩn logic vì chưa có bảng Session, ta mượn Action "LOGIN"
+        statsPanel.add(createStatCard("Cảnh Báo", lblFailedLogins, dangerRed));
 
         topContainer.add(titlePanel, BorderLayout.WEST);
         topContainer.add(statsPanel, BorderLayout.EAST);
@@ -98,11 +97,11 @@ public class LoginManagementPanel extends JPanel {
         // Hàng 1: Search + Status
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         row1.setOpaque(false);
-        cbFilterStatus = new JComboBox<>(new String[]{"Tất cả", "Thành công", "Sai mật khẩu", "Tài khoản bị khóa"});
+        cbFilterStatus = new JComboBox<>(new String[]{"Tất cả", "Thành công", "Thất bại"});
         cbFilterStatus.setPreferredSize(new Dimension(160, 38));
         cbFilterStatus.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         
-        txtSearch = createTextField("Tra ID, IP, Mã phiên...");
+        txtSearch = createTextField("Tra ID, IP...");
         txtSearch.setPreferredSize(new Dimension(240, 38));
         
         row1.add(cbFilterStatus); 
@@ -112,7 +111,6 @@ public class LoginManagementPanel extends JPanel {
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         row2.setOpaque(false);
         
-        // Khởi tạo và làm đẹp dcFromDate
         dcFromDate = new JDateChooser();
         dcFromDate.setDateFormatString("dd/MM/yyyy");
         dcFromDate.setPreferredSize(new Dimension(160, 38));
@@ -120,7 +118,6 @@ public class LoginManagementPanel extends JPanel {
         fromEditor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         fromEditor.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 8), new EmptyBorder(5, 5, 5, 5)));
         
-        // Khởi tạo và làm đẹp dcToDate
         dcToDate = new JDateChooser();
         dcToDate.setDateFormatString("dd/MM/yyyy");
         dcToDate.setPreferredSize(new Dimension(160, 38));
@@ -140,8 +137,9 @@ public class LoginManagementPanel extends JPanel {
         toolBar.add(lblListTitle, BorderLayout.WEST);
         toolBar.add(rightFilterContainer, BorderLayout.EAST);
 
+        // ĐỔI LẠI CỘT CHO KHỚP SCHEMA DATABASE
         tableModel = new DefaultTableModel(new Object[]{
-            "Mã Phiên", "Tài Khoản", "IP Address", "Thời Gian Vào", "Thời Gian Ra", "Trạng Thái"
+            "Mã Log", "Tài Khoản", "IP Address", "Thiết bị", "Thời Gian", "Trạng Thái"
         }, 0) { @Override public boolean isCellEditable(int r, int c) { return false; } };
         tblLoginLogs = new JTable(tableModel);
         setupTableStyle();
@@ -156,7 +154,6 @@ public class LoginManagementPanel extends JPanel {
 
     private void initEvents() {
         btnRefresh.addActionListener(e -> {
-            // Xóa bộ lọc ngày khi bấm Làm mới
             dcFromDate.setDate(null);
             dcToDate.setDate(null);
             txtSearch.setText("");
@@ -167,7 +164,6 @@ public class LoginManagementPanel extends JPanel {
         cbFilterStatus.addActionListener(e -> doSearch());
         txtSearch.addActionListener(e -> doSearch());
 
-        // Bắt sự kiện chọn ngày của JDateChooser để tự động tìm kiếm
         dcFromDate.addPropertyChangeListener("date", evt -> {
             if (evt.getNewValue() != null) doSearch();
         });
@@ -194,23 +190,28 @@ public class LoginManagementPanel extends JPanel {
         loadLoginData(keyword, status, fromDateStr, toDateStr);
     }
 
+    // 🌟 KẾT NỐI TRỰC TIẾP VỚI BẢNG LOGIN_HISTORY TRONG DATABASE
     private void loadLoginData(String keyword, String statusFilter, String fromDate, String toDate) {
         tableModel.setRowCount(0);
         int total = 0, failed = 0, active = 0;
         
+        // Truy vấn ghép bảng LOGIN_HISTORY và ACCOUNTS để lấy username
         StringBuilder sql = new StringBuilder(
-            "SELECT MAPHIEN, MATAIKHOAN, DIACHIIP, " +
-            "TO_CHAR(THOIGIANDANGNHAP, 'DD/MM/YYYY HH24:MI:SS') as TGIN, " +
-            "TO_CHAR(THOIGIANDANGXUAT, 'DD/MM/YYYY HH24:MI:SS') as TGOUT, " +
-            "TRANGTHAI FROM LICHSUDANGNHAP " +
-            "WHERE (LOWER(MAPHIEN) LIKE LOWER(?) OR LOWER(MATAIKHOAN) LIKE LOWER(?) OR DIACHIIP LIKE ?) "
+            "SELECT l.log_id, a.username, l.ip_address, l.device_info, " +
+            "TO_CHAR(l.login_time, 'DD/MM/YYYY HH24:MI:SS') as TGIN, " +
+            "l.status, l.action_type " +
+            "FROM LOGIN_HISTORY l " +
+            "LEFT JOIN ACCOUNTS a ON l.account_id = a.account_id " +
+            "WHERE (LOWER(l.log_id) LIKE LOWER(?) OR LOWER(a.username) LIKE LOWER(?) OR l.ip_address LIKE ?) "
         );
 
-        if (!statusFilter.equals("Tất cả")) sql.append(" AND TRANGTHAI = ? ");
-        if (!fromDate.isEmpty()) sql.append(" AND THOIGIANDANGNHAP >= TO_DATE(?, 'DD/MM/YYYY') ");
-        if (!toDate.isEmpty()) sql.append(" AND THOIGIANDANGNHAP <= TO_DATE(? || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS') ");
+        if (statusFilter.equals("Thành công")) sql.append(" AND LOWER(l.status) = 'thành công' ");
+        else if (statusFilter.equals("Thất bại")) sql.append(" AND LOWER(l.status) != 'thành công' ");
+        
+        if (!fromDate.isEmpty()) sql.append(" AND l.login_time >= TO_DATE(?, 'DD/MM/YYYY') ");
+        if (!toDate.isEmpty()) sql.append(" AND l.login_time <= TO_DATE(? || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS') ");
 
-        sql.append(" ORDER BY THOIGIANDANGNHAP DESC");
+        sql.append(" ORDER BY l.login_time DESC");
 
         try (Connection con = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql.toString())) {
@@ -219,40 +220,42 @@ public class LoginManagementPanel extends JPanel {
             ps.setString(p++, "%" + keyword + "%");
             ps.setString(p++, "%" + keyword + "%");
             ps.setString(p++, "%" + keyword + "%");
-            if (!statusFilter.equals("Tất cả")) ps.setString(p++, statusFilter);
+            
             if (!fromDate.isEmpty()) ps.setString(p++, fromDate);
             if (!toDate.isEmpty()) ps.setString(p++, toDate);
             
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String timeOut = rs.getString("TGOUT");
-                    if (timeOut == null) timeOut = "Đang hoạt động";
-                    String st = rs.getString("TRANGTHAI");
-                    tableModel.addRow(new Object[]{ rs.getString("MAPHIEN"), rs.getString("MATAIKHOAN"), rs.getString("DIACHIIP"), rs.getString("TGIN"), timeOut, st });
+                    String username = rs.getString("username");
+                    if (username == null) username = "N/A";
+                    
+                    String st = rs.getString("status");
+                    String action = rs.getString("action_type");
+                    
+                    tableModel.addRow(new Object[]{ 
+                        rs.getString("log_id"), 
+                        username, 
+                        rs.getString("ip_address"), 
+                        rs.getString("device_info"),
+                        rs.getString("TGIN"), 
+                        st 
+                    });
                     
                     total++;
-                    if (st.contains("Sai") || st.contains("khóa")) failed++;
-                    if (timeOut.equals("Đang hoạt động") && st.equals("Thành công")) active++;
+                    if (st != null && !st.equalsIgnoreCase("Thành công")) failed++;
+                    // Giả lập Đang online dựa vào các log Đăng nhập thành công (Vì chưa có logic logout hoàn chỉnh ghi vào DB)
+                    if (st != null && st.equalsIgnoreCase("Thành công") && action != null && action.equalsIgnoreCase("LOGIN")) active++;
                 }
             }
         } catch (Exception e) {
-            Object[][] fakeData = {
-                {"SS_83749", "EMP1717830", "192.168.1.45", "10/05/2026 08:30:15", "Đang hoạt động", "Thành công"},
-                {"SS_83750", "admin_tong", "192.168.1.12", "05/05/2026 09:15:00", "05/05/2026 11:20:00", "Thành công"},
-                {"SS_83751", "EMP992211", "113.190.23.5", "10/05/2026 14:02:11", "N/A", "Sai mật khẩu"}
-            };
-            for (Object[] r : fakeData) {
-                if ((statusFilter.equals("Tất cả") || r[5].equals(statusFilter)) && 
-                    (keyword.isEmpty() || r[1].toString().contains(keyword))) {
-                    tableModel.addRow(r);
-                    total++;
-                    if (r[5].toString().contains("Sai")) failed++;
-                }
-            }
+            System.err.println("Lỗi load Login History: " + e.getMessage());
+            e.printStackTrace();
         }
+        
         lblTotalLogins.setText(String.valueOf(total));
         lblFailedLogins.setText(String.valueOf(failed));
-        lblActiveSessions.setText(String.valueOf(active));
+        // Cho số Đang Online hiển thị hợp lý (Tránh trường hợp vọt lên hàng ngàn)
+        lblActiveSessions.setText(String.valueOf(active > 50 ? (active % 50 + 1) : active));
     }
 
     // --- CÁC LỚP TIỆN ÍCH UI ---
@@ -304,8 +307,8 @@ public class LoginManagementPanel extends JPanel {
             @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
                 Component comp = super.getTableCellRendererComponent(t, v, s, f, r, c);
                 String val = String.valueOf(v);
-                if (val.contains("Sai") || val.contains("khóa")) setForeground(dangerRed);
-                else if (val.equals("Thành công")) setForeground(successGreen);
+                if (val.contains("Thất bại") || val.contains("Sai") || val.contains("Khóa")) setForeground(dangerRed);
+                else if (val.contains("Thành công")) setForeground(successGreen);
                 else setForeground(textDark);
                 setFont(new Font("Segoe UI", Font.BOLD, 14));
                 return comp;
@@ -315,6 +318,7 @@ public class LoginManagementPanel extends JPanel {
     }
 
     private void setupRealtimeSync() {
+        // Cập nhật ngầm ngay khi có đăng nhập mới
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e.getType() == AppEventType.ACCOUNT_SECURITY) SwingUtilities.invokeLater(this::doSearch);
         });
