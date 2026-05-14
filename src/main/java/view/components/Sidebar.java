@@ -53,14 +53,19 @@ public class Sidebar extends JPanel {
         addMenuItem("Tổng quan");
         addMenuItem("Quản lý sản phẩm");
 
-        // staff / nhân viên -> KHÔNG hiện menu quản lý nhân viên
+        // staff / nhân viên -> KHÔNG hiện menu quản lý nhân viên và thống kê
         if (!isStaff()) {
             addMenuItem("Quản lý nhân viên");
         }
 
         addMenuItem("Khách hàng");
         addMenuItem("Hóa đơn");
-        addMenuItem("Thống kê");
+        
+        // Chỉ hiển thị menu Thống kê cho Admin/Manager
+        if (!isStaff()) {
+            addMenuItem("Thống kê");
+        }
+        
         addMenuItem("Cài đặt");
 
         JScrollPane scrollPane = new JScrollPane(menuPanel);

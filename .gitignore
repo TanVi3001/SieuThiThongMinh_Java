@@ -1,28 +1,10 @@
-# --- JAVA & MAVEN ---
+```
+# Dependencies
 target/
-*.class
-HELP.md
 
-# --- NETBEANS ---
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-
-# --- INTELLIJ IDEA ---
+# IDE
 .idea/
-*.iws
-*.iml
-*.ipr
 
-# --- VS CODE ---
-.vscode/
-
-# --- DATABASE & REPORTS (Bảo vệ file cá nhân) ---
-**/src/main/resources/db/
+# Logs
 *.log
-*.xlsx
-*.pdf
-# (Dòng trên giúp chặn các file Excel/PDF ông test không bị đẩy lên repo làm rác nhóm)
+```

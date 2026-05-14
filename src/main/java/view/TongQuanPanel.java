@@ -170,11 +170,21 @@ public class TongQuanPanel extends JPanel {
         gbc.insets = new Insets(5, 5, 5, 5);
 
         String[] actions = {
-            "\uD83D\uDED2  Tạo đơn hàng mới",
-            "\uD83D\uDCE6  Thêm sản phẩm",
-            "\uD83D\uDC64  Thêm khách hàng",
-            "\uD83D\uDCCA  Xem thống kê"
+            "🛒  Tạo đơn hàng mới",
+            "📦  Thêm sản phẩm",
+            "👤  Thêm khách hàng"
         };
+        
+        // Chỉ hiển thị nút xem thống kê cho Admin/Manager (không phải staff)
+        model.account.Account currentUser = business.service.LoginService.getCurrentUser();
+        if (currentUser != null && !currentUser.getUsername().equalsIgnoreCase("staff")) {
+            actions = new String[]{
+                "🛒  Tạo đơn hàng mới",
+                "📦  Thêm sản phẩm",
+                "👤  Thêm khách hàng",
+                "📊  Xem thống kê"
+            };
+        }
 
         for (int i = 0; i < actions.length; i++) {
             gbc.gridy = i;
