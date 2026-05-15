@@ -2,7 +2,9 @@ package view;
 
 import business.service.StatisticService;
 import com.toedter.calendar.JDateChooser;
+import common.report.ReportViewer;
 import view.components.IconHelper;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -60,7 +62,7 @@ public class StatisticView extends JPanel {
     // UI COMPONENTS
     // =========================================================
     private JDateChooser dpFromDate, dpToDate;
-    private JButton btnFilter, btnExportExcel, btnExportPDF;
+    private JButton btnFilter, btnExportExcel, btnExportPDF, btnExportRevenueReport;
     private JLabel lblLastUpdate;
 
     private JLabel lblTotalRevenueValue, lblTotalOrdersValue, lblAvgKpiValue, lblBestEmployeeValue;
@@ -134,6 +136,7 @@ public class StatisticView extends JPanel {
         btnFilter = createActionButton("Lọc dữ liệu", primaryBlue, Color.WHITE, IconHelper.search(16), 130);
         btnExportExcel = createActionButton("Xuất Excel", excelGreen, Color.WHITE, null, 120);
         btnExportPDF = createActionButton("Xuất PDF", pdfRed, Color.WHITE, null, 120);
+        btnExportRevenueReport = createActionButton("Xuất báo cáo doanh thu", successGreen, Color.WHITE, null, 190);
 
         actionPanel.add(createLabel("Từ ngày:"));
         actionPanel.add(dpFromDate);
@@ -142,6 +145,7 @@ public class StatisticView extends JPanel {
         actionPanel.add(btnFilter);
         actionPanel.add(btnExportExcel);
         actionPanel.add(btnExportPDF);
+        actionPanel.add(btnExportRevenueReport);
 
         lblLastUpdate = new JLabel("Đang tải dữ liệu...");
         lblLastUpdate.setFont(new Font("Segoe UI", Font.ITALIC, 12));
@@ -323,6 +327,7 @@ public class StatisticView extends JPanel {
         btnFilter.addActionListener(e -> refreshDataWithCurrentDates(false, true));
         btnExportExcel.addActionListener(this::exportActiveTableAsCsv);
         btnExportPDF.addActionListener(e -> printActiveTable());
+        btnExportRevenueReport.addActionListener(e -> exportRevenueReport());
     }
 
     private void subscribeRealtime() {
@@ -566,6 +571,7 @@ public class StatisticView extends JPanel {
         btnFilter.setEnabled(!loading);
         btnExportExcel.setEnabled(!loading);
         btnExportPDF.setEnabled(!loading);
+        btnExportRevenueReport.setEnabled(!loading);
         btnFilter.setText(loading ? "Đang tải..." : "Lọc dữ liệu");
     }
 
@@ -788,6 +794,25 @@ public class StatisticView extends JPanel {
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi xuất PDF/In: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportRevenueReport() {
+        Date fromDate = dpFromDate.getDate();
+        Date toDate = dpToDate.getDate();
+
+        try {
+            statisticService.getRevenueReport(fromDate, toDate);
+
+            HashMap<String, Object> params = new HashMap<>();
+            params.put("FROM_DATE", new java.sql.Date(fromDate.getTime()));
+            params.put("TO_DATE", new java.sql.Date(toDate.getTime()));
+
+            ReportViewer.showReport("src/main/resources/reports/RevenueReport.jrxml", params);
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Khoảng ngày không hợp lệ", JOptionPane.WARNING_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Lỗi xuất báo cáo doanh thu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
     }
 
