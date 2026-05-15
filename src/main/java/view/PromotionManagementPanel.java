@@ -324,14 +324,10 @@ public class PromotionManagementPanel extends JPanel {
         tblPromos.clearSelection();
     }
 
-    // =========================================================================
-    // KẾT NỐI DATABASE VÀ GHI AUDIT LOG
-    // =========================================================================
     private void loadPromoData(String keyword, String statusFilter) {
         tableModel.setRowCount(0);
         int total = 0, active = 0, ended = 0;
         
-        // MÔ PHỎNG CÂU LỆNH SQL CHO BẢNG KHUYENMAI CỦA ORACLE
         String sql = "SELECT MAKM, TENKM, PHANTRAMGIAM, TO_CHAR(NGAYBATDAU, 'YYYY-MM-DD') as TUNGAY, " +
                      "TO_CHAR(NGAYKETTHUC, 'YYYY-MM-DD') as DENNGAY, TRANGTHAI " +
                      "FROM KHUYENMAI " +
@@ -358,25 +354,19 @@ public class PromotionManagementPanel extends JPanel {
                     
                     tableModel.addRow(new Object[]{ ma, ten, giam + "%", tuNgay, denNgay, trangThai });
                     
-                    // Thống kê nhanh
                     total++;
                     if ("Đang diễn ra".equals(trangThai)) active++;
                     if ("Đã kết thúc".equals(trangThai) || "Tạm ngưng / Kết thúc".equals(trangThai)) ended++;
                 }
             }
             
-            // Cập nhật lên Dashboard
             lblTotalPromos.setText(String.valueOf(total));
             lblActivePromos.setText(String.valueOf(active));
             lblEndedPromos.setText(String.valueOf(ended));
             
         } catch (Exception e) {
             System.err.println("Lỗi tải danh sách Khuyến mãi: " + e.getMessage());
-            // Fake data để bác xem UI nếu chưa tạo bảng DB
-            if (tableModel.getRowCount() == 0) {
-                tableModel.addRow(new Object[]{"TET2026", "Đón Tết Bính Ngọ", "15%", "2026-01-15", "2026-02-28", "Sắp diễn ra"});
-                tableModel.addRow(new Object[]{"MEMBER26", "Tri ân thành viên", "5%", "2026-01-01", "2026-12-31", "Đang diễn ra"});
-            }
+            // Đã xóa phần Fake Data. Nếu có lỗi, bảng sẽ để trống.
         }
     }
 
@@ -392,7 +382,6 @@ public class PromotionManagementPanel extends JPanel {
                     txtTuNgay.setText(rs.getString("TUNGAY"));
                     txtDenNgay.setText(rs.getString("DENNGAY"));
                     cbTrangThai.setSelectedItem(rs.getString("TRANGTHAI"));
-                    // Các combobox khác tự xử lý join hoặc map tương ứng trong DB
                 }
             }
         } catch (Exception e) { e.printStackTrace(); }
@@ -438,7 +427,6 @@ public class PromotionManagementPanel extends JPanel {
             
             clearForm();
             doSearch();
-            // Bắn tín hiệu nếu các màn POS (Cashier) cần refresh danh sách KM
             EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "PROMO_UPDATED"));
             
         } catch (Exception e) {
@@ -446,9 +434,6 @@ public class PromotionManagementPanel extends JPanel {
         }
     }
 
-    // =========================================================================
-    // CÁC HÀM TIỆN ÍCH UI
-    // =========================================================================
     private JLabel createFormLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -473,7 +458,6 @@ public class PromotionManagementPanel extends JPanel {
         tblPromos.setSelectionForeground(textDark);
         tblPromos.getTableHeader().setReorderingAllowed(false);
 
-        // Chỉnh kích thước cột
         tblPromos.getColumnModel().getColumn(0).setPreferredWidth(80);
         tblPromos.getColumnModel().getColumn(1).setPreferredWidth(180);
         tblPromos.getColumnModel().getColumn(2).setPreferredWidth(70);
@@ -500,8 +484,7 @@ public class PromotionManagementPanel extends JPanel {
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); btn.setFocusPainted(false); btn.setBorderPainted(false); btn.setContentAreaFilled(false);
         btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
             @Override public void paint(Graphics g, JComponent c) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(c.getBackground()); g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 8, 8);
                 super.paint(g2, c); g2.dispose();
             }
@@ -513,10 +496,8 @@ public class PromotionManagementPanel extends JPanel {
         private int r; private Color bg;
         public RoundedPanel(int r, Color bg) { this.r = r; this.bg = bg; setOpaque(false); }
         @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bg); g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r);
-            g2.dispose();
+            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(bg); g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r); g2.dispose();
         }
     }
 
@@ -524,10 +505,8 @@ public class PromotionManagementPanel extends JPanel {
         private Color c; private int r;
         public RoundBorder(Color c, int r) { this.c = c; this.r = r; }
         @Override public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(this.c); g2.drawRoundRect(x, y, w - 1, h - 1, r, r);
-            g2.dispose();
+            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(this.c); g2.drawRoundRect(x, y, w - 1, h - 1, r, r); g2.dispose();
         }
         @Override public Insets getBorderInsets(Component c) { return new Insets(1, 1, 1, 1); }
         @Override public boolean isBorderOpaque() { return false; }
