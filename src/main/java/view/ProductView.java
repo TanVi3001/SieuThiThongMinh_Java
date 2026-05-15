@@ -38,6 +38,7 @@ import common.events.AppEventType;
 import common.events.EventBus;
 import common.realtime.RealtimeClient;
 import common.sync.SyncVersionDao;
+import javax.swing.table.DefaultTableCellRenderer;
 
 
 public class ProductView extends JPanel {
@@ -274,7 +275,12 @@ public class ProductView extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã SP", "Tên sản phẩm", "Giá", "Số lượng", "Loại SP"}, 0) {
+        tableModel = new DefaultTableModel(new Object[]{"Mã SP", "Tên sản phẩm", "Giá", "Số lượng", "Loại SP", "Ảnh"}, 0) {
+            @Override
+            public Class<?> getColumnClass(int col) {
+                if (col == 5) return ImageIcon.class; // cột Ảnh
+                return Object.class;
+            }
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -289,6 +295,24 @@ public class ProductView extends JPanel {
         tblProducts.setShowVerticalLines(false);
         tblProducts.setSelectionBackground(new Color(237, 242, 255));
         tblProducts.setSelectionForeground(textDark);
+        tblProducts.setRowHeight(60); // tăng chiều cao hàng cho ảnh
+
+        tblProducts.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+                JLabel lbl = new JLabel();
+                lbl.setHorizontalAlignment(SwingConstants.CENTER);
+                if (v instanceof ImageIcon imageIcon) {
+                    lbl.setIcon(imageIcon);
+                } else {
+                    lbl.setText("—");
+                    lbl.setForeground(textGray);
+                }
+                return lbl;
+            }
+        });
+        tblProducts.getColumnModel().getColumn(5).setPreferredWidth(80);
+        
         // Cột "Loại SP" (index 4) hiển thị icon + text
         tblProducts.getColumnModel()
                 .getColumn(4)
@@ -736,7 +760,14 @@ public class ProductView extends JPanel {
         try {
             List<Product> list = ProductsSql.getInstance().selectAll();
             for (Product p : list) {
-                Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId()};
+                ImageIcon thumb = null;
+        if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
+            java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
+            if (imgUrl != null) {
+                thumb = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH));
+            }
+        }
+        Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
                 tableModel.addRow(row);
             }
         } catch (Exception e) {
