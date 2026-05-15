@@ -61,6 +61,9 @@ public class ProductView extends JPanel {
 
     private List<String> categoryList = new ArrayList<>();
     private List<String> productNameList = new ArrayList<>();
+    
+    private JLabel lblImageSectionTitle;
+private JButton btnChooseImage;
 
     public ProductView() {
         setLayout(new BorderLayout(20, 20));
@@ -90,6 +93,14 @@ public class ProductView extends JPanel {
             btnDelete.setVisible(false);
             btnUnitConfig.setVisible(false);
             btnImport.setVisible(false);
+        }
+
+        // ẨN PHẦN HÌNH ẢNH VỚI NHÂN VIÊN KHO
+        if (AuthorizationService.isWarehouseStaff()) {
+            lblImagePreview.setVisible(false);
+            btnChooseImage.setVisible(false);
+            // Ẩn label "Hình ảnh" — cần tách thành biến. Xem bước dưới:
+            lblImageSectionTitle.setVisible(false);
         }
     }
 
@@ -214,7 +225,8 @@ public class ProductView extends JPanel {
         // Hình ảnh sản phẩm
         gbc.gridy = y++;
         gbc.insets = new Insets(0, 0, 5, 0);
-        formCard.add(createLabel("Hình ảnh"), gbc);
+        lblImageSectionTitle = createLabel("Hình ảnh");
+        formCard.add(lblImageSectionTitle, gbc);
 
         lblImagePreview = new JLabel("Chưa chọn ảnh", SwingConstants.CENTER);
         lblImagePreview.setPreferredSize(new Dimension(180, 120));
@@ -225,7 +237,7 @@ public class ProductView extends JPanel {
         gbc.insets = new Insets(0, 0, 5, 0);
         formCard.add(lblImagePreview, gbc);
 
-        JButton btnChooseImage = createCustomButton("Chọn ảnh", new Color(108, 117, 125), Color.WHITE, null);
+        btnChooseImage = createCustomButton("Chọn ảnh", new Color(108, 117, 125), Color.WHITE, null);
         btnChooseImage.addActionListener(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Ảnh (jpg, png, gif)", "jpg", "jpeg", "png", "gif"));
