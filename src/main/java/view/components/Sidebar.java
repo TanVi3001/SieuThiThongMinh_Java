@@ -8,6 +8,8 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import java.util.List;
 
 public class Sidebar extends JPanel {
@@ -325,30 +327,49 @@ public class Sidebar extends JPanel {
         }
     }
 
-    // test
-    public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(new FlatLightLaf());
-        } catch (Exception ex) {
-            System.err.println("Failed to initialize LaF");
-        }
-
-        JFrame frame = new JFrame("Sidebar UI Test");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLayout(new BorderLayout());
-
-        frame.add(new Sidebar("staff"), BorderLayout.WEST);
-
-        JPanel mainContent = new JPanel(new BorderLayout());
-        mainContent.setBackground(new Color(245, 245, 247));
-        JLabel lblContent = new JLabel("Main Content Area", SwingConstants.CENTER);
-        lblContent.setFont(new Font("Segoe UI", Font.PLAIN, 24));
-        lblContent.setForeground(Color.GRAY);
-        mainContent.add(lblContent, BorderLayout.CENTER);
-
-        frame.add(mainContent, BorderLayout.CENTER);
-        frame.setSize(1000, 700);
-        frame.setLocationRelativeTo(null);
-        frame.setVisible(true);
-    }
+//    private void handleCloseApp() {
+//        int confirm = JOptionPane.showConfirmDialog(
+//                this,
+//                "Bạn có chắc muốn thoát ứng dụng?",
+//                "Xác nhận thoát",
+//                JOptionPane.YES_NO_OPTION
+//        );
+//
+//        if (confirm != JOptionPane.YES_OPTION) {
+//            return;
+//        }
+//
+//        try {
+//            model.account.Account currentUser
+//                    = business.service.SessionManager.getCurrentUser();
+//
+//            String sessionId
+//                    = business.service.SessionManager.getCurrentSessionId();
+//
+//            if (currentUser != null
+//                    && currentUser.getAccountId() != null
+//                    && sessionId != null) {
+//
+//                if (business.service.HeartbeatService.markLogoutOnce()) {
+//                    business.service.HeartbeatService.stop();
+//
+//                    business.service.AccountService.onLogoutOrCloseApp(
+//                            currentUser.getAccountId(),
+//                            sessionId
+//                    );
+//                }
+//            }
+//
+//        } catch (Exception ex) {
+//            System.err.println("[CloseApp] Không thể cập nhật session: " + ex.getMessage());
+//        }
+//
+//        java.awt.Window window = SwingUtilities.getWindowAncestor(this);
+//
+//        if (window != null) {
+//            window.dispose();
+//        }
+//
+//        System.exit(0);
+//    }
 }

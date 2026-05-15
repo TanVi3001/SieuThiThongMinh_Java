@@ -4,6 +4,7 @@ import common.events.AppDataChangedEvent;
 import common.events.EventBus;
 import view.components.TongQuanPanel;
 import view.components.Sidebar;
+import business.service.AccountService;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -26,6 +27,7 @@ public class DashboardView extends JFrame {
 
     private Timer sessionTimer;
     private boolean isLoggingOut = false;
+    private final long dashboardCreatedAt = System.currentTimeMillis();
     private JPanel mainContentPanel;
 
     // Màu nền chuẩn cho UI hiện đại (Trắng xám nhẹ)
@@ -83,7 +85,13 @@ public class DashboardView extends JFrame {
             this.setTitle("SMART SUPERMARKET - STORE PORTAL");
         }
 
-        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        this.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                handleCloseApp();
+            }
+        });
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         this.setMinimumSize(new Dimension(1100, 700));
         this.setLocationRelativeTo(null);
@@ -177,34 +185,63 @@ public class DashboardView extends JFrame {
     }
 
     private void handleLogout() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có thực sự muốn đăng xuất không?", "Xác nhận", JOptionPane.YES_NO_OPTION);
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Bạn có chắc muốn đăng xuất?",
+                "Xác nhận đăng xuất",
+                JOptionPane.YES_NO_OPTION
+        );
 
-        if (confirm == JOptionPane.YES_OPTION) {
-            this.isLoggingOut = true;
-            if (sessionTimer != null && sessionTimer.isRunning()) {
-                sessionTimer.stop();
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            model.account.Account currentUser
+                    = business.service.SessionManager.getCurrentUser();
+
+            String sessionId
+                    = business.service.SessionManager.getCurrentSessionId();
+
+            if (currentUser != null && currentUser.getAccountId() != null) {
+                business.service.HeartbeatService.stop();
+
+                business.service.AccountService.onLogoutOrCloseApp(
+                        currentUser.getAccountId(),
+                        sessionId
+                );
             }
 
-            String tk = business.service.LoginService.getToken();
-            business.sql.rbac.TokenSql.getInstance().revokeToken(tk);
-            business.service.LoginService.logout();
+            business.service.SessionManager.clear();
 
-            common.auth.UserSession.getInstance().clear();
+            try {
+                common.auth.UserSession.getInstance().clear();
+            } catch (Exception ignored) {
+            }
 
-            java.awt.EventQueue.invokeLater(() -> {
-                view.LoginView login = new view.LoginView();
-                login.setVisible(true);
-                login.setLocationRelativeTo(null);
-            });
+            common.security.SecurityGuard.setProcessingLogout(false);
 
-            this.dispose();
+        } catch (Exception ex) {
+            System.err.println("[Logout] Lỗi logout: " + ex.getMessage());
         }
+
+        dispose();
+
+        view.LoginView login = new view.LoginView();
+        login.setLocationRelativeTo(null);
+        login.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        login.setVisible(true);
     }
 
     private void startSessionCheck() {
-        sessionTimer = new Timer(2000, e -> {
+        sessionTimer = new Timer(5000, e -> {
             if (common.security.SecurityGuard.isProcessingLogout() || isLoggingOut) {
                 ((Timer) e.getSource()).stop();
+                return;
+            }
+
+            // Tránh vừa mở Dashboard đã check quá sớm rồi đá user
+            if (System.currentTimeMillis() - dashboardCreatedAt < 10000) {
                 return;
             }
 
@@ -213,73 +250,131 @@ public class DashboardView extends JFrame {
                     return;
                 }
 
-                String currentToken = business.service.LoginService.getToken();
-                boolean isValid = business.sql.rbac.TokenSql.getInstance().isTokenValid(currentToken);
+                model.account.Account currentUser
+                        = business.service.SessionManager.getCurrentUser();
 
-                boolean roleChanged = false;
-                model.account.Account currentUser = business.service.LoginService.getCurrentUser();
+                String sessionId
+                        = business.service.SessionManager.getCurrentSessionId();
 
-                if (currentUser != null) {
-                    try {
-                        String[] latestData = business.sql.rbac.AccountSql.getInstance().getAccountDetails(currentUser.getAccountId());
-                        if (latestData != null) {
-                            String dbRoleId = latestData[4];
-                            boolean isActive = "0".equals(latestData[5]);
+                if (currentUser == null
+                        || currentUser.getAccountId() == null
+                        || sessionId == null
+                        || sessionId.trim().isEmpty()) {
+                    return;
+                }
 
-                            if (!isActive || !dbRoleId.equals(currentUser.getRoleValue())) {
-                                roleChanged = true;
-                            }
-                        } else {
-                            roleChanged = true;
+                boolean forceLogout = false;
+
+                try {
+                    // Admin / Manager được đăng nhập nhiều app nên KHÔNG kiểm tra CURRENT_SESSION_ID
+                    if (!isMultiSessionRole(currentUser)) {
+                        boolean currentSessionValid
+                                = business.sql.rbac.AccountSql.getInstance()
+                                        .isCurrentSessionValid(
+                                                currentUser.getAccountId(),
+                                                sessionId
+                                        );
+
+                        if (!currentSessionValid) {
+                            forceLogout = true;
                         }
-                    } catch (Exception ex) {
-                        // Bỏ qua lỗi kết nối DB tạm thời
                     }
-                }
 
-                if (!isValid || roleChanged) {
-                    SwingUtilities.invokeLater(() -> {
-                        if (!isLoggingOut && !common.security.SecurityGuard.isProcessingLogout()) {
-                            isLoggingOut = true;
-                            common.security.SecurityGuard.setProcessingLogout(true);
+                    // Check role thật sự có bị đổi không
+                    String[] latestData
+                            = business.sql.rbac.AccountSql.getInstance()
+                                    .getAccountDetails(currentUser.getAccountId());
 
-                            if (sessionTimer != null) {
-                                sessionTimer.stop();
-                            }
+                    if (latestData != null) {
+                        String dbRoleId = latestData[4];
 
-                            common.events.EventBus.clearAll();
+                        String currentRole = currentUser.getRoleId() != null
+                                ? currentUser.getRoleId()
+                                : currentUser.getRoleValue();
 
-                            JOptionPane.showMessageDialog(this, "Phiên đăng nhập đã hết hạn hoặc Quyền truy cập đã bị thay đổi!\nVui lòng đăng nhập lại.", "Thông báo bảo mật", JOptionPane.ERROR_MESSAGE);
-
-                            try {
-                                common.auth.UserSession.getInstance().clear();
-                            } catch (Exception ignored) {
-                            }
-                            business.service.LoginService.logout();
-
-                            java.awt.Window[] windows = java.awt.Window.getWindows();
-                            boolean hasLogin = false;
-                            for (java.awt.Window w : windows) {
-                                if (w instanceof view.LoginView && w.isVisible()) {
-                                    hasLogin = true;
-                                    break;
-                                }
-                            }
-
-                            if (!hasLogin) {
-                                view.LoginView login = new view.LoginView();
-                                login.setVisible(true);
-                                login.setLocationRelativeTo(null);
-                            }
-
-                            this.dispose();
+                        if (dbRoleId != null
+                                && currentRole != null
+                                && !dbRoleId.equalsIgnoreCase(currentRole)) {
+                            forceLogout = true;
                         }
-                    });
+                    }
+
+                } catch (Exception ex) {
+                    // Lỗi DB tạm thời thì KHÔNG logout, tránh đá nhầm user
+                    System.err.println("[SessionCheck] Bỏ qua lỗi kiểm tra session: " + ex.getMessage());
+                    return;
                 }
-            }).start();
+
+                if (forceLogout) {
+                    SwingUtilities.invokeLater(() -> forceLogoutToLogin());
+                }
+
+            }, "dashboard-session-check-thread").start();
         });
 
         sessionTimer.start();
+    }
+
+    private boolean isMultiSessionRole(model.account.Account acc) {
+        if (acc == null) {
+            return false;
+        }
+
+        String role = "";
+
+        if (acc.getRoleId() != null && !acc.getRoleId().trim().isEmpty()) {
+            role = acc.getRoleId();
+        } else if (acc.getRoleValue() != null && !acc.getRoleValue().trim().isEmpty()) {
+            role = acc.getRoleValue();
+        } else if (acc.getRole() != null && !acc.getRole().trim().isEmpty()) {
+            role = acc.getRole();
+        }
+
+        return "R_ADMIN_ALL".equalsIgnoreCase(role)
+                || "R_STORE_MNG".equalsIgnoreCase(role);
+    }
+
+    private void forceLogoutToLogin() {
+        if (isLoggingOut || common.security.SecurityGuard.isProcessingLogout()) {
+            return;
+        }
+
+        isLoggingOut = true;
+        common.security.SecurityGuard.setProcessingLogout(true);
+
+        if (sessionTimer != null) {
+            sessionTimer.stop();
+        }
+
+        try {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Phiên đăng nhập đã hết hạn hoặc tài khoản đã được đăng nhập ở thiết bị khác.\n"
+                    + "Vui lòng đăng nhập lại.",
+                    "Thông báo bảo mật",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            business.service.HeartbeatService.stop();
+            business.service.SessionManager.clear();
+
+            try {
+                common.auth.UserSession.getInstance().clear();
+            } catch (Exception ignored) {
+            }
+
+            dispose();
+
+            view.LoginView login = new view.LoginView();
+            login.setLocationRelativeTo(null);
+            login.setVisible(true);
+
+        } catch (Exception ex) {
+            System.err.println("[DashboardView] Force logout error: " + ex.getMessage());
+        }
+
+        // Không setProcessingLogout(false) ở đây.
+        // Khi user login lại, LoginView hoặc HeartbeatService.start() sẽ reset.
     }
 
     public static void main(String args[]) {
@@ -293,5 +388,46 @@ public class DashboardView extends JFrame {
         java.awt.EventQueue.invokeLater(() -> {
             new DashboardView().setVisible(true);
         });
+    }
+
+    private void handleCloseApp() {
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Bạn có chắc muốn thoát ứng dụng?",
+                "Xác nhận thoát",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            model.account.Account currentUser
+                    = business.service.SessionManager.getCurrentUser();
+
+            String sessionId
+                    = business.service.SessionManager.getCurrentSessionId();
+
+            if (currentUser != null
+                    && currentUser.getAccountId() != null
+                    && sessionId != null) {
+
+                if (business.service.HeartbeatService.markLogoutOnce()) {
+                    business.service.HeartbeatService.stop();
+
+                    business.service.AccountService.onLogoutOrCloseApp(
+                            currentUser.getAccountId(),
+                            sessionId
+                    );
+                }
+            }
+
+        } catch (Exception ex) {
+            System.err.println("[CloseApp] Không thể cập nhật session: " + ex.getMessage());
+        }
+
+        dispose();
+        System.exit(0);
     }
 }

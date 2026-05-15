@@ -19,6 +19,8 @@ public class Employee {
     private String email;
     private String role;   // chức vụ hiển thị trên form
     private String gender;
+    private String onlineStatus;
+    private int activeSessions;
 
     public Employee() {
     }
@@ -48,6 +50,14 @@ public class Employee {
 
     public String getEmployeeId() {
         return employeeId;
+    }
+
+    public int getActiveSessions() {
+        return activeSessions;
+    }
+
+    public void setActiveSessions(int activeSessions) {
+        this.activeSessions = activeSessions;
     }
 
     public void setEmployeeId(String employeeId) {
@@ -143,8 +153,6 @@ public class Employee {
     public void setGender(String gender) {
         this.gender = gender;
     }
-    
-
 
     public String getAccountStatus() {
         return accountStatus;
@@ -153,5 +161,13 @@ public class Employee {
     public void setAccountStatus(String accountStatus) {
         this.accountStatus = accountStatus;
     }
-    
+
+    public String getOnlineStatus() {
+        return onlineStatus;
+    }
+
+    public void setOnlineStatus(String onlineStatus) {
+        this.onlineStatus = onlineStatus;
+    }
+
 }

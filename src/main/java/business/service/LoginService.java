@@ -6,6 +6,7 @@ import business.sql.rbac.TokenSql;
 import common.utils.PasswordUtils;
 import model.account.Account;
 import model.account.Token;
+import business.service.HeartbeatService;
 
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -113,13 +114,19 @@ public class LoginService {
         }
 
         // Lưu session RAM
-        SessionManager.startSession(acc, tokenValue);
+        String sessionId = java.util.UUID.randomUUID().toString();
 
-        LoginHistorySql.getInstance().log(
-                acc.getAccountId(), "LOGIN_SUCCESS", "SUCCESS", null, localIp(), deviceInfo()
+        SessionManager.startSession(acc, tokenValue, sessionId);
+
+        AccountService.onLoginSuccessByRole(
+                acc,
+                sessionId
         );
-        System.out.println("[" + LOGIN_VERSION + "] SUCCESS for username=" + username);
 
+        HeartbeatService.start(
+                acc.getAccountId(),
+                sessionId
+        );
         return acc;
     }
 
@@ -132,22 +139,45 @@ public class LoginService {
     }
 
     public static void logout() {
-        Account u = SessionManager.getCurrentUser();
+        Account currentUser = SessionManager.getCurrentUser();
         String currentToken = SessionManager.getToken();
 
+        // Xử lý các tác vụ liên quan đến User ID
+        if (currentUser != null && currentUser.getAccountId() != null && !currentUser.getAccountId().isBlank()) {
+            String accountId = currentUser.getAccountId();
+
+            // 1. Dừng luồng Ping ngầm
+            HeartbeatService.stop();
+
+            // 2. Trừ active_sessions trong Database (Thay thế hoàn toàn cho setOffline)
+            String sessionId = business.service.SessionManager.getCurrentSessionId();
+
+            if (business.service.HeartbeatService.markLogoutOnce()) {
+                business.service.HeartbeatService.stop();
+
+                business.service.AccountService.onLogoutOrCloseApp(
+                        currentUser.getAccountId(),
+                        sessionId
+                );
+            }
+
+            // 3. Ghi lịch sử đăng xuất
+            LoginHistorySql.getInstance().log(
+                    accountId,
+                    "LOGOUT",
+                    "SUCCESS",
+                    null,
+                    localIp(),
+                    deviceInfo()
+            );
+        }
+
+        // 4. Thu hồi Token (đặt riêng biệt phòng trường hợp có token nhưng user bị null)
         if (currentToken != null && !currentToken.isBlank()) {
             TokenSql.getInstance().revokeToken(currentToken);
         }
 
-        LoginHistorySql.getInstance().log(
-                u != null ? u.getAccountId() : null,
-                "LOGOUT",
-                "SUCCESS",
-                null,
-                localIp(),
-                deviceInfo()
-        );
-
+        // 5. Dọn dẹp dữ liệu cục bộ trên máy
         SessionManager.clear();
         System.out.println("[" + LOGIN_VERSION + "] user logged out");
     }

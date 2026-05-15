@@ -4,6 +4,7 @@ import common.auth.UserSession;
 import common.security.SecurityGuard;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
 /**
@@ -16,6 +17,8 @@ public class LoginView extends javax.swing.JFrame {
 
     public LoginView() {
         initComponents();
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
         this.setLocationRelativeTo(null);
 
         // 🌟 FIX LỖI MỞ 2 APP: Chỉ bắt sự kiện Enter ở ô Mật khẩu
@@ -554,13 +557,15 @@ public class LoginView extends javax.swing.JFrame {
         txtUsername = new javax.swing.JTextField();
         txtPassword = new javax.swing.JPasswordField();
         btnLogin = new javax.swing.JButton();
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {
         String user = txtUsername.getText().trim();
         char[] passwordChars = txtPassword.getPassword();
         String pass = new String(passwordChars);
+
+        common.security.SecurityGuard.setProcessingLogout(false);
 
         if (user.isEmpty() || pass.isEmpty()) {
             javax.swing.JOptionPane.showMessageDialog(this, "Nhập đủ tài khoản/mật khẩu!");
