@@ -157,15 +157,17 @@ CREATE TABLE EMPLOYEES (
     employee_name          NVARCHAR2(100),
     gender                 VARCHAR2(20),
     phone                  VARCHAR2(20),
-    email                  VARCHAR2(100), -- Ưu tiên độ dài 100 từ phiên bản 1
+    email                  VARCHAR2(100),
     hire_date              DATE,
     salary_coefficient     NUMBER(5, 2),
     total_completed_orders NUMBER(10) DEFAULT 0,
     role_id                VARCHAR2(50),
     shift_id               VARCHAR2(50),
+    store_id               VARCHAR2(50), -- Gộp trực tiếp Chi nhánh
     is_deleted             NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_EMPLOYEES_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id),
-    CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id)
+    CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id),
+    CONSTRAINT FK_EMPLOYEES_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
 );
 
 CREATE TABLE ACTIVATION_TOKENS (
