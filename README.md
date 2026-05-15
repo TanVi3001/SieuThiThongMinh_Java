@@ -76,3 +76,62 @@ SieuThiOnline [Project Root]
 | 2 | 24521949 | Nguyễn Đinh Tùng | https://github.com/DeeTung | 24521949@gm.uit.edu.vn |
 | 3 | 24521176 | Hoàng Khôi Nguyên | https://github.com/Paulhoang8326 | 24521176@gm.uit.edu.vn | 
 | 4 | 24521507 | Dương Thúy Quỳnh | https://github.com/duongthuyquynh | 24521507@gm.uit.edu.vn | 
+
+## Chạy local không dùng Docker
+
+Ứng dụng đọc cấu hình DB theo thứ tự ưu tiên:
+
+1. Biến môi trường `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+2. `src/main/resources/database.properties`
+
+Để chạy với Oracle local:
+
+1. Cài Oracle local và tạo schema/user cho ứng dụng.
+2. Cập nhật `src/main/resources/database.properties` theo máy của bạn, ví dụ:
+
+   ```properties
+   db.url=jdbc:oracle:thin:@localhost:1521/FREEPDB1
+   db.username=appuser
+   db.password=your-local-password
+   ```
+
+   Có thể copy từ `src/main/resources/database.properties.example` rồi sửa lại.
+3. Tạo schema và nạp dữ liệu mẫu bằng SQL*Plus hoặc SQLcl:
+
+   ```bash
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/KhoiTaoCacBang.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/create_kpi_history_table.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/migration_invoice_payment.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/seed_local_dev_accounts.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/seed_data.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/seed_kpi_criteria.sql
+   sqlplus appuser/your-local-password@//localhost:1521/FREEPDB1 @database/seed_invoice_report.sql
+   ```
+
+4. Chạy ứng dụng:
+
+   ```bash
+   mvn compile
+   mvn exec:java -Dexec.mainClass="business.main.SieuThiOnline"
+   ```
+
+Tài khoản demo local từ `database/seed_local_dev_accounts.sql`:
+
+| Username | Password | Vai trò |
+| --- | --- | --- |
+| `admin` | `123456` | Admin |
+| `manager` | `123456` | Store Manager |
+| `sale` | `123456` | Sales Staff |
+
+## Chạy với Oracle trong Docker
+
+`docker-compose.yml` khởi động Oracle và map cổng container `1521` ra máy host `1522`. Khi muốn app kết nối tới DB Docker mà không sửa file local, đặt biến môi trường trước khi chạy app:
+
+```powershell
+$env:DB_URL="jdbc:oracle:thin:@localhost:1522/FREEPDB1"
+$env:DB_USERNAME="appuser"
+$env:DB_PASSWORD="apppass"
+mvn exec:java -Dexec.mainClass="business.main.SieuThiOnline"
+```
+
+Các biến môi trường luôn được ưu tiên hơn `database.properties`, nên cùng một bản build có thể chạy local bằng file cấu hình và chạy với DB Docker bằng env mà không hard-code thông tin kết nối trong Java source.

@@ -1,10 +1,10 @@
 package common.db;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 
 public class DatabaseConnection {
@@ -12,24 +12,16 @@ public class DatabaseConnection {
     private static final Properties PROPERTIES = loadProperties();
 
     public static Connection getConnection() {
-        Connection c = null;
+        String url = getRequiredConfigValue("DB_URL", "db.url");
+        String username = getRequiredConfigValue("DB_USERNAME", "db.username");
+        String password = getRequiredConfigValue("DB_PASSWORD", "db.password");
+
         try {
-            // Đăng ký Oracle Driver
             DriverManager.registerDriver(new oracle.jdbc.OracleDriver());
-
-            // Ưu tiên biến môi trường để dễ đổi cấu hình theo từng máy,
-            // sau đó dùng giá trị mặc định trong database.properties.
-            String url = getConfigValue("DB_URL", "db.url");
-            String username = getConfigValue("DB_USERNAME", "db.username");
-            String password = getConfigValue("DB_PASSWORD", "db.password");
-
-            // Thực hiện kết nối
-            c = DriverManager.getConnection(url, username, password);
-
+            return DriverManager.getConnection(url, username, password);
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException(buildConnectionErrorMessage(url, username), e);
         }
-        return c;
     }
 
     public static void closeConnection(Connection c) {
@@ -45,9 +37,13 @@ public class DatabaseConnection {
     private static Properties loadProperties() {
         Properties properties = new Properties();
         try (InputStream inputStream = DatabaseConnection.class.getClassLoader().getResourceAsStream(CONFIG_FILE)) {
-            if (inputStream != null) {
-                properties.load(inputStream);
+            if (inputStream == null) {
+                throw new IllegalStateException(
+                        "Cannot find " + CONFIG_FILE + " on the classpath. "
+                        + "Check src/main/resources/" + CONFIG_FILE + " and rebuild the project."
+                );
             }
+            properties.load(inputStream);
         } catch (IOException e) {
             throw new IllegalStateException("Cannot load database configuration from " + CONFIG_FILE, e);
         }
@@ -62,4 +58,21 @@ public class DatabaseConnection {
         return PROPERTIES.getProperty(propertyKey);
     }
 
+    private static String getRequiredConfigValue(String envKey, String propertyKey) {
+        String value = getConfigValue(envKey, propertyKey);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(
+                    "Missing database configuration for " + propertyKey + ". "
+                    + "Set environment variable " + envKey + " or define " + propertyKey + " in " + CONFIG_FILE + ". "
+                    + "Check local Oracle, " + CONFIG_FILE + ", and DB_URL/DB_USERNAME/DB_PASSWORD environment variables."
+            );
+        }
+        return value.trim();
+    }
+
+    private static String buildConnectionErrorMessage(String url, String username) {
+        return "Cannot connect to Oracle database. "
+                + "DB URL=" + url + ", DB username=" + username + ". "
+                + "Check local Oracle, " + CONFIG_FILE + ", and DB_URL/DB_USERNAME/DB_PASSWORD environment variables.";
+    }
 }
