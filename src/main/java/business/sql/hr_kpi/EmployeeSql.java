@@ -9,6 +9,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import model.employee.Employee;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
+import model.employee.Employee;
 
 public class EmployeeSql implements SqlInterface<Employee> {
 
@@ -21,10 +27,9 @@ public class EmployeeSql implements SqlInterface<Employee> {
         int res = 0;
         // Bơm tự động: hire_date (SYSDATE) và salary_coefficient (1.0) để thỏa mãn Schema mới
         String sql = "INSERT INTO EMPLOYEES (employee_id, employee_name, phone, email, role_id, gender, hire_date, salary_coefficient, is_deleted) "
-                   + "VALUES (?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
-        try (Connection con = DatabaseConnection.getConnection(); 
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
+                + "VALUES (?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
             con.setAutoCommit(false); // Bắt đầu giao dịch an toàn
             try {
                 // Ưu tiên lấy RoleId, nếu không có thì lấy Role name
@@ -38,7 +43,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 pst.setString(6, t.getGender());
 
                 res = pst.executeUpdate();
-                
+
                 // Ghi Audit Log nếu Insert thành công (Nếu hệ thống bác có Audit Log)
                 if (res > 0) {
                     try {
@@ -48,7 +53,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                         System.err.println("Cảnh báo: Không thể ghi Audit Log cho chức năng tạo nhân viên.");
                     }
                 }
-                
+
                 con.commit(); // Chốt giao dịch
             } catch (Exception e) {
                 con.rollback(); // Hoàn tác nếu có lỗi
@@ -373,5 +378,69 @@ public class EmployeeSql implements SqlInterface<Employee> {
             e.printStackTrace();
         }
         return false;
+    }
+
+    public List<Employee> getAllNhanVien(String currentUserRole) {
+        List<Employee> list = new ArrayList<>();
+
+        StringBuilder sql = new StringBuilder();
+
+        sql.append("SELECT ");
+        sql.append("    e.employee_id, ");
+        sql.append("    e.employee_name, ");
+        sql.append("    e.phone, ");
+        sql.append("    e.email, ");
+        sql.append("    e.role_id, ");
+        sql.append("    e.gender, ");
+        sql.append("    CASE ");
+        sql.append("        WHEN a.account_id IS NOT NULL THEN N'Đã cấp' ");
+        sql.append("        ELSE N'Chưa cấp' ");
+        sql.append("    END AS account_status, ");
+        sql.append("    CASE ");
+        sql.append("        WHEN a.account_id IS NULL THEN 'N/A' ");
+        sql.append("        WHEN NVL(a.active_sessions, 0) > 0 THEN 'ONLINE' ");
+        sql.append("        ELSE 'OFFLINE' ");
+        sql.append("    END AS online_status, ");
+        sql.append("    NVL(a.active_sessions, 0) AS active_sessions ");
+        sql.append("FROM EMPLOYEES e ");
+        sql.append("LEFT JOIN ACCOUNTS a ");
+        sql.append("       ON e.employee_id = a.user_id ");
+        sql.append("WHERE NVL(e.is_deleted, 0) = 0 ");
+
+        if ("R_STORE_MNG".equalsIgnoreCase(currentUserRole)) {
+            sql.append("AND NVL(e.role_id, 'UNKNOWN') <> 'R_ADMIN_ALL' ");
+        }
+
+        sql.append("ORDER BY ");
+        sql.append("CASE ");
+        sql.append("    WHEN e.role_id = 'R_ADMIN_ALL' THEN 1 ");
+        sql.append("    WHEN e.role_id = 'R_STORE_MNG' THEN 2 ");
+        sql.append("    ELSE 3 ");
+        sql.append("END, e.employee_name ASC");
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString()); ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Employee emp = new Employee();
+
+                emp.setEmployeeId(rs.getString("employee_id"));
+                emp.setEmployeeName(rs.getString("employee_name"));
+                emp.setPhone(rs.getString("phone"));
+                emp.setEmail(rs.getString("email"));
+                emp.setRoleId(rs.getString("role_id"));
+                emp.setRole(rs.getString("role_id"));
+                emp.setGender(rs.getString("gender"));
+                emp.setAccountStatus(rs.getString("account_status"));
+                emp.setOnlineStatus(rs.getString("online_status"));
+                emp.setActiveSessions(rs.getInt("active_sessions"));
+
+                list.add(emp);
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return list;
     }
 }

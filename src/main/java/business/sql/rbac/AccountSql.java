@@ -26,6 +26,76 @@ public class AccountSql implements SqlInterface<Account> {
         return instance;
     }
 
+    // =========================================================
+    // SESSION MANAGEMENT
+    // =========================================================
+    public boolean increaseActiveSession(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = NVL(ACTIVE_SESSIONS, 0) + 1, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    LAST_LOGIN_AT = CURRENT_TIMESTAMP, "
+                + "    LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("[AccountSql] increaseActiveSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean decreaseActiveSession(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = GREATEST(NVL(ACTIVE_SESSIONS, 0) - 1, 0), "
+                + "    ONLINE_STATUS = CASE "
+                + "        WHEN GREATEST(NVL(ACTIVE_SESSIONS, 0) - 1, 0) > 0 THEN 'ONLINE' "
+                + "        ELSE 'OFFLINE' "
+                + "    END, "
+                + "    LAST_LOGOUT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("[AccountSql] decreaseActiveSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean heartbeat(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0 "
+                + "  AND NVL(ACTIVE_SESSIONS, 0) > 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("[AccountSql] heartbeat error: " + e.getMessage());
+            return false;
+        }
+    }
+
     public Account selectByUsername(String username) {
         Account acc = null;
         String sql = "SELECT a.account_id, a.username, a.password, a.is_deleted, "
@@ -402,7 +472,8 @@ public class AccountSql implements SqlInterface<Account> {
 
         String sql = "SELECT a.account_id, a.username, u.full_name, u.email, "
                 + "       COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value, "
-                + "       a.is_deleted "
+                + "       a.is_deleted, "
+                + "       NVL(a.online_status, 'OFFLINE') AS online_status "
                 + "FROM ACCOUNTS a "
                 + "JOIN USERS u ON a.user_id = u.user_id "
                 + "LEFT JOIN ACCOUNT_ASSIGN_ROLE aar "
@@ -411,7 +482,7 @@ public class AccountSql implements SqlInterface<Account> {
                 + "       ON a.account_id = aarg.account_id AND NVL(aarg.is_deleted, 0) = 0 "
                 + "LEFT JOIN ROLE_GROUPS rg "
                 + "       ON aarg.role_group_id = rg.role_group_id AND NVL(rg.is_deleted, 0) = 0 ";
-                // BỎ HẲN DÒNG WHERE a.is_deleted = 0 Ở ĐÂY ĐỂ LẤY CẢ TÀI KHOẢN BỊ KHÓA
+        // BỎ HẲN DÒNG WHERE a.is_deleted = 0 Ở ĐÂY ĐỂ LẤY CẢ TÀI KHOẢN BỊ KHÓA
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
 
@@ -422,7 +493,8 @@ public class AccountSql implements SqlInterface<Account> {
                     rs.getString("full_name"),
                     rs.getString("email"),
                     rs.getString("role_value"),
-                    String.valueOf(rs.getInt("is_deleted"))
+                    String.valueOf(rs.getInt("is_deleted")),
+                    rs.getString("online_status")
                 });
             }
         } catch (SQLException e) {
@@ -782,8 +854,8 @@ public class AccountSql implements SqlInterface<Account> {
                         rs.getString("username"),
                         rs.getString("full_name"),
                         rs.getString("email"),
-                        rs.getString("role_value"), 
-                        String.valueOf(rs.getInt("is_deleted")) 
+                        rs.getString("role_value"),
+                        String.valueOf(rs.getInt("is_deleted"))
                     };
                 }
             }
@@ -791,5 +863,279 @@ public class AccountSql implements SqlInterface<Account> {
             System.err.println("Lỗi SQL AccountSql.getAccountDetails: " + e.getMessage());
         }
         return null;
+    }
+    // =========================================================
+// ONLINE / OFFLINE STATUS
+// =========================================================
+
+    public boolean updateOnlineStatus(String accountId, String onlineStatus) {
+        if (accountId == null || accountId.isBlank()) {
+            return false;
+        }
+
+        String status = "ONLINE".equalsIgnoreCase(onlineStatus) ? "ONLINE" : "OFFLINE";
+
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET online_status = ?, "
+                + "    last_login_at = CASE WHEN ? = 'ONLINE' THEN CURRENT_TIMESTAMP ELSE last_login_at END, "
+                + "    last_logout_at = CASE WHEN ? = 'OFFLINE' THEN CURRENT_TIMESTAMP ELSE last_logout_at END, "
+                + "    updated_at = CURRENT_TIMESTAMP "
+                + "WHERE account_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, status);
+            pst.setString(2, status);
+            pst.setString(3, status);
+            pst.setString(4, accountId);
+
+            return pst.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("Lỗi AccountSql.updateOnlineStatus: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean setOnline(String accountId) {
+        return updateOnlineStatus(accountId, "ONLINE");
+    }
+
+    public boolean setOffline(String accountId) {
+        return updateOnlineStatus(accountId, "OFFLINE");
+    }
+
+    public String getOnlineStatus(String accountId) {
+        if (accountId == null || accountId.isBlank()) {
+            return "OFFLINE";
+        }
+
+        String sql = "SELECT NVL(online_status, 'OFFLINE') AS online_status "
+                + "FROM ACCOUNTS "
+                + "WHERE account_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, accountId);
+
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("online_status");
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Lỗi AccountSql.getOnlineStatus: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return "OFFLINE";
+    }
+
+    public boolean setAllAccountsOffline() {
+        String sql = "UPDATE ACCOUNTS "
+                + "SET online_status = 'OFFLINE', "
+                + "    last_logout_at = CURRENT_TIMESTAMP, "
+                + "    updated_at = CURRENT_TIMESTAMP "
+                + "WHERE NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            return pst.executeUpdate() >= 0;
+
+        } catch (SQLException e) {
+            System.err.println("Lỗi AccountSql.setAllAccountsOffline: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean activateSingleSession(String accountId, String sessionId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = 1, "
+                + "    CURRENT_SESSION_ID = ?, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    LAST_LOGIN_AT = CURRENT_TIMESTAMP, "
+                + "    LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, sessionId);
+            ps.setString(2, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] activateSingleSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean logoutBySession(String accountId, String sessionId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = 0, "
+                + "    CURRENT_SESSION_ID = NULL, "
+                + "    ONLINE_STATUS = 'OFFLINE', "
+                + "    LAST_LOGOUT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND CURRENT_SESSION_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            ps.setString(2, sessionId);
+
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] logoutBySession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean heartbeatBySession(String accountId, String sessionId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    ACTIVE_SESSIONS = 1, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND CURRENT_SESSION_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            ps.setString(2, sessionId);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] heartbeatBySession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean isCurrentSessionValid(String accountId, String sessionId) {
+        String sql
+                = "SELECT COUNT(*) "
+                + "FROM ACCOUNTS "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND CURRENT_SESSION_ID = ? "
+                + "  AND NVL(ACTIVE_SESSIONS, 0) = 1 "
+                + "  AND ONLINE_STATUS = 'ONLINE' "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            ps.setString(2, sessionId);
+
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] isCurrentSessionValid error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public int resetDeadSessions() {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = 0, "
+                + "    CURRENT_SESSION_ID = NULL, "
+                + "    ONLINE_STATUS = 'OFFLINE', "
+                + "    LAST_LOGOUT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE NVL(IS_DELETED, 0) = 0 "
+                + "  AND NVL(ACTIVE_SESSIONS, 0) = 1 "
+                + "  AND LAST_HEARTBEAT_AT < SYSTIMESTAMP - INTERVAL '2' MINUTE";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            return ps.executeUpdate();
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] resetDeadSessions error: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    public boolean activateMultiSession(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = NVL(ACTIVE_SESSIONS, 0) + 1, "
+                + "    CURRENT_SESSION_ID = NULL, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    LAST_LOGIN_AT = CURRENT_TIMESTAMP, "
+                + "    LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] activateMultiSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean logoutMultiSession(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET ACTIVE_SESSIONS = GREATEST(NVL(ACTIVE_SESSIONS, 0) - 1, 0), "
+                + "    ONLINE_STATUS = CASE "
+                + "        WHEN GREATEST(NVL(ACTIVE_SESSIONS, 0) - 1, 0) > 0 THEN 'ONLINE' "
+                + "        ELSE 'OFFLINE' "
+                + "    END, "
+                + "    LAST_LOGOUT_AT = CURRENT_TIMESTAMP, "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] logoutMultiSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean heartbeatMultiSession(String accountId) {
+        String sql
+                = "UPDATE ACCOUNTS "
+                + "SET LAST_HEARTBEAT_AT = CURRENT_TIMESTAMP, "
+                + "    ONLINE_STATUS = 'ONLINE', "
+                + "    UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE ACCOUNT_ID = ? "
+                + "  AND NVL(IS_DELETED, 0) = 0 "
+                + "  AND NVL(ACTIVE_SESSIONS, 0) > 0";
+
+        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] heartbeatMultiSession error: " + e.getMessage());
+            return false;
+        }
     }
 }

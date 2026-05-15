@@ -378,7 +378,7 @@ public class RegisterView extends javax.swing.JFrame {
     }
 
     private void initComponents() {
-        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         pack();
     }
 

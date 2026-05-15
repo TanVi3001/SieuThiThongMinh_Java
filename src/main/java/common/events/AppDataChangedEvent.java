@@ -1,6 +1,7 @@
 package common.events;
 
 public final class AppDataChangedEvent implements AppEvent {
+
     private final AppEventType type;
     private final String message;
 
@@ -9,6 +10,11 @@ public final class AppDataChangedEvent implements AppEvent {
         this.message = message;
     }
 
-    public AppEventType getType() { return type; }
-    public String getMessage() { return message; }
+    public AppEventType getType() {
+        return type;
+    }
+
+    public String getMessage() {
+        return message;
+    }
 }
