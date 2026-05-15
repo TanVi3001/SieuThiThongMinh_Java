@@ -1,6 +1,7 @@
 -- ==========================================================
 -- 1. ACCOUNT MANAGEMENT AND ROLE-BASED ACCESS CONTROL (RBAC)
 -- ==========================================================
+
 CREATE TABLE USERS (
     user_id      VARCHAR2(50) PRIMARY KEY,
     full_name    NVARCHAR2(255),
@@ -10,7 +11,7 @@ CREATE TABLE USERS (
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted   NUMBER(1) DEFAULT 0
 );
-select * from users;
+
 CREATE TABLE FUNCTIONS (
     function_id   VARCHAR2(50) PRIMARY KEY,
     function_name NVARCHAR2(100),
@@ -18,7 +19,6 @@ CREATE TABLE FUNCTIONS (
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted    NUMBER(1) DEFAULT 0
 );
-select * from FUNCTIONS;
 
 CREATE TABLE ROLE_GROUPS (
     role_group_id VARCHAR2(50) PRIMARY KEY,
@@ -28,23 +28,23 @@ CREATE TABLE ROLE_GROUPS (
     is_deleted    NUMBER(1) DEFAULT 0
 );
 
-select * from ROLE_GROUPS;
-
-
 CREATE TABLE ACCOUNTS (
-    account_id VARCHAR2(50) PRIMARY KEY,
-    user_id    VARCHAR2(50)  NOT NULL,
-    username   VARCHAR2(50)  NOT NULL,
-    password   VARCHAR2(255) NOT NULL,
-    status     NVARCHAR2(20),
-    ROLE       NVARCHAR2(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_deleted NUMBER(1) DEFAULT 0,
+    account_id         VARCHAR2(50) PRIMARY KEY,
+    user_id            VARCHAR2(50)  NOT NULL,
+    username           VARCHAR2(50)  NOT NULL,
+    password           VARCHAR2(255) NOT NULL,
+    status             NVARCHAR2(20),
+    ACTIVE_SESSIONS    NUMBER(10) DEFAULT 0 NOT NULL,
+    LAST_HEARTBEAT_AT  TIMESTAMP,
+    CURRENT_SESSION_ID VARCHAR2(100),
+    online_status      VARCHAR2(20),
+    last_login_at      TIMESTAMP,
+    last_logout_at     TIMESTAMP,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted         NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_ACCOUNTS_USERS FOREIGN KEY (user_id) REFERENCES USERS (user_id)
 );
-
-select * from ACCOUNTS;
 
 CREATE TABLE ROLES (
     role_id     VARCHAR2(50) PRIMARY KEY,
@@ -61,9 +61,6 @@ CREATE TABLE ROLES (
     CONSTRAINT FK_ROLES_FUNCTIONS FOREIGN KEY (function_id) REFERENCES FUNCTIONS (function_id)
 );
 
-select * from ROLES;
-
-
 CREATE TABLE ACCOUNT_ASSIGN_ROLE_GROUP (
     account_id    VARCHAR2(50),
     role_group_id VARCHAR2(50),
@@ -74,8 +71,6 @@ CREATE TABLE ACCOUNT_ASSIGN_ROLE_GROUP (
     CONSTRAINT FK_AARG_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id),
     CONSTRAINT FK_AARG_ROLE_GROUPS FOREIGN KEY (role_group_id) REFERENCES ROLE_GROUPS (role_group_id)
 );
-
-select * from ACCOUNT_ASSIGN_ROLE_GROUP;
 
 CREATE TABLE ROLE_GROUP_ASSIGN_ROLE (
     role_group_id VARCHAR2(50),
@@ -88,9 +83,6 @@ CREATE TABLE ROLE_GROUP_ASSIGN_ROLE (
     CONSTRAINT FK_RGAR_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
 );
 
-select * from ROLE_GROUP_ASSIGN_ROLE;
-
-
 CREATE TABLE ACCOUNT_ASSIGN_ROLE (
     account_id VARCHAR2(50),
     role_id    VARCHAR2(50),
@@ -102,8 +94,6 @@ CREATE TABLE ACCOUNT_ASSIGN_ROLE (
     CONSTRAINT FK_AAR_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
 );
 
-select * from ACCOUNT_ASSIGN_ROLE;
-
 CREATE TABLE TOKENS (
     token_id    VARCHAR2(50) PRIMARY KEY,
     account_id  VARCHAR2(50)  NOT NULL,
@@ -114,9 +104,6 @@ CREATE TABLE TOKENS (
     is_deleted  NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_TOKENS_ACCOUNTS FOREIGN KEY (account_id) REFERENCES ACCOUNTS (account_id)
 );
-
-select * from TOKENS;
-
 
 CREATE TABLE LOGIN_HISTORY (
     log_id         VARCHAR2(50) PRIMARY KEY,
@@ -132,8 +119,6 @@ CREATE TABLE LOGIN_HISTORY (
 );
 CREATE INDEX IDX_LOGHIS_ACCOUNT_TIME ON LOGIN_HISTORY (account_id, login_time DESC);
 CREATE INDEX IDX_LOGHIS_ACTION ON LOGIN_HISTORY (action_type);
-
-select * from LOGIN_HISTORY;
 
 CREATE TABLE AUDIT_LOG (
     LOG_ID      VARCHAR2(50) PRIMARY KEY,
@@ -154,12 +139,11 @@ CREATE INDEX IDX_AUDIT_CREATED ON AUDIT_LOG (CREATED_AT DESC);
 CREATE INDEX IDX_AUDIT_ACCOUNT ON AUDIT_LOG (ACCOUNT_ID);
 CREATE INDEX IDX_AUDIT_ACTION ON AUDIT_LOG (ACTION_TYPE);
 
-select * from AUDIT_LOG;
-
 
 -- ==========================================================
 -- 2. HUMAN RESOURCES AND KPI MANAGEMENT
 -- ==========================================================
+
 CREATE TABLE SHIFTS (
     shift_id   VARCHAR2(50) PRIMARY KEY,
     shift_name NVARCHAR2(50),
@@ -167,24 +151,24 @@ CREATE TABLE SHIFTS (
     end_time   DATE,
     is_deleted NUMBER(1) DEFAULT 0
 );
-select * from SHIFTS;
 
 CREATE TABLE EMPLOYEES (
     employee_id            VARCHAR2(50) PRIMARY KEY,
     employee_name          NVARCHAR2(100),
+    gender                 VARCHAR2(20),
+    phone                  VARCHAR2(20),
+    email                  VARCHAR2(100),
     hire_date              DATE,
-    gender                 varchar(20),
-    phone                  varchar(20),
-    email                  varchar(20),
     salary_coefficient     NUMBER(5, 2),
     total_completed_orders NUMBER(10) DEFAULT 0,
     role_id                VARCHAR2(50),
     shift_id               VARCHAR2(50),
-    is_deleted             NUMBER(1)  DEFAULT 0,
+    store_id               VARCHAR2(50), -- Gộp trực tiếp Chi nhánh
+    is_deleted             NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_EMPLOYEES_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id),
-    CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id)
+    CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id),
+    CONSTRAINT FK_EMPLOYEES_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
 );
-select * from EMPLOYEES;
 
 CREATE TABLE ACTIVATION_TOKENS (
     TOKEN_ID    NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -196,7 +180,6 @@ CREATE TABLE ACTIVATION_TOKENS (
     CONSTRAINT UQ_ACTIVATION_CODE UNIQUE (CODE),
     CONSTRAINT FK_ACTIVATION_EMP FOREIGN KEY (EMPLOYEE_ID) REFERENCES EMPLOYEES (EMPLOYEE_ID)
 );
-
 CREATE INDEX IDX_ACTIVATION_EMP ON ACTIVATION_TOKENS (EMPLOYEE_ID);
 
 CREATE TABLE ATTENDANCE (
@@ -211,7 +194,6 @@ CREATE TABLE ATTENDANCE (
     CONSTRAINT FK_ATTENDANCE_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id),
     CONSTRAINT FK_ATTENDANCE_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id)
 );
-select * from ATTENDANCE;
 
 CREATE TABLE KPI_CRITERIA (
     kpi_id         VARCHAR2(50) PRIMARY KEY,
@@ -222,8 +204,6 @@ CREATE TABLE KPI_CRITERIA (
     minimum_target NUMBER(15, 2),
     is_deleted     NUMBER(1) DEFAULT 0
 );
-
-select * from KPI_CRITERIA;
 
 CREATE TABLE KPI_EVALUATION (
     employee_id       VARCHAR2(50),
@@ -237,18 +217,18 @@ CREATE TABLE KPI_EVALUATION (
     CONSTRAINT FK_EVAL_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id),
     CONSTRAINT FK_EVAL_KPI FOREIGN KEY (kpi_id) REFERENCES KPI_CRITERIA (kpi_id)
 );
-select * from KPI_EVALUATION;
+
 
 -- ==========================================================
 -- 3. PRODUCTS AND INVENTORY MANAGEMENT
 -- ==========================================================
+
 CREATE TABLE CATEGORIES (
     category_id   VARCHAR2(50) PRIMARY KEY,
     category_name NVARCHAR2(100) NOT NULL,
     description   NVARCHAR2(255),
     is_deleted    NUMBER(1) DEFAULT 0
 );
-
 
 CREATE TABLE SUPPLIERS (
     supplier_id   VARCHAR2(50) PRIMARY KEY,
@@ -258,8 +238,6 @@ CREATE TABLE SUPPLIERS (
     phone_number  VARCHAR2(20),
     is_deleted    NUMBER(1) DEFAULT 0
 );
-select * from SUPPLIERS;
-
 
 CREATE TABLE UNITS (
     unit_id     VARCHAR2(50) PRIMARY KEY,
@@ -276,15 +254,24 @@ CREATE TABLE PRODUCTS (
     category_id  VARCHAR2(50),
     supplier_id  VARCHAR2(50),
     base_unit_id VARCHAR2(50),
-    image_path varchar(255),
+    image_path   VARCHAR2(255),
     is_deleted   NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_PRODUCTS_CATEGORIES FOREIGN KEY (category_id) REFERENCES CATEGORIES (category_id),
     CONSTRAINT FK_PRODUCTS_SUPPLIERS FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS (supplier_id),
     CONSTRAINT FK_PRODUCTS_BASE_UNIT FOREIGN KEY (base_unit_id) REFERENCES UNITS (unit_id)
 );
 
-select * from PRODUCTS;
-
+-- Khởi tạo Sequence và Trigger sinh mã Sản phẩm tự động (SP0000001)
+CREATE SEQUENCE product_seq START WITH 1 INCREMENT BY 1;
+/
+CREATE OR REPLACE TRIGGER trg_product_id
+    BEFORE INSERT ON PRODUCTS
+    FOR EACH ROW
+    WHEN (NEW.product_id IS NULL)
+BEGIN
+    :NEW.product_id := 'SP' || LPAD(product_seq.NEXTVAL, 7, '0');
+END;
+/
 
 CREATE TABLE PRODUCT_UNITS (
     product_id              VARCHAR2(50) NOT NULL,
@@ -297,7 +284,6 @@ CREATE TABLE PRODUCT_UNITS (
     CONSTRAINT FK_PU_UNITS FOREIGN KEY (unit_id) REFERENCES UNITS (unit_id),
     CONSTRAINT CK_PU_CONVERSION_POSITIVE CHECK (conversion_rate_to_base > 0)
 );
-select * from PRODUCT_UNITS;
 
 CREATE TABLE STORES (
     store_id     VARCHAR2(50) PRIMARY KEY,
@@ -307,13 +293,10 @@ CREATE TABLE STORES (
     is_deleted   NUMBER(1) DEFAULT 0
 );
 
-select * from STORES;
-
-
 CREATE TABLE INVENTORY (
     product_id   VARCHAR2(50),
     store_id     VARCHAR2(50),
-    quantity     NUMBER    DEFAULT 0,
+    quantity     NUMBER DEFAULT 0,
     unit         NVARCHAR2(50),
     last_updated DATE,
     is_deleted   NUMBER(1) DEFAULT 0,
@@ -321,38 +304,36 @@ CREATE TABLE INVENTORY (
     CONSTRAINT FK_INVENTORY_PRODUCTS FOREIGN KEY (product_id) REFERENCES PRODUCTS (product_id),
     CONSTRAINT FK_INVENTORY_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
 );
-select * from INVENTORY;
+
+
 -- ==========================================================
 -- 4. SALES AND ORDER FULFILLMENT
 -- ==========================================================
+
 CREATE TABLE CUSTOMERS (
-    customer_id   VARCHAR2(50) PRIMARY KEY,
-    customer_name NVARCHAR2(100),
-    phone         varchar(20),
-    email         varchar(20),
-    address       varchar(200),
-    role_id       VARCHAR2(50),
-    total_spending NUMBER(15,2) DEFAULT 0,
-    reward_points NUMBER(10),
-    remember_rank varchar2(20),
-    is_deleted    NUMBER(1) DEFAULT 0,
+    customer_id    VARCHAR2(50) PRIMARY KEY,
+    customer_name  NVARCHAR2(100),
+    phone          VARCHAR2(20),
+    email          VARCHAR2(100),
+    address        VARCHAR2(200),
+    role_id        VARCHAR2(50),
+    total_spending NUMBER(15, 2) DEFAULT 0,
+    reward_points  NUMBER(10) DEFAULT 0,
+    remember_rank  VARCHAR2(20),
+    is_deleted     NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_CUSTOMERS_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id)
 );
-select * from CUSTOMERS;
 
 CREATE TABLE PAYMENT_METHODS (
     payment_method_id VARCHAR2(50) PRIMARY KEY,
     is_deleted        NUMBER(1) DEFAULT 0
 );
-select * from PAYMENT_METHODS;
 
 CREATE TABLE CASH_PAYMENT (
     payment_method_id VARCHAR2(50) PRIMARY KEY,
     is_deleted        NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_CASH_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id)
 );
-select * from CASH_PAYMENT;
-
 
 CREATE TABLE BANK_TRANSFER_PAYMENT (
     payment_method_id     VARCHAR2(50) PRIMARY KEY,
@@ -363,7 +344,6 @@ CREATE TABLE BANK_TRANSFER_PAYMENT (
     is_deleted            NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_BT_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id)
 );
-select * from BANK_TRANSFER_PAYMENT;
 
 CREATE TABLE ORDERS (
     order_id          VARCHAR2(50) PRIMARY KEY,
@@ -379,8 +359,6 @@ CREATE TABLE ORDERS (
     CONSTRAINT FK_ORDERS_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id),
     CONSTRAINT FK_ORDERS_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id)
 );
-select * from ORDERS;
-
 
 CREATE TABLE ORDER_DETAILS (
     order_detail_id VARCHAR2(50) PRIMARY KEY,
@@ -395,8 +373,6 @@ CREATE TABLE ORDER_DETAILS (
     CONSTRAINT FK_OD_PRODUCTS FOREIGN KEY (product_id) REFERENCES PRODUCTS (product_id),
     CONSTRAINT FK_OD_UNITS FOREIGN KEY (unit_id) REFERENCES UNITS (unit_id)
 );
-select * from ORDER_DETAILS;
-
 
 CREATE TABLE DELIVERY_MANAGEMENT (
     delivery_id    VARCHAR2(50) PRIMARY KEY,
@@ -408,7 +384,6 @@ CREATE TABLE DELIVERY_MANAGEMENT (
     CONSTRAINT FK_DM_ORDERS FOREIGN KEY (order_id) REFERENCES ORDERS (order_id),
     CONSTRAINT FK_DM_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id)
 );
-select * from DELIVERY_MANAGEMENT;
 
 CREATE TABLE ON_SITE_PICKUP (
     delivery_id      VARCHAR2(50) PRIMARY KEY,
@@ -416,7 +391,6 @@ CREATE TABLE ON_SITE_PICKUP (
     is_deleted       NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_OSP_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
 );
-select * from ON_SITE_PICKUP;
 
 CREATE TABLE STORE_PICKUP (
     delivery_id        VARCHAR2(50) PRIMARY KEY,
@@ -425,7 +399,6 @@ CREATE TABLE STORE_PICKUP (
     is_deleted         NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_SP_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
 );
-select * from store_pickup;
 
 CREATE TABLE HOME_DELIVERY (
     delivery_id      VARCHAR2(50) PRIMARY KEY,
@@ -435,11 +408,12 @@ CREATE TABLE HOME_DELIVERY (
     is_deleted       NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_HD_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
 );
-select * from home_delivery;
+
 
 -- ==========================================================
 -- 5. PROMOTION CAMPAIGNS & APP SETTINGS
 -- ==========================================================
+
 CREATE TABLE PROMOTION_CAMPAIGNS (
     campaign_id   VARCHAR2(50) PRIMARY KEY,
     campaign_name NVARCHAR2(150) NOT NULL,
@@ -448,7 +422,6 @@ CREATE TABLE PROMOTION_CAMPAIGNS (
     end_date      DATE,
     is_deleted    NUMBER(1) DEFAULT 0
 );
-select * from PROMOTION_CAMPAIGNS;
 
 CREATE TABLE PROMOTIONS (
     promotion_id          VARCHAR2(50) PRIMARY KEY,
@@ -462,8 +435,6 @@ CREATE TABLE PROMOTIONS (
     CONSTRAINT FK_PROMOTIONS_CAMPAIGNS FOREIGN KEY (campaign_id) REFERENCES PROMOTION_CAMPAIGNS (campaign_id),
     CONSTRAINT FK_PROMOTIONS_OD FOREIGN KEY (order_detail_id) REFERENCES ORDER_DETAILS (order_detail_id)
 );
-select * from PROMOTIONS;
-
 
 CREATE TABLE OTP_STORAGE (
     email       VARCHAR2(150) PRIMARY KEY,
@@ -471,41 +442,13 @@ CREATE TABLE OTP_STORAGE (
     expiry_time DATE        NOT NULL
 );
 
-select * from OTP_STORAGE;
-
-
 CREATE TABLE APP_SYNC (
     sync_key       VARCHAR2(50) PRIMARY KEY,
     version_number NUMBER    DEFAULT 0 NOT NULL,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-select * from APP_SYNC;
-
-
 CREATE TABLE SYSTEM_CONFIG (
     config_key   VARCHAR2(50) PRIMARY KEY,
     config_value VARCHAR2(500)
 );
-select * from SYSTEM_CONFIG;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

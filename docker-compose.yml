@@ -5,13 +5,11 @@ services:
     ports:
       - "1522:1521"
     environment:
-      ORACLE_PASSWORD: 123456
-      APP_USER: appuser
-      APP_USER_PASSWORD: apppass
+      ORACLE_PASSWORD: Admin123
     volumes:
       - oracle-data:/opt/oracle/oradata
-      - ./database:/workspace-database:ro
-      - ./database/init:/container-entrypoint-initdb.d:ro
+      - ./database:/container-entrypoint-initdb.d
+    restart: unless-stopped
 
 volumes:
   oracle-data:
