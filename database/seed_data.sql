@@ -50,11 +50,25 @@ COMMIT;
 -- 4. TẠO PHƯƠNG THỨC THANH TOÁN (PAYMENT_METHODS)
 -- Bắt buộc phải có để tạo Hóa đơn
 -- ==========================================================
-INSERT INTO PAYMENT_METHODS (payment_method_id, is_deleted) VALUES ('PM_CASH', 0);
-INSERT INTO PAYMENT_METHODS (payment_method_id, is_deleted) VALUES ('PM_TRANSFER', 0);
+INSERT INTO PAYMENT_METHODS (payment_method_id, is_deleted)
+SELECT 'PM_CASH', 0
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM PAYMENT_METHODS WHERE payment_method_id = 'PM_CASH');
 
-INSERT INTO CASH_PAYMENT (payment_method_id, is_deleted) VALUES ('PM_CASH', 0);
-INSERT INTO BANK_TRANSFER_PAYMENT (payment_method_id, bank_name, is_deleted) VALUES ('PM_TRANSFER', 'Vietcombank', 0);
+INSERT INTO PAYMENT_METHODS (payment_method_id, is_deleted)
+SELECT 'PM_TRANSFER', 0
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM PAYMENT_METHODS WHERE payment_method_id = 'PM_TRANSFER');
+
+INSERT INTO CASH_PAYMENT (payment_method_id, is_deleted)
+SELECT 'PM_CASH', 0
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM CASH_PAYMENT WHERE payment_method_id = 'PM_CASH');
+
+INSERT INTO BANK_TRANSFER_PAYMENT (payment_method_id, bank_name, is_deleted)
+SELECT 'PM_TRANSFER', 'Vietcombank', 0
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM BANK_TRANSFER_PAYMENT WHERE payment_method_id = 'PM_TRANSFER');
 
 -- ==========================================================
 -- 5. TẠO NHÂN VIÊN MẪU (EMPLOYEES)
@@ -77,6 +91,14 @@ VALUES ('CUST002', N'Trần Thị B', 500, 0);
 INSERT INTO CUSTOMERS (customer_id, customer_name, reward_points, is_deleted) 
 VALUES ('CUST003', N'Lê Tấn Vĩ', 1200, 0);
 
+-- ==========================================================
+-- 7. TAO SAN PHAM MAU (PRODUCTS)
+-- ==========================================================
+INSERT INTO PRODUCTS (product_id, product_name, base_price, category_id, supplier_id, base_unit_id, is_deleted)
+VALUES ('SP0000001', N'San pham mau 1', 50000, 'CAT001', 'SUP_01', 'UN_01', 0);
+
+INSERT INTO PRODUCTS (product_id, product_name, base_price, category_id, supplier_id, base_unit_id, is_deleted)
+VALUES ('SP0000002', N'San pham mau 2', 50000, 'CAT001', 'SUP_01', 'UN_01', 0);
 -- ==========================================================
 -- 7. TẠO HÓA ĐƠN MUA HÀNG (ORDERS)
 -- (Khách mua bao nhiêu tiền là nằm ở đây)

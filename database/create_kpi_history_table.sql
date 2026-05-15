@@ -39,6 +39,14 @@ CREATE INDEX idx_kpi_import_date ON EMPLOYEE_KPI_HISTORY(import_date);
 
 -- Tạo view để lấy dữ liệu KPI mới nhất cho mỗi nhân viên
 CREATE OR REPLACE VIEW v_latest_kpi AS
+WITH latest_kpi_history AS (
+    SELECT
+        employee_id,
+        MAX(kpi_history_id) AS kpi_history_id
+    FROM EMPLOYEE_KPI_HISTORY
+    WHERE NVL(is_deleted, 0) = 0
+    GROUP BY employee_id
+)
 SELECT 
     e.employee_id,
     e.employee_name,
@@ -50,13 +58,8 @@ SELECT
     kh.performance_score,
     kh.import_date
 FROM EMPLOYEES e
-LEFT JOIN EMPLOYEE_KPI_HISTORY kh ON e.employee_id = kh.employee_id
-    AND kh.kpi_history_id = (
-        SELECT MAX(kpi_history_id) 
-        FROM EMPLOYEE_KPI_HISTORY 
-        WHERE employee_id = e.employee_id
-            AND NVL(is_deleted, 0) = 0
-    )
+LEFT JOIN latest_kpi_history lkh ON e.employee_id = lkh.employee_id
+LEFT JOIN EMPLOYEE_KPI_HISTORY kh ON kh.kpi_history_id = lkh.kpi_history_id
 WHERE NVL(e.is_deleted, 0) = 0;
 
 -- Query để lấy dữ liệu KPI trong khoảng thời gian
