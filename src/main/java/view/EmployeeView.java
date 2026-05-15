@@ -22,6 +22,10 @@ import javax.swing.table.DefaultTableModel;
 import model.employee.Employee;
 import view.components.IconHelper;
 import business.service.ActivationTokenService;
+import model.product.Store;
+import business.sql.prod_inventory.StoresSql;
+
+
 
 public class EmployeeView extends JPanel {
 
@@ -37,6 +41,9 @@ public class EmployeeView extends JPanel {
 
     private JTextField txtId, txtName, txtPhone, txtEmail;
     private JComboBox<String> cbRole, cbSearch;
+    
+    private JComboBox<String> cbStoreForm;
+    private java.util.List<Store> listStores = new java.util.ArrayList<>();
 
     private JRadioButton rdoMale, rdoFemale;
     private ButtonGroup btngGender;
@@ -109,6 +116,16 @@ public class EmployeeView extends JPanel {
 
     private void refreshAllData() {
         SwingUtilities.invokeLater(() -> {
+            // --- THÊM ĐOẠN NÀY ĐỂ TẢI DANH SÁCH CHI NHÁNH TỪ DATABASE VÀO COMBOBOX ---
+            if (cbStoreForm != null) {
+                cbStoreForm.removeAllItems();
+                listStores = StoresSql.getInstance().selectAll();
+                for (Store s : listStores) {
+                    cbStoreForm.addItem(s.getStoreName() + " (" + s.getStoreId() + ")");
+                }
+            }
+            // -----------------------------------------------------------------------
+
             loadDataToTable();
             loadAutoCompleteData();
         });
@@ -212,14 +229,27 @@ public class EmployeeView extends JPanel {
         txtId.setEnabled(false);
 
         txtName = createTextField("Nhập tên...");
+        
+        // --- THÊM KHỞI TẠO COMBOBOX CHI NHÁNH TẠI ĐÂY ---
+        cbStoreForm = new JComboBox<>();
+        cbStoreForm.setPreferredSize(new Dimension(280, 38));
+        cbStoreForm.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbStoreForm.setBackground(Color.WHITE);
+        // -----------------------------------------------
+
         txtPhone = createTextField("Nhập số điện thoại...");
         txtEmail = createTextField("Nhập email...");
 
+        // --- ĐÃ SỬA: KHỞI TẠO COMBOBOX CHỨC VỤ LIỀN MẠCH (BƯỚC 1) ---
         cbRole = new JComboBox<>();
-        styleComboBox(cbRole, "Nhập phân quyền...");
+        cbRole.setPreferredSize(new Dimension(280, 38));
+        cbRole.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbRole.setBackground(Color.WHITE);
         for (String r : roleList) {
             cbRole.addItem(r);
         }
+        cbRole.setSelectedIndex(-1); // Đặt trạng thái ban đầu là trống
+        // -------------------------------------------------------------
 
         rdoMale = new JRadioButton("Nam");
         rdoFemale = new JRadioButton("Nữ");
@@ -241,6 +271,11 @@ public class EmployeeView extends JPanel {
 
         formCard.add(createLabel("Tên nhân viên (*)"), addGbc(gbc, y++, 5));
         formCard.add(txtName, addGbc(gbc, y++, 15));
+
+        // --- THÊM HIỂN THỊ COMBOBOX CHI NHÁNH LÊN FORM ---
+        formCard.add(createLabel("Chi nhánh làm việc (*)"), addGbc(gbc, y++, 5));
+        formCard.add(cbStoreForm, addGbc(gbc, y++, 15));
+        // -------------------------------------------------
 
         formCard.add(createLabel("Số điện thoại (*)"), addGbc(gbc, y++, 5));
         formCard.add(txtPhone, addGbc(gbc, y++, 15));
@@ -278,6 +313,7 @@ public class EmployeeView extends JPanel {
                 new Object[]{
                     "Mã NV",
                     "Tên nhân viên",
+                    "Chi nhánh", // <-- ĐÃ BỔ SUNG CỘT CHI NHÁNH VÀO BẢNG
                     "Số ĐT",
                     "Email",
                     "Cấp tài khoản",
@@ -296,8 +332,8 @@ public class EmployeeView extends JPanel {
 
         tblEmployees = new JTable(tableModel);
 
-// Ẩn cột RawId
-        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(8));
+        // Ẩn cột RawId (Bây giờ RawId đã bị đẩy xuống vị trí số 9 do thêm cột Chi nhánh)
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(9)); 
 
         setupTableStyle();
 
@@ -344,6 +380,18 @@ public class EmployeeView extends JPanel {
                 txtId.setText(maskSensitiveInfo(currentSelectedRawId));
 
                 txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_NAME)));
+                
+                // --- BỔ SUNG BƯỚC 6: CHỌN LẠI CHI NHÁNH TRÊN COMBOBOX TẠI ĐÂY ---
+                // Cột số 2 là cột Chi nhánh vừa chèn vào bảng
+                String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, 2)); 
+                for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
+                    if (cbStoreForm.getItemAt(i).contains(storeNameInTable)) {
+                        cbStoreForm.setSelectedIndex(i);
+                        break;
+                    }
+                }
+                // -----------------------------------------------------------------
+
                 txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_PHONE)));
                 txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_EMAIL)));
 
@@ -359,7 +407,9 @@ public class EmployeeView extends JPanel {
                     txtEmail.setToolTipText(null);
                 }
 
-                ((JTextField) cbRole.getEditor().getEditorComponent()).setText(role);
+                // --- ĐÃ SỬA THEO BƯỚC 3: Dùng setSelectedItem thay cho setText ---
+                cbRole.setSelectedItem(role);
+                // -----------------------------------------------------------------
 
                 String gender = String.valueOf(tableModel.getValueAt(modelRow, COL_GENDER));
                 rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
@@ -667,7 +717,6 @@ public class EmployeeView extends JPanel {
             updateTable(filtered);
         });
     }
-
     private Employee getEmployeeFromForm() {
         String name = txtName.getText().trim();
         String phone = txtPhone.getText().trim();
@@ -677,11 +726,16 @@ public class EmployeeView extends JPanel {
                 ? "Nam"
                 : (rdoFemale.isSelected() ? "Nữ" : "");
 
-        JTextField roleEditor = (JTextField) cbRole.getEditor().getEditorComponent();
-        String role = roleEditor.getText().trim().toUpperCase();
+        // --- ĐÃ SỬA THEO BƯỚC 2: Lấy Role từ ComboBox không cho phép gõ ---
+        String role = "";
+        if (cbRole.getSelectedIndex() >= 0) {
+            role = cbRole.getSelectedItem().toString().trim().toUpperCase();
+        }
+        // -------------------------------------------------------------------
 
-        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || role.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin cá nhân và chức vụ (*)");
+        // --- CẬP NHẬT: Thêm điều kiện bắt buộc chọn Chi nhánh ---
+        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || role.isEmpty() || cbStoreForm.getSelectedIndex() < 0) {
+            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin cá nhân, chức vụ và chi nhánh (*)");
             return null;
         }
 
@@ -728,6 +782,13 @@ public class EmployeeView extends JPanel {
         e.setRole(role);
         e.setRoleId(role);
 
+        // --- CẬP NHẬT: Lấy Store ID từ ComboBox gán vào Employee ---
+        String selectedStore = cbStoreForm.getSelectedItem().toString();
+        // Cắt lấy đoạn ID nằm trong dấu ngoặc tròn, ví dụ: Siêu thị Quận 1 (ST001) -> lấy ST001
+        String storeId = selectedStore.substring(selectedStore.lastIndexOf("(") + 1, selectedStore.length() - 1);
+        e.setStoreId(storeId);
+        // -----------------------------------------------------------
+
         return e;
     }
 
@@ -745,7 +806,17 @@ public class EmployeeView extends JPanel {
         tblEmployees.clearSelection();
 
         ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
-        ((JTextField) cbRole.getEditor().getEditorComponent()).setText("");
+        
+        // --- BỔ SUNG: Xóa lựa chọn Chi nhánh ---
+        if (cbStoreForm != null) {
+            cbStoreForm.setSelectedIndex(-1);
+        }
+        
+        // --- ĐÃ SỬA THEO BƯỚC 4: Reset ComboBox Chức vụ liền mạch ---
+        if (cbRole != null) {
+            cbRole.setSelectedIndex(-1);
+        }
+        // -----------------------------------------------------------
     }
 
     private void loadDataToTable() {
@@ -828,9 +899,13 @@ public class EmployeeView extends JPanel {
                 onlineStatus = "ONLINE (" + emp.getActiveSessions() + ")";
             }
 
+            // --- THÊM XỬ LÝ LẤY TÊN CHI NHÁNH ---
+            String storeName = emp.getStoreName() != null ? emp.getStoreName() : "Chưa phân";
+
             tableModel.addRow(new Object[]{
                 maskSensitiveInfo(employeeId),
                 safeCell(emp.getEmployeeName()),
+                safeCell(storeName), // <-- Chèn Chi nhánh vào Cột vị trí số 2
                 safeCell(emp.getPhone()),
                 safeCell(emp.getEmail()),
                 safeCell(accountStatus),
