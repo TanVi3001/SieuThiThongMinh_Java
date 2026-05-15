@@ -1,6 +1,21 @@
-# Hướng dẫn Pull Code và Cập nhật Database Docker Oracle bằng DataGrip
+# Hướng dẫn Pull Code và Cập nhật Database Docker Oracle
 
 Tài liệu này hướng dẫn quy trình làm việc chuẩn cho nhóm khi làm đồ án **Java Swing + Oracle Database**.
+
+Mục tiêu mới của nhóm:
+
+```text
+Không cần mở DataGrip để chạy patch thủ công mỗi lần.
+Sau khi pull code, chỉ cần chạy 1 file .bat để cập nhật database Docker local.
+```
+
+File hỗ trợ chính:
+
+```text
+database/run_patches.bat
+```
+
+---
 
 ## 1. Bối cảnh cần hiểu trước
 
@@ -10,6 +25,7 @@ Nhóm đang làm việc theo mô hình:
 GitHub
 ├── Lưu source code Java
 ├── Lưu file SQL: schema.sql, seed.sql, patch.sql
+├── Lưu file script chạy patch: database/run_patches.bat
 └── Lưu tài liệu hướng dẫn
 
 Docker Oracle trên máy từng thành viên
@@ -23,13 +39,17 @@ GitHub chỉ đồng bộ code và file SQL.
 GitHub KHÔNG tự cập nhật database đang nằm trong Docker.
 ```
 
-Vì vậy, sau khi `git pull`, nếu có file SQL mới thì mỗi thành viên phải **tự chạy file SQL đó vào Oracle Docker local bằng DataGrip**.
+Vì vậy, sau khi `git pull`, nếu có file SQL patch mới thì mỗi thành viên cần chạy:
+
+```text
+database/run_patches.bat
+```
+
+Script này sẽ tự đưa các file patch SQL vào Oracle Docker local.
 
 ---
 
 ## 2. Pull code từ GitHub về máy
-
-### Cách 1: Pull bằng Terminal/CMD
 
 Mở terminal tại thư mục project:
 
@@ -38,46 +58,33 @@ git checkout main
 git pull origin main
 ```
 
-Nếu nhóm đang làm trên branch khác, ví dụ `develop` hoặc `fix-employee-session-ui`, thì đổi lại đúng branch:
+Nếu nhóm đang làm trên branch khác, ví dụ `fix-employee-session-ui`, thì dùng:
 
 ```bash
 git checkout fix-employee-session-ui
 git pull origin fix-employee-session-ui
 ```
 
-### Cách 2: Pull bằng IDE
-
-Nếu dùng NetBeans, IntelliJ hoặc VS Code:
+Hoặc pull bằng IDE:
 
 ```text
 Git → Pull
 ```
-
-hoặc dùng giao diện Version Control của IDE.
-
-### Lưu ý quan trọng
 
 Sau khi pull xong, máy bạn chỉ mới có:
 
 ```text
 - Code Java mới
 - File .sql mới
+- File .bat mới
 - File README/tài liệu mới
 ```
 
-Database trong Docker **chưa tự thay đổi**.
-
-Ví dụ GitHub có file mới:
-
-```text
-database/05_session_and_login_history_patch.sql
-```
-
-Sau khi pull, file này chỉ nằm trong project. Bạn vẫn phải mở DataGrip và chạy file này vào database local.
+Database trong Docker **chưa tự thay đổi** cho tới khi chạy script patch.
 
 ---
 
-## 3. Kiểm tra Docker Oracle local có đang chạy không
+## 3. Kiểm tra Docker Oracle local
 
 Mở CMD/PowerShell/Terminal và chạy:
 
@@ -92,31 +99,20 @@ CONTAINER ID   IMAGE                       PORTS                    NAMES
 abc123         gvenzl/oracle-free:23-slim  0.0.0.0:1521->1521/tcp   supermarket-oracle
 ```
 
-hoặc nếu máy bạn bị trùng port 1521 và dùng port 1522:
+hoặc nếu máy dùng port 1522:
 
 ```text
 0.0.0.0:1522->1521/tcp
 ```
 
-### Nếu container chưa chạy
-
-Xem danh sách container:
+Nếu container chưa chạy:
 
 ```bash
 docker ps -a
-```
-
-Start container Oracle:
-
-```bash
 docker start supermarket-oracle
 ```
 
-Nếu tên container khác, thay `supermarket-oracle` bằng tên thật trong cột `NAMES`.
-
-### Nếu chưa từng tạo container
-
-Chạy Docker Compose tại thư mục project:
+Nếu chưa từng tạo container:
 
 ```bash
 docker compose up -d
@@ -124,390 +120,184 @@ docker compose up -d
 
 ---
 
-## 4. Hiểu port Docker Oracle
+## 4. Cách chạy patch nhanh bằng file .bat
 
-Thông thường Oracle Docker được map ra:
-
-```text
-localhost:1521
-```
-
-Nghĩa là app Java/DataGrip trên máy bạn sẽ connect vào:
+Sau khi pull code xong, chạy file:
 
 ```text
-Host: localhost
-Port: 1521
+database/run_patches.bat
 ```
 
-Nếu máy bạn đã có Oracle local chiếm port 1521, Docker có thể được map ra port 1522:
+Có 2 cách chạy.
+
+### Cách 1: Double click
+
+Mở thư mục project:
 
 ```text
-Host: localhost
-Port: 1522
+SieuThiThongMinh_Java/database/
 ```
 
-Ví dụ trong `docker-compose.yml`:
-
-```yaml
-ports:
-  - "1522:1521"
-```
-
-Ý nghĩa:
+Double click:
 
 ```text
-Máy Windows dùng port 1522
-Oracle bên trong Docker vẫn dùng port 1521
+run_patches.bat
+```
+
+### Cách 2: Chạy bằng terminal
+
+Mở CMD/PowerShell tại thư mục project:
+
+```bash
+database/run_patches.bat
+```
+
+Script sẽ tự làm các việc sau:
+
+```text
+1. Kiểm tra Docker CLI có dùng được không.
+2. Kiểm tra container supermarket-oracle có tồn tại không.
+3. Nếu container chưa chạy thì tự start.
+4. Kiểm tra kết nối Oracle bằng system/Admin123@FREEPDB1.
+5. Chạy file database/05_session_and_login_history_patch.sql nếu có.
+6. Chạy tất cả file .sql trong database/patches nếu folder này tồn tại.
 ```
 
 ---
 
-## 5. Mở DataGrip và tìm connection Oracle Docker local
+## 5. Cấu hình mặc định của run_patches.bat
 
-Mở **DataGrip**.
-
-Nhìn bên trái ở **Database Explorer**, tìm connection Oracle local.
-
-Connection Docker local thường có dạng:
+Trong file:
 
 ```text
-Host: localhost
-Port: 1521
+database/run_patches.bat
 ```
 
-hoặc:
+Có cấu hình mặc định:
+
+```bat
+set CONTAINER_NAME=supermarket-oracle
+set ORACLE_USER=system
+set ORACLE_PASSWORD=Admin123
+set ORACLE_SERVICE=FREEPDB1
+```
+
+Nghĩa là script sẽ connect vào Oracle Docker bằng:
 
 ```text
-Host: localhost
-Port: 1522
+system/Admin123@FREEPDB1
 ```
 
-### Cách kiểm tra connection có đúng Docker local không
+Nếu máy bạn dùng tên container khác hoặc service khác, sửa lại các dòng trên.
 
-Click chuột phải vào connection:
+Ví dụ nếu service là `XEPDB1`:
 
-```text
-Properties
+```bat
+set ORACLE_SERVICE=XEPDB1
 ```
 
-Kiểm tra các thông tin:
+Nếu container tên khác:
 
-```text
-Host
-Port
-User
-Service name / SID
+```bat
+set CONTAINER_NAME=ten_container_cua_ban
 ```
-
-Nếu thấy:
-
-```text
-Host = localhost
-Port = 1521 hoặc 1522
-```
-
-thì đó là database local trên máy bạn.
 
 ---
 
-## 6. Tạo connection mới trong DataGrip nếu chưa có
-
-Trong DataGrip:
-
-```text
-Database Explorer → dấu + → Data Source → Oracle
-```
-
-Nhập thông tin:
-
-```text
-Host: localhost
-Port: 1521
-User: system hoặc user project
-Password: mật khẩu Oracle Docker
-Service name: XEPDB1 hoặc XE hoặc FREEPDB1
-```
-
-Ví dụ nếu dùng Oracle Free Docker:
-
-```text
-Host: localhost
-Port: 1521
-Service name: FREEPDB1
-User: system
-Password: Admin123
-```
-
-Nếu máy bạn dùng port 1522:
-
-```text
-Host: localhost
-Port: 1522
-Service name: FREEPDB1
-User: system
-Password: Admin123
-```
-
-Bấm:
-
-```text
-Test Connection
-```
-
-Nếu báo thành công thì bấm **OK**.
-
-### Nếu test connection lỗi service name
-
-Thử lần lượt:
-
-```text
-FREEPDB1
-XEPDB1
-XE
-```
-
-Tùy image Oracle mà service name sẽ khác nhau.
-
----
-
-## 7. Chạy file SQL patch/seed/schema trong DataGrip
-
-Sau khi pull code, nếu có file SQL mới, ví dụ:
-
-```text
-database/patches/patch_002_add_customer_rank.sql
-```
-
-hoặc:
-
-```text
-database/05_session_and_login_history_patch.sql
-```
-
-thì làm như sau:
-
-### Bước 1: Mở file SQL
-
-Trong DataGrip hoặc IDE, mở file `.sql` cần chạy.
-
-### Bước 2: Chọn đúng Data Source
-
-Ở góc trên của editor SQL, DataGrip sẽ có chỗ chọn connection.
-
-Nếu đang hiện:
-
-```text
-<no data source>
-```
-
-hoặc:
-
-```text
-<database>
-```
-
-thì bấm vào đó và chọn connection Oracle Docker local, ví dụ:
-
-```text
-@localhost
-localhost:1521
-localhost:1522
-```
-
-Cần đảm bảo chọn đúng database local của mình, không chạy nhầm vào database LAN hoặc database của người khác.
-
-### Bước 3: Run file SQL
-
-Có thể chạy bằng một trong các cách:
-
-```text
-Ctrl + A → Run
-```
-
-hoặc:
-
-```text
-Chuột phải vào file .sql → Run
-```
-
-hoặc bấm nút **Run/Execute** trên thanh công cụ.
-
-### Lưu ý với PL/SQL block
-
-Nếu file có dạng:
-
-```sql
-BEGIN
-    EXECUTE IMMEDIATE 'ALTER TABLE ACCOUNTS ADD LAST_LOGIN_AT TIMESTAMP';
-EXCEPTION
-    WHEN OTHERS THEN
-        IF SQLCODE != -1430 THEN RAISE; END IF;
-END;
-/
-```
-
-thì nên chạy **toàn bộ file**, không chỉ chạy từng dòng lẻ.
-
----
-
-## 8. Luồng chuẩn cần nhớ
+## 6. Luồng chuẩn sau khi có run_patches.bat
 
 ```text
 git pull
     ↓
 Có code mới và file SQL mới trong project
     ↓
-Mở DataGrip
+Docker Oracle local đang chạy
     ↓
-Chọn đúng connection Oracle Docker local
+Chạy database/run_patches.bat
     ↓
-Run file SQL patch/seed/schema
+Script tự chạy SQL patch vào Oracle Docker
     ↓
-Database trong Docker local mới được cập nhật
+Database trong Docker local được cập nhật
     ↓
 Clean and Build Java project
     ↓
 Run app
 ```
 
+Đây là luồng khuyên dùng cho nhóm.
+
 ---
 
-## 9. Ví dụ cụ thể: thêm cột LAST_LOGIN_AT vào ACCOUNTS
+## 7. Khi nào vẫn cần DataGrip?
 
-Giả sử nhóm cần thêm cột mới để lưu thời gian đăng nhập cuối cùng.
-
-Một bạn tạo file:
+Dù có `run_patches.bat`, DataGrip vẫn cần cho các việc:
 
 ```text
-database/patches/patch_005_add_last_login.sql
+- Xem bảng và dữ liệu
+- Kiểm tra patch đã chạy chưa
+- Test câu SQL
+- Debug lỗi database
+- Import/export dữ liệu demo
 ```
 
-Nội dung:
+Nhưng với patch thông thường, không cần mở DataGrip nữa. Chỉ chạy `.bat` là đủ.
 
-```sql
-ALTER TABLE ACCOUNTS ADD LAST_LOGIN_AT TIMESTAMP;
-```
+---
 
-Bạn đó commit và push lên GitHub:
+## 8. Kiểm tra patch đã chạy thành công
 
-```bash
-git add database/patches/patch_005_add_last_login.sql
-git commit -m "add last login column patch"
-git push origin main
-```
+Mở DataGrip, connect Oracle Docker local.
 
-Các thành viên khác làm:
-
-```bash
-git pull origin main
-```
-
-Sau khi pull, file patch đã nằm trong project, nhưng database Docker local **chưa có cột mới**.
-
-Mỗi thành viên cần:
+Ví dụ Docker port 1521:
 
 ```text
-1. Mở DataGrip
-2. Chọn connection Oracle Docker local localhost:1521 hoặc localhost:1522
-3. Mở file patch_005_add_last_login.sql
-4. Run file SQL
-5. Kiểm tra bảng ACCOUNTS đã có cột LAST_LOGIN_AT
+Host: localhost
+Port: 1521
+Service name: FREEPDB1
+User: system
+Password: Admin123
 ```
 
-Kiểm tra bằng SQL:
+Nếu máy dùng port 1522:
+
+```text
+Host: localhost
+Port: 1522
+Service name: FREEPDB1
+User: system
+Password: Admin123
+```
+
+Chạy kiểm tra:
 
 ```sql
 SELECT COLUMN_NAME, DATA_TYPE
 FROM USER_TAB_COLUMNS
 WHERE TABLE_NAME = 'ACCOUNTS'
-  AND COLUMN_NAME = 'LAST_LOGIN_AT';
+  AND COLUMN_NAME IN (
+      'ACTIVE_SESSIONS',
+      'CURRENT_SESSION_ID',
+      'ONLINE_STATUS',
+      'LAST_HEARTBEAT_AT',
+      'LAST_LOGIN_AT',
+      'LAST_LOGOUT_AT'
+  )
+ORDER BY COLUMN_NAME;
 ```
 
-Nếu có kết quả là patch thành công.
+Nếu có đủ các cột trên là patch đã chạy đúng.
 
 ---
 
-## 10. Lỗi thường gặp và cách hiểu
+## 9. Ví dụ cụ thể: thêm cột LAST_LOGIN_AT vào ACCOUNTS
 
-### 10.1. Pull code xong nhưng database chưa đổi
-
-Nguyên nhân:
+Một bạn tạo file patch:
 
 ```text
-GitHub chỉ kéo file SQL về, chưa tự chạy SQL vào database.
+database/patches/patch_005_add_last_login.sql
 ```
 
-Cách fix:
-
-```text
-Mở DataGrip và chạy file SQL patch mới.
-```
-
----
-
-### 10.2. Chạy nhầm connection
-
-Ví dụ bạn chạy patch vào database LAN hoặc database cũ, còn app lại connect Docker local.
-
-Hậu quả:
-
-```text
-Patch chạy thành công nhưng app vẫn lỗi.
-```
-
-Cách fix:
-
-```text
-Kiểm tra lại connection trong DataGrip.
-Đảm bảo Host = localhost, Port = 1521 hoặc 1522 đúng với Docker local.
-```
-
----
-
-### 10.3. Java báo ORA-00904 invalid identifier
-
-Ví dụ:
-
-```text
-ORA-00904: "LAST_LOGIN_AT": invalid identifier
-ORA-00904: "ACTIVE_SESSIONS": invalid identifier
-```
-
-Nguyên nhân:
-
-```text
-Code Java đã dùng cột mới nhưng database local chưa được patch.
-```
-
-Cách fix:
-
-```text
-Chạy file patch SQL tương ứng trong DataGrip.
-```
-
----
-
-### 10.4. ALTER TABLE ADD bị lỗi vì cột đã tồn tại
-
-Ví dụ:
-
-```text
-ORA-01430: column being added already exists in table
-```
-
-Nguyên nhân:
-
-```text
-Bạn đã chạy patch đó trước đó rồi.
-```
-
-Cách xử lý:
-
-```text
-Nếu chắc chắn cột đã tồn tại thì có thể bỏ qua.
-```
-
-Nên viết patch dạng an toàn:
+Nội dung nên viết dạng an toàn:
 
 ```sql
 BEGIN
@@ -521,88 +311,193 @@ END;
 /
 ```
 
-Patch dạng này chạy nhiều lần vẫn không làm hỏng database.
+Bạn đó push lên GitHub.
+
+Các thành viên khác làm:
+
+```bash
+git pull origin main
+```
+
+Sau đó chạy:
+
+```bash
+database/run_patches.bat
+```
+
+Script sẽ tự tìm file `.sql` trong `database/patches` và chạy vào Docker Oracle local.
+
+Kiểm tra bằng DataGrip:
+
+```sql
+SELECT COLUMN_NAME, DATA_TYPE
+FROM USER_TAB_COLUMNS
+WHERE TABLE_NAME = 'ACCOUNTS'
+  AND COLUMN_NAME = 'LAST_LOGIN_AT';
+```
+
+Nếu có kết quả là thành công.
 
 ---
 
-### 10.5. DataGrip không connect được Oracle Docker
+## 10. Lỗi thường gặp
 
-Kiểm tra Docker:
+### 10.1. Pull code xong nhưng database chưa đổi
 
-```bash
-docker ps
-```
-
-Nếu container chưa chạy:
-
-```bash
-docker start supermarket-oracle
-```
-
-Nếu vẫn không được, kiểm tra port đang map:
-
-```bash
-docker ps
-```
-
-Xem cột `PORTS`, ví dụ:
+Nguyên nhân:
 
 ```text
-0.0.0.0:1521->1521/tcp
+Bạn mới pull file SQL về, nhưng chưa chạy run_patches.bat.
+```
+
+Cách fix:
+
+```text
+Chạy database/run_patches.bat
+```
+
+---
+
+### 10.2. Script báo không tìm thấy container
+
+Ví dụ:
+
+```text
+Container "supermarket-oracle" was not found.
+```
+
+Cách fix:
+
+```bash
+docker ps -a
+```
+
+Xem tên container thật, rồi sửa trong `run_patches.bat`:
+
+```bat
+set CONTAINER_NAME=ten_container_that
+```
+
+Hoặc tạo container bằng:
+
+```bash
+docker compose up -d
+```
+
+---
+
+### 10.3. Script không connect được Oracle
+
+Có thể Oracle chưa ready.
+
+Xem log:
+
+```bash
+docker logs -f supermarket-oracle
+```
+
+Chờ database ready rồi chạy lại:
+
+```bash
+database/run_patches.bat
+```
+
+---
+
+### 10.4. Sai service name
+
+Nếu script connect lỗi, có thể service không phải `FREEPDB1`.
+
+Thử sửa:
+
+```bat
+set ORACLE_SERVICE=XEPDB1
 ```
 
 hoặc:
 
-```text
-0.0.0.0:1522->1521/tcp
+```bat
+set ORACLE_SERVICE=XE
 ```
 
-Sau đó dùng đúng port trong DataGrip.
+Tùy image Oracle mà service khác nhau.
 
 ---
 
-### 10.6. Sai Service name
+### 10.5. Java báo ORA-00904 invalid identifier
 
-Nếu DataGrip báo lỗi service, thử các service name phổ biến:
+Ví dụ:
 
 ```text
-FREEPDB1
-XEPDB1
-XE
+ORA-00904: "ACTIVE_SESSIONS": invalid identifier
+ORA-00904: "LAST_HEARTBEAT_AT": invalid identifier
 ```
 
-Với Docker image `gvenzl/oracle-free`, service thường là:
+Nguyên nhân:
 
 ```text
-FREEPDB1
+Code Java đã dùng cột mới nhưng database local chưa được patch.
+```
+
+Cách fix:
+
+```text
+Chạy database/run_patches.bat
 ```
 
 ---
 
-## 11. Quy tắc làm việc nhóm
+### 10.6. ALTER TABLE ADD báo cột đã tồn tại
+
+Ví dụ:
+
+```text
+ORA-01430: column being added already exists in table
+```
+
+Nguyên nhân:
+
+```text
+Patch đã từng chạy trước đó.
+```
+
+Cách xử lý:
+
+```text
+Nếu patch viết dạng an toàn BEGIN...EXCEPTION thì có thể chạy nhiều lần.
+Nếu patch chỉ viết ALTER TABLE trực tiếp thì lần 2 sẽ lỗi.
+```
+
+Vì vậy, khi tạo patch mới, nên viết dạng an toàn.
+
+---
+
+## 11. Quy tắc tạo file patch mới cho nhóm
 
 Khi có thay đổi database, không sửa trực tiếp trên máy rồi im luôn. Cần tạo file SQL patch và push lên GitHub.
+
+Nên đặt file trong:
+
+```text
+database/patches/
+```
+
+Ví dụ:
+
+```text
+database/patches/patch_006_add_customer_rank.sql
+database/patches/patch_007_add_invoice_status.sql
+```
 
 Quy trình đúng:
 
 ```text
 1. Một bạn thay đổi schema/data mẫu.
-2. Tạo file SQL patch/seed trong thư mục database/.
-3. Commit và push file SQL lên GitHub.
-4. Các thành viên git pull.
-5. Mỗi người tự chạy file SQL đó vào Docker Oracle local bằng DataGrip.
-```
-
-Không nên chỉ nói miệng:
-
-```text
-Tôi thêm cột rồi, mọi người tự thêm nha.
-```
-
-Mà nên có file rõ ràng:
-
-```text
-database/patches/patch_005_add_last_login.sql
+2. Tạo file SQL patch trong database/patches/.
+3. Viết patch dạng an toàn nếu có thể.
+4. Commit và push file SQL lên GitHub.
+5. Thành viên khác git pull.
+6. Thành viên khác chạy database/run_patches.bat.
 ```
 
 ---
@@ -612,7 +507,8 @@ database/patches/patch_005_add_last_login.sql
 ```text
 GitHub = nơi lưu code và file SQL.
 Docker Oracle = nơi chạy database local của từng người.
-DataGrip = công cụ để chạy SQL vào Docker Oracle.
+run_patches.bat = công cụ tự chạy SQL patch vào Docker Oracle.
+DataGrip = công cụ kiểm tra/debug database khi cần.
 ```
 
 Nhớ kỹ:
@@ -620,5 +516,5 @@ Nhớ kỹ:
 ```text
 git pull chỉ cập nhật project.
 git pull không cập nhật database.
-Muốn database cập nhật thì phải chạy SQL trong DataGrip.
+Muốn database cập nhật thì chạy database/run_patches.bat.
 ```
