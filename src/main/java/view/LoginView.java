@@ -51,15 +51,17 @@ public class LoginView extends JFrame {
 
     private static final Logger logger = Logger.getLogger(LoginView.class.getName());
 
-    private static final int FRAME_WIDTH = 896;
-    private static final int FRAME_HEIGHT = 672;
-    private static final int CARD_WIDTH = 361;
-    private static final int CARD_HEIGHT = 539;
-    private static final int CARD_RIGHT_MARGIN = 28;
-    private static final int FORM_PADDING_X = 46;
-    private static final int INPUT_WIDTH = 270;
-    private static final int LOGIN_INPUT_HEIGHT = 42;
-    private static final int REGISTER_INPUT_HEIGHT = 36;
+    private static final int FRAME_WIDTH = 797;
+    private static final int FRAME_HEIGHT = 597;
+    private static final int CARD_X = 443;
+    private static final int CARD_Y = 45;
+    private static final int CARD_WIDTH = 336;
+    private static final int CARD_HEIGHT = 515;
+    private static final int BG_CROP_TOP = 45;
+    private static final int FORM_PADDING_X = 39;
+    private static final int INPUT_WIDTH = 232;
+    private static final int LOGIN_INPUT_HEIGHT = 36;
+    private static final int REGISTER_INPUT_HEIGHT = 31;
 
     private static final Color NAVY = new Color(7, 27, 77);
     private static final Color ORANGE = new Color(255, 90, 0);
@@ -126,40 +128,40 @@ public class LoginView extends JFrame {
         panel.setLayout(null);
 
         int x = FORM_PADDING_X;
-        int y = 46;
+        int y = 39;
 
-        JLabel title = label("Đăng nhập", 25, Font.BOLD, NAVY);
-        title.setBounds(x, y, INPUT_WIDTH, 32);
+        JLabel title = label("Đăng nhập", 22, Font.BOLD, NAVY);
+        title.setBounds(x, y, INPUT_WIDTH, 28);
         panel.add(title);
 
-        y += 42;
-        JLabel subtitle = label("Vui lòng nhập thông tin tài khoản", 12, Font.PLAIN, TEXT_MUTED);
-        subtitle.setBounds(x, y, INPUT_WIDTH, 18);
+        y += 36;
+        JLabel subtitle = label("Vui lòng nhập thông tin tài khoản", 10, Font.PLAIN, TEXT_MUTED);
+        subtitle.setBounds(x, y, INPUT_WIDTH, 14);
         panel.add(subtitle);
 
-        y += 41;
+        y += 35;
         panel.add(fieldLabel("Tên đăng nhập", x, y, INPUT_WIDTH));
 
-        y += 20;
+        y += 17;
         usernameField = new InputField("user", false, "Nhập username", LOGIN_INPUT_HEIGHT);
         usernameField.setBounds(x, y, INPUT_WIDTH, LOGIN_INPUT_HEIGHT);
         panel.add(usernameField);
 
-        y += LOGIN_INPUT_HEIGHT + 21;
+        y += LOGIN_INPUT_HEIGHT + 18;
         panel.add(fieldLabel("Mật khẩu", x, y, INPUT_WIDTH));
 
-        y += 20;
+        y += 17;
         passwordField = new InputField("lock", true, "Nhập mật khẩu", LOGIN_INPUT_HEIGHT);
         passwordField.setBounds(x, y, INPUT_WIDTH, LOGIN_INPUT_HEIGHT);
         panel.add(passwordField);
 
-        y += LOGIN_INPUT_HEIGHT + 17;
+        y += LOGIN_INPUT_HEIGHT + 14;
         JPanel rememberRow = createTransparentPanel();
         rememberRow.setLayout(null);
-        rememberRow.setBounds(x, y, INPUT_WIDTH, 20);
+        rememberRow.setBounds(x, y, INPUT_WIDTH, 16);
 
         JLabel forgot = linkLabel("Quên mật khẩu?");
-        forgot.setBounds(INPUT_WIDTH - 105, 0, 105, 20);
+        forgot.setBounds(INPUT_WIDTH - 95, 0, 95, 16);
         forgot.setHorizontalAlignment(SwingConstants.RIGHT);
         forgot.addMouseListener(new MouseAdapter() {
             @Override
@@ -172,18 +174,18 @@ public class LoginView extends JFrame {
         rememberRow.add(forgot);
         panel.add(rememberRow);
 
-        y += 41;
+        y += 35;
         btnLogin = new PrimaryButton("Đăng nhập  →");
-        btnLogin.setBounds(x, y, INPUT_WIDTH, 43);
+        btnLogin.setBounds(x, y, INPUT_WIDTH, 37);
         btnLogin.addActionListener(evt -> btnLoginActionPerformed());
         panel.add(btnLogin);
 
-        y += 66;
+        y += 56;
         panel.add(createDivider(x, y, INPUT_WIDTH));
 
-        y += 27;
+        y += 23;
         OutlineButton registerButton = new OutlineButton("Đăng ký tài khoản", "user-plus");
-        registerButton.setBounds(x, y, INPUT_WIDTH, 42);
+        registerButton.setBounds(x, y, INPUT_WIDTH, 36);
         registerButton.addActionListener(evt -> showRegisterPanel());
         panel.add(registerButton);
 
@@ -199,15 +201,15 @@ public class LoginView extends JFrame {
         panel.setPreferredSize(new Dimension(CARD_WIDTH, CARD_HEIGHT));
 
         int x = FORM_PADDING_X;
-        int y = 38;
+        int y = 32;
 
-        JLabel title = label("Đăng ký", 25, Font.BOLD, NAVY);
-        title.setBounds(x, y, INPUT_WIDTH, 32);
+        JLabel title = label("Đăng ký", 22, Font.BOLD, NAVY);
+        title.setBounds(x, y, INPUT_WIDTH, 28);
         panel.add(title);
 
-        y += 38;
-        JLabel subtitle = label("Tạo tài khoản để sử dụng hệ thống", 12, Font.PLAIN, TEXT_MUTED);
-        subtitle.setBounds(x, y, INPUT_WIDTH, 18);
+        y += 32;
+        JLabel subtitle = label("Tạo tài khoản để sử dụng hệ thống", 10, Font.PLAIN, TEXT_MUTED);
+        subtitle.setBounds(x, y, INPUT_WIDTH, 14);
         panel.add(subtitle);
 
         txtCode = new InputField("key", false, "Nhập mã kích hoạt", REGISTER_INPUT_HEIGHT);
@@ -221,24 +223,24 @@ public class LoginView extends JFrame {
         String[] labels = {"Mã kích hoạt (*)", "Họ và tên", "Email", "Số điện thoại", "Tên đăng nhập", "Mật khẩu"};
         registerLabels = new JLabel[labels.length];
 
-        y += 31;
+        y += 26;
         for (int i = 0; i < labels.length; i++) {
             registerLabels[i] = fieldLabel(labels[i], x, y, INPUT_WIDTH);
             panel.add(registerLabels[i]);
 
-            y += 17;
+            y += 14;
             fields[i].setBounds(x, y, INPUT_WIDTH, REGISTER_INPUT_HEIGHT);
             panel.add(fields[i]);
-            y += REGISTER_INPUT_HEIGHT + 11;
+            y += REGISTER_INPUT_HEIGHT + 10;
         }
 
         btnCheckCode = new PrimaryButton("Kiểm tra mã  →");
-        btnCheckCode.setBounds(x, 171, INPUT_WIDTH, 41);
+        btnCheckCode.setBounds(x, 146, INPUT_WIDTH, 35);
         btnCheckCode.addActionListener(evt -> checkActivationCode());
         panel.add(btnCheckCode);
 
         lblResendEmail = centeredHtml("<span style='color:#FF5A00'><u>Sai Email? Cập nhật & gửi lại mã</u></span>");
-        lblResendEmail.setBounds(x, 223, INPUT_WIDTH, 18);
+        lblResendEmail.setBounds(x, 191, INPUT_WIDTH, 14);
         lblResendEmail.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -248,14 +250,14 @@ public class LoginView extends JFrame {
         panel.add(lblResendEmail);
 
         btnRegister = new PrimaryButton("Đăng ký  →");
-        btnRegister.setBounds(x, 466, INPUT_WIDTH, 41);
+        btnRegister.setBounds(x, 422, INPUT_WIDTH, 35);
         btnRegister.addActionListener(evt -> activateAccount());
         panel.add(btnRegister);
 
         JLabel back = centeredHtml(
                 "<span style='color:#6B7895'>Đã có tài khoản? </span>"
                 + "<span style='color:#FF5A00'><u>Đăng nhập</u></span>");
-        back.setBounds(x, 515, INPUT_WIDTH, 20);
+        back.setBounds(x, 462, INPUT_WIDTH, 17);
         back.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -566,8 +568,8 @@ public class LoginView extends JFrame {
     }
 
     private JLabel fieldLabel(String text, int x, int y, int width) {
-        JLabel label = label(text, 10, Font.BOLD, NAVY);
-        label.setBounds(x, y, width, 14);
+        JLabel label = label(text, 9, Font.BOLD, NAVY);
+        label.setBounds(x, y, width, 12);
         return label;
     }
 
@@ -579,14 +581,14 @@ public class LoginView extends JFrame {
     }
 
     private JLabel linkLabel(String text) {
-        JLabel label = label(text, 10, Font.BOLD, ORANGE);
+        JLabel label = label(text, 8, Font.BOLD, ORANGE);
         label.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return label;
     }
 
     private JLabel centeredHtml(String body) {
         JLabel label = new JLabel("<html><div style='text-align:center'>" + body + "</div></html>");
-        label.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 8));
         label.setHorizontalAlignment(SwingConstants.CENTER);
         label.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return label;
@@ -600,18 +602,18 @@ public class LoginView extends JFrame {
         JLabel left = new JLabel();
         left.setOpaque(true);
         left.setBackground(BORDER);
-        left.setBounds(0, 7, 109, 1);
+        left.setBounds(0, 6, 94, 1);
         divider.add(left);
 
-        JLabel text = label("hoặc", 10, Font.PLAIN, TEXT_MUTED);
+        JLabel text = label("hoặc", 8, Font.PLAIN, TEXT_MUTED);
         text.setHorizontalAlignment(SwingConstants.CENTER);
-        text.setBounds(112, 0, 46, 16);
+        text.setBounds(96, 0, 40, 13);
         divider.add(text);
 
         JLabel right = new JLabel();
         right.setOpaque(true);
         right.setBackground(BORDER);
-        right.setBounds(width - 109, 7, 109, 1);
+        right.setBounds(width - 94, 6, 94, 1);
         divider.add(right);
 
         return divider;
@@ -650,9 +652,13 @@ public class LoginView extends JFrame {
 
         @Override
         public void doLayout() {
-            int x = Math.max(24, getWidth() - CARD_WIDTH - CARD_RIGHT_MARGIN);
-            int y = Math.max(24, (getHeight() - CARD_HEIGHT) / 2);
-            cardPanel.setBounds(x, y, CARD_WIDTH, CARD_HEIGHT);
+            double sx = getWidth() / (double) FRAME_WIDTH;
+            double sy = getHeight() / (double) FRAME_HEIGHT;
+            cardPanel.setBounds(
+                    (int) Math.round(CARD_X * sx),
+                    (int) Math.round(CARD_Y * sy),
+                    (int) Math.round(CARD_WIDTH * sx),
+                    (int) Math.round(CARD_HEIGHT * sy));
         }
 
         @Override
@@ -666,12 +672,16 @@ public class LoginView extends JFrame {
                 int imageW = background.getWidth(this);
                 int imageH = background.getHeight(this);
                 if (imageW > 0 && imageH > 0) {
-                    double scale = Math.max(getWidth() / (double) imageW, getHeight() / (double) imageH);
+                    int sourceH = imageH - BG_CROP_TOP;
+                    double scale = Math.max(getWidth() / (double) imageW, getHeight() / (double) sourceH);
                     int drawW = (int) Math.ceil(imageW * scale);
-                    int drawH = (int) Math.ceil(imageH * scale);
+                    int drawH = (int) Math.ceil(sourceH * scale);
                     int drawX = (getWidth() - drawW) / 2;
                     int drawY = (getHeight() - drawH) / 2;
-                    g2.drawImage(background, drawX, drawY, drawW, drawH, this);
+                    g2.drawImage(background,
+                            drawX, drawY, drawX + drawW, drawY + drawH,
+                            0, BG_CROP_TOP, imageW, imageH,
+                            this);
                 }
             } else {
                 g2.setColor(new Color(245, 248, 252));
@@ -681,9 +691,9 @@ public class LoginView extends JFrame {
         }
 
         private Image loadBackground() {
-            URL url = LoginView.class.getResource("/image/bg.png");
+            URL url = LoginView.class.getResource("/image/bg1.png");
             if (url == null) {
-                logger.warning("Không tìm thấy background resource: /image/bg.png");
+                logger.warning("Không tìm thấy background resource: /image/bg1.png");
                 return null;
             }
             return new javax.swing.ImageIcon(url).getImage();
@@ -702,9 +712,9 @@ public class LoginView extends JFrame {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            int arc = 21;
-            int inset = 7;
-            for (int i = 0; i < 10; i++) {
+            int arc = 18;
+            int inset = 6;
+            for (int i = 0; i < 9; i++) {
                 float alpha = 0.075f - (i * 0.0045f);
                 if (alpha <= 0) {
                     continue;
@@ -712,7 +722,7 @@ public class LoginView extends JFrame {
                 g2.setComposite(AlphaComposite.SrcOver.derive(alpha));
                 g2.setColor(new Color(18, 34, 70));
                 int grow = i;
-                g2.fillRoundRect(inset - grow / 2, inset + 6 - grow / 2,
+                g2.fillRoundRect(inset - grow / 2, inset + 5 - grow / 2,
                         getWidth() - inset * 2 + grow, getHeight() - inset * 2 + grow,
                         arc + grow, arc + grow);
             }
@@ -726,7 +736,7 @@ public class LoginView extends JFrame {
 
         @Override
         public Insets getInsets() {
-            return new Insets(7, 7, 7, 7);
+            return new Insets(6, 6, 6, 6);
         }
     }
 
@@ -743,7 +753,7 @@ public class LoginView extends JFrame {
             setPreferredSize(new Dimension(INPUT_WIDTH, height));
 
             IconView icon = new IconView(iconType);
-            icon.setBounds(13, 0, 24, height);
+            icon.setBounds(6, 0, 22, height);
             add(icon);
 
             if (password) {
@@ -751,18 +761,18 @@ public class LoginView extends JFrame {
                 pass.setEchoChar('•');
                 field = pass;
                 JButton reveal = new EyeButton(pass);
-                reveal.setBounds(INPUT_WIDTH - 34, 0, 23, height);
+                reveal.setBounds(INPUT_WIDTH - 31, 0, 24, height);
                 add(reveal);
             } else {
                 field = new JTextField();
             }
 
-            field.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, password ? 27 : 8));
-            field.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            field.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, password ? 22 : 6));
+            field.setFont(new Font("Segoe UI", Font.PLAIN, 10));
             field.setForeground(NAVY);
             field.setOpaque(false);
             field.putClientProperty("JTextField.placeholderText", placeholder);
-            field.setBounds(46, 1, INPUT_WIDTH - 56, height - 2);
+            field.setBounds(34, 1, INPUT_WIDTH - 42, height - 2);
             add(field);
         }
 
@@ -771,10 +781,10 @@ public class LoginView extends JFrame {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(fieldBackground);
-            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 9, 9);
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
             g2.setColor(BORDER);
             g2.setStroke(new BasicStroke(1.4f));
-            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 9, 9);
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
             g2.dispose();
             super.paintComponent(g);
         }
@@ -833,7 +843,7 @@ public class LoginView extends JFrame {
 
         private PrimaryButton(String text) {
             super(text);
-            setFont(new Font("Segoe UI", Font.BOLD, 12));
+            setFont(new Font("Segoe UI", Font.BOLD, 10));
             setForeground(Color.WHITE);
             setContentAreaFilled(false);
             setBorderPainted(false);
@@ -861,7 +871,7 @@ public class LoginView extends JFrame {
             Color start = isEnabled() ? (hovered ? ORANGE_LIGHT : ORANGE) : new Color(180, 188, 205);
             Color end = isEnabled() ? new Color(255, 106, 0) : new Color(180, 188, 205);
             g2.setPaint(new java.awt.GradientPaint(0, 0, start, getWidth(), 0, end));
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 7, 7);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
             g2.dispose();
             super.paintComponent(g);
         }
@@ -875,15 +885,18 @@ public class LoginView extends JFrame {
         private OutlineButton(String text, String iconType) {
             super(text);
             this.iconType = iconType;
-            setFont(new Font("Segoe UI", Font.BOLD, 11));
+            setFont(new Font("Segoe UI", Font.BOLD, 9));
             setForeground(NAVY);
             setContentAreaFilled(false);
             setBorderPainted(false);
             setFocusPainted(false);
             setCursor(new Cursor(Cursor.HAND_CURSOR));
-            setIcon(new VectorIcon(iconType, 18, 18, TEXT_MUTED));
-            setIconTextGap(8);
+            setIcon(null);
+            setIconTextGap(0);
             setHorizontalAlignment(SwingConstants.CENTER);
+            setVerticalAlignment(SwingConstants.CENTER);
+            setVerticalTextPosition(SwingConstants.CENTER);
+            setHorizontalTextPosition(SwingConstants.CENTER);
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseEntered(MouseEvent e) {
@@ -904,10 +917,10 @@ public class LoginView extends JFrame {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(hovered ? new Color(255, 249, 245) : Color.WHITE);
-            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 7, 7);
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
             g2.setColor(BORDER);
             g2.setStroke(new BasicStroke(1.3f));
-            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 7, 7);
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 6, 6);
             g2.dispose();
             super.paintComponent(g);
         }
@@ -987,11 +1000,12 @@ public class LoginView extends JFrame {
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            int y = switch (type) {
-                case "lock" -> getHeight() / 2 - 10;
-                case "user", "user-plus" -> getHeight() / 2 - 9;
-                default -> getHeight() / 2 - 8;
+            int iconH = switch (type) {
+                case "lock" -> 21;
+                case "user", "user-plus" -> 21;
+                default -> 19;
             };
+            int y = (getHeight() - iconH) / 2;
             drawSmallIcon(g2, type, 1, y, TEXT_MUTED);
             g2.dispose();
         }
