@@ -22,6 +22,9 @@ import common.events.AppDataChangedEvent;
 import javax.swing.SwingUtilities;
 import common.security.SecurityGuard;
 import common.sync.SyncVersionDao;
+// --- THÊM IMPORT CHO CHI NHÁNH ---
+import model.product.Store;
+import business.sql.prod_inventory.StoresSql;
 
 public class ManagerManagementView extends JPanel {
 
@@ -36,6 +39,10 @@ public class ManagerManagementView extends JPanel {
 
     private JTextField txtId, txtName, txtPhone, txtEmail;
     private JComboBox<String> cbSearch;
+    // --- KHAI BÁO BIẾN COMBOBOX CHI NHÁNH ---
+    private JComboBox<String> cbStoreForm;
+    private List<Store> listStores = new ArrayList<>();
+    
     private JRadioButton rdoMale, rdoFemale;
     private ButtonGroup btngGender;
 
@@ -57,7 +64,7 @@ public class ManagerManagementView extends JPanel {
         loadAutoCompleteData();
         initUI();
         initEvents();
-        loadDataToTable();
+        refreshAllData(); // Gọi refresh thay vì loadData trực tiếp để nạp chi nhánh
 
         setupRealtimeSync();
         SecurityGuard.attach(this);
@@ -121,7 +128,15 @@ public class ManagerManagementView extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; gbc.gridx = 0;
 
         txtId = createTextField("Mã tự động..."); txtId.setEnabled(false);
-        txtName = createTextField("Nhập họ và tên..."); txtPhone = createTextField("Nhập số điện thoại...");
+        txtName = createTextField("Nhập họ và tên..."); 
+        
+        // --- KHỞI TẠO COMBOBOX CHI NHÁNH ---
+        cbStoreForm = new JComboBox<>();
+        cbStoreForm.setPreferredSize(new Dimension(280, 38));
+        cbStoreForm.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbStoreForm.setBackground(Color.WHITE);
+        
+        txtPhone = createTextField("Nhập số điện thoại...");
         txtEmail = createTextField("Nhập email...");
 
         rdoMale = new JRadioButton("Nam"); rdoFemale = new JRadioButton("Nữ");
@@ -135,6 +150,11 @@ public class ManagerManagementView extends JPanel {
         int y = 0;
         formCard.add(createLabel("Mã quản lý"), addGbc(gbc, y++, 5)); formCard.add(txtId, addGbc(gbc, y++, 15));
         formCard.add(createLabel("Họ và tên (*)"), addGbc(gbc, y++, 5)); formCard.add(txtName, addGbc(gbc, y++, 15));
+        
+        // --- HIỂN THỊ CHI NHÁNH LÊN FORM ---
+        formCard.add(createLabel("Chi nhánh công tác (*)"), addGbc(gbc, y++, 5)); 
+        formCard.add(cbStoreForm, addGbc(gbc, y++, 15));
+
         formCard.add(createLabel("Số điện thoại (*)"), addGbc(gbc, y++, 5)); formCard.add(txtPhone, addGbc(gbc, y++, 15));
         formCard.add(createLabel("Email kích hoạt (*)"), addGbc(gbc, y++, 5)); formCard.add(txtEmail, addGbc(gbc, y++, 15));
         formCard.add(createLabel("Giới tính (*)"), addGbc(gbc, y++, 5)); formCard.add(genderPanel, addGbc(gbc, y++, 25));
@@ -151,11 +171,13 @@ public class ManagerManagementView extends JPanel {
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout()); tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã QL", "Họ và tên", "Số ĐT", "Email", "Cấp tài khoản", "Giới tính", "RawId"}, 0) {
+        // --- BỔ SUNG CỘT CHI NHÁNH VÀO TABLE MODEL ---
+        tableModel = new DefaultTableModel(new Object[]{"Mã QL", "Họ và tên", "Chi nhánh", "Số ĐT", "Email", "Cấp tài khoản", "Giới tính", "RawId"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tblManagers = new JTable(tableModel);
-        tblManagers.removeColumn(tblManagers.getColumnModel().getColumn(6));
+        // Ẩn RawId hiện đang ở cột 7
+        tblManagers.removeColumn(tblManagers.getColumnModel().getColumn(7));
         setupTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblManagers);
@@ -164,6 +186,19 @@ public class ManagerManagementView extends JPanel {
 
         centerPanel.add(formCard, BorderLayout.WEST); centerPanel.add(tableCard, BorderLayout.CENTER);
         add(centerPanel, BorderLayout.CENTER);
+    }
+
+    private void refreshAllData() {
+        SwingUtilities.invokeLater(() -> {
+            if (cbStoreForm != null) {
+                cbStoreForm.removeAllItems();
+                listStores = StoresSql.getInstance().selectAll();
+                for (Store s : listStores) {
+                    cbStoreForm.addItem(s.getStoreName() + " (" + s.getStoreId() + ")");
+                }
+            }
+            loadDataToTable();
+        });
     }
 
     private void styleSearchBox(JComboBox<String> cb) {
@@ -217,8 +252,9 @@ public class ManagerManagementView extends JPanel {
             @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 setHorizontalAlignment(JLabel.CENTER);
-                String accStatus = String.valueOf(table.getModel().getValueAt(table.convertRowIndexToModel(row), 4));
-                if (column == 4) {
+                // Cột trạng thái hiện ở vị trí số 5 do có cột Chi nhánh chèn vào
+                String accStatus = String.valueOf(table.getModel().getValueAt(table.convertRowIndexToModel(row), 5));
+                if (column == 5) {
                     if ("Chưa cấp".equals(accStatus)) { setForeground(new Color(220, 53, 69)); setFont(new Font("Segoe UI", Font.BOLD, 14)); }
                     else if ("Đã cấp".equals(accStatus)) { setForeground(new Color(25, 135, 84)); setFont(new Font("Segoe UI", Font.BOLD, 14)); }
                 } else {
@@ -259,14 +295,23 @@ public class ManagerManagementView extends JPanel {
                 int row = tblManagers.getSelectedRow();
                 int modelRow = tblManagers.convertRowIndexToModel(row);
                 if (row >= 0) {
-                    currentSelectedRawId = String.valueOf(tableModel.getValueAt(modelRow, 6)); // Lấy RawId từ cột 6
-                    txtId.setText(maskSensitiveInfo(currentSelectedRawId)); // Đẩy Mã QL đã che lên TextField
+                    currentSelectedRawId = String.valueOf(tableModel.getValueAt(modelRow, 7)); // Cột 7 là RawId
+                    txtId.setText(maskSensitiveInfo(currentSelectedRawId));
                     
                     txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, 1)));
-                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 2))); 
-                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 3))); 
+                    
+                    // --- CHỌN LẠI CHI NHÁNH TRÊN COMBOBOX ---
+                    String storeInTable = String.valueOf(tableModel.getValueAt(modelRow, 2));
+                    for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
+                        if (cbStoreForm.getItemAt(i).contains(storeInTable)) {
+                            cbStoreForm.setSelectedIndex(i); break;
+                        }
+                    }
 
-                    String accStatus = String.valueOf(tableModel.getValueAt(modelRow, 4));
+                    txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, 3))); 
+                    txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, 4))); 
+
+                    String accStatus = String.valueOf(tableModel.getValueAt(modelRow, 5));
                     boolean isActivated = accStatus != null && accStatus.trim().equalsIgnoreCase("Đã cấp");
 
                     if (isActivated) {
@@ -275,7 +320,7 @@ public class ManagerManagementView extends JPanel {
                         txtEmail.setEnabled(true); txtEmail.setToolTipText(null);
                     }
 
-                    String gender = String.valueOf(tableModel.getValueAt(modelRow, 5));
+                    String gender = String.valueOf(tableModel.getValueAt(modelRow, 6));
                     rdoMale.setSelected("Nam".equalsIgnoreCase(gender)); rdoFemale.setSelected("Nữ".equalsIgnoreCase(gender));
                 }
             }
@@ -296,7 +341,6 @@ public class ManagerManagementView extends JPanel {
 
             emp.setEmployeeId("MNG" + System.currentTimeMillis());
 
-            // THÊM CỜ BÁO LỖI (ELSE) ĐỂ BÁC BIẾT NÓ BỊ GÌ
             if (employeeSql.insert(emp) > 0) {
                 SyncVersionDao.bumpVersion("EMPLOYEES"); 
                 RealtimeClient.send("EMPLOYEES_CHANGED"); 
@@ -340,7 +384,6 @@ public class ManagerManagementView extends JPanel {
                 loadDataToTable(); 
                 clearForm();
             } else {
-                // ĐÂY LÀ CHỖ HIỆN LỖI NẾU INSERT THẤT BẠI
                 JOptionPane.showMessageDialog(this, "❌ Cấp tài khoản thất bại!\nOracle Database từ chối thêm dữ liệu. Vui lòng kiểm tra màn hình Output (Log) của NetBeans để xem lỗi chi tiết (VD: Lỗi khóa ngoại).", "Lỗi Cơ Sở Dữ Liệu", JOptionPane.ERROR_MESSAGE);
             }
         });
@@ -352,7 +395,6 @@ public class ManagerManagementView extends JPanel {
                 return; 
             }
             
-            // TRẢ LẠI MÃ GỐC ĐỂ CẬP NHẬT
             String idToUpdate = currentSelectedRawId;
             
             Employee emp = getManagerFromForm(); 
@@ -431,7 +473,6 @@ public class ManagerManagementView extends JPanel {
                 loadDataToTable(); 
                 clearForm();
             } else {
-                // ĐÂY LÀ CHỖ HIỆN LỖI NẾU UPDATE THẤT BẠI
                 JOptionPane.showMessageDialog(this, "❌ Cập nhật thất bại!\nOracle Database từ chối sửa dữ liệu. Vui lòng kiểm tra màn hình Output của NetBeans để xem lỗi chi tiết.", "Lỗi Cơ Sở Dữ Liệu", JOptionPane.ERROR_MESSAGE);
             }
         });
@@ -463,8 +504,9 @@ public class ManagerManagementView extends JPanel {
 
             if (role.contains("MNG") || roleId.contains("MNG") || role.contains("QUẢN LÝ") || roleId.contains("QUẢN LÝ")) {
                 tableModel.addRow(new Object[]{
-                    maskSensitiveInfo(emp.getEmployeeId()), // ẨN MÃ QL
+                    maskSensitiveInfo(emp.getEmployeeId()),
                     emp.getEmployeeName(),
+                    emp.getStoreName() != null ? emp.getStoreName() : "Chưa phân",
                     emp.getPhone(), 
                     emp.getEmail(), 
                     emp.getAccountStatus(), 
@@ -490,8 +532,8 @@ public class ManagerManagementView extends JPanel {
         String name = txtName.getText().trim(); String phone = txtPhone.getText().trim(); String email = txtEmail.getText().trim().toLowerCase();
         String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
 
-        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin (*)"); return null;
+        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || cbStoreForm.getSelectedIndex() < 0) {
+            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin và chọn Chi nhánh công tác (*)"); return null;
         }
         if (!isValidEmail(email)) {
             JOptionPane.showMessageDialog(this, "Email không hợp lệ!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE); txtEmail.requestFocus(); return null;
@@ -501,13 +543,19 @@ public class ManagerManagementView extends JPanel {
         }
 
         Employee e = new Employee(); e.setEmployeeName(name); e.setPhone(phone); e.setEmail(email); e.setGender(gender); e.setRole("R_STORE_MNG"); e.setRoleId("R_STORE_MNG");
+        
+        // --- LẤY STORE ID ---
+        String selected = cbStoreForm.getSelectedItem().toString();
+        e.setStoreId(selected.substring(selected.lastIndexOf("(") + 1, selected.length() - 1));
+        
         return e;
     }
 
     private void clearForm() {
         txtId.setText(""); txtName.setText(""); txtPhone.setText(""); txtEmail.setText(""); txtEmail.setEnabled(true); txtEmail.setToolTipText(null);
-        currentSelectedRawId = ""; // Reset biến tạm
+        currentSelectedRawId = "";
         btngGender.clearSelection(); tblManagers.clearSelection();
+        if (cbStoreForm != null) cbStoreForm.setSelectedIndex(-1);
         if (cbSearch != null) ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
     }
 

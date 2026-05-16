@@ -22,7 +22,7 @@ public class ReportViewer extends JFrame {
     }
 
     public ReportViewer(String jrxmlPath, Map<String, Object> parameters) {
-        setTitle("Report Viewer");
+        setTitle("Trình xem báo cáo");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
         setSize(1000, 700);

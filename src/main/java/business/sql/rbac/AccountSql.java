@@ -123,8 +123,7 @@ public class AccountSql implements SqlInterface<Account> {
                 }
             }
         } catch (SQLException e) {
-            System.err.println("Lỗi SQL Account.selectByUsername: " + e.getMessage());
-            e.printStackTrace();
+            throw new IllegalStateException("Cannot query account data during login.", e);
         }
         return acc;
     }

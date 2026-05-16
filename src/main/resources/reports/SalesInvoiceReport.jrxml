@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
               xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
@@ -30,7 +30,7 @@ SELECT
     o.order_date,
     NVL(e.employee_name, o.employee_id) AS cashier_name,
     NVL(o.payment_method_id, 'N/A') AS payment_method_name,
-    NVL(c.customer_name, 'Walk-in Customer') AS customer_name,
+    NVL(c.customer_name, 'Khách vãng lai') AS customer_name,
     o.customer_id,
     o.status,
     o.note,
@@ -111,21 +111,21 @@ ORDER BY od.order_detail_id
                 <textElement>
                     <font size="17" isBold="true"/>
                 </textElement>
-                <text><![CDATA[SIEUTHIONLINE SUPERMARKET]]></text>
+                <text><![CDATA[SIÊU THỊ ONLINE]]></text>
             </staticText>
             <staticText>
                 <reportElement x="82" y="40" width="210" height="14" forecolor="#CCFBF1" uuid="d64d345f-6a8b-4eec-a5a2-6207df7edbbb"/>
                 <textElement>
                     <font size="9"/>
                 </textElement>
-                <text><![CDATA[Fresh goods, fast checkout, trusted service]]></text>
+                <text><![CDATA[Hàng hóa tươi mới, thanh toán nhanh, dịch vụ tin cậy]]></text>
             </staticText>
             <staticText>
                 <reportElement x="385" y="18" width="130" height="28" forecolor="#FFFFFF" uuid="ab09d1e4-f78f-4471-8b44-6288322e9037"/>
                 <textElement textAlignment="Right">
                     <font size="18" isBold="true"/>
                 </textElement>
-                <text><![CDATA[SALES INVOICE]]></text>
+                <text><![CDATA[HÓA ĐƠN BÁN HÀNG]]></text>
             </staticText>
             <textField>
                 <reportElement x="385" y="48" width="130" height="14" forecolor="#CCFBF1" uuid="eb8eea59-958b-44bd-a1a2-dd465414fa0f"/>
@@ -137,11 +137,11 @@ ORDER BY od.order_detail_id
 
             <staticText>
                 <reportElement style="Label" x="0" y="96" width="160" height="16" uuid="bb1a69af-b3e1-43e9-a3a9-5c75c6d9de43"/>
-                <text><![CDATA[Invoice Information]]></text>
+                <text><![CDATA[Thông tin hóa đơn]]></text>
             </staticText>
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="116" width="58" height="13" uuid="6c00a77b-7f94-47cc-bda6-b2a09cce51ec"/>
-                <text><![CDATA[Order ID]]></text>
+                <text><![CDATA[Mã đơn hàng]]></text>
             </staticText>
             <textField>
                 <reportElement style="Base" x="68" y="116" width="150" height="13" uuid="40675cda-6629-4e94-a701-1521bd8df566"/>
@@ -149,7 +149,7 @@ ORDER BY od.order_detail_id
             </textField>
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="133" width="58" height="13" uuid="53ed4719-3ff5-4b37-9349-d825d986a8ac"/>
-                <text><![CDATA[Order Date]]></text>
+                <text><![CDATA[Ngày lập]]></text>
             </staticText>
             <textField pattern="dd/MM/yyyy">
                 <reportElement style="Base" x="68" y="133" width="150" height="13" uuid="14da8db2-0d89-42f0-abf9-12a10fe456de"/>
@@ -157,7 +157,7 @@ ORDER BY od.order_detail_id
             </textField>
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="150" width="58" height="13" uuid="45454628-90b2-4994-a10e-e096f9098045"/>
-                <text><![CDATA[Cashier]]></text>
+                <text><![CDATA[Thu ngân]]></text>
             </staticText>
             <textField>
                 <reportElement style="Base" x="68" y="150" width="180" height="13" uuid="2a197f1d-4cce-4d40-80fd-818c0690f265"/>
@@ -166,11 +166,11 @@ ORDER BY od.order_detail_id
 
             <staticText>
                 <reportElement style="Label" x="302" y="96" width="180" height="16" uuid="5ad26a28-9c41-438f-9e5c-93e9ff7845e4"/>
-                <text><![CDATA[Customer Information]]></text>
+                <text><![CDATA[Thông tin khách hàng]]></text>
             </staticText>
             <staticText>
                 <reportElement style="SmallMuted" x="302" y="116" width="70" height="13" uuid="afcc0a1f-b2ef-43aa-bf3a-80bc599187e1"/>
-                <text><![CDATA[Customer]]></text>
+                <text><![CDATA[Khách hàng]]></text>
             </staticText>
             <textField>
                 <reportElement style="Base" x="382" y="116" width="153" height="13" uuid="cbeefab4-11cf-4ec6-a22c-b6f0f0ebfd15"/>
@@ -178,7 +178,7 @@ ORDER BY od.order_detail_id
             </textField>
             <staticText>
                 <reportElement style="SmallMuted" x="302" y="133" width="70" height="13" uuid="841e131c-159c-40bf-b5fa-77ca747e61bb"/>
-                <text><![CDATA[Customer ID]]></text>
+                <text><![CDATA[Mã khách hàng]]></text>
             </staticText>
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="133" width="153" height="13" uuid="a5f44297-2e59-4547-b529-45bd70723f40"/>
@@ -186,7 +186,7 @@ ORDER BY od.order_detail_id
             </textField>
             <staticText>
                 <reportElement style="SmallMuted" x="302" y="150" width="70" height="13" uuid="dc0d889d-2b87-4652-8e59-7c578de113d4"/>
-                <text><![CDATA[Payment]]></text>
+                <text><![CDATA[Thanh toán]]></text>
             </staticText>
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="150" width="153" height="13" uuid="be4d559b-2744-485c-8400-1c4f7ae92d0e"/>
@@ -201,23 +201,23 @@ ORDER BY od.order_detail_id
                 <reportElement style="TableHeader" x="0" y="0" width="220" height="24" uuid="1c885221-607e-4c26-bd62-0494c347ca3c"/>
                 <box leftPadding="8"/>
                 <textElement verticalAlignment="Middle"/>
-                <text><![CDATA[Product]]></text>
+                <text><![CDATA[Sản phẩm]]></text>
             </staticText>
             <staticText>
                 <reportElement style="TableHeader" x="220" y="0" width="70" height="24" uuid="3f0197bf-8e66-4bf8-9e01-dc552642432b"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle"/>
-                <text><![CDATA[Qty]]></text>
+                <text><![CDATA[SL]]></text>
             </staticText>
             <staticText>
                 <reportElement style="TableHeader" x="290" y="0" width="115" height="24" uuid="55e35ee0-0d9b-424d-a65a-97c265398823"/>
                 <textElement textAlignment="Right" verticalAlignment="Middle"/>
-                <text><![CDATA[Unit Price]]></text>
+                <text><![CDATA[Đơn giá]]></text>
             </staticText>
             <staticText>
                 <reportElement style="TableHeader" x="405" y="0" width="130" height="24" uuid="76b258bf-2391-474e-a308-abf1717053d3"/>
                 <box rightPadding="8"/>
                 <textElement textAlignment="Right" verticalAlignment="Middle"/>
-                <text><![CDATA[Subtotal]]></text>
+                <text><![CDATA[Thành tiền]]></text>
             </staticText>
         </band>
     </columnHeader>
@@ -262,12 +262,12 @@ ORDER BY od.order_detail_id
             </line>
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="8" width="280" height="12" uuid="0c4187d0-6f24-4c66-8873-9c069dbbc6f8"/>
-                <text><![CDATA[SieuThiOnline Supermarket - Generated by JasperReports]]></text>
+                <text><![CDATA[Siêu Thị Online - Tạo bởi JasperReports]]></text>
             </staticText>
             <textField>
                 <reportElement style="SmallMuted" x="455" y="8" width="80" height="12" uuid="8d113a48-f93a-4ca6-bf92-12f197c6c04f"/>
                 <textElement textAlignment="Right"/>
-                <textFieldExpression><![CDATA["Page " + $V{PAGE_NUMBER}]]></textFieldExpression>
+                <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
             </textField>
         </band>
     </pageFooter>
@@ -276,11 +276,11 @@ ORDER BY od.order_detail_id
         <band height="128" splitType="Stretch">
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="10" width="300" height="14" uuid="6a9f1ad2-223d-4748-8eb0-3a6067c5cc10"/>
-                <text><![CDATA[Thank you for shopping!]]></text>
+                <text><![CDATA[Cảm ơn quý khách đã mua hàng!]]></text>
             </staticText>
             <textField isStretchWithOverflow="true" isBlankWhenNull="true">
                 <reportElement style="SmallMuted" x="0" y="28" width="300" height="32" uuid="3318c09e-569f-48d7-973e-eb9a32b54cf3"/>
-                <textFieldExpression><![CDATA[$F{note} == null ? "" : "Note: " + $F{note}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$F{note} == null ? "" : "Ghi chú: " + $F{note}]]></textFieldExpression>
             </textField>
 
             <rectangle radius="6">
@@ -291,7 +291,7 @@ ORDER BY od.order_detail_id
             </rectangle>
             <staticText>
                 <reportElement style="Label" x="342" y="22" width="78" height="14" uuid="85939c75-d3e8-41ad-af63-558c5e02ff43"/>
-                <text><![CDATA[Subtotal]]></text>
+                <text><![CDATA[Thành tiền]]></text>
             </staticText>
             <textField pattern="#,##0.##">
                 <reportElement style="Money" x="430" y="22" width="88" height="14" uuid="31975ef6-19e6-4ea5-9160-6f3f511668c7"/>
@@ -299,7 +299,7 @@ ORDER BY od.order_detail_id
             </textField>
             <staticText>
                 <reportElement style="Label" x="342" y="43" width="78" height="14" uuid="4126ba23-bd03-4ad8-8c97-63283fab89d9"/>
-                <text><![CDATA[Discount]]></text>
+                <text><![CDATA[Giảm giá]]></text>
             </staticText>
             <textField pattern="#,##0.##">
                 <reportElement style="Money" x="430" y="43" width="88" height="14" uuid="bce74b44-dae6-4455-9ea5-c3b213627f4f"/>
@@ -316,7 +316,7 @@ ORDER BY od.order_detail_id
                 <textElement verticalAlignment="Middle">
                     <font size="12" isBold="true"/>
                 </textElement>
-                <text><![CDATA[TOTAL]]></text>
+                <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
             <textField pattern="#,##0.##">
                 <reportElement x="420" y="73" width="98" height="20" forecolor="#0F766E" uuid="f268c68f-9a8a-4996-8e12-880318e6526b"/>
@@ -334,3 +334,4 @@ ORDER BY od.order_detail_id
     </summary>
 
 </jasperReport>
+

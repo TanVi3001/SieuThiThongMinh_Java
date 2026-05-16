@@ -33,6 +33,27 @@ data/*.csv
 *.pdf
 *.docx
 
+# --- LOCAL DATABASE / DOCKER CONFIG (Mỗi máy tự cấu hình riêng) ---
+# Không push cấu hình DB cá nhân như port 1521/1522, user system/appuser, password local.
+src/main/resources/database.properties
+src/main/resources/database-local.properties
+src/main/resources/*.local.properties
+.env
+.env.*
+!.env.example
+
+# Không push override Docker riêng từng máy.
+docker-compose.override.yml
+docker-compose.local.yml
+compose.override.yml
+compose.local.yml
+
+# Không push file dump/backup dữ liệu nặng hoặc dữ liệu cá nhân.
+backup/*.dmp
+backup/*.DMP
+backup/*.log
+backup/*.LOG
+
 # --- LOCAL DOCUMENTATION / DIAGRAMS ---
 AGENTS.md
 DanhSachActor_UseCase_DacTa_SSMS.md

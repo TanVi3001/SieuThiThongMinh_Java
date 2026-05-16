@@ -14,6 +14,7 @@ public class Employee {
     private String shiftId;
     private int isDeleted;
     private String accountStatus;
+    
     // ===== thêm field để khớp form EmployeeView =====
     private String phone;
     private String email;
@@ -21,6 +22,10 @@ public class Employee {
     private String gender;
     private String onlineStatus;
     private int activeSessions;
+    
+    // ===== BỔ SUNG LIÊN KẾT CHI NHÁNH (ERP) =====
+    private String storeId;
+    private String storeName;
 
     public Employee() {
     }
@@ -170,4 +175,20 @@ public class Employee {
         this.onlineStatus = onlineStatus;
     }
 
+    // ===== GETTER/SETTER CHO CHI NHÁNH =====
+    public String getStoreId() {
+        return storeId;
+    }
+
+    public void setStoreId(String storeId) {
+        this.storeId = storeId;
+    }
+
+    public String getStoreName() {
+        return storeName;
+    }
+
+    public void setStoreName(String storeName) {
+        this.storeName = storeName;
+    }
 }
