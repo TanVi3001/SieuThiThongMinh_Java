@@ -51,7 +51,6 @@ public class StatisticView extends JPanel {
     private final Color textGray = new Color(100, 116, 139);
     private final Color borderLight = new Color(226, 232, 240);
     private final Color excelGreen = new Color(33, 115, 70);
-    private final Color pdfRed = new Color(210, 33, 40);
 
     private final Font titleFont = new Font("Segoe UI", Font.BOLD, 26);
     private final Font sectionFont = new Font("Segoe UI", Font.BOLD, 16);
@@ -62,7 +61,8 @@ public class StatisticView extends JPanel {
     // UI COMPONENTS
     // =========================================================
     private JDateChooser dpFromDate, dpToDate;
-    private JButton btnFilter, btnExportExcel, btnExportPDF, btnExportRevenueReport;
+    private JComboBox<RevenueReportType> cboRevenueReportType;
+    private JButton btnFilter, btnExportExcel, btnExportRevenueReport;
     private JLabel lblLastUpdate;
 
     private JLabel lblTotalRevenueValue, lblTotalOrdersValue, lblAvgKpiValue, lblBestEmployeeValue;
@@ -133,18 +133,22 @@ public class StatisticView extends JPanel {
         dpToDate.setDateFormatString("dd/MM/yyyy");
         dpToDate.setPreferredSize(new Dimension(135, 34));
 
+        cboRevenueReportType = new JComboBox<>(RevenueReportType.values());
+        cboRevenueReportType.setFont(normalFont);
+        cboRevenueReportType.setPreferredSize(new Dimension(155, 34));
+
         btnFilter = createActionButton("Lọc dữ liệu", primaryBlue, Color.WHITE, IconHelper.search(16), 130);
         btnExportExcel = createActionButton("Xuất Excel", excelGreen, Color.WHITE, null, 120);
-        btnExportPDF = createActionButton("Xuất PDF", pdfRed, Color.WHITE, null, 120);
         btnExportRevenueReport = createActionButton("Xuất báo cáo doanh thu", successGreen, Color.WHITE, null, 190);
 
         actionPanel.add(createLabel("Từ ngày:"));
         actionPanel.add(dpFromDate);
         actionPanel.add(createLabel("Đến ngày:"));
         actionPanel.add(dpToDate);
+        actionPanel.add(createLabel("Kiểu báo cáo:"));
+        actionPanel.add(cboRevenueReportType);
         actionPanel.add(btnFilter);
         actionPanel.add(btnExportExcel);
-        actionPanel.add(btnExportPDF);
         actionPanel.add(btnExportRevenueReport);
 
         lblLastUpdate = new JLabel("Đang tải dữ liệu...");
@@ -326,7 +330,6 @@ public class StatisticView extends JPanel {
     private void initEvents() {
         btnFilter.addActionListener(e -> refreshDataWithCurrentDates(false, true));
         btnExportExcel.addActionListener(this::exportActiveTableAsCsv);
-        btnExportPDF.addActionListener(e -> printActiveTable());
         btnExportRevenueReport.addActionListener(e -> exportRevenueReport());
     }
 
@@ -570,8 +573,8 @@ public class StatisticView extends JPanel {
     private void setLoadingState(boolean loading) {
         btnFilter.setEnabled(!loading);
         btnExportExcel.setEnabled(!loading);
-        btnExportPDF.setEnabled(!loading);
         btnExportRevenueReport.setEnabled(!loading);
+        cboRevenueReportType.setEnabled(!loading);
         btnFilter.setText(loading ? "Đang tải..." : "Lọc dữ liệu");
     }
 
@@ -782,31 +785,20 @@ public class StatisticView extends JPanel {
         }
     }
 
-    private void printActiveTable() {
-        JTable table = getActiveTable();
-        if (table == null) {
-            return;
-        }
-        try {
-            boolean ok = table.print(JTable.PrintMode.FIT_WIDTH);
-            if (ok) {
-                JOptionPane.showMessageDialog(this, "✅ Đã gửi bảng hiện tại sang trình in/PDF printer.");
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Lỗi xuất PDF/In: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
     private void exportRevenueReport() {
-        Date fromDate = dpFromDate.getDate();
-        Date toDate = dpToDate.getDate();
-
         try {
-            statisticService.getRevenueReport(fromDate, toDate);
+            Date startDate = getSelectedStartDate();
+            Date endDate = getSelectedEndDate();
+            Date endDatePlusOne = addDays(endDate, 1);
+            RevenueReportType reportType = getSelectedReportType();
 
             HashMap<String, Object> params = new HashMap<>();
-            params.put("FROM_DATE", new java.sql.Date(fromDate.getTime()));
-            params.put("TO_DATE", new java.sql.Date(toDate.getTime()));
+            params.put("START_DATE", new java.sql.Date(startDate.getTime()));
+            params.put("END_DATE", new java.sql.Date(endDate.getTime()));
+            params.put("END_DATE_PLUS_ONE", new java.sql.Date(endDatePlusOne.getTime()));
+            params.put("REPORT_TYPE", reportType.queryValue);
+            params.put("REPORT_TYPE_LABEL", reportType.label);
+            params.put("PERIOD_HEADER", reportType.periodHeader);
 
             ReportViewer.showReport("src/main/resources/reports/RevenueReport.jrxml", params);
         } catch (IllegalArgumentException ex) {
@@ -814,6 +806,50 @@ public class StatisticView extends JPanel {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi xuất báo cáo doanh thu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private Date getSelectedStartDate() {
+        Date selected = dpFromDate.getDate();
+        if (selected == null) {
+            throw new IllegalArgumentException("Vui lòng chọn Từ ngày trước khi xuất báo cáo.");
+        }
+        return atStartOfDay(selected);
+    }
+
+    private Date getSelectedEndDate() {
+        Date selected = dpToDate.getDate();
+        if (selected == null) {
+            throw new IllegalArgumentException("Vui lòng chọn Đến ngày trước khi xuất báo cáo.");
+        }
+
+        Date startDate = getSelectedStartDate();
+        Date endDate = atStartOfDay(selected);
+        if (startDate.after(endDate)) {
+            throw new IllegalArgumentException("Ngày bắt đầu không thể sau ngày kết thúc.");
+        }
+        return endDate;
+    }
+
+    private RevenueReportType getSelectedReportType() {
+        Object selected = cboRevenueReportType.getSelectedItem();
+        return selected instanceof RevenueReportType ? (RevenueReportType) selected : RevenueReportType.DAY;
+    }
+
+    private Date atStartOfDay(Date date) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
+    }
+
+    private Date addDays(Date date, int days) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.DAY_OF_MONTH, days);
+        return cal.getTime();
     }
 
     private JTable getActiveTable() {
@@ -1545,6 +1581,28 @@ public class StatisticView extends JPanel {
             this.completedOrders = completedOrders;
             this.status = status;
             this.trend = trend;
+        }
+    }
+
+    enum RevenueReportType {
+        DAY("Theo ngày", "DAY", "Ngày"),
+        MONTH("Theo tháng", "MONTH", "Tháng"),
+        YEAR("Theo năm", "YEAR", "Năm"),
+        RANGE("Khoảng thời gian", "RANGE", "Kỳ báo cáo");
+
+        private final String label;
+        private final String queryValue;
+        private final String periodHeader;
+
+        RevenueReportType(String label, String queryValue, String periodHeader) {
+            this.label = label;
+            this.queryValue = queryValue;
+            this.periodHeader = periodHeader;
+        }
+
+        @Override
+        public String toString() {
+            return label;
         }
     }
 }
