@@ -8,7 +8,7 @@ REM ==========================================================
 
 set CONTAINER_NAME=supermarket-oracle
 set ORACLE_USER=system
-set ORACLE_PASSWORD=Admin123
+set ORACLE_PASSWORD=123456
 set ORACLE_SERVICE=FREEPDB1
 
 cd /d "%~dp0.."
@@ -31,16 +31,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 2. Check container exists
+REM 2. If container is missing, create it from docker-compose.yml
 docker ps -a --format "{{.Names}}" | findstr /x "%CONTAINER_NAME%" >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Container "%CONTAINER_NAME%" was not found.
-    echo Please run: docker compose up -d
-    pause
-    exit /b 1
+    echo [WARN] Container "%CONTAINER_NAME%" was not found.
+    echo [INFO] Running docker compose up -d to create/start Oracle container...
+    docker compose up -d
+    if errorlevel 1 (
+        echo [ERROR] docker compose up -d failed.
+        echo Check Docker Desktop and docker-compose.yml.
+        pause
+        exit /b 1
+    )
 )
 
-REM 3. Start container if not running
+REM 3. Start container if it exists but is not running
 docker ps --format "{{.Names}}" | findstr /x "%CONTAINER_NAME%" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Container is not running. Starting %CONTAINER_NAME%...
@@ -50,20 +55,37 @@ if errorlevel 1 (
         pause
         exit /b 1
     )
-    echo [INFO] Waiting Oracle to be ready...
-    timeout /t 20 /nobreak >nul
 )
 
-REM 4. Test SQLPlus connection inside container
-echo [INFO] Testing Oracle connection...
-echo EXIT; | docker exec -i %CONTAINER_NAME% sqlplus -L %ORACLE_USER%/%ORACLE_PASSWORD%@%ORACLE_SERVICE% >nul 2>&1
-if errorlevel 1 (
+echo [INFO] Waiting Oracle to be ready. This can take a few minutes on first startup...
+
+REM 4. Test SQLPlus connection inside container with retries
+set CONNECT_OK=0
+for /L %%I in (1,1,18) do (
+    echo [INFO] Testing Oracle connection attempt %%I/18...
+    echo EXIT; | docker exec -i %CONTAINER_NAME% sqlplus -L %ORACLE_USER%/%ORACLE_PASSWORD%@%ORACLE_SERVICE% >nul 2>&1
+    if not errorlevel 1 (
+        set CONNECT_OK=1
+        goto CONNECT_READY
+    )
+    timeout /t 10 /nobreak >nul
+)
+
+:CONNECT_READY
+if "%CONNECT_OK%"=="0" (
     echo [ERROR] Cannot connect to Oracle inside Docker.
-    echo Check container logs or wait until database is ready:
+    echo Check container logs:
     echo docker logs -f %CONTAINER_NAME%
+    echo.
+    echo Common causes:
+    echo - Oracle is still starting.
+    echo - ORACLE_PASSWORD in docker-compose.yml is different from ORACLE_PASSWORD in this file.
+    echo - ORACLE_SERVICE is not FREEPDB1.
     pause
     exit /b 1
 )
+
+echo [OK] Oracle connection is ready.
 
 REM 5. Run known patch files
 set HAS_PATCH=0
