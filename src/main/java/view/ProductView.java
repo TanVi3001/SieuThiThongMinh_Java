@@ -169,9 +169,9 @@ private JButton btnChooseImage;
         searchFieldWrapper.add(searchIconLabel, BorderLayout.WEST);
         searchFieldWrapper.add(cbSearch, BorderLayout.CENTER);
 
-        btnSearch = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, null);
-        btnExportPDF = createCustomButton("Xuất Excel", new Color(0, 163, 108), Color.WHITE, null);
-        btnImport = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, null);
+        btnSearch  = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
+        btnExportPDF = createCustomButton("Xuất Excel", new Color(0, 163, 108), Color.WHITE, IconHelper.export(20));
+        btnImport  = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, IconHelper.file(20));
 
         toolPanel.add(searchFieldWrapper);
         toolPanel.add(btnSearch);

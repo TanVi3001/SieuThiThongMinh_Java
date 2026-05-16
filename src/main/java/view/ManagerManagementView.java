@@ -113,7 +113,7 @@ public class ManagerManagementView extends JPanel {
         searchFieldWrapper.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(new Color(220, 225, 235), 25), new EmptyBorder(0, 15, 0, 15)));
         searchFieldWrapper.add(new JLabel(IconHelper.search(16)), BorderLayout.WEST); searchFieldWrapper.add(cbSearch, BorderLayout.CENTER);
 
-        btnSearch = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, null);
+        btnSearch = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
         toolPanel.add(searchFieldWrapper); toolPanel.add(btnSearch);
 
         headerPanel.add(titlePanel, BorderLayout.WEST); headerPanel.add(toolPanel, BorderLayout.EAST);

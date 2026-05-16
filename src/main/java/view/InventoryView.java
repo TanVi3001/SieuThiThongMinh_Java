@@ -8,6 +8,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import view.components.IconHelper;
 
 public class InventoryView extends JPanel {
 
@@ -107,9 +108,9 @@ public class InventoryView extends JPanel {
         JPanel tableToolsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         tableToolsPanel.setOpaque(false);
         
-        btnInbound = createCustomButton("Nhập Kho", colorSuccess, Color.WHITE);
-        btnOutbound = createCustomButton("Xuất / Hủy", colorDanger, Color.WHITE);
-        btnAuditLog = createCustomButton("Lịch sử biến động", textGray, Color.WHITE);
+        btnInbound  = createCustomButton("Nhập Kho", colorSuccess, Color.WHITE, IconHelper.add(20));
+        btnOutbound = createCustomButton("Xuất / Hủy", colorDanger,  Color.WHITE, IconHelper.delete(20));
+        btnAuditLog = createCustomButton("Lịch sử biến động", textGray,     Color.WHITE, IconHelper.history(20));
         
         tableToolsPanel.add(btnInbound);
         tableToolsPanel.add(btnOutbound);
@@ -155,7 +156,7 @@ public class InventoryView extends JPanel {
         return card;
     }
 
-    private JButton createCustomButton(String text, Color bg, Color fg) {
+    private JButton createCustomButton(String text, Color bg, Color fg, ImageIcon icon) {
         JButton btn = new JButton(text) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -168,6 +169,10 @@ public class InventoryView extends JPanel {
             }
         };
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        if (icon != null) {
+            btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18,18,Image.SCALE_SMOOTH)));
+            btn.setIconTextGap(8);
+        }
         btn.setForeground(fg);
         btn.setPreferredSize(new Dimension(140, 38));
         btn.setContentAreaFilled(false);
