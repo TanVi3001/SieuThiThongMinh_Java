@@ -58,15 +58,18 @@ public class EmployeeView extends JPanel {
     private String currentSelectedRawId = "";
 
     // Model column indexes
+    // Bảng hiện có thêm cột Chi nhánh ở vị trí 2,
+    // nên toàn bộ index phía sau phải dịch sang phải 1 cột.
     private static final int COL_ID = 0;
     private static final int COL_NAME = 1;
-    private static final int COL_PHONE = 2;
-    private static final int COL_EMAIL = 3;
-    private static final int COL_ACCOUNT_STATUS = 4;
-    private static final int COL_ONLINE_STATUS = 5;
-    private static final int COL_ROLE = 6;
-    private static final int COL_GENDER = 7;
-    private static final int COL_RAW_ID = 8;
+    private static final int COL_STORE = 2;
+    private static final int COL_PHONE = 3;
+    private static final int COL_EMAIL = 4;
+    private static final int COL_ACCOUNT_STATUS = 5;
+    private static final int COL_ONLINE_STATUS = 6;
+    private static final int COL_ROLE = 7;
+    private static final int COL_GENDER = 8;
+    private static final int COL_RAW_ID = 9;
 
     public EmployeeView() {
         if (!business.service.AuthorizationService.canAccessEmployeeManagement()) {
@@ -96,13 +99,14 @@ public class EmployeeView extends JPanel {
         tblEmployees.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
 
         tblEmployees.getColumnModel().getColumn(0).setPreferredWidth(95);   // Mã NV
-        tblEmployees.getColumnModel().getColumn(1).setPreferredWidth(170);  // Tên
-        tblEmployees.getColumnModel().getColumn(2).setPreferredWidth(110);  // SĐT
-        tblEmployees.getColumnModel().getColumn(3).setPreferredWidth(260);  // Email
-        tblEmployees.getColumnModel().getColumn(4).setPreferredWidth(120);  // Cấp tài khoản
-        tblEmployees.getColumnModel().getColumn(5).setPreferredWidth(120);  // Hoạt động
-        tblEmployees.getColumnModel().getColumn(6).setPreferredWidth(190);  // Chức vụ
-        tblEmployees.getColumnModel().getColumn(7).setPreferredWidth(80);   // Giới tính
+        tblEmployees.getColumnModel().getColumn(1).setPreferredWidth(160);  // Tên
+        tblEmployees.getColumnModel().getColumn(2).setPreferredWidth(155);  // Chi nhánh
+        tblEmployees.getColumnModel().getColumn(3).setPreferredWidth(115);  // SĐT
+        tblEmployees.getColumnModel().getColumn(4).setPreferredWidth(230);  // Email
+        tblEmployees.getColumnModel().getColumn(5).setPreferredWidth(120);  // Cấp tài khoản
+        tblEmployees.getColumnModel().getColumn(6).setPreferredWidth(120);  // Hoạt động
+        tblEmployees.getColumnModel().getColumn(7).setPreferredWidth(150);  // Chức vụ
+        tblEmployees.getColumnModel().getColumn(8).setPreferredWidth(80);   // Giới tính
     }
 
     private void setupRealtimeSync() {
@@ -120,9 +124,22 @@ public class EmployeeView extends JPanel {
             if (cbStoreForm != null) {
                 cbStoreForm.removeAllItems();
                 listStores = StoresSql.getInstance().selectAll();
+
                 for (Store s : listStores) {
-                    cbStoreForm.addItem(s.getStoreName() + " (" + s.getStoreId() + ")");
+                    String storeLabel = s.getStoreName();
+
+                    if (storeLabel == null || storeLabel.trim().isEmpty()) {
+                        storeLabel = s.getAddress();
+                    }
+
+                    if (storeLabel == null || storeLabel.trim().isEmpty()) {
+                        storeLabel = s.getStoreId();
+                    }
+
+                    cbStoreForm.addItem(storeLabel + " (" + s.getStoreId() + ")");
                 }
+
+                cbStoreForm.setSelectedIndex(-1);
             }
             // -----------------------------------------------------------------------
 
@@ -381,23 +398,24 @@ public class EmployeeView extends JPanel {
 
                 txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_NAME)));
                 
-                // --- BỔ SUNG BƯỚC 6: CHỌN LẠI CHI NHÁNH TRÊN COMBOBOX TẠI ĐÂY ---
-                // Cột số 2 là cột Chi nhánh vừa chèn vào bảng
-                String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, 2)); 
+                String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, COL_STORE));
+                cbStoreForm.setSelectedIndex(-1);
+
                 for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
-                    if (cbStoreForm.getItemAt(i).contains(storeNameInTable)) {
+                    String item = String.valueOf(cbStoreForm.getItemAt(i));
+                    if (item.contains(storeNameInTable)) {
                         cbStoreForm.setSelectedIndex(i);
                         break;
                     }
                 }
-                // -----------------------------------------------------------------
 
                 txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_PHONE)));
                 txtEmail.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_EMAIL)));
 
-                String accountStatus = String.valueOf(tableModel.getValueAt(modelRow, COL_ACCOUNT_STATUS));
-                boolean isActivated = accountStatus != null
-                        && accountStatus.trim().equalsIgnoreCase("Đã cấp");
+                String accountStatus = normalizeAccountStatus(
+                        String.valueOf(tableModel.getValueAt(modelRow, COL_ACCOUNT_STATUS))
+                );
+                boolean isActivated = accountStatus.trim().equalsIgnoreCase("Đã cấp");
 
                 if (isActivated) {
                     txtEmail.setEnabled(false);
@@ -859,6 +877,23 @@ public class EmployeeView extends JPanel {
         return value.trim();
     }
 
+    private String normalizeAccountStatus(String status) {
+        if (status == null) {
+            return "Chưa cấp";
+        }
+
+        String value = status.trim();
+
+        if (value.isEmpty()
+                || value.equals("—")
+                || value.equalsIgnoreCase("N/A")
+                || value.equalsIgnoreCase("null")) {
+            return "Chưa cấp";
+        }
+
+        return value;
+    }
+
 //    private String formatRoleName(String roleId) {
 //        if (roleId == null) {
 //            return "—";
@@ -887,9 +922,7 @@ public class EmployeeView extends JPanel {
         for (Employee emp : list) {
             String employeeId = emp.getEmployeeId();
 
-            String accountStatus = emp.getAccountStatus() != null
-                    ? emp.getAccountStatus().trim()
-                    : "Chưa cấp";
+            String accountStatus = normalizeAccountStatus(emp.getAccountStatus());
 
             String onlineStatus = emp.getOnlineStatus() != null
                     ? emp.getOnlineStatus().trim()
@@ -899,8 +932,10 @@ public class EmployeeView extends JPanel {
                 onlineStatus = "ONLINE (" + emp.getActiveSessions() + ")";
             }
 
-            // --- THÊM XỬ LÝ LẤY TÊN CHI NHÁNH ---
             String storeName = emp.getStoreName() != null ? emp.getStoreName() : "Chưa phân";
+            if (storeName.trim().isEmpty() || "—".equals(storeName.trim())) {
+                storeName = "Chưa phân";
+            }
 
             tableModel.addRow(new Object[]{
                 maskSensitiveInfo(employeeId),
@@ -1267,16 +1302,9 @@ public class EmployeeView extends JPanel {
             if (isSelected) {
                 setBackground(selectedBg);
                 setForeground(textDark);
-            } else if (isCurrentUserRow) {
-                setBackground(currentUserBg);
-                setForeground(new Color(25, 135, 84));
-            } else if (isAdminRow) {
-                setBackground(adminBg);
-                setForeground(new Color(220, 53, 69));
-            } else if (isManagerRow) {
-                setBackground(managerBg);
-                setForeground(new Color(25, 135, 84));
             } else {
+                // Không tô màu riêng cho Admin/Manager/Current User nữa
+                // để tránh cả dòng bị xanh/đỏ gây rối mắt.
                 setBackground(row % 2 == 0 ? normalBg : zebraBg);
                 setForeground(Color.BLACK);
             }
