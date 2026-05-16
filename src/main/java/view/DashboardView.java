@@ -4,7 +4,9 @@ import common.events.AppDataChangedEvent;
 import common.events.EventBus;
 import view.components.TongQuanPanel;
 import view.components.Sidebar;
+import view.components.NotificationBell;
 import business.service.AccountService;
+import business.service.AuthorizationService;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -20,6 +22,7 @@ import javax.swing.Timer;
 
 import common.events.AppEventType;
 import common.security.SecurityGuard;
+import java.awt.FlowLayout;
 
 public class DashboardView extends JFrame {
 
@@ -151,7 +154,22 @@ public class DashboardView extends JFrame {
                     break;
             }
         });
-
+        
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
+        topBar.setBackground(Color.WHITE);
+        topBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(230, 230, 230)));
+        
+        NotificationBell bell;
+        if (AuthorizationService.isWarehouseStaff()) {
+            bell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
+        } else if (AuthorizationService.isStoreManager()) {
+            bell = new NotificationBell(NotificationBell.Audience.MANAGER);
+        } else {
+            bell = new NotificationBell(NotificationBell.Audience.ALL);
+        }
+        topBar.add(bell);
+        this.getContentPane().add(topBar, BorderLayout.NORTH);
+        
         // Bố trí Sidebar bên trái và Content ở giữa
         this.getContentPane().add(newSidebar, BorderLayout.WEST);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);

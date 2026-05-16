@@ -18,6 +18,10 @@ public class IconHelper {
     private static final Map<String, ImageIcon> categoryIconCache = new HashMap<>();
     private static final String CATEGORY_ICON_PATH = "/view/image/categories/";
 
+    static ImageIcon notification(int i) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+
     private IconHelper() {
     }
 
