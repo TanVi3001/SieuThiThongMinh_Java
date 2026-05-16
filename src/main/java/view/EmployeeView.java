@@ -25,8 +25,6 @@ import business.service.ActivationTokenService;
 import model.product.Store;
 import business.sql.prod_inventory.StoresSql;
 
-
-
 public class EmployeeView extends JPanel {
 
     private final Color bgLight = new Color(244, 246, 250);
@@ -41,7 +39,7 @@ public class EmployeeView extends JPanel {
 
     private JTextField txtId, txtName, txtPhone, txtEmail;
     private JComboBox<String> cbRole, cbSearch;
-    
+
     private JComboBox<String> cbStoreForm;
     private java.util.List<Store> listStores = new java.util.ArrayList<>();
 
@@ -246,7 +244,7 @@ public class EmployeeView extends JPanel {
         txtId.setEnabled(false);
 
         txtName = createTextField("Nhập tên...");
-        
+
         // --- THÊM KHỞI TẠO COMBOBOX CHI NHÁNH TẠI ĐÂY ---
         cbStoreForm = new JComboBox<>();
         cbStoreForm.setPreferredSize(new Dimension(280, 38));
@@ -350,7 +348,7 @@ public class EmployeeView extends JPanel {
         tblEmployees = new JTable(tableModel);
 
         // Ẩn cột RawId (Bây giờ RawId đã bị đẩy xuống vị trí số 9 do thêm cột Chi nhánh)
-        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(9)); 
+        tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(9));
 
         setupTableStyle();
 
@@ -397,7 +395,7 @@ public class EmployeeView extends JPanel {
                 txtId.setText(maskSensitiveInfo(currentSelectedRawId));
 
                 txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_NAME)));
-                
+
                 String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, COL_STORE));
                 cbStoreForm.setSelectedIndex(-1);
 
@@ -735,6 +733,7 @@ public class EmployeeView extends JPanel {
             updateTable(filtered);
         });
     }
+
     private Employee getEmployeeFromForm() {
         String name = txtName.getText().trim();
         String phone = txtPhone.getText().trim();
@@ -824,12 +823,12 @@ public class EmployeeView extends JPanel {
         tblEmployees.clearSelection();
 
         ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
-        
+
         // --- BỔ SUNG: Xóa lựa chọn Chi nhánh ---
         if (cbStoreForm != null) {
             cbStoreForm.setSelectedIndex(-1);
         }
-        
+
         // --- ĐÃ SỬA THEO BƯỚC 4: Reset ComboBox Chức vụ liền mạch ---
         if (cbRole != null) {
             cbRole.setSelectedIndex(-1);
@@ -1302,9 +1301,16 @@ public class EmployeeView extends JPanel {
             if (isSelected) {
                 setBackground(selectedBg);
                 setForeground(textDark);
+            } else if (isCurrentUserRow && isManagerRow) {
+                // Manager hiện tại đang đăng nhập
+                setBackground(currentUserBg);
+                setForeground(new Color(0, 120, 70));
+            } else if (isManagerRow) {
+                // Các dòng Manager khác
+                setBackground(managerBg);
+                setForeground(new Color(25, 135, 84));
             } else {
-                // Không tô màu riêng cho Admin/Manager/Current User nữa
-                // để tránh cả dòng bị xanh/đỏ gây rối mắt.
+                // Admin và Staff giữ màu bình thường
                 setBackground(row % 2 == 0 ? normalBg : zebraBg);
                 setForeground(Color.BLACK);
             }
