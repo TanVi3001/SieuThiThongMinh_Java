@@ -8,7 +8,7 @@ REM ==========================================================
 
 set CONTAINER_NAME=supermarket-oracle
 set ORACLE_USER=system
-set ORACLE_PASSWORD=123456
+set ORACLE_PASSWORD=Admin123
 set ORACLE_SERVICE=FREEPDB1
 
 cd /d "%~dp0.."
