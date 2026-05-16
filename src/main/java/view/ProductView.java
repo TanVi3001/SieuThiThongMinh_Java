@@ -106,11 +106,20 @@ private JButton btnChooseImage;
 
     private void loadAutoCompleteData() {
         categoryList.clear();
-        categoryList.add("CAT001 - Thực phẩm khô");
-        categoryList.add("CAT002 - Đồ uống");
-        categoryList.add("CAT003 - Hóa mỹ phẩm");
-        categoryList.add("CAT004 - Bánh kẹo");
-        categoryList.add("CAT005 - Thực phẩm tươi sống");
+        // Load từ DB thay vì hardcode
+        try {
+            List<model.product.Category> cats = business.sql.prod_inventory.CategoriesSql.getInstance().selectAll();
+            for (var c : cats) {
+                categoryList.add(c.getCategoryId() + " - " + c.getCategoryName());
+            }
+        } catch (Exception e) {
+            // fallback hardcode nếu lỗi
+            categoryList.add("CAT001 - Thực phẩm khô");
+            categoryList.add("CAT002 - Đồ uống");
+            categoryList.add("CAT003 - Hóa mỹ phẩm");
+            categoryList.add("CAT004 - Bánh kẹo");
+            categoryList.add("CAT005 - Thực phẩm tươi sống");
+        }
 
         productNameList.clear();
         try {
@@ -118,6 +127,8 @@ private JButton btnChooseImage;
             for (Product p : list) {
                 if (p.getProductName() != null && !p.getProductName().isBlank()) {
                     productNameList.add(p.getProductName().trim());
+                    // Thêm cả mã SP vào gợi ý
+                    productNameList.add(p.getProductId() + " - " + p.getProductName().trim());
                 }
             }
         } catch (Exception e) {
