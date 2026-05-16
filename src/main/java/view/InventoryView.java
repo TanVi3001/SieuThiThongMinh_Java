@@ -94,7 +94,7 @@ public class InventoryView extends JPanel {
         lblOutOfStock = new JLabel("0", SwingConstants.LEFT);
 
         cardsPanel.add(createSummaryCard("Tổng mặt hàng", lblTotalItems, primaryBlue));
-        cardsPanel.add(createSummaryCard("Sắp hết hàng (<10)", lblLowStock, colorWarning));
+        cardsPanel.add(createSummaryCard("Sắp hết hàng (<20)", lblLowStock, colorWarning));
         cardsPanel.add(createSummaryCard("Hết sạch hàng (0)", lblOutOfStock, colorDanger));
 
         centerPanel.add(cardsPanel, BorderLayout.NORTH);
@@ -194,23 +194,35 @@ public class InventoryView extends JPanel {
         // THUẬT TOÁN ĐỔ MÀU CẢNH BÁO TỰ ĐỘNG
         tblInventory.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                
-                // Lấy giá trị cột "Số Lượng Tồn" (Cột số 2)
-                int quantity = Integer.parseInt(table.getModel().getValueAt(row, 2).toString());
-                
-                if (!isSelected) {
-                    if (quantity == 0) {
-                        c.setForeground(colorDanger); // Đỏ nếu hết hàng
-                        c.setFont(c.getFont().deriveFont(Font.BOLD));
-                    } else if (quantity < 10) {
-                        c.setForeground(colorWarning); // Cam nếu sắp hết
-                        c.setFont(c.getFont().deriveFont(Font.BOLD));
-                    } else {
-                        c.setForeground(textDark); // Đen bình thường
-                        c.setFont(c.getFont().deriveFont(Font.PLAIN));
+        
+                try {
+                    int qty = Integer.parseInt(table.getModel().getValueAt(row, 2).toString());
+                    if (!isSelected) {
+                        if (qty == 0) {
+                        // ĐỎ - hết hàng
+                            c.setBackground(new Color(255, 235, 235));
+                            c.setForeground(colorDanger);
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.BOLD));
+                        } else if (qty <= 5) {
+                            // CAM ĐẬM - nguy hiểm (< 5)
+                            c.setBackground(new Color(255, 243, 224));
+                            c.setForeground(new Color(230, 81, 0));
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.BOLD));
+                        } else if (qty <= 20) {
+                            // VÀNG - cảnh báo (< 20)
+                            c.setBackground(new Color(255, 253, 231));
+                            c.setForeground(new Color(245, 127, 23));
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.PLAIN));
+                        } else {
+                            c.setBackground(Color.WHITE);
+                            c.setForeground(textDark);
+                        }
                     }
+                } catch (Exception ex) {
+                    c.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
                 }
                 return c;
             }
