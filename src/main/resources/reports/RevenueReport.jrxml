@@ -22,8 +22,12 @@
     <style name="TableCell" style="Base" fontSize="9"/>
     <style name="Money" style="TableCell" hTextAlign="Right"/>
 
-    <parameter name="FROM_DATE" class="java.util.Date"/>
-    <parameter name="TO_DATE" class="java.util.Date"/>
+    <parameter name="START_DATE" class="java.util.Date"/>
+    <parameter name="END_DATE" class="java.util.Date"/>
+    <parameter name="END_DATE_PLUS_ONE" class="java.util.Date"/>
+    <parameter name="REPORT_TYPE" class="java.lang.String"/>
+    <parameter name="REPORT_TYPE_LABEL" class="java.lang.String"/>
+    <parameter name="PERIOD_HEADER" class="java.lang.String"/>
 
     <queryString language="SQL">
         <![CDATA[
@@ -34,33 +38,59 @@ WITH valid_orders AS (
         NVL(o.total_amount, 0) AS total_amount
     FROM orders o
     WHERE NVL(o.is_deleted, 0) = 0
-      AND UPPER(NVL(o.status, '')) IN ('COMPLETED', 'HOAN THANH', N'HOÀN THÀNH')
-      AND o.order_date >= $P{FROM_DATE}
-      AND o.order_date < ($P{TO_DATE} + 1)
+      AND (
+          UPPER(NVL(o.status, '')) = 'COMPLETED'
+          OR UPPER(NVL(o.status, '')) = 'HOAN THANH'
+          OR UPPER(NVL(o.status, '')) LIKE N'%HOÀN THÀNH%'
+      )
+      AND o.order_date >= $P{START_DATE}
+      AND o.order_date < $P{END_DATE_PLUS_ONE}
 ),
 detail_totals AS (
     SELECT
         od.order_id,
-        SUM(NVL(od.quantity, 0)) AS products_sold
+        SUM(NVL(od.quantity_base, od.quantity)) AS products_sold
     FROM order_details od
     WHERE NVL(od.is_deleted, 0) = 0
     GROUP BY od.order_id
 ),
-monthly AS (
+grouped_revenue AS (
     SELECT
-        TRUNC(vo.order_date, 'MM') AS month_start,
-        TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY') AS month_label,
+        CASE
+            WHEN $P{REPORT_TYPE} = 'DAY' THEN TRUNC(vo.order_date)
+            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TRUNC(vo.order_date, 'MM')
+            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TRUNC(vo.order_date, 'YYYY')
+            ELSE TRUNC($P{START_DATE})
+        END AS period_start,
+        CASE
+            WHEN $P{REPORT_TYPE} = 'DAY' THEN TO_CHAR(TRUNC(vo.order_date), 'DD/MM/YYYY')
+            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY')
+            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TO_CHAR(TRUNC(vo.order_date, 'YYYY'), 'YYYY')
+            ELSE 'Toàn kỳ'
+        END AS period_label,
         COUNT(*) AS orders_count,
         SUM(NVL(dt.products_sold, 0)) AS products_sold,
         SUM(vo.total_amount) AS revenue
     FROM valid_orders vo
     LEFT JOIN detail_totals dt
         ON vo.order_id = dt.order_id
-    GROUP BY TRUNC(vo.order_date, 'MM')
+    GROUP BY
+        CASE
+            WHEN $P{REPORT_TYPE} = 'DAY' THEN TRUNC(vo.order_date)
+            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TRUNC(vo.order_date, 'MM')
+            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TRUNC(vo.order_date, 'YYYY')
+            ELSE TRUNC($P{START_DATE})
+        END,
+        CASE
+            WHEN $P{REPORT_TYPE} = 'DAY' THEN TO_CHAR(TRUNC(vo.order_date), 'DD/MM/YYYY')
+            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY')
+            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TO_CHAR(TRUNC(vo.order_date, 'YYYY'), 'YYYY')
+            ELSE 'Toàn kỳ'
+        END
 )
 SELECT
-    month_start,
-    month_label,
+    period_start,
+    period_label,
     orders_count,
     products_sold,
     revenue,
@@ -71,13 +101,13 @@ SELECT
         WHEN SUM(orders_count) OVER () = 0 THEN 0
         ELSE SUM(revenue) OVER () / SUM(orders_count) OVER ()
     END AS avg_order_value
-FROM monthly
-ORDER BY month_start
+FROM grouped_revenue
+ORDER BY period_start
         ]]>
     </queryString>
 
-    <field name="month_start" class="java.util.Date"/>
-    <field name="month_label" class="java.lang.String"/>
+    <field name="period_start" class="java.util.Date"/>
+    <field name="period_label" class="java.lang.String"/>
     <field name="orders_count" class="java.math.BigDecimal"/>
     <field name="products_sold" class="java.math.BigDecimal"/>
     <field name="revenue" class="java.math.BigDecimal"/>
@@ -132,7 +162,7 @@ ORDER BY month_start
                 <textElement>
                     <font size="9"/>
                 </textElement>
-                <text><![CDATA[Tổng quan doanh thu theo tháng]]></text>
+                <text><![CDATA[Tổng quan doanh thu theo kỳ báo cáo]]></text>
             </staticText>
             <staticText>
                 <reportElement x="550" y="18" width="212" height="24" forecolor="#FFFFFF" uuid="530ee471-c96c-418f-bb56-6fb5e8e6e612"/>
@@ -148,7 +178,7 @@ ORDER BY month_start
             </staticText>
             <textField pattern="dd/MM/yyyy">
                 <reportElement style="Base" x="42" y="86" width="84" height="14" uuid="3d814ba0-f6fa-40b8-a4f5-1e9372df2fef"/>
-                <textFieldExpression><![CDATA[$P{FROM_DATE}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$P{START_DATE}]]></textFieldExpression>
             </textField>
             <staticText>
                 <reportElement style="Label" x="148" y="86" width="24" height="14" uuid="a487d559-dc1e-40aa-9f26-31d11cc6eaf5"/>
@@ -156,16 +186,16 @@ ORDER BY month_start
             </staticText>
             <textField pattern="dd/MM/yyyy">
                 <reportElement style="Base" x="174" y="86" width="84" height="14" uuid="5e4b3e42-f9f3-48b7-98cc-78b0ecf18055"/>
-                <textFieldExpression><![CDATA[$P{TO_DATE}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$P{END_DATE}]]></textFieldExpression>
             </textField>
             <staticText>
                 <reportElement style="Label" x="280" y="86" width="72" height="14" uuid="ac171ab4-d9d4-49e2-9368-c1f5e03a3409"/>
                 <text><![CDATA[Nhóm theo:]]></text>
             </staticText>
-            <staticText>
-                <reportElement style="Base" x="352" y="86" width="60" height="14" uuid="ca2024ac-f563-48d2-bec3-06c13cc77a1c"/>
-                <text><![CDATA[Tháng]]></text>
-            </staticText>
+            <textField>
+                <reportElement style="Base" x="352" y="86" width="140" height="14" uuid="ca2024ac-f563-48d2-bec3-06c13cc77a1c"/>
+                <textFieldExpression><![CDATA[$P{REPORT_TYPE_LABEL}]]></textFieldExpression>
+            </textField>
 
             <rectangle radius="6">
                 <reportElement x="0" y="114" width="182" height="58" backcolor="#F0FDFA" uuid="d812a089-b5a3-4d5c-8a48-3870f59727e4"/>
@@ -227,12 +257,12 @@ ORDER BY month_start
 
     <columnHeader>
         <band height="26" splitType="Stretch">
-            <staticText>
+            <textField>
                 <reportElement style="TableHeader" x="0" y="0" width="252" height="24" uuid="74108b03-08cc-4868-a641-f40b86917ec6"/>
                 <box leftPadding="8"/>
                 <textElement verticalAlignment="Middle"/>
-                <text><![CDATA[Tháng]]></text>
-            </staticText>
+                <textFieldExpression><![CDATA[$P{PERIOD_HEADER}]]></textFieldExpression>
+            </textField>
             <staticText>
                 <reportElement style="TableHeader" x="252" y="0" width="130" height="24" uuid="2f31f3a9-0f6b-4718-80ef-91d95e9f9296"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle"/>
@@ -261,7 +291,7 @@ ORDER BY month_start
             <textField>
                 <reportElement style="TableCell" x="0" y="4" width="252" height="15" uuid="043f84ad-84bd-45a0-9200-2c3f8dd58871"/>
                 <box leftPadding="8"/>
-                <textFieldExpression><![CDATA[$F{month_label}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$F{period_label}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
                 <reportElement style="TableCell" x="252" y="4" width="130" height="15" uuid="81e3ba2c-7997-4a56-90e0-18ac261ae3d6"/>
