@@ -445,6 +445,41 @@ public class ProductsSql {
         return null;
     }
 
+    public Product findByExactNameAndCategory(String name, String categoryId) {
+        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, i.store_id, i.quantity, i.unit "
+                + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
+                + "WHERE p.is_deleted = 0 "
+                + "AND LOWER(TRIM(p.product_name)) = LOWER(TRIM(?)) "
+                + "AND TRIM(p.category_id) = TRIM(?) "
+                + "FETCH FIRST 1 ROWS ONLY";
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, name != null ? name.trim() : "");
+            ps.setString(2, categoryId != null ? categoryId.trim() : "");
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Product p = new Product();
+                    p.setProductId(rs.getString("product_id"));
+                    p.setProductName(rs.getString("product_name"));
+                    p.setBasePrice(rs.getBigDecimal("base_price"));
+                    p.setCategoryId(rs.getString("category_id"));
+                    p.setSupplierId(rs.getString("supplier_id"));
+                    try {
+                        p.setStoreId(rs.getString("store_id"));
+                    } catch (Exception e) {
+                    }
+                    p.setQuantity(rs.getInt("quantity"));
+                    try {
+                        p.setUnit(rs.getString("unit"));
+                    } catch (Exception e) {
+                    }
+                    return p;
+                }
+            }
+        } catch (SQLException e) {
+        }
+        return null;
+    }
+
     public boolean addQuantity(String productId, int addedQuantity, String storeId) {
         if (storeId == null || storeId.trim().isEmpty()) {
             storeId = "ST001";
