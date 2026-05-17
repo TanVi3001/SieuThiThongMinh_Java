@@ -1,6 +1,7 @@
 package view.components;
 
 import business.sql.sales_order.StatisticSql;
+import business.service.AuthorizationService;
 import common.db.DatabaseConnection;
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
@@ -182,6 +183,7 @@ public class TongQuanPanel extends JPanel {
         bottomPanel.add(statsPanel);
         bottomPanel.add(createOrderTablePanel());
         add(bottomPanel);
+        
     }
 
     // =============================================

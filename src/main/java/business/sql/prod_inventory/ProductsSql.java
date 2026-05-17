@@ -92,7 +92,10 @@ public class ProductsSql {
                 p.setBasePrice(rs.getBigDecimal("base_price"));
                 p.setCategoryId(rs.getString("category_id"));
                 p.setSupplierId(rs.getString("supplier_id"));
-                try { p.setImagePath(rs.getString("image_path")); } catch (Exception ignored) {}
+                try {
+                    p.setImagePath(rs.getString("image_path"));
+                } catch (Exception ignored) {
+                }
 
                 try {
                     p.setStoreId(rs.getString("store_id"));
@@ -402,8 +405,14 @@ public class ProductsSql {
                     p.setCategoryId(rs.getString("category_id"));
                     p.setSupplierId(rs.getString("supplier_id"));
                     p.setImagePath(rs.getString("image_path"));
-                    try { p.setStoreId(rs.getString("store_id")); } catch (Exception ignored) {}
-                    try { p.setUnit(rs.getString("unit")); } catch (Exception ignored) {}
+                    try {
+                        p.setStoreId(rs.getString("store_id"));
+                    } catch (Exception ignored) {
+                    }
+                    try {
+                        p.setUnit(rs.getString("unit"));
+                    } catch (Exception ignored) {
+                    }
                     p.setQuantity(rs.getInt("quantity"));
                     return p;
                 }
@@ -471,15 +480,74 @@ public class ProductsSql {
     }
 
     public String generateNextProductId() {
-        String sql = "SELECT MAX(product_id) FROM PRODUCTS WHERE product_id LIKE 'SP%'";
+        String sql = """
+        SELECT NVL(MAX(TO_NUMBER(SUBSTR(product_id, 3))), 0) + 1 AS next_num
+        FROM PRODUCTS
+        WHERE REGEXP_LIKE(product_id, '^SP[0-9]+$')
+    """;
+
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-            if (rs.next() && rs.getString(1) != null) {
-                int num = Integer.parseInt(rs.getString(1).substring(2));
-                return String.format("SP%07d", num + 1);
+
+            if (rs.next()) {
+                int nextNum = rs.getInt("next_num");
+                return String.format("SP%07d", nextNum);
             }
+
         } catch (Exception e) {
+            e.printStackTrace();
         }
+
         return "SP0000001";
+    }
+
+    public Product findByExactNameAndCategory(String name, String categoryId) {
+        String sql = """
+        SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id,
+               i.store_id, i.quantity, i.unit
+        FROM PRODUCTS p
+        LEFT JOIN INVENTORY i 
+            ON p.product_id = i.product_id 
+            AND NVL(i.is_deleted, 0) = 0
+        WHERE NVL(p.is_deleted, 0) = 0
+          AND LOWER(TRIM(p.product_name)) = LOWER(TRIM(?))
+          AND TRIM(p.category_id) = TRIM(?)
+        FETCH FIRST 1 ROWS ONLY
+    """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, name);
+            ps.setString(2, categoryId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Product p = new Product();
+                    p.setProductId(rs.getString("product_id"));
+                    p.setProductName(rs.getString("product_name"));
+                    p.setBasePrice(rs.getBigDecimal("base_price"));
+                    p.setCategoryId(rs.getString("category_id"));
+                    p.setSupplierId(rs.getString("supplier_id"));
+
+                    try {
+                        p.setStoreId(rs.getString("store_id"));
+                    } catch (Exception ignored) {
+                    }
+
+                    try {
+                        p.setUnit(rs.getString("unit"));
+                    } catch (Exception ignored) {
+                    }
+
+                    p.setQuantity(rs.getInt("quantity"));
+                    return p;
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
     }
 
     // ===== helpers =====
