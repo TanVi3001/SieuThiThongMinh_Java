@@ -8,6 +8,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import view.components.IconHelper;
 
 public class InventoryView extends JPanel {
 
@@ -93,7 +94,7 @@ public class InventoryView extends JPanel {
         lblOutOfStock = new JLabel("0", SwingConstants.LEFT);
 
         cardsPanel.add(createSummaryCard("Tổng mặt hàng", lblTotalItems, primaryBlue));
-        cardsPanel.add(createSummaryCard("Sắp hết hàng (<10)", lblLowStock, colorWarning));
+        cardsPanel.add(createSummaryCard("Sắp hết hàng (<20)", lblLowStock, colorWarning));
         cardsPanel.add(createSummaryCard("Hết sạch hàng (0)", lblOutOfStock, colorDanger));
 
         centerPanel.add(cardsPanel, BorderLayout.NORTH);
@@ -107,9 +108,9 @@ public class InventoryView extends JPanel {
         JPanel tableToolsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         tableToolsPanel.setOpaque(false);
         
-        btnInbound = createCustomButton("Nhập Kho", colorSuccess, Color.WHITE);
-        btnOutbound = createCustomButton("Xuất / Hủy", colorDanger, Color.WHITE);
-        btnAuditLog = createCustomButton("Lịch sử biến động", textGray, Color.WHITE);
+        btnInbound  = createCustomButton("Nhập Kho", colorSuccess, Color.WHITE, IconHelper.add(20));
+        btnOutbound = createCustomButton("Xuất / Hủy", colorDanger,  Color.WHITE, IconHelper.delete(20));
+        btnAuditLog = createCustomButton("Lịch sử biến động", textGray,     Color.WHITE, IconHelper.history(20));
         
         tableToolsPanel.add(btnInbound);
         tableToolsPanel.add(btnOutbound);
@@ -155,7 +156,7 @@ public class InventoryView extends JPanel {
         return card;
     }
 
-    private JButton createCustomButton(String text, Color bg, Color fg) {
+    private JButton createCustomButton(String text, Color bg, Color fg, ImageIcon icon) {
         JButton btn = new JButton(text) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -168,6 +169,10 @@ public class InventoryView extends JPanel {
             }
         };
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        if (icon != null) {
+            btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18,18,Image.SCALE_SMOOTH)));
+            btn.setIconTextGap(8);
+        }
         btn.setForeground(fg);
         btn.setPreferredSize(new Dimension(140, 38));
         btn.setContentAreaFilled(false);
@@ -189,23 +194,35 @@ public class InventoryView extends JPanel {
         // THUẬT TOÁN ĐỔ MÀU CẢNH BÁO TỰ ĐỘNG
         tblInventory.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                
-                // Lấy giá trị cột "Số Lượng Tồn" (Cột số 2)
-                int quantity = Integer.parseInt(table.getModel().getValueAt(row, 2).toString());
-                
-                if (!isSelected) {
-                    if (quantity == 0) {
-                        c.setForeground(colorDanger); // Đỏ nếu hết hàng
-                        c.setFont(c.getFont().deriveFont(Font.BOLD));
-                    } else if (quantity < 10) {
-                        c.setForeground(colorWarning); // Cam nếu sắp hết
-                        c.setFont(c.getFont().deriveFont(Font.BOLD));
-                    } else {
-                        c.setForeground(textDark); // Đen bình thường
-                        c.setFont(c.getFont().deriveFont(Font.PLAIN));
+        
+                try {
+                    int qty = Integer.parseInt(table.getModel().getValueAt(row, 2).toString());
+                    if (!isSelected) {
+                        if (qty == 0) {
+                        // ĐỎ - hết hàng
+                            c.setBackground(new Color(255, 235, 235));
+                            c.setForeground(colorDanger);
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.BOLD));
+                        } else if (qty <= 5) {
+                            // CAM ĐẬM - nguy hiểm (< 5)
+                            c.setBackground(new Color(255, 243, 224));
+                            c.setForeground(new Color(230, 81, 0));
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.BOLD));
+                        } else if (qty <= 20) {
+                            // VÀNG - cảnh báo (< 20)
+                            c.setBackground(new Color(255, 253, 231));
+                            c.setForeground(new Color(245, 127, 23));
+                            ((JLabel)c).setFont(((JLabel)c).getFont().deriveFont(Font.PLAIN));
+                        } else {
+                            c.setBackground(Color.WHITE);
+                            c.setForeground(textDark);
+                        }
                     }
+                } catch (Exception ex) {
+                    c.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
                 }
                 return c;
             }

@@ -3,6 +3,7 @@ package view;
 import javax.swing.*;
 import java.awt.*;
 import view.components.WarehouseSidebar;
+import view.components.NotificationBell;
 
 public class WarehouseDashboardView extends JFrame {
 
@@ -64,6 +65,13 @@ public class WarehouseDashboardView extends JFrame {
         mainContentPanel = new JPanel(new BorderLayout());
         mainContentPanel.setBackground(bgWarehouse);
 
+        JPanel topBar = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 15, 5));
+        topBar.setBackground(java.awt.Color.WHITE);
+        topBar.setBorder(javax.swing.BorderFactory.createMatteBorder(0, 0, 1, 0, new java.awt.Color(230, 230, 230)));
+        NotificationBell bell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
+        topBar.add(bell);
+        this.getContentPane().add(topBar, java.awt.BorderLayout.NORTH);
+        
         this.getContentPane().add(warehouseSidebar, BorderLayout.WEST);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
