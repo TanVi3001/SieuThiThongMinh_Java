@@ -1,191 +1,155 @@
 package view.components;
 
-import business.service.AuthorizationService;
-import com.formdev.flatlaf.FlatLightLaf;
-import javax.swing.*;
-import javax.swing.border.MatteBorder;
-import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.util.ArrayList;
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
 import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 
 public class Sidebar extends JPanel {
 
-    private final List<MenuItem> menuItems;
+    private static final int SIDEBAR_WIDTH = 310;
+    private static final Color SIDEBAR_BG = ModernSidebarMenuItem.WHITE;
+    private static final Color APP_BG = new Color(247, 249, 253);
+    private static final Color NAVY = ModernSidebarMenuItem.NAVY;
+    private static final Color TEXT_MUTED = new Color(95, 111, 143);
+    private static final Color BORDER = ModernSidebarMenuItem.BORDER;
+    private static final Color ORANGE = ModernSidebarMenuItem.PRIMARY_ORANGE;
+
+    private final List<ModernSidebarMenuItem> menuItems;
     private final JPanel menuPanel;
     private final String userRole;
+    private MenuClickListener listener;
 
     public Sidebar(String userRole) {
         this.userRole = userRole;
         this.menuItems = new ArrayList<>();
 
         setLayout(new BorderLayout());
+        setOpaque(false);
+        setPreferredSize(new Dimension(SIDEBAR_WIDTH, 0));
+        setMinimumSize(new Dimension(SIDEBAR_WIDTH, 0));
+        setMaximumSize(new Dimension(SIDEBAR_WIDTH, Integer.MAX_VALUE));
+        setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 8));
 
-        // --- CHÌA KHÓA FIX LỖI Ở ĐÂY ---
-        setPreferredSize(new Dimension(260, 0));
-        setMinimumSize(new Dimension(260, 0));
-        setMaximumSize(new Dimension(260, Integer.MAX_VALUE));
-        // -------------------------------
+        add(createBrandingPanel(), BorderLayout.NORTH);
 
-        setBackground(Color.WHITE);
-        setBorder(new MatteBorder(0, 0, 0, 1, new Color(230, 230, 230)));
-
-        // 1) Branding (Top)
-        JPanel brandingPanel = new JPanel();
-        brandingPanel.setLayout(new BoxLayout(brandingPanel, BoxLayout.Y_AXIS));
-        brandingPanel.setBackground(Color.WHITE);
-        brandingPanel.setBorder(BorderFactory.createEmptyBorder(25, 20, 25, 20));
-
-        JLabel appName = new JLabel("Smart Supermarket");
-        appName.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        appName.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel subtitle = new JLabel("Management System");
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        subtitle.setForeground(new Color(120, 120, 120));
-        subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        brandingPanel.add(appName);
-        brandingPanel.add(Box.createRigidArea(new Dimension(0, 4)));
-        brandingPanel.add(subtitle);
-
-        // 2) Menu (Center)
         menuPanel = new JPanel();
+        menuPanel.setOpaque(false);
         menuPanel.setLayout(new BoxLayout(menuPanel, BoxLayout.Y_AXIS));
-        menuPanel.setBackground(Color.WHITE);
-        menuPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+        menuPanel.setBorder(BorderFactory.createEmptyBorder(18, 24, 12, 24));
 
-        // Khai báo các quyền
         boolean isSale = "R_STAFF_SALE".equalsIgnoreCase(userRole);
         boolean isManagerOrAdmin = "R_ADMIN_ALL".equalsIgnoreCase(userRole) || "R_STORE_MNG".equalsIgnoreCase(userRole);
 
-        // Ai cũng thấy Tổng quan
-        addMenuItem("Tổng quan", IconHelper.dashboard(20));
-
-        // CHỈ STAFF SALE MỚI THẤY NÚT BÁN HÀNG (Dùng Icon Cart hoặc Barcode)
+        addMenuItem("Tổng quan", IconHelper.dashboard(24));
         if (isSale) {
-            addMenuItem("Bán hàng", IconHelper.product(20));
+            addMenuItem("Bán hàng", IconHelper.order(24));
         }
-
-        // Ai cũng thấy Sản phẩm (Dùng Icon Box/Inventory)
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(20));
-
-        // Chỉ Manager/Admin thấy Nhân sự
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
         if (isManagerOrAdmin) {
-            addMenuItem("Quản lý nhân viên", IconHelper.employee(20));
+            addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
         }
-
-        // Ai cũng thấy Khách hàng & Hóa đơn
-        addMenuItem("Khách hàng", IconHelper.customer(20));
-        addMenuItem("Hóa đơn", IconHelper.bill(20));
-
-        // Chỉ Manager/Admin thấy Thống kê
+        addMenuItem("Khách hàng", IconHelper.customer(24));
+        addMenuItem("Hóa đơn", IconHelper.bill(24));
         if (isManagerOrAdmin) {
-            addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(20));
+            addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
         }
-
-        addMenuItem("Cài đặt", IconHelper.settings(20));
+        addMenuItem("Cài đặt", IconHelper.settings(24));
 
         JScrollPane scrollPane = new JScrollPane(menuPanel);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
         scrollPane.setBorder(null);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
-        // 3) Bottom (Logout)
-        JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBackground(Color.WHITE);
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 20, 20));
-
-        // GẮN ICON ĐĂNG XUẤT
-        MenuItem logoutItem = new MenuItem("Đăng xuất", IconHelper.logout(20), () -> {
-            if (listener != null) {
-                listener.onMenuClick("Đăng xuất");
-            }
-        });
-        logoutItem.setFramed(true);
-        bottomPanel.add(logoutItem, BorderLayout.CENTER);
-
-        add(brandingPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
-        add(bottomPanel, BorderLayout.SOUTH);
+        add(createBottomPanel(), BorderLayout.SOUTH);
 
         if (!menuItems.isEmpty()) {
             menuItems.get(0).setActive(true);
         }
     }
 
-    // Trong lớp Sidebar.java, tạo một hàm buildMenuItem
-    private JPanel createMenuItem(String title, String iconPath, boolean isActive) {
-        JPanel itemPanel = new JPanel(new BorderLayout(15, 0)); // Gap giữa Icon và Text là 15px
-        itemPanel.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20)); // Căn lề chuẩn
-        itemPanel.setOpaque(true);
+    private JPanel createBrandingPanel() {
+        JPanel brandingPanel = new JPanel(new BorderLayout(16, 0));
+        brandingPanel.setOpaque(false);
+        brandingPanel.setBorder(BorderFactory.createEmptyBorder(28, 28, 24, 24));
 
-        // Bo góc nhẹ cho item
-        itemPanel.putClientProperty("FlatLaf.style", "arc: 12");
+        JLabel logo = new JLabel(new CartLogoIcon(48));
+        logo.setPreferredSize(new Dimension(52, 52));
+        brandingPanel.add(logo, BorderLayout.WEST);
 
-        JLabel lblIcon = new JLabel(new ImageIcon(iconPath));
-        JLabel lblTitle = new JLabel(title);
-        lblTitle.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+        JPanel textPanel = new JPanel();
+        textPanel.setOpaque(false);
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
 
-        itemPanel.add(lblIcon, BorderLayout.WEST);
-        itemPanel.add(lblTitle, BorderLayout.CENTER);
+        JLabel appName = new JLabel("Smart Supermarket");
+        appName.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        appName.setForeground(NAVY);
+        appName.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Xử lý Active và Normal state
-        Color activeColor = new Color(230, 235, 255); // Xanh nhạt highlight
-        Color hoverColor = new Color(240, 240, 240); // Xám nhạt khi hover
-        Color defaultColor = Color.WHITE; // Màu nền Sidebar
+        JLabel subtitle = new JLabel("Management System");
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitle.setForeground(TEXT_MUTED);
+        subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        if (isActive) {
-            itemPanel.setBackground(activeColor);
-            lblTitle.setForeground(new Color(40, 90, 255)); // Đổi màu chữ xanh
-        } else {
-            itemPanel.setBackground(defaultColor);
-            lblTitle.setForeground(new Color(80, 80, 80));
-        }
+        textPanel.add(Box.createVerticalGlue());
+        textPanel.add(appName);
+        textPanel.add(Box.createRigidArea(new Dimension(0, 3)));
+        textPanel.add(subtitle);
+        textPanel.add(Box.createVerticalGlue());
+        brandingPanel.add(textPanel, BorderLayout.CENTER);
 
-        // Xử lý Hover
-        itemPanel.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                if (!isActive) {
-                    itemPanel.setBackground(hoverColor);
-                }
-            }
+        return brandingPanel;
+    }
 
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                if (!isActive) {
-                    itemPanel.setBackground(defaultColor);
-                }
-            }
+    private JPanel createBottomPanel() {
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setOpaque(false);
+        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(4, 24, 28, 24));
 
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                // Cập nhật lại toàn bộ Sidebar để đổi isActive, sau đó gọi callback
-                // menuClickListener.onMenuClick(title);
+        SidebarWatermarkPanel watermark = new SidebarWatermarkPanel();
+        watermark.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bottomPanel.add(watermark);
+        bottomPanel.add(Box.createRigidArea(new Dimension(0, 12)));
+
+        ModernSidebarMenuItem logoutItem = new ModernSidebarMenuItem("Đăng xuất", IconHelper.logout(24), () -> {
+            if (listener != null) {
+                listener.onMenuClick("Đăng xuất");
             }
         });
+        logoutItem.setFramed(true);
+        logoutItem.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bottomPanel.add(logoutItem);
 
-        return itemPanel;
+        return bottomPanel;
     }
 
-    public interface MenuClickListener {
-
-        void onMenuClick(String title);
-    }
-
-    private MenuClickListener listener;
-
-    public void setMenuClickListener(MenuClickListener listener) {
-        this.listener = listener;
-    }
-
-    // Đã cập nhật hàm này để nhận thêm tham số ImageIcon
     private void addMenuItem(final String title, ImageIcon icon) {
-        final MenuItem[] itemHolder = new MenuItem[1];
-        MenuItem item = new MenuItem(title, icon, () -> {
-            for (MenuItem m : menuItems) {
-                m.setActive(false);
+        final ModernSidebarMenuItem[] itemHolder = new ModernSidebarMenuItem[1];
+        ModernSidebarMenuItem item = new ModernSidebarMenuItem(title, icon, () -> {
+            for (ModernSidebarMenuItem menuItem : menuItems) {
+                menuItem.setActive(false);
             }
             itemHolder[0].setActive(true);
             if (listener != null) {
@@ -193,183 +157,125 @@ public class Sidebar extends JPanel {
             }
         });
         itemHolder[0] = item;
+        item.setAlignmentX(Component.LEFT_ALIGNMENT);
         menuItems.add(item);
         menuPanel.add(item);
-        menuPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        menuPanel.add(Box.createRigidArea(new Dimension(0, 12)));
     }
 
-    // =========================================================
-    // INNER CLASS: ĐỊNH NGHĨA LẠI THẺ MENU CÓ HỖ TRỢ ICON
-    // =========================================================
-    class MenuItem extends JPanel {
+    public void setMenuClickListener(MenuClickListener listener) {
+        this.listener = listener;
+    }
 
-        private String title;
-        private ImageIcon icon;
-        private boolean isActive = false;
-        private boolean isHovered = false;
-        private boolean isFramed = false;
+    public interface MenuClickListener {
+        void onMenuClick(String title);
+    }
 
-        private final Color COLOR_ACTIVE_BG = new Color(237, 242, 255);
-        private final Color COLOR_ACTIVE_TEXT = new Color(43, 54, 116);
-        private final Color COLOR_ACTIVE_LINE = new Color(67, 97, 238);
+    @Override
+    protected void paintComponent(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(APP_BG);
+        g2.fillRect(0, 0, getWidth(), getHeight());
 
-        private final Color COLOR_INACTIVE_BG = Color.WHITE;
-        private final Color COLOR_INACTIVE_TEXT = new Color(112, 126, 174);
-        private final Color COLOR_HOVER_BG = new Color(248, 249, 252);
-
-        private final Color COLOR_LOGOUT_BG = new Color(220, 53, 69);
-        private final Color COLOR_LOGOUT_HOVER = new Color(200, 35, 51);
-
-        public MenuItem(String title, ImageIcon icon, Runnable onClickAction) {
-            this.title = title;
-            this.icon = icon;
-            setLayout(new BorderLayout());
-
-            setPreferredSize(new Dimension(260, 45));
-            setMinimumSize(new Dimension(260, 45));
-            setMaximumSize(new Dimension(260, 45));
-
-            setOpaque(false);
-            setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    isHovered = true;
-                    repaint();
-                }
-
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    isHovered = false;
-                    repaint();
-                }
-
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    if (onClickAction != null) {
-                        onClickAction.run();
-                    }
-                }
-            });
+        int x = 6;
+        int y = 4;
+        int w = getWidth() - 14;
+        int h = getHeight() - 8;
+        for (int i = 5; i >= 1; i--) {
+            g2.setColor(new Color(23, 52, 99, 4 + i));
+            g2.fillRoundRect(x + i, y + i, w - i * 2, h - i * 2, 24, 24);
         }
+        g2.setColor(SIDEBAR_BG);
+        g2.fillRoundRect(x, y, w, h, 24, 24);
+        g2.setColor(BORDER);
+        g2.setStroke(new BasicStroke(1f));
+        g2.drawRoundRect(x, y, w - 1, h - 1, 24, 24);
+        g2.dispose();
+        super.paintComponent(g);
+    }
 
-        public void setActive(boolean active) {
-            this.isActive = active;
-            repaint();
-        }
+    private static class CartLogoIcon implements javax.swing.Icon {
+        private final int size;
 
-        public void setFramed(boolean framed) {
-            this.isFramed = framed;
-            repaint();
+        CartLogoIcon(int size) {
+            this.size = size;
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
+        public int getIconWidth() {
+            return size;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return size;
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            int w = getWidth();
-            int h = getHeight();
-
-            if (isFramed) {
-                // --- VẼ NÚT LOGOUT ĐỎ ---
-                g2.setColor(isHovered ? COLOR_LOGOUT_HOVER : COLOR_LOGOUT_BG);
-                g2.fillRoundRect(0, 0, w, h, 15, 15);
-
-                g2.setColor(Color.WHITE);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
-                FontMetrics fm = g2.getFontMetrics();
-
-                int iconWidth = (icon != null) ? icon.getIconWidth() + 10 : 0;
-                int totalWidth = iconWidth + fm.stringWidth(title);
-                int startX = (w - totalWidth) / 2;
-
-                if (icon != null) {
-                    icon.paintIcon(this, g2, startX, (h - icon.getIconHeight()) / 2);
-                    startX += iconWidth;
-                }
-
-                int textY = ((h - fm.getHeight()) / 2) + fm.getAscent();
-                g2.drawString(title, startX, textY);
-
-            } else {
-                // --- VẼ THẺ MENU BÌNH THƯỜNG ---
-                if (isActive) {
-                    g2.setColor(COLOR_ACTIVE_BG);
-                    g2.fillRect(0, 0, w, h);
-
-                    g2.setColor(COLOR_ACTIVE_LINE);
-                    g2.fillRoundRect(0, 5, 4, h - 10, 4, 4);
-
-                    g2.setColor(COLOR_ACTIVE_TEXT);
-                    g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
-                } else {
-                    g2.setColor(isHovered ? COLOR_HOVER_BG : COLOR_INACTIVE_BG);
-                    g2.fillRect(0, 0, w, h);
-
-                    g2.setColor(COLOR_INACTIVE_TEXT);
-                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-                }
-
-                int iconX = 25;
-                int textX = 60;
-
-                if (icon != null) {
-                    icon.paintIcon(this, g2, iconX, (h - icon.getIconHeight()) / 2);
-                }
-
-                FontMetrics fm = g2.getFontMetrics();
-                int textY = ((h - fm.getHeight()) / 2) + fm.getAscent();
-                g2.drawString(title, textX, textY);
-            }
+            g2.setColor(new Color(255, 106, 0, 24));
+            g2.fillRoundRect(x + 3, y + 3, size - 6, size - 6, 16, 16);
+            g2.setColor(ORANGE);
+            g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            int bx = x + 11;
+            int by = y + 16;
+            g2.drawLine(bx, by, bx + 5, by + 20);
+            g2.drawLine(bx + 5, by + 20, bx + 26, by + 20);
+            g2.drawLine(bx + 9, by + 6, bx + 30, by + 6);
+            g2.drawLine(bx + 30, by + 6, bx + 25, by + 19);
+            g2.drawLine(bx + 11, by + 10, bx + 24, by + 10);
+            g2.drawLine(bx + 13, by + 15, bx + 22, by + 15);
+            g2.fillOval(bx + 7, by + 25, 5, 5);
+            g2.fillOval(bx + 24, by + 25, 5, 5);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            FontMetrics fm = g2.getFontMetrics();
+            String mark = "K";
+            g2.drawString(mark, bx + 18 - fm.stringWidth(mark) / 2, by + 17);
             g2.dispose();
         }
     }
 
-//    private void handleCloseApp() {
-//        int confirm = JOptionPane.showConfirmDialog(
-//                this,
-//                "Bạn có chắc muốn thoát ứng dụng?",
-//                "Xác nhận thoát",
-//                JOptionPane.YES_NO_OPTION
-//        );
-//
-//        if (confirm != JOptionPane.YES_OPTION) {
-//            return;
-//        }
-//
-//        try {
-//            model.account.Account currentUser
-//                    = business.service.SessionManager.getCurrentUser();
-//
-//            String sessionId
-//                    = business.service.SessionManager.getCurrentSessionId();
-//
-//            if (currentUser != null
-//                    && currentUser.getAccountId() != null
-//                    && sessionId != null) {
-//
-//                if (business.service.HeartbeatService.markLogoutOnce()) {
-//                    business.service.HeartbeatService.stop();
-//
-//                    business.service.AccountService.onLogoutOrCloseApp(
-//                            currentUser.getAccountId(),
-//                            sessionId
-//                    );
-//                }
-//            }
-//
-//        } catch (Exception ex) {
-//            System.err.println("[CloseApp] Không thể cập nhật session: " + ex.getMessage());
-//        }
-//
-//        java.awt.Window window = SwingUtilities.getWindowAncestor(this);
-//
-//        if (window != null) {
-//            window.dispose();
-//        }
-//
-//        System.exit(0);
-//    }
+    private static class SidebarWatermarkPanel extends JPanel {
+        SidebarWatermarkPanel() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(260, 124));
+            setMinimumSize(new Dimension(220, 100));
+            setMaximumSize(new Dimension(Integer.MAX_VALUE, 124));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setComposite(AlphaComposite.SrcOver.derive(0.13f));
+            int baseY = getHeight() - 18;
+            g2.setColor(new Color(95, 111, 143));
+            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(154, baseY, 188, baseY);
+            g2.drawRoundRect(88, baseY - 34, 74, 34, 8, 8);
+            g2.drawLine(80, baseY - 48, 92, baseY - 34);
+            g2.drawLine(100, baseY - 26, 154, baseY - 26);
+            g2.drawLine(104, baseY - 17, 150, baseY - 17);
+            g2.fillOval(102, baseY + 4, 7, 7);
+            g2.fillOval(145, baseY + 4, 7, 7);
+
+            g2.setColor(ORANGE);
+            g2.fillOval(110, baseY - 29, 12, 12);
+            g2.fillOval(128, baseY - 31, 14, 14);
+            g2.fillOval(144, baseY - 27, 11, 11);
+
+            g2.setColor(new Color(95, 111, 143));
+            g2.drawLine(200, baseY, 200, baseY - 58);
+            g2.drawLine(200, baseY - 42, 184, baseY - 56);
+            g2.drawLine(200, baseY - 34, 218, baseY - 48);
+            g2.drawLine(200, baseY - 22, 184, baseY - 34);
+            g2.drawOval(176, baseY - 64, 18, 10);
+            g2.drawOval(212, baseY - 56, 18, 10);
+            g2.dispose();
+        }
+    }
 }
