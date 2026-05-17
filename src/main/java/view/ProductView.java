@@ -57,6 +57,7 @@ public class ProductView extends JPanel {
     private JTable tblProducts;
     private DefaultTableModel tableModel;
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch, btnExportPDF, btnUnitConfig, btnImport, btnEmergencyAlert;
+    private JPanel productToolPanel;
 
     private RoundedPanel formCard;
     private JPanel tabContentPanel;
@@ -210,8 +211,8 @@ public class ProductView extends JPanel {
         titlePanel.add(lblTitle);
         titlePanel.add(lblSub);
 
-        JPanel toolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
-        toolPanel.setOpaque(false);
+        productToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        productToolPanel.setOpaque(false);
 
         cbSearch = new JComboBox<>();
         styleSearchBox(cbSearch, "Nhập tên sản phẩm để tìm...");
@@ -235,14 +236,13 @@ public class ProductView extends JPanel {
         btnEmergencyAlert = createCustomButton("Báo hết hàng", new Color(220, 53, 69), Color.WHITE, null);
         btnEmergencyAlert.setVisible(false);
 
-        toolPanel.add(searchFieldWrapper);
-        toolPanel.add(btnSearch);
-        toolPanel.add(btnExportPDF);
-        toolPanel.add(btnEmergencyAlert);
-        toolPanel.add(btnImport);
+        productToolPanel.add(searchFieldWrapper);
+        productToolPanel.add(btnSearch);
+        productToolPanel.add(btnExportPDF);
+        productToolPanel.add(btnEmergencyAlert);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(toolPanel, BorderLayout.EAST);
+        headerPanel.add(productToolPanel, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new BorderLayout(0, 15));
@@ -481,6 +481,10 @@ public class ProductView extends JPanel {
 
         currentProductTab = tab;
 
+        if (productToolPanel != null) {
+            productToolPanel.setVisible("DETAIL".equals(tab));
+        }
+
         if (tabContentPanel != null) {
             CardLayout cl = (CardLayout) tabContentPanel.getLayout();
             cl.show(tabContentPanel, tab);
@@ -490,13 +494,18 @@ public class ProductView extends JPanel {
             boolean active = "OVERVIEW".equals(tab);
             btnOverviewTab.setBackground(active ? primaryBlue : Color.WHITE);
             btnOverviewTab.setForeground(active ? Color.WHITE : textDark);
+            btnOverviewTab.repaint();
         }
 
         if (btnDetailTab != null) {
             boolean active = "DETAIL".equals(tab);
             btnDetailTab.setBackground(active ? primaryBlue : Color.WHITE);
             btnDetailTab.setForeground(active ? Color.WHITE : textDark);
+            btnDetailTab.repaint();
         }
+
+        revalidate();
+        repaint();
     }
 
     private JPanel buildCategorySection() {
