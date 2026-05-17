@@ -59,6 +59,20 @@ public class ProductView extends JPanel {
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch, btnExportPDF, btnUnitConfig, btnImport, btnEmergencyAlert;
 
     private RoundedPanel formCard;
+    private JPanel tabContentPanel;
+    private JPanel detailPanel;
+    private JPanel overviewPanel;
+    private JButton btnOverviewTab;
+    private JButton btnDetailTab;
+    private String currentProductTab = "DETAIL";
+    private JPanel categoryCardPanel;
+    private JScrollPane categoryScrollPane;
+    private JLabel lblCurrentCategory;
+    private JButton btnShowAllProducts;
+
+    private String selectedCategoryId = null;
+    private final Map<String, String> categoryNameMap = new java.util.LinkedHashMap<>();
+    private final List<Product> cachedProducts = new ArrayList<>();
 
     private List<String> categoryList = new ArrayList<>();
     private List<String> productNameList = new ArrayList<>();
@@ -89,33 +103,95 @@ public class ProductView extends JPanel {
 
     private void loadAutoCompleteData() {
         categoryList.clear();
-        // Load từ DB thay vì hardcode
+        categoryNameMap.clear();
+
         try {
             List<model.product.Category> cats = business.sql.prod_inventory.CategoriesSql.getInstance().selectAll();
-            for (var c : cats) {
-                categoryList.add(c.getCategoryId() + " - " + c.getCategoryName());
+
+            for (model.product.Category c : cats) {
+                String categoryId = c.getCategoryId();
+                String categoryName = c.getCategoryName();
+
+                if (categoryId == null || categoryId.trim().isEmpty()) {
+                    continue;
+                }
+
+                categoryId = categoryId.trim();
+                categoryName = categoryName == null ? "" : categoryName.trim();
+
+                categoryNameMap.put(categoryId, categoryName);
+                categoryList.add(categoryId + " - " + categoryName);
             }
         } catch (Exception e) {
-            // fallback hardcode nếu lỗi
+            categoryNameMap.put("CAT001", "Thực phẩm khô");
+            categoryNameMap.put("CAT002", "Đồ uống");
+            categoryNameMap.put("CAT003", "Hóa mỹ phẩm");
+            categoryNameMap.put("CAT004", "Bánh kẹo");
+            categoryNameMap.put("CAT005", "Thực phẩm tươi sống");
+
             categoryList.add("CAT001 - Thực phẩm khô");
             categoryList.add("CAT002 - Đồ uống");
             categoryList.add("CAT003 - Hóa mỹ phẩm");
             categoryList.add("CAT004 - Bánh kẹo");
             categoryList.add("CAT005 - Thực phẩm tươi sống");
         }
+        sortCategoryNameMap();
 
         productNameList.clear();
+
         try {
             List<Product> list = ProductsSql.getInstance().selectAll();
+
             for (Product p : list) {
                 if (p.getProductName() != null && !p.getProductName().isBlank()) {
                     productNameList.add(p.getProductName().trim());
-                    // Thêm cả mã SP vào gợi ý
                     productNameList.add(p.getProductId() + " - " + p.getProductName().trim());
+                }
+
+                String categoryId = p.getCategoryId();
+                if (categoryId != null && !categoryId.trim().isEmpty() && !categoryNameMap.containsKey(categoryId.trim())) {
+                    categoryNameMap.put(categoryId.trim(), "Danh mục " + categoryId.trim());
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void sortCategoryNameMap() {
+        List<Map.Entry<String, String>> entries = new ArrayList<>(categoryNameMap.entrySet());
+
+        entries.sort((a, b) -> {
+            int numA = extractCategoryNumber(a.getKey());
+            int numB = extractCategoryNumber(b.getKey());
+            return Integer.compare(numA, numB);
+        });
+
+        categoryNameMap.clear();
+        categoryList.clear();
+
+        for (Map.Entry<String, String> entry : entries) {
+            String categoryId = entry.getKey();
+            String categoryName = entry.getValue();
+
+            categoryNameMap.put(categoryId, categoryName);
+            categoryList.add(categoryId + " - " + categoryName);
+        }
+    }
+
+    private int extractCategoryNumber(String categoryId) {
+        if (categoryId == null) {
+            return Integer.MAX_VALUE;
+        }
+
+        try {
+            String digits = categoryId.replaceAll("\\D+", "");
+            if (digits.isEmpty()) {
+                return Integer.MAX_VALUE;
+            }
+            return Integer.parseInt(digits);
+        } catch (Exception e) {
+            return Integer.MAX_VALUE;
         }
     }
 
@@ -125,10 +201,10 @@ public class ProductView extends JPanel {
 
         JPanel titlePanel = new JPanel(new GridLayout(2, 1));
         titlePanel.setOpaque(false);
-        JLabel lblTitle = new JLabel("Danh Mục Sản Phẩm");
+        JLabel lblTitle = new JLabel("Sản phẩm & Danh mục");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(textDark);
-        JLabel lblSub = new JLabel("Quản lý thông tin, giá bán và số lượng tồn kho");
+        JLabel lblSub = new JLabel("Theo dõi danh mục, tồn kho và hiệu suất sản phẩm");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblSub.setForeground(textGray);
         titlePanel.add(lblTitle);
@@ -169,8 +245,23 @@ public class ProductView extends JPanel {
         headerPanel.add(toolPanel, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
-        JPanel centerPanel = new JPanel(new BorderLayout(20, 0));
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 15));
         centerPanel.setOpaque(false);
+
+        JPanel tabBar = buildTabBar();
+        centerPanel.add(tabBar, BorderLayout.NORTH);
+
+        tabContentPanel = new JPanel(new CardLayout());
+        tabContentPanel.setOpaque(false);
+
+        detailPanel = new JPanel(new BorderLayout(0, 15));
+        detailPanel.setOpaque(false);
+
+        JPanel categorySection = buildCategorySection();
+        detailPanel.add(categorySection, BorderLayout.NORTH);
+
+        JPanel contentPanel = new JPanel(new BorderLayout(20, 0));
+        contentPanel.setOpaque(false);
 
         formCard = new RoundedPanel(20, cardWhite);
         formCard.setPreferredSize(new Dimension(350, 0));
@@ -279,7 +370,7 @@ public class ProductView extends JPanel {
 
         gbc.gridy = y++;
         formCard.add(btnGrid, gbc);
-        centerPanel.add(formCard, BorderLayout.WEST);
+        contentPanel.add(formCard, BorderLayout.WEST);
 
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout());
@@ -330,7 +421,685 @@ public class ProductView extends JPanel {
         tblProducts.getColumnModel()
                 .getColumn(4)
                 .setCellRenderer(new view.components.CategoryTableRenderer(20));
-        tblProducts.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+
+        applyStockRowRenderer();
+        JScrollPane scrollPane = new JScrollPane(tblProducts);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        tableCard.add(scrollPane, BorderLayout.CENTER);
+
+        contentPanel.add(tableCard, BorderLayout.CENTER);
+        detailPanel.add(contentPanel, BorderLayout.CENTER);
+
+        overviewPanel = buildOverviewPanel();
+
+        tabContentPanel.add(overviewPanel, "OVERVIEW");
+        tabContentPanel.add(detailPanel, "DETAIL");
+
+        centerPanel.add(tabContentPanel, BorderLayout.CENTER);
+
+        add(centerPanel, BorderLayout.CENTER);
+
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin()) {
+            switchProductTab("OVERVIEW");
+        } else {
+            switchProductTab("DETAIL");
+        }
+
+    }
+
+    private JPanel buildTabBar() {
+        JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        wrapper.setOpaque(false);
+
+        btnOverviewTab = createCustomButton("Tổng quan", primaryBlue, Color.WHITE, null);
+        btnDetailTab = createCustomButton("Chi tiết", Color.WHITE, textDark, null);
+
+        btnOverviewTab.setPreferredSize(new Dimension(130, 40));
+        btnDetailTab.setPreferredSize(new Dimension(110, 40));
+
+        btnOverviewTab.addActionListener(e -> switchProductTab("OVERVIEW"));
+        btnDetailTab.addActionListener(e -> switchProductTab("DETAIL"));
+
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin()) {
+            wrapper.add(btnOverviewTab);
+        }
+
+        wrapper.add(btnDetailTab);
+
+        return wrapper;
+    }
+
+    private void switchProductTab(String tab) {
+        if (tab == null) {
+            tab = "DETAIL";
+        }
+
+        if ("OVERVIEW".equals(tab) && !(AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())) {
+            tab = "DETAIL";
+        }
+
+        currentProductTab = tab;
+
+        if (tabContentPanel != null) {
+            CardLayout cl = (CardLayout) tabContentPanel.getLayout();
+            cl.show(tabContentPanel, tab);
+        }
+
+        if (btnOverviewTab != null) {
+            boolean active = "OVERVIEW".equals(tab);
+            btnOverviewTab.setBackground(active ? primaryBlue : Color.WHITE);
+            btnOverviewTab.setForeground(active ? Color.WHITE : textDark);
+        }
+
+        if (btnDetailTab != null) {
+            boolean active = "DETAIL".equals(tab);
+            btnDetailTab.setBackground(active ? primaryBlue : Color.WHITE);
+            btnDetailTab.setForeground(active ? Color.WHITE : textDark);
+        }
+    }
+
+    private JPanel buildCategorySection() {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 10));
+        wrapper.setOpaque(false);
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+
+        JLabel title = new JLabel("Bộ lọc danh mục");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(textDark);
+
+        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        filterPanel.setOpaque(false);
+
+        lblCurrentCategory = new JLabel("Đang xem: Tất cả sản phẩm");
+        lblCurrentCategory.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblCurrentCategory.setForeground(textDark);
+        lblCurrentCategory.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(new Color(210, 220, 245), 20),
+                new EmptyBorder(8, 14, 8, 14)
+        ));
+
+        btnShowAllProducts = createCustomButton("Xem tất cả", primaryBlue, Color.WHITE, null);
+        btnShowAllProducts.setPreferredSize(new Dimension(115, 36));
+        btnShowAllProducts.addActionListener(e -> {
+            selectedCategoryId = null;
+            updateCurrentCategoryLabel();
+            loadDataToTable();
+        });
+
+        filterPanel.add(lblCurrentCategory);
+        filterPanel.add(btnShowAllProducts);
+
+        top.add(title, BorderLayout.WEST);
+        top.add(filterPanel, BorderLayout.EAST);
+
+        categoryCardPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 14, 8));
+        categoryCardPanel.setOpaque(false);
+
+        categoryScrollPane = new JScrollPane(categoryCardPanel);
+        categoryScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        categoryScrollPane.setOpaque(false);
+        categoryScrollPane.getViewport().setOpaque(false);
+        categoryScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        categoryScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        categoryScrollPane.getHorizontalScrollBar().setUnitIncrement(16);
+        categoryScrollPane.setPreferredSize(new Dimension(0, 145));
+
+        wrapper.add(top, BorderLayout.NORTH);
+        wrapper.add(categoryScrollPane, BorderLayout.CENTER);
+
+        return wrapper;
+    }
+
+    private JPanel buildOverviewPanel() {
+        JPanel root = new JPanel(new BorderLayout(0, 15));
+        root.setOpaque(false);
+
+        JPanel kpiPanel = new JPanel(new GridLayout(1, 5, 15, 0));
+        kpiPanel.setOpaque(false);
+
+        int totalCategories = categoryNameMap.size();
+        int totalProducts = cachedProducts.size();
+        int totalQuantity = 0;
+        int outOfStock = 0;
+        int lowStock = 0;
+
+        for (Product p : cachedProducts) {
+            int qty = p.getQuantity();
+            totalQuantity += qty;
+
+            if (qty <= 0) {
+                outOfStock++;
+            } else if (qty <= 10) {
+                lowStock++;
+            }
+        }
+
+        kpiPanel.add(createOverviewKpiCard("Tổng danh mục", String.valueOf(totalCategories), new Color(67, 97, 238)));
+        kpiPanel.add(createOverviewKpiCard("Tổng mặt hàng", String.valueOf(totalProducts), new Color(0, 163, 108)));
+        kpiPanel.add(createOverviewKpiCard("Tổng tồn kho", String.valueOf(totalQuantity), new Color(103, 58, 183)));
+        kpiPanel.add(createOverviewKpiCard("Hết hàng", String.valueOf(outOfStock), new Color(220, 53, 69)));
+        kpiPanel.add(createOverviewKpiCard("Sắp hết", String.valueOf(lowStock), new Color(255, 153, 0)));
+
+        JPanel analyticsPanel = buildPowerBIPlaceholderPanel();
+
+        JPanel centerContent = new JPanel(new BorderLayout(0, 15));
+        centerContent.setOpaque(false);
+
+        centerContent.add(buildOverviewCategoryAnalyticsPanel(), BorderLayout.NORTH);
+        centerContent.add(analyticsPanel, BorderLayout.CENTER);
+
+        root.add(kpiPanel, BorderLayout.NORTH);
+        root.add(centerContent, BorderLayout.CENTER);
+
+        return root;
+    }
+
+    private JPanel buildPowerBIPlaceholderPanel() {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 12));
+        wrapper.setOpaque(false);
+
+        JLabel title = new JLabel("Power BI Analytics");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(textDark);
+
+        RoundedPanel card = new RoundedPanel(22, Color.WHITE);
+        card.setLayout(new BorderLayout(18, 0));
+        card.setBorder(new EmptyBorder(22, 24, 22, 24));
+
+        JPanel leftPanel = new JPanel(new BorderLayout(0, 12));
+        leftPanel.setOpaque(false);
+
+        JLabel mainTitle = new JLabel("Biểu đồ xu hướng tồn kho theo danh mục");
+        mainTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        mainTitle.setForeground(textDark);
+
+        JLabel subTitle = new JLabel("Mô phỏng biểu đồ phân tích dạng Curve Line Chart - có thể thay bằng Power BI thật sau này.");
+        subTitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subTitle.setForeground(new Color(90, 100, 130));
+
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 4));
+        titleBox.setOpaque(false);
+        titleBox.add(mainTitle);
+        titleBox.add(subTitle);
+
+        JPanel chartPanel = new InventoryCurveChartPanel();
+
+        leftPanel.add(titleBox, BorderLayout.NORTH);
+        leftPanel.add(chartPanel, BorderLayout.CENTER);
+
+        JPanel rightPanel = new JPanel();
+        rightPanel.setOpaque(false);
+        rightPanel.setPreferredSize(new Dimension(330, 0));
+        rightPanel.setLayout(new GridLayout(3, 1, 0, 12));
+
+        rightPanel.add(createInsightBox(
+                "[TREND] Xu hướng tồn kho",
+                "Theo dõi mức tồn kho giữa các nhóm sản phẩm.",
+                new Color(237, 242, 255)
+        ));
+
+        rightPanel.add(createInsightBox(
+                "[RISK] Rủi ro thiếu hàng",
+                "Điểm thấp thể hiện nhóm hàng cần theo dõi.",
+                new Color(255, 247, 230)
+        ));
+
+        rightPanel.add(createInsightBox(
+                "[BI] Tích hợp Power BI",
+                "Có thể thay bằng WebView hoặc ảnh báo cáo Power BI.",
+                new Color(255, 235, 238)
+        ));
+
+        card.add(leftPanel, BorderLayout.CENTER);
+        card.add(rightPanel, BorderLayout.EAST);
+
+        wrapper.add(title, BorderLayout.NORTH);
+        wrapper.add(card, BorderLayout.CENTER);
+
+        return wrapper;
+    }
+
+    private JPanel createInsightBox(String title, String desc, Color bg) {
+        RoundedPanel box = new RoundedPanel(16, bg);
+        box.setLayout(new BorderLayout(0, 8));
+        box.setBorder(new EmptyBorder(14, 16, 14, 16));
+
+        JLabel lblTitle = new JLabel(
+                "<html><div style='width:250px;'>"
+                + escapeHtml(title)
+                + "</div></html>"
+        );
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTitle.setForeground(textDark);
+
+        JLabel lblDesc = new JLabel(
+                "<html><div style='width:250px; color:#555555; line-height:1.45;'>"
+                + escapeHtml(desc)
+                + "</div></html>"
+        );
+        lblDesc.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblDesc.setForeground(new Color(90, 100, 130));
+
+        box.add(lblTitle, BorderLayout.NORTH);
+        box.add(lblDesc, BorderLayout.CENTER);
+
+        return box;
+    }
+
+    private String escapeHtml(String input) {
+        if (input == null) {
+            return "";
+        }
+
+        return input
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    private JPanel createOverviewKpiCard(String title, String value, Color accent) {
+        RoundedPanel card = new RoundedPanel(18, Color.WHITE);
+        card.setLayout(new BorderLayout());
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(borderGray, 18),
+                new EmptyBorder(15, 18, 15, 18)
+        ));
+
+        JLabel lblTitle = new JLabel(title);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTitle.setForeground(textGray);
+
+        JLabel lblValue = new JLabel(value);
+        lblValue.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblValue.setForeground(accent);
+
+        card.add(lblTitle, BorderLayout.NORTH);
+        card.add(lblValue, BorderLayout.CENTER);
+
+        return card;
+    }
+
+    private JPanel buildOverviewCategoryAnalyticsPanel() {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 10));
+        wrapper.setOpaque(false);
+
+        JLabel title = new JLabel("Phân tích theo loại sản phẩm");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(textDark);
+
+        JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 14, 8));
+        cardsPanel.setOpaque(false);
+
+        int totalInventory = 0;
+        for (Product p : cachedProducts) {
+            totalInventory += p.getQuantity();
+        }
+
+        for (String categoryId : categoryNameMap.keySet()) {
+            String categoryName = getCategoryNameById(categoryId);
+
+            int totalItems = 0;
+            int totalQuantity = 0;
+            int outOfStock = 0;
+            int lowStock = 0;
+
+            for (Product p : cachedProducts) {
+                String pCategoryId = p.getCategoryId();
+
+                if (pCategoryId == null || !pCategoryId.trim().equals(categoryId)) {
+                    continue;
+                }
+
+                int qty = p.getQuantity();
+
+                totalItems++;
+                totalQuantity += qty;
+
+                if (qty <= 0) {
+                    outOfStock++;
+                } else if (qty <= 10) {
+                    lowStock++;
+                }
+            }
+
+            double percent = totalInventory == 0 ? 0 : (totalQuantity * 100.0 / totalInventory);
+
+            JPanel card = createOverviewCategoryCard(
+                    categoryId,
+                    categoryName,
+                    totalItems,
+                    totalQuantity,
+                    outOfStock,
+                    lowStock,
+                    percent
+            );
+
+            cardsPanel.add(card);
+        }
+
+        JScrollPane scroll = new JScrollPane(cardsPanel);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        scroll.getHorizontalScrollBar().setUnitIncrement(20);
+        scroll.setPreferredSize(new Dimension(0, 155));
+
+        wrapper.add(title, BorderLayout.NORTH);
+        wrapper.add(scroll, BorderLayout.CENTER);
+
+        return wrapper;
+    }
+
+    private JPanel createOverviewCategoryCard(
+            String categoryId,
+            String categoryName,
+            int totalItems,
+            int totalQuantity,
+            int outOfStock,
+            int lowStock,
+            double percent
+    ) {
+        RoundedPanel card = new RoundedPanel(18, Color.WHITE);
+        card.setPreferredSize(new Dimension(300, 125));
+        card.setLayout(new BorderLayout(12, 0));
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(borderGray, 18),
+                new EmptyBorder(15, 16, 15, 16)
+        ));
+
+        JLabel icon = new JLabel(getCategoryEmoji(categoryId), SwingConstants.CENTER);
+        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 34));
+        icon.setPreferredSize(new Dimension(64, 70));
+
+        JPanel infoPanel = new JPanel();
+        infoPanel.setOpaque(false);
+        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+
+        JLabel lblId = new JLabel(categoryId);
+        lblId.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblId.setForeground(primaryBlue);
+
+        JLabel lblName = new JLabel(categoryName);
+        lblName.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblName.setForeground(textDark);
+
+        JLabel lblMain = new JLabel(totalItems + " mặt hàng • " + totalQuantity + " tồn kho");
+        lblMain.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblMain.setForeground(new Color(90, 100, 130));
+
+        JLabel lblStatus = new JLabel(
+                "Hết: " + outOfStock
+                + " | Sắp hết: " + lowStock
+                + " | " + String.format("%.1f", percent) + "%"
+        );
+        lblStatus.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        if (outOfStock > 0) {
+            lblStatus.setForeground(new Color(220, 53, 69));
+        } else if (lowStock > 0) {
+            lblStatus.setForeground(new Color(255, 153, 0));
+        } else {
+            lblStatus.setForeground(new Color(25, 135, 84));
+        }
+
+        infoPanel.add(lblId);
+        infoPanel.add(Box.createVerticalStrut(4));
+        infoPanel.add(lblName);
+        infoPanel.add(Box.createVerticalStrut(8));
+        infoPanel.add(lblMain);
+        infoPanel.add(Box.createVerticalStrut(6));
+        infoPanel.add(lblStatus);
+
+        card.add(icon, BorderLayout.WEST);
+        card.add(infoPanel, BorderLayout.CENTER);
+
+        Color normalBg = Color.WHITE;
+        Color hoverBg = new Color(248, 250, 255);
+
+        card.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                selectedCategoryId = categoryId;
+                updateCurrentCategoryLabel();
+                filterProductsByCategory(categoryId);
+                switchProductTab("DETAIL");
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                card.bgColor = hoverBg;
+                card.repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                card.bgColor = normalBg;
+                card.repaint();
+            }
+        });
+
+        return card;
+    }
+
+    private void refreshCategoryCards() {
+        if (categoryCardPanel == null) {
+            return;
+        }
+
+        categoryCardPanel.removeAll();
+
+        List<Product> products = new ArrayList<>(cachedProducts);
+
+        for (String categoryId : categoryNameMap.keySet()) {
+            String categoryName = getCategoryNameById(categoryId);
+
+            int totalItems = 0;
+            int totalQuantity = 0;
+            int outOfStock = 0;
+            int lowStock = 0;
+
+            for (Product p : products) {
+                String pCategoryId = p.getCategoryId();
+
+                if (pCategoryId == null || !pCategoryId.trim().equals(categoryId)) {
+                    continue;
+                }
+
+                int qty = p.getQuantity();
+
+                totalItems++;
+                totalQuantity += qty;
+
+                if (qty <= 0) {
+                    outOfStock++;
+                } else if (qty <= 10) {
+                    lowStock++;
+                }
+            }
+
+            JPanel card = createCategoryCard(
+                    categoryId,
+                    categoryName,
+                    totalItems,
+                    totalQuantity,
+                    outOfStock,
+                    lowStock
+            );
+
+            categoryCardPanel.add(card);
+        }
+
+        categoryCardPanel.revalidate();
+        categoryCardPanel.repaint();
+    }
+
+    private JPanel createCategoryCard(
+            String categoryId,
+            String categoryName,
+            int totalItems,
+            int totalQuantity,
+            int outOfStock,
+            int lowStock
+    ) {
+        boolean selected = categoryId != null && categoryId.equals(selectedCategoryId);
+
+        Color normalBg = selected ? new Color(237, 242, 255) : Color.WHITE;
+        Color hoverBg = selected ? new Color(225, 233, 255) : new Color(248, 250, 255);
+        Color borderColor = selected ? primaryBlue : borderGray;
+
+        RoundedPanel card = new RoundedPanel(18, normalBg);
+        card.setLayout(new BorderLayout(12, 0));
+        card.setPreferredSize(new Dimension(285, 120));
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(borderColor, 18),
+                new EmptyBorder(15, 16, 15, 16)
+        ));
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        JLabel icon = new JLabel(getCategoryEmoji(categoryId), SwingConstants.CENTER);
+        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 34));
+        icon.setPreferredSize(new Dimension(54, 70));
+
+        JPanel iconWrap = new JPanel(new GridBagLayout());
+        iconWrap.setOpaque(false);
+        iconWrap.setPreferredSize(new Dimension(62, 70));
+        iconWrap.add(icon);
+
+        JPanel textPanel = new JPanel();
+        textPanel.setOpaque(false);
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+
+        JLabel lblId = new JLabel(categoryId);
+        lblId.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblId.setForeground(primaryBlue);
+
+        JLabel lblName = new JLabel(categoryName);
+        lblName.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblName.setForeground(textDark);
+
+        JLabel lblTotal = new JLabel(totalItems + " mặt hàng • " + totalQuantity + " tồn kho");
+        lblTotal.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblTotal.setForeground(new Color(90, 100, 130));
+
+        JLabel lblWarning = new JLabel("Hết hàng: " + outOfStock + "  |  Sắp hết: " + lowStock);
+        lblWarning.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        if (outOfStock > 0) {
+            lblWarning.setForeground(new Color(220, 53, 69));
+        } else if (lowStock > 0) {
+            lblWarning.setForeground(new Color(230, 120, 0));
+        } else {
+            lblWarning.setForeground(new Color(25, 135, 84));
+        }
+
+        textPanel.add(lblId);
+        textPanel.add(Box.createVerticalStrut(4));
+        textPanel.add(lblName);
+        textPanel.add(Box.createVerticalStrut(8));
+        textPanel.add(lblTotal);
+        textPanel.add(Box.createVerticalStrut(6));
+        textPanel.add(lblWarning);
+
+        card.add(iconWrap, BorderLayout.WEST);
+        card.add(textPanel, BorderLayout.CENTER);
+
+        card.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                filterProductsByCategory(categoryId);
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                card.bgColor = hoverBg;
+                card.repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                card.bgColor = normalBg;
+                card.repaint();
+            }
+        });
+
+        return card;
+    }
+
+    private void filterProductsByCategory(String categoryId) {
+        selectedCategoryId = categoryId;
+        updateCurrentCategoryLabel();
+
+        List<Product> filtered = new ArrayList<>();
+
+        for (Product p : cachedProducts) {
+            String pCategoryId = p.getCategoryId();
+
+            if (pCategoryId != null && pCategoryId.trim().equals(categoryId)) {
+                filtered.add(p);
+            }
+        }
+
+        fillTable(filtered);
+        refreshCategoryCards();
+    }
+
+    private void updateCurrentCategoryLabel() {
+        if (lblCurrentCategory == null) {
+            return;
+        }
+
+        if (selectedCategoryId == null || selectedCategoryId.trim().isEmpty()) {
+            lblCurrentCategory.setText("Đang xem: Tất cả sản phẩm");
+        } else {
+            lblCurrentCategory.setText("Đang xem: " + selectedCategoryId + " - " + getCategoryNameById(selectedCategoryId));
+        }
+    }
+
+    private String getCategoryNameById(String categoryId) {
+        if (categoryId == null) {
+            return "Không xác định";
+        }
+
+        String name = categoryNameMap.get(categoryId.trim());
+
+        if (name == null || name.trim().isEmpty()) {
+            return "Danh mục " + categoryId;
+        }
+
+        return name;
+    }
+
+    private String getCategoryEmoji(String categoryId) {
+        if (categoryId == null) {
+            return "📦";
+        }
+
+        return switch (categoryId.trim()) {
+            case "CAT001" ->
+                "🍚";
+            case "CAT002" ->
+                "🥤";
+            case "CAT003" ->
+                "🧴";
+            case "CAT004" ->
+                "🍪";
+            case "CAT005" ->
+                "🥩";
+            default ->
+                "📦";
+        };
+    }
+
+    private void applyStockRowRenderer() {
+        DefaultTableCellRenderer stockRenderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(
                     JTable table,
@@ -346,6 +1115,7 @@ public class ProductView extends JPanel {
                 Object qtyObj = table.getModel().getValueAt(modelRow, 3);
 
                 int quantity = 0;
+
                 try {
                     quantity = Integer.parseInt(String.valueOf(qtyObj).trim());
                 } catch (Exception ignored) {
@@ -356,10 +1126,10 @@ public class ProductView extends JPanel {
                     c.setForeground(textDark);
                 } else if (quantity <= 0) {
                     c.setBackground(new Color(255, 230, 230));
-                    c.setForeground(new Color(160, 0, 0));
+                    c.setForeground(new Color(200, 0, 0));
                 } else if (quantity <= 10) {
                     c.setBackground(new Color(255, 246, 220));
-                    c.setForeground(new Color(120, 80, 0));
+                    c.setForeground(new Color(150, 95, 0));
                 } else {
                     c.setBackground(Color.WHITE);
                     c.setForeground(Color.BLACK);
@@ -371,14 +1141,15 @@ public class ProductView extends JPanel {
 
                 return c;
             }
-        });
-        JScrollPane scrollPane = new JScrollPane(tblProducts);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.getViewport().setBackground(Color.WHITE);
-        tableCard.add(scrollPane, BorderLayout.CENTER);
+        };
 
-        centerPanel.add(tableCard, BorderLayout.CENTER);
-        add(centerPanel, BorderLayout.CENTER);
+        for (int i = 0; i < tblProducts.getColumnCount(); i++) {
+            if (i != 5) {
+                tblProducts.getColumnModel().getColumn(i).setCellRenderer(stockRenderer);
+            }
+        }
+
+        tblProducts.getColumnModel().getColumn(4).setCellRenderer(new view.components.CategoryTableRenderer(20));
     }
 
     private void applyProductRolePermission() {
@@ -584,7 +1355,7 @@ public class ProductView extends JPanel {
     class RoundedPanel extends JPanel {
 
         private int radius;
-        private Color bgColor;
+        Color bgColor;
 
         public RoundedPanel(int radius, Color bgColor) {
             this.radius = radius;
@@ -910,18 +1681,54 @@ public class ProductView extends JPanel {
         ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
 
         selectedImagePath = null;
-        lblImagePreview.setIcon(null);
-        lblImagePreview.setText("Chưa chọn ảnh");
+
+        if (lblImagePreview != null) {
+            lblImagePreview.setIcon(null);
+            lblImagePreview.setText("Chưa chọn ảnh");
+        }
 
         tblProducts.clearSelection();
+
+        if (selectedCategoryId == null || selectedCategoryId.trim().isEmpty()) {
+            fillTable(cachedProducts);
+        } else {
+            filterProductsByCategory(selectedCategoryId);
+        }
     }
 
     private void btnSearchActionPerformed() {
         JTextField editor = (JTextField) cbSearch.getEditor().getEditorComponent();
-        String keyword = editor.getText().trim();
+        String keyword = editor.getText().trim().toLowerCase();
 
-        List<Product> list = ProductsSql.getInstance().searchByName(keyword);
-        fillTable(list);
+        if (cachedProducts.isEmpty()) {
+            try {
+                cachedProducts.clear();
+                cachedProducts.addAll(ProductsSql.getInstance().selectAll());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        List<Product> result = new ArrayList<>();
+
+        for (Product p : cachedProducts) {
+            boolean matchCategory = true;
+
+            if (selectedCategoryId != null && !selectedCategoryId.trim().isEmpty()) {
+                matchCategory = p.getCategoryId() != null
+                        && p.getCategoryId().trim().equals(selectedCategoryId);
+            }
+
+            boolean matchKeyword = keyword.isEmpty()
+                    || (p.getProductName() != null && p.getProductName().toLowerCase().contains(keyword))
+                    || (p.getProductId() != null && p.getProductId().toLowerCase().contains(keyword));
+
+            if (matchCategory && matchKeyword) {
+                result.add(p);
+            }
+        }
+
+        fillTable(result);
     }
 
     private void btnExportPDFActionPerformed() {
@@ -1110,33 +1917,92 @@ public class ProductView extends JPanel {
     }
 
     public void loadDataToTable() {
-        tableModel.setRowCount(0);
         try {
             List<Product> list = ProductsSql.getInstance().selectAll();
+
+            cachedProducts.clear();
+            cachedProducts.addAll(list);
+
             for (Product p : list) {
-                ImageIcon thumb = null;
-                if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
-                    java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
-                    if (imgUrl != null) {
-                        thumb = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH));
+                String categoryId = p.getCategoryId();
+
+                if (categoryId != null
+                        && !categoryId.trim().isEmpty()
+                        && !categoryNameMap.containsKey(categoryId.trim())) {
+                    categoryNameMap.put(categoryId.trim(), "Danh mục " + categoryId.trim());
+                }
+            }
+
+            if (selectedCategoryId == null || selectedCategoryId.trim().isEmpty()) {
+                fillTable(list);
+            } else {
+                List<Product> filtered = new ArrayList<>();
+
+                for (Product p : list) {
+                    String pCategoryId = p.getCategoryId();
+
+                    if (pCategoryId != null && pCategoryId.trim().equals(selectedCategoryId)) {
+                        filtered.add(p);
                     }
                 }
-                Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
-                tableModel.addRow(row);
+
+                fillTable(filtered);
             }
+
+            refreshCategoryCards();
+            updateCurrentCategoryLabel();
+
+            if (tabContentPanel != null) {
+                String oldTab = currentProductTab;
+                overviewPanel = buildOverviewPanel();
+                tabContentPanel.removeAll();
+                tabContentPanel.add(overviewPanel, "OVERVIEW");
+                tabContentPanel.add(detailPanel, "DETAIL");
+                switchProductTab(oldTab);
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void refreshTable() {
+        loadAutoCompleteData();
         loadDataToTable();
     }
 
     private void fillTable(List<Product> list) {
         tableModel.setRowCount(0);
+
+        if (list == null) {
+            return;
+        }
+
         for (Product p : list) {
-            tableModel.addRow(new Object[]{p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId()});
+            ImageIcon thumb = null;
+
+            if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
+                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
+
+                if (imgUrl != null) {
+                    thumb = new ImageIcon(
+                            new ImageIcon(imgUrl)
+                                    .getImage()
+                                    .getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH)
+                    );
+                }
+            }
+
+            Object[] row = {
+                p.getProductId(),
+                p.getProductName(),
+                p.getBasePrice(),
+                p.getQuantity(),
+                p.getCategoryId(),
+                thumb
+            };
+
+            tableModel.addRow(row);
         }
     }
 
@@ -1388,5 +2254,229 @@ public class ProductView extends JPanel {
         JTextField editor = (JTextField) cb.getEditor().getEditorComponent();
         editor.putClientProperty("JTextField.placeholderText", placeholder);
         editor.setBorder(new EmptyBorder(0, 5, 0, 5));
+    }
+
+    private class InventoryCurveChartPanel extends JPanel {
+
+        private final Color chartBg = new Color(20, 35, 52);
+        private final Color gridColor = new Color(55, 75, 95);
+        private final Color lineColor = new Color(116, 95, 255);
+        private final Color pointColor = new Color(255, 92, 122);
+
+        public InventoryCurveChartPanel() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(700, 320));
+            setBorder(new EmptyBorder(18, 18, 18, 18));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int x = 10;
+            int y = 10;
+            int w = getWidth() - 20;
+            int h = getHeight() - 20;
+
+            g2.setColor(chartBg);
+            g2.fillRoundRect(x, y, w, h, 22, 22);
+
+            drawChartTitle(g2, x, y, w);
+            drawGrid(g2, x, y, w, h);
+            drawCurve(g2, x, y, w, h);
+            drawLegend(g2, x, y, w);
+
+            g2.dispose();
+        }
+
+        private void drawChartTitle(Graphics2D g2, int x, int y, int w) {
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Inventory Trend by Category", x + 22, y + 34);
+
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            g2.setColor(new Color(180, 195, 210));
+            g2.drawString("Curve Line Chart - mô phỏng dashboard phân tích sản phẩm", x + 22, y + 54);
+        }
+
+        private void drawGrid(Graphics2D g2, int x, int y, int w, int h) {
+            int chartX = x + 60;
+            int chartY = y + 75;
+            int chartW = w - 95;
+            int chartH = h - 120;
+
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+            g2.setColor(new Color(150, 165, 180));
+
+            int lines = 5;
+            for (int i = 0; i <= lines; i++) {
+                int gy = chartY + (chartH * i / lines);
+
+                g2.setColor(gridColor);
+                g2.drawLine(chartX, gy, chartX + chartW, gy);
+
+                g2.setColor(new Color(150, 165, 180));
+                int value = (lines - i) * 20;
+                g2.drawString(String.valueOf(value) + "%", x + 22, gy + 4);
+            }
+
+            g2.setColor(new Color(150, 165, 180));
+
+            List<String> labels = getCategoryLabelsForChart();
+            int n = labels.size();
+
+            if (n == 0) {
+                return;
+            }
+
+            for (int i = 0; i < n; i++) {
+                int px = chartX + (n == 1 ? chartW / 2 : i * chartW / (n - 1));
+                g2.drawString(labels.get(i), px - 18, chartY + chartH + 28);
+            }
+        }
+
+        private void drawCurve(Graphics2D g2, int x, int y, int w, int h) {
+            int chartX = x + 60;
+            int chartY = y + 75;
+            int chartW = w - 95;
+            int chartH = h - 120;
+
+            List<Integer> values = getCategoryPercentValuesForChart();
+
+            if (values.isEmpty()) {
+                drawEmptyChart(g2, chartX, chartY, chartW, chartH);
+                return;
+            }
+
+            int n = values.size();
+
+            int[] xs = new int[n];
+            int[] ys = new int[n];
+
+            for (int i = 0; i < n; i++) {
+                xs[i] = chartX + (n == 1 ? chartW / 2 : i * chartW / (n - 1));
+                int percent = Math.max(0, Math.min(100, values.get(i)));
+                ys[i] = chartY + chartH - (percent * chartH / 100);
+            }
+
+            // vùng glow nhẹ
+            g2.setStroke(new BasicStroke(8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.setColor(new Color(116, 95, 255, 55));
+            drawSmoothLine(g2, xs, ys);
+
+            // line chính
+            g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.setColor(lineColor);
+            drawSmoothLine(g2, xs, ys);
+
+            // điểm
+            for (int i = 0; i < n; i++) {
+                g2.setColor(pointColor);
+                g2.fillOval(xs[i] - 5, ys[i] - 5, 10, 10);
+
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawOval(xs[i] - 5, ys[i] - 5, 10, 10);
+
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                g2.setColor(Color.WHITE);
+                g2.drawString(values.get(i) + "%", xs[i] - 10, ys[i] - 12);
+            }
+        }
+
+        private void drawSmoothLine(Graphics2D g2, int[] xs, int[] ys) {
+            if (xs.length == 1) {
+                g2.drawLine(xs[0], ys[0], xs[0], ys[0]);
+                return;
+            }
+
+            java.awt.geom.Path2D path = new java.awt.geom.Path2D.Double();
+            path.moveTo(xs[0], ys[0]);
+
+            for (int i = 0; i < xs.length - 1; i++) {
+                int x1 = xs[i];
+                int y1 = ys[i];
+                int x2 = xs[i + 1];
+                int y2 = ys[i + 1];
+
+                int ctrlX1 = x1 + (x2 - x1) / 2;
+                int ctrlY1 = y1;
+                int ctrlX2 = x1 + (x2 - x1) / 2;
+                int ctrlY2 = y2;
+
+                path.curveTo(ctrlX1, ctrlY1, ctrlX2, ctrlY2, x2, y2);
+            }
+
+            g2.draw(path);
+        }
+
+        private void drawLegend(Graphics2D g2, int x, int y, int w) {
+            int lx = x + w - 210;
+            int ly = y + 30;
+
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+
+            g2.setColor(lineColor);
+            g2.fillOval(lx, ly - 8, 8, 8);
+            g2.setColor(new Color(210, 220, 235));
+            g2.drawString("Tồn kho", lx + 14, ly);
+
+            g2.setColor(pointColor);
+            g2.fillOval(lx + 80, ly - 8, 8, 8);
+            g2.setColor(new Color(210, 220, 235));
+            g2.drawString("Cảnh báo", lx + 94, ly);
+        }
+
+        private void drawEmptyChart(Graphics2D g2, int chartX, int chartY, int chartW, int chartH) {
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Chưa có dữ liệu sản phẩm để hiển thị biểu đồ.", chartX + 30, chartY + chartH / 2);
+        }
+
+        private List<String> getCategoryLabelsForChart() {
+            List<String> labels = new ArrayList<>();
+
+            for (String categoryId : categoryNameMap.keySet()) {
+                labels.add(categoryId);
+            }
+
+            return labels;
+        }
+
+        private List<Integer> getCategoryPercentValuesForChart() {
+            List<Integer> values = new ArrayList<>();
+
+            int totalInventory = 0;
+            Map<String, Integer> quantityByCategory = new java.util.LinkedHashMap<>();
+
+            for (String categoryId : categoryNameMap.keySet()) {
+                quantityByCategory.put(categoryId, 0);
+            }
+
+            for (Product p : cachedProducts) {
+                String categoryId = p.getCategoryId();
+
+                if (categoryId == null) {
+                    continue;
+                }
+
+                categoryId = categoryId.trim();
+                int qty = p.getQuantity();
+
+                totalInventory += qty;
+                quantityByCategory.put(categoryId, quantityByCategory.getOrDefault(categoryId, 0) + qty);
+            }
+
+            for (String categoryId : categoryNameMap.keySet()) {
+                int qty = quantityByCategory.getOrDefault(categoryId, 0);
+                int percent = totalInventory == 0 ? 0 : (int) Math.round(qty * 100.0 / totalInventory);
+                values.add(percent);
+            }
+
+            return values;
+        }
     }
 }
