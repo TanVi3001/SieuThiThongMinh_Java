@@ -60,3 +60,6 @@ DanhSachActor_UseCase_DacTa_SSMS.md
 SoDoUseCaseTongQuat_SSMS.png
 SoDoUseCaseTongQuat_SSMS.puml
 # (Dòng trên giúp chặn các file Excel/PDF ông test không bị đẩy lên repo làm rác nhóm)
+
+# Local Oracle Docker runner config
+database/run_db_patch.bat
