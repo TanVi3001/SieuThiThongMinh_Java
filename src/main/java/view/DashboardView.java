@@ -154,11 +154,11 @@ public class DashboardView extends JFrame {
                     break;
             }
         });
-        
+
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
         topBar.setBackground(Color.WHITE);
         topBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(230, 230, 230)));
-        
+
         NotificationBell bell;
         if (AuthorizationService.isWarehouseStaff()) {
             bell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
@@ -169,7 +169,7 @@ public class DashboardView extends JFrame {
         }
         topBar.add(bell);
         this.getContentPane().add(topBar, BorderLayout.NORTH);
-        
+
         // Bố trí Sidebar bên trái và Content ở giữa
         this.getContentPane().add(newSidebar, BorderLayout.WEST);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);

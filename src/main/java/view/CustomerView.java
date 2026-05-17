@@ -23,6 +23,8 @@ import javax.swing.table.DefaultTableModel;
 import model.order.Customer;
 import view.components.IconHelper;
 import java.util.Arrays;
+import business.service.AuthorizationService;
+import view.components.CustomerAnalyticsPanel;
 
 public class CustomerView extends JPanel {
 
@@ -41,7 +43,13 @@ public class CustomerView extends JPanel {
     private JTable tblCustomers;
     private DefaultTableModel tableModel;
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch;
-
+    private JPanel customerToolPanel;
+    private JPanel tabContentPanel;
+    private JPanel detailPanel;
+    private JPanel overviewPanel;
+    private JButton btnOverviewTab;
+    private JButton btnDetailTab;
+    private String currentCustomerTab = "DETAIL";
     private List<String> customerSearchList = new ArrayList<>();
 
     // Lưu tạm SĐT gốc để dùng khi cập nhật
@@ -94,13 +102,100 @@ public class CustomerView extends JPanel {
     private void initUI() {
         add(createHeaderPanel(), BorderLayout.NORTH);
 
-        JPanel centerPanel = new JPanel(new BorderLayout(25, 0));
-        centerPanel.setOpaque(false);
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 15));
+        mainPanel.setOpaque(false);
 
-        centerPanel.add(createFormCard(), BorderLayout.WEST);
-        centerPanel.add(createTableCard(), BorderLayout.CENTER);
+        JPanel tabBar = buildCustomerTabBar();
+        mainPanel.add(tabBar, BorderLayout.NORTH);
 
-        add(centerPanel, BorderLayout.CENTER);
+        tabContentPanel = new JPanel(new CardLayout());
+        tabContentPanel.setOpaque(false);
+
+        detailPanel = new JPanel(new BorderLayout(25, 0));
+        detailPanel.setOpaque(false);
+        detailPanel.add(createFormCard(), BorderLayout.WEST);
+        detailPanel.add(createTableCard(), BorderLayout.CENTER);
+
+        overviewPanel = new CustomerAnalyticsPanel();
+
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin()) {
+            tabContentPanel.add(overviewPanel, "OVERVIEW");
+            tabContentPanel.add(detailPanel, "DETAIL");
+            switchCustomerTab("OVERVIEW");
+        } else {
+            tabContentPanel.add(detailPanel, "DETAIL");
+            switchCustomerTab("DETAIL");
+        }
+
+        mainPanel.add(tabContentPanel, BorderLayout.CENTER);
+
+        add(mainPanel, BorderLayout.CENTER);
+    }
+
+    private JPanel buildCustomerTabBar() {
+        JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        wrapper.setOpaque(false);
+
+        btnOverviewTab = createCustomButton("Tổng quan", primaryBlue, Color.WHITE, null);
+        btnDetailTab = createCustomButton("Chi tiết", Color.WHITE, textDark, null);
+
+        btnOverviewTab.setPreferredSize(new Dimension(130, 40));
+        btnDetailTab.setPreferredSize(new Dimension(110, 40));
+
+        btnOverviewTab.addActionListener(e -> switchCustomerTab("OVERVIEW"));
+        btnDetailTab.addActionListener(e -> switchCustomerTab("DETAIL"));
+
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin()) {
+            wrapper.add(btnOverviewTab);
+        }
+
+        wrapper.add(btnDetailTab);
+
+        return wrapper;
+    }
+
+    private void switchCustomerTab(String tab) {
+        if (tab == null) {
+            tab = "DETAIL";
+        }
+
+        if ("OVERVIEW".equals(tab) && !(AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())) {
+            tab = "DETAIL";
+        }
+
+        currentCustomerTab = tab;
+
+        if (customerToolPanel != null) {
+            customerToolPanel.setVisible("DETAIL".equals(tab));
+        }
+
+        if (tabContentPanel != null) {
+            CardLayout cl = (CardLayout) tabContentPanel.getLayout();
+            cl.show(tabContentPanel, tab);
+        }
+
+        updateCustomerTabButtonStyle();
+
+        revalidate();
+        repaint();
+    }
+
+    private void updateCustomerTabButtonStyle() {
+        if (btnOverviewTab != null) {
+            boolean active = "OVERVIEW".equals(currentCustomerTab);
+
+            btnOverviewTab.setBackground(active ? primaryBlue : Color.WHITE);
+            btnOverviewTab.setForeground(active ? Color.WHITE : textDark);
+            btnOverviewTab.repaint();
+        }
+
+        if (btnDetailTab != null) {
+            boolean active = "DETAIL".equals(currentCustomerTab);
+
+            btnDetailTab.setBackground(active ? primaryBlue : Color.WHITE);
+            btnDetailTab.setForeground(active ? Color.WHITE : textDark);
+            btnDetailTab.repaint();
+        }
     }
 
     private JPanel createHeaderPanel() {
@@ -121,9 +216,8 @@ public class CustomerView extends JPanel {
         titlePanel.add(lblTitle);
         titlePanel.add(lblSub);
 
-        JPanel toolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
-        toolPanel.setOpaque(false);
-
+        customerToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
+        customerToolPanel.setOpaque(false);
         cbSearch = new JComboBox<>();
         styleSearchBox(cbSearch);
         setupAutoComplete(cbSearch, customerSearchList);
@@ -142,12 +236,12 @@ public class CustomerView extends JPanel {
         btnSearch = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, null);
         btnSearch.setPreferredSize(new Dimension(130, 45));
 
-        toolPanel.add(searchFieldWrapper);
-        toolPanel.add(btnSearch);
+        customerToolPanel.add(searchFieldWrapper);
+        customerToolPanel.add(btnSearch);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(toolPanel, BorderLayout.EAST);
-
+        headerPanel.add(customerToolPanel, BorderLayout.EAST);
+        headerPanel.add(customerToolPanel, BorderLayout.EAST);
         return headerPanel;
     }
 
@@ -521,6 +615,19 @@ public class CustomerView extends JPanel {
     public void refreshTable() {
         loadAutoCompleteData();
         loadCustomerData();
+
+        if (overviewPanel != null && (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())) {
+            String oldTab = currentCustomerTab;
+
+            overviewPanel = new CustomerAnalyticsPanel();
+
+            if (tabContentPanel != null) {
+                tabContentPanel.removeAll();
+                tabContentPanel.add(overviewPanel, "OVERVIEW");
+                tabContentPanel.add(detailPanel, "DETAIL");
+                switchCustomerTab(oldTab);
+            }
+        }
     }
 
     private String maskPhone(String phone) {
