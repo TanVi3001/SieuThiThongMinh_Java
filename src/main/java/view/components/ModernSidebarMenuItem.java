@@ -28,6 +28,8 @@ public class ModernSidebarMenuItem extends JPanel {
     public static final Color BORDER = new Color(232, 237, 245);
     public static final Color APP_BG = new Color(246, 247, 251);
     public static final Color WHITE = Color.WHITE;
+    private static final Color LOGOUT_RED = new Color(255, 77, 61);
+    private static final Color LOGOUT_HOVER_BORDER = new Color(255, 216, 194);
 
     public static final Color PRIMARY_ORANGE = ORANGE;
     public static final Color PRIMARY_ORANGE_DARK = new Color(238, 86, 0);
@@ -132,20 +134,21 @@ public class ModernSidebarMenuItem extends JPanel {
         int w = getWidth();
         g2.setColor(hovered ? ORANGE_LIGHT : WHITE);
         g2.fillRoundRect(0, y, w, rectH, ARC, ARC);
-        g2.setColor(hovered ? new Color(255, 216, 194) : BORDER);
+        g2.setColor(hovered ? LOGOUT_HOVER_BORDER : BORDER);
         g2.setStroke(new BasicStroke(1.2f));
         g2.drawRoundRect(0, y, w - 1, rectH - 1, ARC, ARC);
 
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
         FontMetrics fm = g2.getFontMetrics();
-        int totalWidth = ICON_SIZE + 12 + fm.stringWidth(title);
+        int logoutIconSize = 26;
+        int totalWidth = logoutIconSize + 14 + fm.stringWidth(title);
         int iconX = Math.max(18, (w - totalWidth) / 2);
-        int iconY = (getHeight() - ICON_SIZE) / 2;
-        paintLogoutIcon(g2, iconX, iconY, ORANGE);
+        int iconY = (getHeight() - logoutIconSize) / 2;
+        paintLogoutIcon(g2, iconX, iconY, LOGOUT_RED);
 
-        g2.setColor(ORANGE);
+        g2.setColor(LOGOUT_RED);
         int textY = ((getHeight() - fm.getHeight()) / 2) + fm.getAscent();
-        g2.drawString(title, iconX + ICON_SIZE + 12, textY);
+        g2.drawString(title, iconX + logoutIconSize + 14, textY);
     }
 
     private void paintSoftShadow(Graphics2D g2, int x, int y, int w, int h, Color color) {
@@ -255,10 +258,10 @@ public class ModernSidebarMenuItem extends JPanel {
 
     private void paintLogoutIcon(Graphics2D g2, int x, int y, Color color) {
         g2.setColor(color);
-        g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g2.drawRoundRect(x + 2, y + 4, 10, 14, 2, 2);
-        g2.drawLine(x + 12, y + 11, x + 20, y + 11);
-        g2.drawLine(x + 16, y + 7, x + 20, y + 11);
-        g2.drawLine(x + 16, y + 15, x + 20, y + 11);
+        g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.drawRoundRect(x + 2, y + 4, 11, 18, 3, 3);
+        g2.drawLine(x + 13, y + 13, x + 23, y + 13);
+        g2.drawLine(x + 19, y + 8, x + 24, y + 13);
+        g2.drawLine(x + 19, y + 18, x + 24, y + 13);
     }
 }
