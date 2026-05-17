@@ -40,7 +40,6 @@ import common.realtime.RealtimeClient;
 import common.sync.SyncVersionDao;
 import javax.swing.table.DefaultTableCellRenderer;
 
-
 public class ProductView extends JPanel {
 
     private final Color bgLight = new Color(244, 246, 250);
@@ -57,13 +56,15 @@ public class ProductView extends JPanel {
 
     private JTable tblProducts;
     private DefaultTableModel tableModel;
-    private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch, btnExportPDF, btnUnitConfig, btnImport;
+    private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch, btnExportPDF, btnUnitConfig, btnImport, btnEmergencyAlert;
+
+    private RoundedPanel formCard;
 
     private List<String> categoryList = new ArrayList<>();
     private List<String> productNameList = new ArrayList<>();
-    
+
     private JLabel lblImageSectionTitle;
-private JButton btnChooseImage;
+    private JButton btnChooseImage;
 
     public ProductView() {
         setLayout(new BorderLayout(20, 20));
@@ -75,33 +76,15 @@ private JButton btnChooseImage;
         initEvents();
         loadDataToTable();
 
-        // ---------------------------------------------------------
-        // ĐÃ FIX LỖI REAL-TIME Ở ĐÂY: Bọc SwingUtilities.invokeLater
-        // ---------------------------------------------------------
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e.getType() == AppEventType.PRODUCTS || e.getType() == AppEventType.INVENTORY) {
-                // Bắt buộc phải dùng invokeLater để đưa luồng phụ về luồng UI chính
                 SwingUtilities.invokeLater(() -> {
                     refreshTable();
                 });
             }
         });
 
-        if (AuthorizationService.isCashier()) {
-            btnAdd.setVisible(false);
-            btnUpdate.setVisible(false);
-            btnDelete.setVisible(false);
-            btnUnitConfig.setVisible(false);
-            btnImport.setVisible(false);
-        }
-
-        // ẨN PHẦN HÌNH ẢNH VỚI NHÂN VIÊN KHO
-        if (AuthorizationService.isWarehouseStaff()) {
-            lblImagePreview.setVisible(false);
-            btnChooseImage.setVisible(false);
-            // Ẩn label "Hình ảnh" — cần tách thành biến. Xem bước dưới:
-            lblImageSectionTitle.setVisible(false);
-        }
+        applyProductRolePermission();
     }
 
     private void loadAutoCompleteData() {
@@ -169,13 +152,17 @@ private JButton btnChooseImage;
         searchFieldWrapper.add(searchIconLabel, BorderLayout.WEST);
         searchFieldWrapper.add(cbSearch, BorderLayout.CENTER);
 
-        btnSearch  = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
+        btnSearch = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
         btnExportPDF = createCustomButton("Xuất Excel", new Color(0, 163, 108), Color.WHITE, IconHelper.export(20));
-        btnImport  = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, IconHelper.file(20));
+        btnImport = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, IconHelper.file(20));
+//        btnEmergencyAlert = createCustomButton("Báo hết hàng", new Color(220, 53, 69), Color.WHITE, IconHelper.warning(20));
+        btnEmergencyAlert = createCustomButton("Báo hết hàng", new Color(220, 53, 69), Color.WHITE, null);
+        btnEmergencyAlert.setVisible(false);
 
         toolPanel.add(searchFieldWrapper);
         toolPanel.add(btnSearch);
         toolPanel.add(btnExportPDF);
+        toolPanel.add(btnEmergencyAlert);
         toolPanel.add(btnImport);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
@@ -185,7 +172,7 @@ private JButton btnChooseImage;
         JPanel centerPanel = new JPanel(new BorderLayout(20, 0));
         centerPanel.setOpaque(false);
 
-        RoundedPanel formCard = new RoundedPanel(20, cardWhite);
+        formCard = new RoundedPanel(20, cardWhite);
         formCard.setPreferredSize(new Dimension(350, 0));
         formCard.setLayout(new GridBagLayout());
         formCard.setBorder(new EmptyBorder(20, 25, 20, 25));
@@ -301,9 +288,12 @@ private JButton btnChooseImage;
         tableModel = new DefaultTableModel(new Object[]{"Mã SP", "Tên sản phẩm", "Giá", "Số lượng", "Loại SP", "Ảnh"}, 0) {
             @Override
             public Class<?> getColumnClass(int col) {
-                if (col == 5) return ImageIcon.class; // cột Ảnh
+                if (col == 5) {
+                    return ImageIcon.class; // cột Ảnh
+                }
                 return Object.class;
             }
+
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -335,12 +325,53 @@ private JButton btnChooseImage;
             }
         });
         tblProducts.getColumnModel().getColumn(5).setPreferredWidth(80);
-        
+
         // Cột "Loại SP" (index 4) hiển thị icon + text
         tblProducts.getColumnModel()
                 .getColumn(4)
                 .setCellRenderer(new view.components.CategoryTableRenderer(20));
+        tblProducts.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table,
+                    Object value,
+                    boolean isSelected,
+                    boolean hasFocus,
+                    int row,
+                    int column
+            ) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
+                int modelRow = table.convertRowIndexToModel(row);
+                Object qtyObj = table.getModel().getValueAt(modelRow, 3);
+
+                int quantity = 0;
+                try {
+                    quantity = Integer.parseInt(String.valueOf(qtyObj).trim());
+                } catch (Exception ignored) {
+                }
+
+                if (isSelected) {
+                    c.setBackground(new Color(237, 242, 255));
+                    c.setForeground(textDark);
+                } else if (quantity <= 0) {
+                    c.setBackground(new Color(255, 230, 230));
+                    c.setForeground(new Color(160, 0, 0));
+                } else if (quantity <= 10) {
+                    c.setBackground(new Color(255, 246, 220));
+                    c.setForeground(new Color(120, 80, 0));
+                } else {
+                    c.setBackground(Color.WHITE);
+                    c.setForeground(Color.BLACK);
+                }
+
+                if (c instanceof JLabel lbl) {
+                    lbl.setHorizontalAlignment(SwingConstants.CENTER);
+                }
+
+                return c;
+            }
+        });
         JScrollPane scrollPane = new JScrollPane(tblProducts);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(Color.WHITE);
@@ -348,6 +379,102 @@ private JButton btnChooseImage;
 
         centerPanel.add(tableCard, BorderLayout.CENTER);
         add(centerPanel, BorderLayout.CENTER);
+    }
+
+    private void applyProductRolePermission() {
+        /*
+     * Store Manager:
+     * - Chỉ xem danh sách sản phẩm
+     * - Tìm kiếm
+     * - Xuất Excel
+     * Không được thêm/sửa/xóa/nhập CSV/cấu hình đơn vị.
+         */
+        if (AuthorizationService.isStoreManager()) {
+            if (formCard != null) {
+                formCard.setVisible(false);
+            }
+
+            btnImport.setVisible(false);
+            btnEmergencyAlert.setVisible(true);
+            btnAdd.setVisible(false);
+            btnUpdate.setVisible(false);
+            btnDelete.setVisible(false);
+            btnClear.setVisible(false);
+            btnUnitConfig.setVisible(false);
+
+            if (btnChooseImage != null) {
+                btnChooseImage.setVisible(false);
+            }
+
+            if (lblImagePreview != null) {
+                lblImagePreview.setVisible(false);
+            }
+
+            if (lblImageSectionTitle != null) {
+                lblImageSectionTitle.setVisible(false);
+            }
+
+            revalidate();
+            repaint();
+            return;
+        }
+
+        /*
+     * Cashier:
+     * - Chỉ xem/tìm kiếm sản phẩm
+     * - Không thao tác kho
+         */
+        if (AuthorizationService.isCashier()) {
+            if (formCard != null) {
+                formCard.setVisible(false);
+            }
+
+            btnImport.setVisible(false);
+
+            btnAdd.setVisible(false);
+            btnUpdate.setVisible(false);
+            btnDelete.setVisible(false);
+            btnClear.setVisible(false);
+            btnUnitConfig.setVisible(false);
+
+            if (btnChooseImage != null) {
+                btnChooseImage.setVisible(false);
+            }
+
+            if (lblImagePreview != null) {
+                lblImagePreview.setVisible(false);
+            }
+
+            if (lblImageSectionTitle != null) {
+                lblImageSectionTitle.setVisible(false);
+            }
+
+            revalidate();
+            repaint();
+            return;
+        }
+
+        /*
+     * Warehouse Staff:
+     * - Được thêm/sửa/xóa/cập nhật tồn kho/nhập CSV/cấu hình đơn vị
+     * - Ẩn phần hình ảnh nếu nghiệp vụ kho không cần quản lý ảnh
+         */
+        if (AuthorizationService.isWarehouseStaff()) {
+            if (lblImagePreview != null) {
+                lblImagePreview.setVisible(false);
+            }
+
+            if (btnChooseImage != null) {
+                btnChooseImage.setVisible(false);
+            }
+
+            if (lblImageSectionTitle != null) {
+                lblImageSectionTitle.setVisible(false);
+            }
+
+            revalidate();
+            repaint();
+        }
     }
 
     private void styleComboBox(JComboBox<String> cb, String placeholder) {
@@ -522,6 +649,55 @@ private JButton btnChooseImage;
         btnExportPDF.addActionListener(e -> btnExportPDFActionPerformed());
         btnUnitConfig.addActionListener(e -> showUnitConfigDialog());
         btnImport.addActionListener(e -> handleImportCSV());
+        btnEmergencyAlert.addActionListener(e -> sendStockAlert());
+    }
+
+    private void sendStockAlert() {
+        int row = tblProducts.getSelectedRow();
+
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn một sản phẩm cần báo kho!");
+            return;
+        }
+
+        int modelRow = tblProducts.convertRowIndexToModel(row);
+
+        String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
+        String productName = String.valueOf(tableModel.getValueAt(modelRow, 1));
+
+        int quantity = 0;
+        try {
+            quantity = Integer.parseInt(String.valueOf(tableModel.getValueAt(modelRow, 3)).trim());
+        } catch (Exception ignored) {
+        }
+
+        if (quantity > 20) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Sản phẩm này vẫn còn tồn kho (" + quantity + ").\n"
+                    + "Chỉ nên cảnh báo khi sản phẩm sắp hết hoặc đã hết hàng.",
+                    "Chưa cần cảnh báo",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Gửi cảnh báo cho kho về sản phẩm:\n"
+                + productName + " (" + productId + ")\n"
+                + "Số lượng hiện tại: " + quantity,
+                "Xác nhận gửi cảnh báo",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        RealtimeClient.send("INVENTORY_ALERT:" + productId + ":" + productName + ":" + quantity);
+
+        JOptionPane.showMessageDialog(this, "Đã gửi cảnh báo tồn kho cho bộ phận kho!");
     }
 
     private void btnAddActionPerformed() {
@@ -535,60 +711,114 @@ private JButton btnChooseImage;
         }
 
         ProductsSql dao = ProductsSql.getInstance();
-        Product existingProduct = dao.findByExactName(p.getProductName());
+
+        /*
+     * Logic chuẩn:
+     * - Nếu sản phẩm đã tồn tại theo Tên + Loại SP => chỉ cộng dồn số lượng, KHÔNG sinh mã mới.
+     * - Nếu là mặt hàng mới hoàn toàn => mới sinh mã SP tiếp theo.
+         */
+        Product existingProduct = dao.findByExactNameAndCategory(
+                p.getProductName(),
+                p.getCategoryId()
+        );
 
         if (existingProduct != null) {
-            int confirm = JOptionPane.showConfirmDialog(this,
-                    "Sản phẩm '" + p.getProductName() + "' đã có trong kho.\nBạn có muốn cộng dồn thêm " + p.getQuantity() + " vào số lượng hiện tại không?",
-                    "Phát hiện trùng lặp", JOptionPane.YES_NO_OPTION);
+            int confirm = JOptionPane.showConfirmDialog(
+                    this,
+                    "Sản phẩm '" + p.getProductName() + "' đã tồn tại trong kho.\n"
+                    + "Mã hiện tại: " + existingProduct.getProductId() + "\n"
+                    + "Bạn có muốn cộng thêm " + p.getQuantity() + " vào số lượng hiện tại không?",
+                    "Phát hiện sản phẩm trùng",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE
+            );
 
-            if (confirm == JOptionPane.YES_OPTION) {
-                if (dao.addQuantity(existingProduct.getProductId(), p.getQuantity(), existingProduct.getStoreId())) {
-
-                    SyncVersionDao.bumpVersion("INVENTORY");
-                    SyncVersionDao.bumpVersion("PRODUCTS");
-
-                    // REALTIME
-                    RealtimeClient.send("PRODUCTS_CHANGED");
-                    RealtimeClient.send("INVENTORY_CHANGED");
-
-                    JOptionPane.showMessageDialog(this, "✅ Đã cộng dồn số lượng thành công!");
-                    loadDataToTable();
-                    btnClearActionPerformed();
-                } else {
-                    JOptionPane.showMessageDialog(this, "❌ Lỗi khi cộng dồn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        } else {
-            p.setProductId(dao.generateNextProductId());
-            if (p.getSupplierId() == null || p.getSupplierId().trim().isEmpty()) {
-                p.setSupplierId("SUP001");
-            }
-            if (p.getStoreId() == null || p.getStoreId().trim().isEmpty()) {
-                p.setStoreId("ST001");
-            }
-            if (p.getUnit() == null || p.getUnit().trim().isEmpty()) {
-                p.setUnit("Cái");
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
             }
 
-            if (dao.insert(p)) {
+            String storeId = existingProduct.getStoreId();
+            if (storeId == null || storeId.trim().isEmpty()) {
+                storeId = "ST001";
+            }
 
-                SyncVersionDao.bumpVersion("PRODUCTS");
+            boolean success = dao.addQuantity(
+                    existingProduct.getProductId(),
+                    p.getQuantity(),
+                    storeId
+            );
+
+            if (success) {
                 SyncVersionDao.bumpVersion("INVENTORY");
+                SyncVersionDao.bumpVersion("PRODUCTS");
 
-                // REALTIME
                 RealtimeClient.send("PRODUCTS_CHANGED");
                 RealtimeClient.send("INVENTORY_CHANGED");
 
-                JOptionPane.showMessageDialog(this, "✅ Thêm sản phẩm mới thành công!\nMã tự cấp: " + p.getProductId());
+                JOptionPane.showMessageDialog(
+                        this,
+                        "✅ Đã cộng dồn số lượng thành công!\n"
+                        + "Mã sản phẩm giữ nguyên: " + existingProduct.getProductId()
+                );
+
                 loadDataToTable();
-                if (!productNameList.contains(p.getProductName())) {
-                    productNameList.add(p.getProductName());
-                }
                 btnClearActionPerformed();
             } else {
-                JOptionPane.showMessageDialog(this, "❌ Thêm thất bại! Vui lòng kiểm tra dữ liệu đầu vào.", "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "❌ Lỗi khi cộng dồn số lượng!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
             }
+
+            return;
+        }
+
+        // Chỉ sinh mã mới khi đây là sản phẩm mới hoàn toàn
+        p.setProductId(dao.generateNextProductId());
+
+        if (p.getSupplierId() == null || p.getSupplierId().trim().isEmpty()) {
+            p.setSupplierId("SUP001");
+        }
+
+        if (p.getStoreId() == null || p.getStoreId().trim().isEmpty()) {
+            p.setStoreId("ST001");
+        }
+
+        if (p.getUnit() == null || p.getUnit().trim().isEmpty()) {
+            p.setUnit("Cái");
+        }
+
+        boolean inserted = dao.insert(p);
+
+        if (inserted) {
+            SyncVersionDao.bumpVersion("PRODUCTS");
+            SyncVersionDao.bumpVersion("INVENTORY");
+
+            RealtimeClient.send("PRODUCTS_CHANGED");
+            RealtimeClient.send("INVENTORY_CHANGED");
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "✅ Thêm sản phẩm mới thành công!\n"
+                    + "Mã tự cấp: " + p.getProductId()
+            );
+
+            loadDataToTable();
+
+            if (!productNameList.contains(p.getProductName())) {
+                productNameList.add(p.getProductName());
+            }
+
+            btnClearActionPerformed();
+        } else {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "❌ Thêm thất bại! Vui lòng kiểm tra dữ liệu đầu vào.",
+                    "Lỗi hệ thống",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -726,20 +956,34 @@ private JButton btnChooseImage;
             return;
         }
 
-        Object nameObj = tblProducts.getValueAt(row, 1);
-        Object priceObj = tblProducts.getValueAt(row, 2);
-        Object qtyObj = tblProducts.getValueAt(row, 3);
-        Object categoryObj = tblProducts.getValueAt(row, 4);
+        int modelRow = tblProducts.convertRowIndexToModel(row);
 
-        txtName.setText(nameObj == null ? "" : nameObj.toString().trim());
-        txtPrice.setText(priceObj == null ? "" : priceObj.toString().trim());
-        txtQuantity.setText(qtyObj == null ? "" : qtyObj.toString().trim());
+        String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
+        String productName = String.valueOf(tableModel.getValueAt(modelRow, 1));
+        String price = String.valueOf(tableModel.getValueAt(modelRow, 2));
+        String quantityText = String.valueOf(tableModel.getValueAt(modelRow, 3));
+        String categoryId = String.valueOf(tableModel.getValueAt(modelRow, 4));
+
+        int quantity = 0;
+        try {
+            quantity = Integer.parseInt(quantityText.trim());
+        } catch (Exception ignored) {
+        }
+
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isCashier()) {
+            if (evt.getClickCount() == 2) {
+                showProductDetailDialog(productId, productName, price, quantity, categoryId);
+            }
+            return;
+        }
+
+        txtName.setText(productName);
+        txtPrice.setText(price);
+        txtQuantity.setText(quantityText);
 
         JTextField editor = (JTextField) cbCategory.getEditor().getEditorComponent();
-        editor.setText(categoryObj == null ? "" : categoryObj.toString().trim());
+        editor.setText(categoryId);
 
-        // Hiển thị ảnh nếu có
-        String productId = tblProducts.getValueAt(row, 0).toString().trim();
         Product selected = ProductsSql.getInstance().findById(productId);
         if (selected != null && selected.getImagePath() != null && !selected.getImagePath().isEmpty()) {
             selectedImagePath = selected.getImagePath();
@@ -764,6 +1008,93 @@ private JButton btnChooseImage;
         }
     }
 
+    private void showProductDetailDialog(String productId, String productName, String price, int quantity, String categoryId) {
+        String status;
+        Color statusColor;
+
+        if (quantity <= 0) {
+            status = "HẾT HÀNG";
+            statusColor = new Color(220, 53, 69);
+        } else if (quantity <= 10) {
+            status = "SẮP HẾT HÀNG";
+            statusColor = new Color(255, 153, 0);
+        } else {
+            status = "CÒN HÀNG";
+            statusColor = new Color(25, 135, 84);
+        }
+
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Chi tiết sản phẩm", true);
+        dialog.setSize(460, 360);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout());
+        dialog.getContentPane().setBackground(bgLight);
+
+        RoundedPanel card = new RoundedPanel(20, Color.WHITE);
+        card.setLayout(new GridBagLayout());
+        card.setBorder(new EmptyBorder(25, 30, 25, 30));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1;
+        gbc.insets = new Insets(6, 0, 6, 0);
+        gbc.gridx = 0;
+
+        JLabel title = new JLabel("Chi tiết sản phẩm");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(textDark);
+        gbc.gridy = 0;
+        card.add(title, gbc);
+
+        gbc.gridy++;
+        card.add(detailLine("Mã sản phẩm", productId), gbc);
+
+        gbc.gridy++;
+        card.add(detailLine("Tên sản phẩm", productName), gbc);
+
+        gbc.gridy++;
+        card.add(detailLine("Giá bán", price), gbc);
+
+        gbc.gridy++;
+        card.add(detailLine("Số lượng tồn", String.valueOf(quantity)), gbc);
+
+        gbc.gridy++;
+        card.add(detailLine("Loại sản phẩm", categoryId), gbc);
+
+        gbc.gridy++;
+        JLabel statusLabel = new JLabel("Trạng thái: " + status);
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        statusLabel.setForeground(statusColor);
+        card.add(statusLabel, gbc);
+
+        JButton btnClose = createCustomButton("Đóng", new Color(165, 177, 194), Color.WHITE, null);
+        btnClose.addActionListener(e -> dialog.dispose());
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        bottom.setOpaque(false);
+        bottom.add(btnClose);
+
+        dialog.add(card, BorderLayout.CENTER);
+        dialog.add(bottom, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    private JPanel detailLine(String label, String value) {
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+
+        JLabel lbl = new JLabel(label + ": ");
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lbl.setForeground(textDark);
+
+        JLabel val = new JLabel(value == null ? "" : value);
+        val.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        val.setForeground(Color.BLACK);
+
+        row.add(lbl, BorderLayout.WEST);
+        row.add(val, BorderLayout.CENTER);
+        return row;
+    }
+
     private List<Map<String, Object>> getAllProductsFromTable() {
         List<Map<String, Object>> list = new ArrayList<>();
         int rowCount = tblProducts.getRowCount();
@@ -784,13 +1115,13 @@ private JButton btnChooseImage;
             List<Product> list = ProductsSql.getInstance().selectAll();
             for (Product p : list) {
                 ImageIcon thumb = null;
-        if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
-            java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
-            if (imgUrl != null) {
-                thumb = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH));
-            }
-        }
-        Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
+                if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
+                    java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
+                    if (imgUrl != null) {
+                        thumb = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH));
+                    }
+                }
+                Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
                 tableModel.addRow(row);
             }
         } catch (Exception e) {
@@ -1043,13 +1374,12 @@ private JButton btnChooseImage;
 
     private void handleImportCSV() {        // Lấy frame cha chứa View này
         JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
+
         // Gọi Dialog Import chuyên dụng mà chúng ta đã sửa (có ProgressBar chạy ngầm)
         // Truyền 'this' (ProductView) vào để Dialog có thể gọi refresh bảng sau khi xong
         ImportProductDialog dialog = new ImportProductDialog(topFrame, this);
         dialog.setVisible(true);
     }
-    
 
     private void styleSearchBox(JComboBox<String> cb, String placeholder) {
         cb.setEditable(true);
