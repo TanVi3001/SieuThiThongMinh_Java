@@ -1,32 +1,12 @@
 package view;
 
+import business.service.InventoryPricePolicyService;
 import business.sql.prod_inventory.InventoryTransactionSql;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.Frame;
-import java.awt.GridLayout;
+import java.awt.*;
 import java.awt.print.PrinterException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.SimpleDateFormat;
 import java.util.List;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.JSeparator;
-import javax.swing.SwingConstants;
+import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -68,8 +48,8 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
             return;
         }
 
-        setSize(1100, 700);
-        setMinimumSize(new Dimension(900, 600));
+        setSize(1320, 760);
+        setMinimumSize(new Dimension(1180, 680));
         setLocationRelativeTo(getOwner());
         setLayout(new BorderLayout());
         getContentPane().setBackground(BG);
@@ -94,14 +74,14 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
 
         JLabel title = new JLabel("PHIẾU NHẬP HÀNG");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 28));
         title.setForeground(NAVY);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel subtitle = new JLabel(
                 "Mã phiếu: " + receiptId
                 + "  •  Số dòng sản phẩm: " + lineCount
-                + "  •  Dữ liệu đã lưu trong Oracle"
+                + "  •  Giá nhập sau VAT phải nhỏ hơn giá bán"
         );
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subtitle.setForeground(MUTED);
@@ -160,10 +140,10 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
                     "Mã SP",
                     "Tên sản phẩm",
                     "SL",
-                    "Đơn vị",
-                    "Giá nhập chưa VAT",
+                    "ĐV",
+                    "Giá nhập",
                     "VAT",
-                    "Giá nhập sau VAT",
+                    "Nhập + VAT",
                     "Giá bán",
                     "Thành tiền"
                 },
@@ -178,7 +158,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         int stt = 1;
 
         for (InventoryTransactionSql.PurchaseReceiptLineDTO line : lines) {
-            BigDecimal importAfterVat = calculateImportAfterVat(
+            BigDecimal importAfterVat = InventoryPricePolicyService.calculateImportPriceAfterVat(
                     line.unitImportPrice,
                     line.vatRate
             );
@@ -190,7 +170,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
                 line.quantity,
                 safe(line.unit, "Cái"),
                 money(line.unitImportPrice),
-                moneyPercent(line.vatRate),
+                percent(line.vatRate),
                 money(importAfterVat),
                 money(line.salePrice),
                 money(line.afterTax)
@@ -204,6 +184,8 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(245, 246, 250)));
         scrollPane.getViewport().setBackground(Color.WHITE);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(18);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
         card.add(infoPanel, BorderLayout.NORTH);
         card.add(scrollPane, BorderLayout.CENTER);
@@ -247,7 +229,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
             totalTax = totalTax.add(nullToZero(line.taxAmount));
             totalAfterTax = totalAfterTax.add(nullToZero(line.afterTax));
 
-            BigDecimal importAfterVat = calculateImportAfterVat(
+            BigDecimal importAfterVat = InventoryPricePolicyService.calculateImportPriceAfterVat(
                     line.unitImportPrice,
                     line.vatRate
             );
@@ -297,7 +279,8 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
     }
 
     private void styleTable() {
-        table.setRowHeight(36);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setRowHeight(38);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         table.setForeground(NAVY);
         table.setGridColor(new Color(245, 246, 250));
@@ -361,15 +344,15 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         });
 
         table.getColumnModel().getColumn(0).setPreferredWidth(45);
-        table.getColumnModel().getColumn(1).setPreferredWidth(95);
-        table.getColumnModel().getColumn(2).setPreferredWidth(260);
+        table.getColumnModel().getColumn(1).setPreferredWidth(105);
+        table.getColumnModel().getColumn(2).setPreferredWidth(320);
         table.getColumnModel().getColumn(3).setPreferredWidth(55);
-        table.getColumnModel().getColumn(4).setPreferredWidth(70);
-        table.getColumnModel().getColumn(5).setPreferredWidth(140);
-        table.getColumnModel().getColumn(6).setPreferredWidth(70);
-        table.getColumnModel().getColumn(7).setPreferredWidth(140);
+        table.getColumnModel().getColumn(4).setPreferredWidth(60);
+        table.getColumnModel().getColumn(5).setPreferredWidth(130);
+        table.getColumnModel().getColumn(6).setPreferredWidth(65);
+        table.getColumnModel().getColumn(7).setPreferredWidth(135);
         table.getColumnModel().getColumn(8).setPreferredWidth(120);
-        table.getColumnModel().getColumn(9).setPreferredWidth(130);
+        table.getColumnModel().getColumn(9).setPreferredWidth(135);
     }
 
     private JButton createButton(String text, Color bg) {
@@ -414,19 +397,6 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         }
     }
 
-    private BigDecimal calculateImportAfterVat(BigDecimal importBeforeVat, BigDecimal vatRate) {
-        BigDecimal before = nullToZero(importBeforeVat);
-        BigDecimal vat = nullToZero(vatRate);
-
-        return before
-                .multiply(
-                        BigDecimal.ONE.add(
-                                vat.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)
-                        )
-                )
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
     private BigDecimal nullToZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
@@ -439,7 +409,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         return String.format("%,.0f", value);
     }
 
-    private String moneyPercent(BigDecimal value) {
+    private String percent(BigDecimal value) {
         if (value == null) {
             return "0%";
         }

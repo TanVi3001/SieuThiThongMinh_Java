@@ -23,9 +23,15 @@ import javax.swing.ScrollPaneConstants;
 
 public class WarehouseSidebar extends JPanel {
 
+    public static final String MENU_INVENTORY = "Quản lý tồn kho";
+    public static final String MENU_PRODUCTS = "Quản lý sản phẩm";
+    public static final String MENU_SUPPLIERS = "Quản lý nhà cung cấp";
+    public static final String MENU_CATEGORY_TAX = "Danh mục & Thuế VAT";
+    public static final String MENU_SETTINGS = "Cài đặt";
+    public static final String MENU_LOGOUT = "Đăng xuất";
+
     private static final int SIDEBAR_WIDTH = 280;
 
-    // Dùng chung palette với Store Portal
     private static final Color SIDEBAR_BG = ModernSidebarMenuItem.WHITE;
     private static final Color APP_BG = ModernSidebarMenuItem.APP_BG;
     private static final Color NAVY = ModernSidebarMenuItem.NAVY;
@@ -33,13 +39,19 @@ public class WarehouseSidebar extends JPanel {
     private static final Color BORDER = ModernSidebarMenuItem.BORDER;
     private static final Color ORANGE = ModernSidebarMenuItem.ORANGE;
 
-    private final List<ModernSidebarMenuItem> menuItems;
-    private final JPanel menuPanel;
+    private final List<MenuEntry> menuEntries = new ArrayList<>();
+
+    private JPanel menuPanel;
     private MenuClickListener listener;
+    private String activeMenuTitle = MENU_INVENTORY;
 
     public WarehouseSidebar() {
-        this.menuItems = new ArrayList<>();
+        initLayout();
+        initMenu();
+        setActiveMenu(MENU_INVENTORY);
+    }
 
+    private void initLayout() {
         setLayout(new BorderLayout());
         setOpaque(false);
         setPreferredSize(new Dimension(SIDEBAR_WIDTH, 0));
@@ -54,12 +66,6 @@ public class WarehouseSidebar extends JPanel {
         menuPanel.setLayout(new BoxLayout(menuPanel, BoxLayout.Y_AXIS));
         menuPanel.setBorder(BorderFactory.createEmptyBorder(8, 24, 12, 24));
 
-        addMenuItem("Quản lý tồn kho", getIconByTitle("Quản lý tồn kho"));
-        addMenuItem("Quản lý sản phẩm", getIconByTitle("Quản lý sản phẩm"));
-        addMenuItem("Nhà cung cấp", getIconByTitle("Nhà cung cấp"));
-        addMenuItem("Danh mục & Thuế VAT", getIconByTitle("Danh mục & Thuế VAT"));
-        addMenuItem("Cài đặt", getIconByTitle("Cài đặt"));
-
         JScrollPane scrollPane = new JScrollPane(menuPanel);
         scrollPane.setOpaque(false);
         scrollPane.getViewport().setOpaque(false);
@@ -70,10 +76,14 @@ public class WarehouseSidebar extends JPanel {
 
         add(scrollPane, BorderLayout.CENTER);
         add(createBottomPanel(), BorderLayout.SOUTH);
+    }
 
-        if (!menuItems.isEmpty()) {
-            menuItems.get(0).setActive(true);
-        }
+    private void initMenu() {
+        addMenuItem(MENU_INVENTORY, getIconByTitle(MENU_INVENTORY));
+        addMenuItem(MENU_PRODUCTS, getIconByTitle(MENU_PRODUCTS));
+        addMenuItem(MENU_SUPPLIERS, getIconByTitle(MENU_SUPPLIERS));
+        addMenuItem(MENU_CATEGORY_TAX, getIconByTitle(MENU_CATEGORY_TAX));
+        addMenuItem(MENU_SETTINGS, getIconByTitle(MENU_SETTINGS));
     }
 
     private JPanel createBrandingPanel() {
@@ -118,11 +128,11 @@ public class WarehouseSidebar extends JPanel {
         bottomPanel.add(Box.createVerticalGlue());
 
         ModernSidebarMenuItem logoutItem = new ModernSidebarMenuItem(
-                "Đăng xuất",
+                MENU_LOGOUT,
                 IconHelper.logout(24),
                 () -> {
                     if (listener != null) {
-                        listener.onMenuClick("Đăng xuất");
+                        listener.onMenuClick(MENU_LOGOUT);
                     }
                 }
         );
@@ -136,30 +146,44 @@ public class WarehouseSidebar extends JPanel {
     }
 
     private void addMenuItem(final String title, ImageIcon icon) {
-        final ModernSidebarMenuItem[] itemHolder = new ModernSidebarMenuItem[1];
-
         ModernSidebarMenuItem item = new ModernSidebarMenuItem(
                 title,
                 icon,
-                () -> {
-                    for (ModernSidebarMenuItem menuItem : menuItems) {
-                        menuItem.setActive(false);
-                    }
-
-                    itemHolder[0].setActive(true);
-
-                    if (listener != null) {
-                        listener.onMenuClick(title);
-                    }
-                }
+                () -> handleMenuClick(title)
         );
 
-        itemHolder[0] = item;
         item.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        menuItems.add(item);
+        menuEntries.add(new MenuEntry(title, item));
         menuPanel.add(item);
         menuPanel.add(Box.createRigidArea(new Dimension(0, 9)));
+    }
+
+    private void handleMenuClick(String title) {
+        setActiveMenu(title);
+
+        if (listener != null) {
+            listener.onMenuClick(title);
+        }
+    }
+
+    public void setActiveMenu(String title) {
+        if (title == null || title.trim().isEmpty()) {
+            return;
+        }
+
+        activeMenuTitle = title;
+
+        for (MenuEntry entry : menuEntries) {
+            entry.item.setActive(title.equals(entry.title));
+        }
+
+        revalidate();
+        repaint();
+    }
+
+    public String getActiveMenuTitle() {
+        return activeMenuTitle;
     }
 
     private ImageIcon getIconByTitle(String title) {
@@ -195,6 +219,17 @@ public class WarehouseSidebar extends JPanel {
     public interface MenuClickListener {
 
         void onMenuClick(String title);
+    }
+
+    private static class MenuEntry {
+
+        private final String title;
+        private final ModernSidebarMenuItem item;
+
+        private MenuEntry(String title, ModernSidebarMenuItem item) {
+            this.title = title;
+            this.item = item;
+        }
     }
 
     @Override

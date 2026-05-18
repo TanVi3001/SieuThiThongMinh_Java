@@ -79,6 +79,10 @@ public class InventoryTransactionSql {
      * unitImportPrice = giá nhập chưa VAT. vatRate = phần trăm VAT.
      *
      * Điều kiện nghiệp vụ: Giá nhập sau VAT phải nhỏ hơn giá bán hiện tại.
+     *
+     * Quan trọng: Khi nhập kho với nhà cung cấp nào, hệ thống sẽ cập nhật
+     * PRODUCTS.supplier_id để màn Quản Lý Nhà Cung Cấp thống kê được số sản
+     * phẩm theo NCC.
      */
     public String createPurchaseReceiptAndIncreaseStock(
             String productId,
@@ -121,14 +125,13 @@ public class InventoryTransactionSql {
 
         BigDecimal unitImportAfterVat = calculateImportPriceAfterVat(unitImportPrice, vatRate);
 
-        // BẮT BUỘC: Giá nhập sau VAT phải nhỏ hơn giá bán.
         if (unitImportAfterVat.compareTo(salePrice) >= 0) {
             throw new IllegalArgumentException(
                     "Giá nhập sau VAT phải nhỏ hơn giá bán.\n\n"
-                    + "Giá nhập chưa VAT: " + unitImportPrice + "\n"
-                    + "VAT: " + vatRate + "%\n"
-                    + "Giá nhập sau VAT: " + unitImportAfterVat + "\n"
-                    + "Giá bán hiện tại: " + salePrice
+                    + "Giá nhập chưa VAT: " + money(unitImportPrice) + " VNĐ\n"
+                    + "VAT: " + vatRate.stripTrailingZeros().toPlainString() + "%\n"
+                    + "Giá nhập sau VAT: " + money(unitImportAfterVat) + " VNĐ\n"
+                    + "Giá bán hiện tại: " + money(salePrice) + " VNĐ"
             );
         }
 
@@ -155,10 +158,12 @@ public class InventoryTransactionSql {
                 : product.getUnit().trim();
 
         String storeId = product.getStoreId() == null || product.getStoreId().trim().isEmpty()
-                ? "ST001"
+                ? "ST01"
                 : product.getStoreId().trim();
 
+        String cleanSupplierId = emptyToDefault(supplierId, "SUP_01");
         String createdBy = getCurrentAccountId();
+        String cleanNote = note == null ? "" : note.trim();
 
         String sqlReceipt = """
             INSERT INTO PURCHASE_RECEIPTS
@@ -246,15 +251,22 @@ public class InventoryTransactionSql {
             )
         """;
 
+        String sqlUpdateProductSupplier = """
+            UPDATE PRODUCTS
+            SET supplier_id = ?
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
             try (
-                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt); PreparedStatement psDetail = con.prepareStatement(sqlDetail); PreparedStatement psTransaction = con.prepareStatement(sqlTransaction)) {
+                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt); PreparedStatement psDetail = con.prepareStatement(sqlDetail); PreparedStatement psTransaction = con.prepareStatement(sqlTransaction); PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier)) {
                 psReceipt.setString(1, receiptId);
-                psReceipt.setString(2, emptyToDefault(supplierId, "SUP001"));
+                psReceipt.setString(2, cleanSupplierId);
                 psReceipt.setString(3, createdBy);
-                psReceipt.setString(4, note);
+                psReceipt.setString(4, cleanNote);
                 psReceipt.setBigDecimal(5, beforeTax);
                 psReceipt.setBigDecimal(6, taxAmount);
                 psReceipt.setBigDecimal(7, afterTax);
@@ -286,9 +298,13 @@ public class InventoryTransactionSql {
                 psTransaction.setBigDecimal(9, vatRate);
                 psTransaction.setBigDecimal(10, taxAmount);
                 psTransaction.setBigDecimal(11, afterTax);
-                psTransaction.setString(12, note);
+                psTransaction.setString(12, cleanNote);
                 psTransaction.setString(13, createdBy);
                 psTransaction.executeUpdate();
+
+                psUpdateProductSupplier.setString(1, cleanSupplierId);
+                psUpdateProductSupplier.setString(2, productId);
+                psUpdateProductSupplier.executeUpdate();
 
                 con.commit();
                 return receiptId;
@@ -306,7 +322,8 @@ public class InventoryTransactionSql {
     }
 
     /**
-     * Xuất/hủy kho và ghi lịch sử biến động.
+     * Xuất/hủy kho và ghi lịch sử biến động. Hiện tại nếu bạn đã bỏ nút
+     * Xuất/Hủy khỏi UI thì hàm này vẫn giữ lại để sau này dùng.
      */
     public boolean createOutboundTransaction(String productId, int quantity, String note) {
         if (productId == null || productId.trim().isEmpty() || quantity <= 0) {
@@ -326,7 +343,7 @@ public class InventoryTransactionSql {
                 : product.getUnit().trim();
 
         String storeId = product.getStoreId() == null || product.getStoreId().trim().isEmpty()
-                ? "ST001"
+                ? "ST01"
                 : product.getStoreId().trim();
 
         BigDecimal salePrice = product.getBasePrice() == null
@@ -378,7 +395,7 @@ public class InventoryTransactionSql {
                 ps.setString(5, storeId);
                 ps.setBigDecimal(6, salePrice);
                 ps.setBigDecimal(7, totalAmount);
-                ps.setString(8, note);
+                ps.setString(8, note == null ? "" : note.trim());
                 ps.setString(9, getCurrentAccountId());
                 ps.executeUpdate();
 
@@ -428,7 +445,8 @@ public class InventoryTransactionSql {
                        t.created_by,
                        t.created_at
                 FROM INVENTORY_TRANSACTIONS t
-                LEFT JOIN PRODUCTS p ON p.product_id = t.product_id
+                LEFT JOIN PRODUCTS p
+                    ON p.product_id = t.product_id
                 WHERE NVL(t.is_deleted, 0) = 0
                 ORDER BY t.created_at DESC
             )
@@ -494,8 +512,10 @@ public class InventoryTransactionSql {
                    r.note,
                    r.created_at
             FROM PURCHASE_RECEIPTS r
-            JOIN PURCHASE_RECEIPT_DETAILS d ON d.receipt_id = r.receipt_id
-            LEFT JOIN PRODUCTS p ON p.product_id = d.product_id
+            JOIN PURCHASE_RECEIPT_DETAILS d
+                ON d.receipt_id = r.receipt_id
+            LEFT JOIN PRODUCTS p
+                ON p.product_id = d.product_id
             WHERE r.receipt_id = ?
               AND NVL(r.is_deleted, 0) = 0
               AND NVL(d.is_deleted, 0) = 0
@@ -558,7 +578,8 @@ public class InventoryTransactionSql {
                    d.line_tax,
                    d.line_after_tax
             FROM PURCHASE_RECEIPT_DETAILS d
-            LEFT JOIN PRODUCTS p ON p.product_id = d.product_id
+            LEFT JOIN PRODUCTS p
+                ON p.product_id = d.product_id
             WHERE d.receipt_id = ?
               AND NVL(d.is_deleted, 0) = 0
             ORDER BY d.created_at ASC
@@ -625,5 +646,13 @@ public class InventoryTransactionSql {
 
     private String emptyToDefault(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private String money(BigDecimal value) {
+        if (value == null) {
+            return "0";
+        }
+
+        return String.format("%,.0f", value);
     }
 }
