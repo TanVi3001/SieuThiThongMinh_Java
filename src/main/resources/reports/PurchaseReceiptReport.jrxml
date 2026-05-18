@@ -205,11 +205,11 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText><reportElement style="TableHeader" x="124" y="0" width="166" height="24"/><box leftPadding="8"/><textElement verticalAlignment="Middle"/><text><![CDATA[Tên sản phẩm]]></text></staticText>
             <staticText><reportElement style="TableHeader" x="290" y="0" width="44" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[SL]]></text></staticText>
             <staticText><reportElement style="TableHeader" x="334" y="0" width="42" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[ĐV]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="376" y="0" width="82" height="24"/><textElement textAlignment="Right" verticalAlignment="Middle"/><text><![CDATA[Giá nhập]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="376" y="0" width="82" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Giá nhập]]></text></staticText>
             <staticText><reportElement style="TableHeader" x="458" y="0" width="50" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[VAT]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="508" y="0" width="84" height="24"/><textElement textAlignment="Right" verticalAlignment="Middle"/><text><![CDATA[Nhập + VAT]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="592" y="0" width="82" height="24"/><textElement textAlignment="Right" verticalAlignment="Middle"/><text><![CDATA[Giá bán]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="674" y="0" width="118" height="24"/><box rightPadding="8"/><textElement textAlignment="Right" verticalAlignment="Middle"/><text><![CDATA[Thành tiền]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="508" y="0" width="84" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Nhập + VAT]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="592" y="0" width="82" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Giá bán]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="674" y="0" width="118" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Thành tiền]]></text></staticText>
         </band>
     </columnHeader>
 
@@ -226,11 +226,11 @@ ORDER BY d.created_at, d.receipt_detail_id
             <textField isBlankWhenNull="true"><reportElement style="TableCell" x="124" y="5" width="166" height="13"/><box leftPadding="8"/><textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression></textField>
             <textField pattern="#,##0"><reportElement style="TableCell" x="290" y="5" width="44" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression></textField>
             <textField isBlankWhenNull="true"><reportElement style="TableCell" x="334" y="5" width="42" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{unit}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="Money" x="376" y="5" width="82" height="13"/><textFieldExpression><![CDATA[$F{import_price}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="376" y="5" width="82" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{import_price}]]></textFieldExpression></textField>
             <textField pattern="#,##0.##'%'"><reportElement style="TableCell" x="458" y="5" width="50" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{vat_percent}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="Money" x="508" y="5" width="84" height="13"/><textFieldExpression><![CDATA[$F{import_price_with_vat}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="Money" x="592" y="5" width="82" height="13"/><textFieldExpression><![CDATA[$F{selling_price}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="Money" x="674" y="5" width="118" height="13"/><box rightPadding="8"/><textElement textAlignment="Right"><font isBold="true"/></textElement><textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="508" y="5" width="84" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{import_price_with_vat}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="592" y="5" width="82" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{selling_price}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="674" y="5" width="118" height="13"/><textElement textAlignment="Center"><font isBold="true"/></textElement><textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression></textField>
         </band>
     </detail>
 
