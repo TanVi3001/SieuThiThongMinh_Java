@@ -467,3 +467,102 @@ CREATE TABLE INVENTORY_NOTIFICATIONS (
     resolved_at     TIMESTAMP,
     is_deleted      NUMBER(1) DEFAULT 0
 );
+
+-- ==========================================================
+-- PURCHASE RECEIPTS / INVENTORY TRANSACTION HISTORY
+-- Quản lý phiếu nhập hàng và lịch sử biến động kho
+-- ==========================================================
+
+CREATE TABLE PURCHASE_RECEIPTS (
+    receipt_id         VARCHAR2(50) PRIMARY KEY,
+    supplier_id        VARCHAR2(50),
+    created_by         VARCHAR2(50),
+    note               NVARCHAR2(1000),
+
+    total_before_tax   NUMBER(18,2) DEFAULT 0,
+    total_tax          NUMBER(18,2) DEFAULT 0,
+    total_after_tax    NUMBER(18,2) DEFAULT 0,
+
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted         NUMBER(1) DEFAULT 0
+);
+
+CREATE TABLE PURCHASE_RECEIPT_DETAILS (
+    receipt_detail_id  VARCHAR2(50) PRIMARY KEY,
+    receipt_id         VARCHAR2(50) NOT NULL,
+    product_id         VARCHAR2(50) NOT NULL,
+
+    quantity           NUMBER(10) NOT NULL,
+    unit               NVARCHAR2(50),
+
+    unit_import_price  NUMBER(18,2) NOT NULL,
+    sale_price         NUMBER(18,2) NOT NULL,
+    vat_rate           NUMBER(5,2) DEFAULT 0,
+
+    line_before_tax    NUMBER(18,2) DEFAULT 0,
+    line_tax           NUMBER(18,2) DEFAULT 0,
+    line_after_tax     NUMBER(18,2) DEFAULT 0,
+
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted         NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_PRD_RECEIPT
+        FOREIGN KEY (receipt_id)
+        REFERENCES PURCHASE_RECEIPTS(receipt_id),
+
+    CONSTRAINT FK_PRD_PRODUCT
+        FOREIGN KEY (product_id)
+        REFERENCES PRODUCTS(product_id)
+);
+
+CREATE TABLE INVENTORY_TRANSACTIONS (
+    transaction_id     VARCHAR2(50) PRIMARY KEY,
+    receipt_id         VARCHAR2(50),
+    product_id         VARCHAR2(50) NOT NULL,
+
+    transaction_type   VARCHAR2(30) NOT NULL,
+    quantity           NUMBER(10) NOT NULL,
+    unit               NVARCHAR2(50),
+    store_id           VARCHAR2(50),
+
+    unit_import_price  NUMBER(18,2),
+    sale_price         NUMBER(18,2),
+    vat_rate           NUMBER(5,2),
+    vat_amount         NUMBER(18,2),
+    total_amount       NUMBER(18,2),
+
+    note               NVARCHAR2(1000),
+    created_by         VARCHAR2(50),
+
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted         NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_INV_TRANS_RECEIPT
+        FOREIGN KEY (receipt_id)
+        REFERENCES PURCHASE_RECEIPTS(receipt_id),
+
+    CONSTRAINT FK_INV_TRANS_PRODUCT
+        FOREIGN KEY (product_id)
+        REFERENCES PRODUCTS(product_id),
+
+    CONSTRAINT CK_INV_TRANS_TYPE
+        CHECK (transaction_type IN ('INBOUND', 'OUTBOUND', 'ADJUSTMENT', 'CANCEL'))
+);
+
+CREATE INDEX IDX_PURCHASE_RECEIPTS_CREATED_AT
+ON PURCHASE_RECEIPTS(created_at);
+
+CREATE INDEX IDX_PURCHASE_DETAILS_RECEIPT
+ON PURCHASE_RECEIPT_DETAILS(receipt_id);
+
+CREATE INDEX IDX_PURCHASE_DETAILS_PRODUCT
+ON PURCHASE_RECEIPT_DETAILS(product_id);
+
+CREATE INDEX IDX_INV_TRANS_PRODUCT_TIME
+ON INVENTORY_TRANSACTIONS(product_id, created_at);
+
+CREATE INDEX IDX_INV_TRANS_RECEIPT
+ON INVENTORY_TRANSACTIONS(receipt_id);
