@@ -1,59 +1,119 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
-set CONTAINER_NAME=supermarket-oracle
-set ORACLE_USER=system
-set ORACLE_PASSWORD=Admin123
-set ORACLE_SERVICE=FREEPDB1
+REM ==========================================================
+REM Smart Supermarket - Restore Latest Backup
+REM Purpose: Import latest .DMP file in backup folder
+REM ==========================================================
 
-set DUMP_FILE=SMART_SUPERMARKET_DEMO.DMP
-set IMPORT_LOG=smart_supermarket_import.log
-set CONTAINER_BACKUP_DIR=/opt/oracle/backup
-set DIRECTORY_NAME=DATA_PUMP_DIR_SMART
+set DB_HOST=10.0.216.238
+set DB_PORT=1521
+set DB_SERVICE=orcl
 
-cd /d "%~dp0"
+set DB_ADMIN_USER=system
+set DB_ADMIN_PASSWORD=Admin123
 
-echo Checking DMP file...
-if not exist "%DUMP_FILE%" (
-    echo [ERROR] Cannot find %DUMP_FILE%
-    pause
-    exit /b 1
-)
+set APP_SCHEMA=SYSTEM
 
-echo Checking container...
-docker ps --format "{{.Names}}" | findstr /x "%CONTAINER_NAME%" >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Container %CONTAINER_NAME% is not running.
-    echo Please run docker compose up -d first.
-    pause
-    exit /b 1
-)
-
-echo Creating backup folder inside container...
-docker exec %CONTAINER_NAME% bash -lc "mkdir -p %CONTAINER_BACKUP_DIR%"
-
-echo Copying DMP into container...
-docker cp "%DUMP_FILE%" %CONTAINER_NAME%:%CONTAINER_BACKUP_DIR%/%DUMP_FILE%
-
-echo Creating Oracle DIRECTORY...
-(
-echo CREATE OR REPLACE DIRECTORY %DIRECTORY_NAME% AS '%CONTAINER_BACKUP_DIR%';
-echo GRANT READ, WRITE ON DIRECTORY %DIRECTORY_NAME% TO %ORACLE_USER%;
-echo EXIT;
-) | docker exec -i %CONTAINER_NAME% sqlplus -L %ORACLE_USER%/%ORACLE_PASSWORD%@%ORACLE_SERVICE%
-
-echo Importing DMP...
-docker exec -i %CONTAINER_NAME% impdp %ORACLE_USER%/%ORACLE_PASSWORD%@%ORACLE_SERVICE% DIRECTORY=%DIRECTORY_NAME% DUMPFILE=%DUMP_FILE% LOGFILE=%IMPORT_LOG% TABLE_EXISTS_ACTION=REPLACE
-
-if errorlevel 1 (
-    echo [ERROR] Import failed.
-    pause
-    exit /b 1
-)
-
-echo Copying import log back...
-docker cp %CONTAINER_NAME%:%CONTAINER_BACKUP_DIR%/%IMPORT_LOG% "%~dp0%IMPORT_LOG%"
+set BACKUP_DIR=%~dp0
+set ORACLE_DIR_NAME=DATA_PUMP_DIR_SMART
 
 echo.
-echo [DONE] Restore completed.
+echo ==========================================================
+echo Smart Supermarket - Restore Latest Backup
+echo ==========================================================
+echo Host       : %DB_HOST%
+echo Port       : %DB_PORT%
+echo Service    : %DB_SERVICE%
+echo Schema     : %APP_SCHEMA%
+echo Backup dir : %BACKUP_DIR%
+echo ==========================================================
+echo.
+
+set LATEST_DMP=
+
+for /f "delims=" %%F in ('dir /b /o-d "%BACKUP_DIR%*.DMP" 2^>nul') do (
+    set LATEST_DMP=%%F
+    goto FOUND_DMP
+)
+
+:FOUND_DMP
+
+if "%LATEST_DMP%"=="" (
+    echo [ERROR] No .DMP file found in backup folder.
+    pause
+    exit /b 1
+)
+
+echo Latest dump file:
+echo %LATEST_DMP%
+echo.
+
+set LOG_FILE=%LATEST_DMP:.DMP=_RESTORE.log%
+set LOG_FILE=%LOG_FILE:.dmp=_RESTORE.log%
+
+set /p CONFIRM=Type YES to restore latest backup: 
+
+if /I not "%CONFIRM%"=="YES" (
+    echo [CANCELLED] Restore cancelled.
+    pause
+    exit /b 0
+)
+
+where sqlplus >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] sqlplus not found. Please check Oracle Client / PATH.
+    pause
+    exit /b 1
+)
+
+where impdp >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] impdp not found. Please check Oracle Client / PATH.
+    pause
+    exit /b 1
+)
+
+(
+echo CREATE OR REPLACE DIRECTORY %ORACLE_DIR_NAME% AS '%BACKUP_DIR:\=/%';
+echo GRANT READ, WRITE ON DIRECTORY %ORACLE_DIR_NAME% TO %DB_ADMIN_USER%;
+echo EXIT;
+) > "%TEMP%\smart_create_dp_dir.sql"
+
+sqlplus -L %DB_ADMIN_USER%/%DB_ADMIN_PASSWORD%@//%DB_HOST%:%DB_PORT%/%DB_SERVICE% @"%TEMP%\smart_create_dp_dir.sql"
+
+if errorlevel 1 (
+    echo [ERROR] Cannot create Oracle DIRECTORY.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [INFO] Restoring %LATEST_DMP%...
+
+impdp %DB_ADMIN_USER%/%DB_ADMIN_PASSWORD%@//%DB_HOST%:%DB_PORT%/%DB_SERVICE% ^
+    DIRECTORY=%ORACLE_DIR_NAME% ^
+    DUMPFILE=%LATEST_DMP% ^
+    LOGFILE=%LOG_FILE% ^
+    SCHEMAS=%APP_SCHEMA% ^
+    TABLE_EXISTS_ACTION=REPLACE ^
+    EXCLUDE=STATISTICS
+
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Restore failed.
+    echo Check log file: %BACKUP_DIR%%LOG_FILE%
+    pause
+    exit /b 1
+)
+
+echo.
+echo ==========================================================
+echo [DONE] Restore completed successfully.
+echo Dump file: %LATEST_DMP%
+echo Log file : %LOG_FILE%
+echo ==========================================================
+echo.
+
 pause
+exit /b 0
