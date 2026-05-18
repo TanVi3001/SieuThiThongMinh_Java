@@ -105,18 +105,16 @@ public class ProductView extends JPanel {
         // Manager chỉ xem + làm mới + ẩn nút CSV 
         if (AuthorizationService.isStoreManager()) {
             btnAdd.setVisible(false);
-            btnUpdate.setVisible(false);
             btnDelete.setVisible(false);
             btnUnitConfig.setVisible(false);
             btnImport.setVisible(false);
-            // Ẩn Nhập CSV trên toolbar
-            btnImport.getParent().remove(btnImport);
-            // Căn giữa nút Làm mới
+            // Chỉ giữ Cập nhật + Làm mới
             btnGrid.removeAll();
-            btnGrid.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 5));
+            btnGrid.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
             btnGrid.setPreferredSize(new Dimension(280, 50));
             btnGrid.setMinimumSize(new Dimension(280, 50));
             btnGrid.setMaximumSize(new Dimension(280, 50));
+            btnGrid.add(btnUpdate);
             btnGrid.add(btnClear);
             btnGrid.revalidate();
             btnGrid.repaint();
@@ -126,12 +124,25 @@ public class ProductView extends JPanel {
         if (AuthorizationService.isWarehouseStaff()) {
             lblImagePreview.setVisible(false);
             btnChooseImage.setVisible(false);
-            // Ẩn label "Hình ảnh" — cần tách thành biến. Xem bước dưới:
             lblImageSectionTitle.setVisible(false);
-            // Ẩn luôn cột Ảnh trong bảng
             tblProducts.getColumnModel().getColumn(5).setMinWidth(0);
             tblProducts.getColumnModel().getColumn(5).setMaxWidth(0);
             tblProducts.getColumnModel().getColumn(5).setWidth(0);
+            // Chỉ giữ Import CSV + Làm mới
+            btnAdd.setVisible(false);
+            btnUpdate.setVisible(false);
+            btnDelete.setVisible(false);
+            btnUnitConfig.setVisible(false);
+            btnGrid.removeAll();
+            btnGrid.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
+            btnGrid.setPreferredSize(new Dimension(280, 50));
+            btnGrid.setMinimumSize(new Dimension(280, 50));
+            btnGrid.setMaximumSize(new Dimension(280, 50));
+            btnGrid.add(btnClear);
+            btnGrid.revalidate();
+            btnGrid.repaint();
+            btnExportPDF.setEnabled(false);
+            btnExportPDF.setVisible(false);
         }
     }
 
