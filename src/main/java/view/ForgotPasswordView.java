@@ -1,366 +1,636 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
- */
 package view;
 
+import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.Insets;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
+import java.net.URL;
+import java.util.Arrays;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities; // THÊM IMPORT
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
-/**
- *
- * @author nguye
- */
-public class ForgotPasswordView extends javax.swing.JFrame {
+public class ForgotPasswordView extends JFrame {
 
-    private javax.swing.JTextField txtOTP;
-    private javax.swing.JPasswordField txtNewPass;
-    private javax.swing.JPasswordField txtConfirmPass;
-    private javax.swing.JButton btnSendOTP; // Lưu biến nút bấm
+    private static final java.util.logging.Logger logger
+            = java.util.logging.Logger.getLogger(ForgotPasswordView.class.getName());
 
-    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(ForgotPasswordView.class.getName());
-    /**
-     * Creates new form ForgotPasswordView
+    /*
+     * Giữ cùng kích thước cửa sổ với LoginView bản lớn.
+     * Card của quên mật khẩu cao hơn một chút để không bị cắt nút cuối.
      */
+    private static final int FRAME_WIDTH = 1050;
+    private static final int FRAME_HEIGHT = 788;
 
-    private String usernameFromLogin; // Biến lưu tên đăng nhập từ LoginView truyền sang
+    private static final int CARD_X = 605;
+    private static final int CARD_Y = 45;
+    private static final int CARD_WIDTH = 410;
+    private static final int CARD_HEIGHT = 700;
+
+    private static final int BG_CROP_TOP = 45;
+
+    private static final int FORM_PADDING_X = 54;
+    private static final int INPUT_WIDTH = 302;
+    private static final int INPUT_HEIGHT = 49;
+
+    private static final Color NAVY = new Color(7, 27, 77);
+    private static final Color ORANGE = new Color(255, 90, 0);
+    private static final Color ORANGE_LIGHT = new Color(255, 117, 20);
+    private static final Color GREEN = new Color(77, 190, 84);
+    private static final Color GREEN_LIGHT = new Color(85, 231, 94);
+    private static final Color TEXT_MUTED = new Color(107, 120, 149);
+    private static final Color BORDER = new Color(221, 227, 238);
+
+    private final String usernameFromLogin;
+
+    private BackgroundPanel rootPanel;
+    private ShadowCardPanel cardPanel;
+
+    private InputField txtUserEmail;
+    private InputField txtOTP;
+    private InputField txtNewPass;
+    private InputField txtConfirmPass;
+
+    private PrimaryButton btnSendOTP;
+    private PrimaryButton btnConfirm;
 
     public ForgotPasswordView(String username) {
-        this.usernameFromLogin = username;
-        initComponents();
-        setupModernUI();
+        this.usernameFromLogin = username == null ? "" : username;
+        initFrame();
+        buildUi();
     }
 
     public ForgotPasswordView() {
-        this(""); // Gọi lại constructor ở trên với chuỗi rỗng
+        this("");
     }
 
-    private void setupModernUI() {
-        this.getContentPane().removeAll();
-        this.getContentPane().setLayout(new java.awt.GridBagLayout());
-        this.getContentPane().setBackground(java.awt.Color.WHITE);
+    private void initFrame() {
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setTitle("Smart Supermarket - Quên mật khẩu");
+        setPreferredSize(new Dimension(FRAME_WIDTH, FRAME_HEIGHT));
+        setMinimumSize(new Dimension(FRAME_WIDTH, FRAME_HEIGHT));
+        setResizable(false);
+    }
 
-        javax.swing.JPanel cardPanel = new javax.swing.JPanel(null);
-        cardPanel.setBackground(java.awt.Color.WHITE);
-        cardPanel.setPreferredSize(new java.awt.Dimension(450, 680)); // Tăng chiều cao để chứa form dài
+    private void buildUi() {
+        rootPanel = new BackgroundPanel();
+        rootPanel.setLayout(null);
+        setContentPane(rootPanel);
 
-        java.awt.Color navyBlue = new java.awt.Color(44, 62, 80);
+        cardPanel = new ShadowCardPanel();
+        cardPanel.setLayout(new BorderLayout());
+        rootPanel.add(cardPanel);
 
-        // Header & Subtitle
-        javax.swing.JLabel lblTitle = new javax.swing.JLabel("QUÊN MẬT KHẨU", javax.swing.SwingConstants.CENTER);
-        lblTitle.setFont(new java.awt.Font("Segoe UI", Font.BOLD, 28));
-        lblTitle.setForeground(navyBlue);
-        lblTitle.setBounds(50, 40, 350, 40);
-        cardPanel.add(lblTitle);
+        JPanel forgotPanel = buildForgotPanel();
+        cardPanel.add(forgotPanel, BorderLayout.CENTER);
 
-        javax.swing.JLabel lblSubtitle = new javax.swing.JLabel("<html><center>Nhập Email để nhận mã OTP và Username<br>(Mã có hiệu lực trong 5 phút)</center></html>", javax.swing.SwingConstants.CENTER);
-        lblSubtitle.setFont(new java.awt.Font("Segoe UI", Font.PLAIN, 12));
-        lblSubtitle.setBounds(50, 85, 350, 40);
-        cardPanel.add(lblSubtitle);
+        pack();
+        setLocationRelativeTo(null);
+        SwingUtilities.invokeLater(() -> txtUserEmail.requestFocusInWindow());
+    }
 
-        // --- Ô NHẬP EMAIL ---
-        txtUserEmail.setBounds(80, 150, 290, 45);
-        txtUserEmail.putClientProperty("JComponent.roundRect", true);
-        txtUserEmail.putClientProperty("JTextField.placeholderText", "Email đã đăng ký...");
-        cardPanel.add(txtUserEmail);
+    private JPanel buildForgotPanel() {
+        JPanel panel = createTransparentPanel();
+        panel.setLayout(null);
 
-        btnSendOTP = new javax.swing.JButton("GỬI MÃ XÁC MINH") {
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(76, 175, 80)); // Màu xanh lá "Gửi mã"
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 30, 30);
-                super.paintComponent(g);
-                g2.dispose();
-            }
-        };
-        btnSendOTP.setBounds(80, 205, 290, 40);
-        btnSendOTP.setForeground(Color.WHITE);
-        btnSendOTP.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btnSendOTP.setContentAreaFilled(false);
-        btnSendOTP.setBorderPainted(false);
-        btnSendOTP.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        int x = FORM_PADDING_X;
+        int y = 55;
+
+        JLabel title = label("Quên mật khẩu", 30, Font.BOLD, NAVY);
+        title.setBounds(x, y, INPUT_WIDTH, 40);
+        panel.add(title);
+
+        y += 46;
+        JLabel subtitle = label("Nhập Email để nhận mã OTP và Username", 12, Font.PLAIN, TEXT_MUTED);
+        subtitle.setBounds(x, y, INPUT_WIDTH, 18);
+        panel.add(subtitle);
+
+        y += 22;
+        JLabel subtitle2 = label("Mã xác minh có hiệu lực trong 5 phút", 12, Font.PLAIN, TEXT_MUTED);
+        subtitle2.setBounds(x, y, INPUT_WIDTH, 18);
+        panel.add(subtitle2);
+
+        y += 36;
+        panel.add(fieldLabel("Email đã đăng ký", x, y, INPUT_WIDTH));
+
+        y += 18;
+        txtUserEmail = new InputField("mail", false, "Nhập email đã đăng ký...", INPUT_HEIGHT);
+        txtUserEmail.setBounds(x, y, INPUT_WIDTH, INPUT_HEIGHT);
+        panel.add(txtUserEmail);
+
+        y += INPUT_HEIGHT + 16;
+        btnSendOTP = new PrimaryButton("Gửi mã xác minh", true);
+        btnSendOTP.setBounds(x, y, INPUT_WIDTH, 46);
         btnSendOTP.addActionListener(e -> handleSendOTP());
-        cardPanel.add(btnSendOTP);
+        panel.add(btnSendOTP);
 
-        // --- Ô NHẬP OTP ---
-        txtOTP = new javax.swing.JTextField();
-        txtOTP.setBounds(80, 275, 290, 45);
-        txtOTP.putClientProperty("JComponent.roundRect", true);
-        txtOTP.putClientProperty("JTextField.placeholderText", "Nhập mã OTP 6 số...");
-        cardPanel.add(txtOTP);
+        y += 64;
+        panel.add(fieldLabel("Mã OTP", x, y, INPUT_WIDTH));
 
-        // --- Ô NHẬP MẬT KHẨU MỚI ---
-        txtNewPass = new javax.swing.JPasswordField();
-        txtNewPass.setBounds(80, 345, 290, 45);
-        txtNewPass.putClientProperty("JComponent.roundRect", true);
-        txtNewPass.putClientProperty("JPasswordField.showRevealButton", true);
-        txtNewPass.putClientProperty("JTextField.placeholderText", "Mật khẩu mới...");
-        cardPanel.add(txtNewPass);
+        y += 18;
+        txtOTP = new InputField("key", false, "Nhập mã OTP 6 số...", INPUT_HEIGHT);
+        txtOTP.setBounds(x, y, INPUT_WIDTH, INPUT_HEIGHT);
+        panel.add(txtOTP);
 
-        txtConfirmPass = new javax.swing.JPasswordField();
-        txtConfirmPass.setBounds(80, 405, 290, 45);
-        txtConfirmPass.putClientProperty("JComponent.roundRect", true);
-        txtConfirmPass.putClientProperty("JTextField.placeholderText", "Xác nhận mật khẩu...");
-        cardPanel.add(txtConfirmPass);
+        y += INPUT_HEIGHT + 18;
+        panel.add(fieldLabel("Mật khẩu mới", x, y, INPUT_WIDTH));
 
-        // --- NÚT XÁC NHẬN ĐỔI PASS ---
-        javax.swing.JButton btnConfirm = new javax.swing.JButton("XÁC NHẬN THAY ĐỔI") {
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(navyBlue);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 40, 40);
-                super.paintComponent(g);
-                g2.dispose();
-            }
-        };
-        btnConfirm.setBounds(80, 480, 290, 50);
-        btnConfirm.setForeground(Color.WHITE);
-        btnConfirm.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnConfirm.setContentAreaFilled(false);
-        btnConfirm.setBorderPainted(false);
-        btnConfirm.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        y += 18;
+        txtNewPass = new InputField("lock", true, "Nhập mật khẩu mới...", INPUT_HEIGHT);
+        txtNewPass.setBounds(x, y, INPUT_WIDTH, INPUT_HEIGHT);
+        panel.add(txtNewPass);
+
+        y += INPUT_HEIGHT + 18;
+        panel.add(fieldLabel("Xác nhận mật khẩu", x, y, INPUT_WIDTH));
+
+        y += 18;
+        txtConfirmPass = new InputField("lock", true, "Nhập lại mật khẩu mới...", INPUT_HEIGHT);
+        txtConfirmPass.setBounds(x, y, INPUT_WIDTH, INPUT_HEIGHT);
+        panel.add(txtConfirmPass);
+
+        y += INPUT_HEIGHT + 25;
+        btnConfirm = new PrimaryButton("Xác nhận thay đổi  →", false);
+        btnConfirm.setBounds(x, y, INPUT_WIDTH, 48);
         btnConfirm.addActionListener(e -> handleResetPassword());
-        cardPanel.add(btnConfirm);
+        panel.add(btnConfirm);
 
-        // Quay lại
-        javax.swing.JLabel lblBack = new javax.swing.JLabel("Quay lại đăng nhập", javax.swing.SwingConstants.CENTER);
-        lblBack.setBounds(150, 550, 150, 20);
-        lblBack.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        lblBack.addMouseListener(new java.awt.event.MouseAdapter() {
+        y += 59;
+        JLabel back = centeredHtml(
+                "<span style='color:#6B7895'>Đã nhớ mật khẩu? </span>"
+                + "<span style='color:#FF5A00'><u>Quay lại đăng nhập</u></span>");
+        back.setBounds(x, y, INPUT_WIDTH, 24);
+        back.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
+            public void mouseClicked(MouseEvent e) {
                 new LoginView().setVisible(true);
                 dispose();
             }
         });
-        cardPanel.add(lblBack);
+        panel.add(back);
 
-        this.getContentPane().add(cardPanel, new java.awt.GridBagConstraints());
-        this.setSize(500, 750);
-        this.setLocationRelativeTo(null);
-        this.setResizable(false);
+        return panel;
     }
 
-    /**
-     * Logic xử lý gửi mail
-     */
-    /**
-     * Bước 1: Tìm Username và gửi OTP
-     */
     private void handleSendOTP() {
         String userEmail = txtUserEmail.getText().trim();
+
         if (userEmail.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Vui lòng nhập Email!");
             return;
         }
 
-        // 1. Dò tìm Username từ Database dựa trên Email
         String foundUsername = business.sql.rbac.AccountSql.getInstance().findUsernameByEmail(userEmail);
 
-        if (foundUsername != null) {
-            // 2. Tạo OTP ngẫu nhiên
-            String otp = String.valueOf(new java.util.Random().nextInt(900000) + 100000);
-
-            // 3. Lưu OTP vào CSDL (Hết hạn sau 5 phút)
-            business.sql.rbac.AccountSql.getInstance().saveOTP(userEmail, otp);
-
-            // Vô hiệu hóa nút và đổi text để người dùng biết máy đang xử lý
-            btnSendOTP.setEnabled(false);
-            btnSendOTP.setText("Đang gửi mail...");
-
-            // Chạy tiến trình gửi mail ở luồng riêng (Tránh đơ máy)
-            new Thread(() -> {
-                boolean mailSent = business.service.EmailService.sendPasswordRecoveryOTP(userEmail, foundUsername, otp);
-
-                SwingUtilities.invokeLater(() -> {
-                    if (mailSent) {
-                        JOptionPane.showMessageDialog(this, "Mã OTP và Tên đăng nhập đã được gửi vào Email của bạn!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
-                        btnSendOTP.setText("Gửi lại mã OTP");
-                    } else {
-                        JOptionPane.showMessageDialog(this, "Lỗi gửi mail! Vui lòng kiểm tra lại kết nối mạng.", "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
-                        btnSendOTP.setText("GỬI MÃ XÁC MINH");
-                    }
-                    btnSendOTP.setEnabled(true);
-                });
-            }).start();
-        } else {
+        if (foundUsername == null) {
             JOptionPane.showMessageDialog(this, "Email này không tồn tại trong hệ thống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        String otp = String.valueOf(new java.util.Random().nextInt(900000) + 100000);
+        business.sql.rbac.AccountSql.getInstance().saveOTP(userEmail, otp);
+
+        btnSendOTP.setEnabled(false);
+        btnSendOTP.setText("Đang gửi mail...");
+
+        new Thread(() -> {
+            boolean mailSent = business.service.EmailService.sendPasswordRecoveryOTP(userEmail, foundUsername, otp);
+
+            SwingUtilities.invokeLater(() -> {
+                if (mailSent) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Mã OTP và Tên đăng nhập đã được gửi vào Email của bạn!",
+                            "Thành công",
+                            JOptionPane.INFORMATION_MESSAGE);
+                    btnSendOTP.setText("Gửi lại mã OTP");
+                } else {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Lỗi gửi mail! Vui lòng kiểm tra lại kết nối mạng.",
+                            "Lỗi hệ thống",
+                            JOptionPane.ERROR_MESSAGE);
+                    btnSendOTP.setText("Gửi mã xác minh");
+                }
+                btnSendOTP.setEnabled(true);
+            });
+        }, "forgot-password-send-otp-thread").start();
     }
 
-    /**
-     * Bước 2: Kiểm tra OTP và Cập nhật mật khẩu mới
-     */
     private void handleResetPassword() {
         String email = txtUserEmail.getText().trim();
         String otpInput = txtOTP.getText().trim();
-        String newPass = new String(txtNewPass.getPassword());
-        String confirmPass = new String(txtConfirmPass.getPassword());
+        char[] newPassChars = txtNewPass.getPassword();
+        char[] confirmPassChars = txtConfirmPass.getPassword();
 
-        if (otpInput.isEmpty() || newPass.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập đầy đủ OTP và mật khẩu mới!");
-            return;
-        }
-        if (!newPass.equals(confirmPass)) {
-            JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!");
-            return;
-        }
+        String newPass = new String(newPassChars);
+        String confirmPass = new String(confirmPassChars);
 
-        // Kiểm tra OTP trong DB (Khớp và chưa hết hạn)
-        boolean isValid = business.sql.rbac.AccountSql.getInstance().validateOTP(email, otpInput);
-
-        if (isValid) {
-            // Cập nhật pass mới
-            business.sql.rbac.AccountSql.getInstance().updatePasswordByEmail(email, newPass);
-            JOptionPane.showMessageDialog(this, "Đổi mật khẩu thành công! Bạn hãy dùng Username trong mail để đăng nhập.");
-            new LoginView().setVisible(true);
-            this.dispose();
-        } else {
-            JOptionPane.showMessageDialog(this, "Mã OTP không đúng hoặc đã hết hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * This method is called from within the constructor to initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is always
-     * regenerated by the Form Editor.
-     */
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">                          
-    private void initComponents() {
-
-        LoginView = new javax.swing.JPanel();
-        Login = new javax.swing.JLabel();
-        Username = new javax.swing.JLabel();
-        txtUserEmail = new javax.swing.JTextField();
-        btnLogin = new javax.swing.JButton();
-        jLabel1 = new javax.swing.JLabel();
-
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        setBackground(new java.awt.Color(255, 255, 255));
-
-        LoginView.setBackground(new java.awt.Color(44, 62, 80));
-        LoginView.setForeground(new java.awt.Color(255, 255, 255));
-
-        Login.setFont(new java.awt.Font("Segoe UI", 1, 20)); // NOI18N
-        Login.setForeground(new java.awt.Color(255, 255, 255));
-        Login.setText("NHẬP EMAIL");
-
-        Username.setFont(new java.awt.Font("Segoe UI", 1, 15)); // NOI18N
-        Username.setForeground(new java.awt.Color(255, 255, 255));
-        Username.setText("EMAIL");
-
-        txtUserEmail.addActionListener(this::txtUserEmailActionPerformed);
-
-        btnLogin.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        btnLogin.setText("XÁC NHẬN");
-        btnLogin.addActionListener(this::btnLoginActionPerformed);
-
-        jLabel1.setForeground(new java.awt.Color(255, 255, 255));
-        jLabel1.setText("Vui lòng nhập email để chúng tôi có thể gửi thông tin cho bạn");
-
-        javax.swing.GroupLayout LoginViewLayout = new javax.swing.GroupLayout(LoginView);
-        LoginView.setLayout(LoginViewLayout);
-        LoginViewLayout.setHorizontalGroup(
-                LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                                .addGap(43, 43, 43)
-                                                .addComponent(jLabel1))
-                                        .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, LoginViewLayout.createSequentialGroup()
-                                                .addGap(65, 65, 65)
-                                                .addComponent(Username)
-                                                .addGap(18, 18, 18)
-                                                .addComponent(txtUserEmail)))
-                                .addContainerGap(49, Short.MAX_VALUE))
-                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                                .addGap(157, 157, 157)
-                                                .addComponent(btnLogin))
-                                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                                .addGap(150, 150, 150)
-                                                .addComponent(Login)))
-                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-        );
-        LoginViewLayout.setVerticalGroup(
-                LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(LoginViewLayout.createSequentialGroup()
-                                .addGap(46, 46, 46)
-                                .addComponent(Login)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabel1)
-                                .addGap(18, 18, 18)
-                                .addGroup(LoginViewLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(txtUserEmail, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addComponent(Username, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGap(29, 29, 29)
-                                .addComponent(btnLogin)
-                                .addContainerGap(35, Short.MAX_VALUE))
-        );
-
-        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addComponent(LoginView, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-        );
-        layout.setVerticalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addComponent(LoginView, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-        );
-
-        pack();
-    }// </editor-fold>                        
-
-    private void txtUserEmailActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
-    }
-
-    private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
-    }
-
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
+            if (email.isEmpty() || otpInput.isEmpty() || newPass.isEmpty() || confirmPass.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Vui lòng nhập đầy đủ Email, OTP và mật khẩu mới!");
+                return;
             }
-        } catch (ReflectiveOperationException | javax.swing.UnsupportedLookAndFeelException ex) {
-            logger.log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
 
-        /* Create and display the form */
+            if (!newPass.equals(confirmPass)) {
+                JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!");
+                return;
+            }
+
+            boolean isValid = business.sql.rbac.AccountSql.getInstance().validateOTP(email, otpInput);
+
+            if (isValid) {
+                business.sql.rbac.AccountSql.getInstance().updatePasswordByEmail(email, newPass);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Đổi mật khẩu thành công! Bạn hãy dùng Username trong mail để đăng nhập.");
+                new LoginView().setVisible(true);
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Mã OTP không đúng hoặc đã hết hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        } finally {
+            Arrays.fill(newPassChars, '\0');
+            Arrays.fill(confirmPassChars, '\0');
+        }
+    }
+
+    private JLabel fieldLabel(String text, int x, int y, int width) {
+        JLabel label = label(text, 11, Font.BOLD, NAVY);
+        label.setBounds(x, y, width, 15);
+        return label;
+    }
+
+    private JLabel label(String text, int size, int style, Color color) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", style, size));
+        label.setForeground(color);
+        return label;
+    }
+
+    private JLabel centeredHtml(String body) {
+        JLabel label = new JLabel("<html><div style='text-align:center'>" + body + "</div></html>");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        label.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return label;
+    }
+
+    private JPanel createTransparentPanel() {
+        JPanel panel = new JPanel();
+        panel.setOpaque(false);
+        return panel;
+    }
+
+    public static void main(String[] args) {
         java.awt.EventQueue.invokeLater(() -> new ForgotPasswordView().setVisible(true));
     }
 
-    // Variables declaration - do not modify                     
-    private javax.swing.JLabel Login;
-    private javax.swing.JPanel LoginView;
-    private javax.swing.JLabel Username;
-    private javax.swing.JButton btnLogin;
-    private javax.swing.JLabel jLabel1;
-    private javax.swing.JTextField txtUserEmail;
-    // End of variables declaration                   
+    private final class BackgroundPanel extends JPanel {
+
+        private final Image background;
+
+        private BackgroundPanel() {
+            setOpaque(true);
+            background = loadBackground();
+        }
+
+        @Override
+        public void doLayout() {
+            double sx = getWidth() / (double) FRAME_WIDTH;
+            double sy = getHeight() / (double) FRAME_HEIGHT;
+            cardPanel.setBounds(
+                    (int) Math.round(CARD_X * sx),
+                    (int) Math.round(CARD_Y * sy),
+                    (int) Math.round(CARD_WIDTH * sx),
+                    (int) Math.round(CARD_HEIGHT * sy));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+            if (background != null) {
+                int imageW = background.getWidth(this);
+                int imageH = background.getHeight(this);
+                if (imageW > 0 && imageH > 0) {
+                    int sourceH = imageH - BG_CROP_TOP;
+                    double scale = Math.max(getWidth() / (double) imageW, getHeight() / (double) sourceH);
+                    int drawW = (int) Math.ceil(imageW * scale);
+                    int drawH = (int) Math.ceil(sourceH * scale);
+                    int drawX = (getWidth() - drawW) / 2;
+                    int drawY = (getHeight() - drawH) / 2;
+
+                    g2.drawImage(background,
+                            drawX, drawY, drawX + drawW, drawY + drawH,
+                            0, BG_CROP_TOP, imageW, imageH,
+                            this);
+                }
+            } else {
+                g2.setColor(new Color(245, 248, 252));
+                g2.fillRect(0, 0, getWidth(), getHeight());
+            }
+
+            g2.dispose();
+        }
+
+        private Image loadBackground() {
+            URL url = ForgotPasswordView.class.getResource("/image/bg.png");
+            if (url == null) {
+                logger.warning("Không tìm thấy background resource: /image/bg.png");
+                return null;
+            }
+            return new javax.swing.ImageIcon(url).getImage();
+        }
+    }
+
+    private static final class ShadowCardPanel extends JPanel {
+
+        private ShadowCardPanel() {
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int arc = 20;
+            int inset = 7;
+
+            for (int i = 0; i < 10; i++) {
+                float alpha = 0.08f - (i * 0.005f);
+                if (alpha <= 0) {
+                    continue;
+                }
+                g2.setComposite(AlphaComposite.SrcOver.derive(alpha));
+                g2.setColor(new Color(18, 34, 70));
+                int grow = i;
+                g2.fillRoundRect(
+                        inset - grow / 2,
+                        inset + 5 - grow / 2,
+                        getWidth() - inset * 2 + grow,
+                        getHeight() - inset * 2 + grow,
+                        arc + grow,
+                        arc + grow);
+            }
+
+            g2.setComposite(AlphaComposite.SrcOver);
+            g2.setColor(Color.WHITE);
+            g2.fillRoundRect(inset, inset, getWidth() - inset * 2, getHeight() - inset * 2, arc, arc);
+            g2.dispose();
+
+            super.paintComponent(g);
+        }
+
+        @Override
+        public Insets getInsets() {
+            return new Insets(7, 7, 7, 7);
+        }
+    }
+
+    private static final class InputField extends JPanel {
+
+        private final JTextField field;
+        private Color fieldBackground = Color.WHITE;
+
+        private InputField(String iconType, boolean password, String placeholder, int height) {
+            setLayout(null);
+            setOpaque(false);
+            setPreferredSize(new Dimension(INPUT_WIDTH, height));
+
+            IconView icon = new IconView(iconType);
+            icon.setBounds(9, 0, 28, height);
+            add(icon);
+
+            if (password) {
+                JPasswordField pass = new JPasswordField();
+                pass.setEchoChar('•');
+                field = pass;
+
+                JButton reveal = new EyeButton(pass);
+                reveal.setBounds(INPUT_WIDTH - 38, 0, 31, height);
+                add(reveal);
+            } else {
+                field = new JTextField();
+            }
+
+            field.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, password ? 28 : 8));
+            field.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            field.setForeground(NAVY);
+            field.setOpaque(false);
+            field.putClientProperty("JTextField.placeholderText", placeholder);
+            field.setBounds(43, 1, INPUT_WIDTH - 52, height - 2);
+            add(field);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            g2.setColor(fieldBackground);
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+
+            g2.setColor(BORDER);
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+
+            g2.dispose();
+            super.paintComponent(g);
+        }
+
+        private String getText() {
+            return field.getText();
+        }
+
+        private char[] getPassword() {
+            if (field instanceof JPasswordField pass) {
+                return pass.getPassword();
+            }
+            return field.getText().toCharArray();
+        }
+
+        @Override
+        public boolean requestFocusInWindow() {
+            return field.requestFocusInWindow();
+        }
+    }
+
+    private static final class PrimaryButton extends JButton {
+
+        private final boolean greenStyle;
+        private boolean hovered;
+
+        private PrimaryButton(String text, boolean greenStyle) {
+            super(text);
+            this.greenStyle = greenStyle;
+
+            setFont(new Font("Segoe UI", Font.BOLD, 13));
+            setForeground(Color.WHITE);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    hovered = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    hovered = false;
+                    repaint();
+                }
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            Color start;
+            Color end;
+
+            if (!isEnabled()) {
+                start = new Color(180, 188, 205);
+                end = new Color(180, 188, 205);
+            } else if (greenStyle) {
+                start = hovered ? GREEN_LIGHT : GREEN;
+                end = hovered ? new Color(80, 225, 90) : new Color(88, 229, 96);
+            } else {
+                start = hovered ? ORANGE_LIGHT : ORANGE;
+                end = new Color(255, 106, 0);
+            }
+
+            g2.setPaint(new java.awt.GradientPaint(0, 0, start, getWidth(), 0, end));
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    private static final class EyeButton extends JButton {
+
+        private final JPasswordField passwordField;
+        private boolean visible;
+
+        private EyeButton(JPasswordField passwordField) {
+            this.passwordField = passwordField;
+
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            addActionListener(evt -> {
+                visible = !visible;
+                passwordField.setEchoChar(visible ? (char) 0 : '•');
+                repaint();
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            drawEye(g2, getWidth() / 2, getHeight() / 2, visible ? ORANGE : TEXT_MUTED);
+
+            g2.dispose();
+        }
+    }
+
+    private static final class IconView extends JComponent {
+
+        private final String type;
+
+        private IconView(String type) {
+            this.type = type;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int iconH = switch (type) {
+                case "lock", "mail", "key" ->
+                    24;
+                default ->
+                    22;
+            };
+
+            int y = (getHeight() - iconH) / 2;
+            drawSmallIcon(g2, type, 1, y, TEXT_MUTED);
+
+            g2.dispose();
+        }
+    }
+
+    private static void drawSmallIcon(Graphics2D g2, String type, int x, int y, Color color) {
+        g2.setColor(color);
+        g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+        switch (type) {
+            case "lock" -> {
+                g2.drawRoundRect(x + 4, y + 10, 17, 13, 3, 3);
+                g2.drawArc(x + 7, y + 1, 11, 15, 0, 180);
+                g2.fillOval(x + 11, y + 15, 3, 3);
+            }
+            case "key" -> {
+                g2.drawOval(x + 2, y + 7, 10, 10);
+                g2.drawLine(x + 12, y + 12, x + 25, y + 12);
+                g2.drawLine(x + 21, y + 12, x + 21, y + 17);
+            }
+            case "mail" -> {
+                g2.drawRoundRect(x + 2, y + 5, 23, 16, 3, 3);
+                g2.drawLine(x + 3, y + 6, x + 13, y + 14);
+                g2.drawLine(x + 24, y + 6, x + 13, y + 14);
+            }
+            default -> {
+                g2.drawOval(x + 7, y + 2, 10, 10);
+                g2.drawArc(x + 2, y + 14, 23, 13, 20, 140);
+            }
+        }
+    }
+
+    private static void drawEye(Graphics2D g2, int cx, int cy, Color color) {
+        g2.setColor(color);
+        g2.setStroke(new BasicStroke(1.9f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+        RoundRectangle2D eye = new RoundRectangle2D.Double(cx - 10, cy - 5, 20, 10, 12, 12);
+        g2.draw(eye);
+        g2.fillOval(cx - 3, cy - 3, 6, 6);
+    }
 }
