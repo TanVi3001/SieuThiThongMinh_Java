@@ -2,6 +2,7 @@ package common.report;
 
 import common.db.DatabaseConnection;
 import java.awt.BorderLayout;
+import java.awt.Dialog;
 import java.io.File;
 import java.sql.Connection;
 import java.util.HashMap;
@@ -24,6 +25,7 @@ public class ReportViewer extends JFrame {
     public ReportViewer(String jrxmlPath, Map<String, Object> parameters) {
         setTitle("Trình xem báo cáo");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setModalExclusionType(Dialog.ModalExclusionType.APPLICATION_EXCLUDE);
         setLayout(new BorderLayout());
         setSize(1000, 700);
         setLocationRelativeTo(null);
@@ -32,7 +34,12 @@ public class ReportViewer extends JFrame {
     }
 
     public static void showReport(String jrxmlPath, HashMap<String, Object> parameters) {
-        SwingUtilities.invokeLater(() -> new ReportViewer(jrxmlPath, parameters).setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            ReportViewer viewer = new ReportViewer(jrxmlPath, parameters);
+            viewer.setVisible(true);
+            viewer.toFront();
+            viewer.requestFocus();
+        });
     }
 
     private void loadReport(String jrxmlPath, Map<String, Object> parameters) {

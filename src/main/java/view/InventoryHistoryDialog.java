@@ -1,6 +1,7 @@
 package view;
 
 import business.sql.prod_inventory.InventoryTransactionSql;
+import common.report.PurchaseReceiptReportService;
 import java.awt.*;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
@@ -95,11 +96,16 @@ public class InventoryHistoryDialog extends JDialog {
         btnClose.setPreferredSize(new Dimension(100, 38));
         btnClose.addActionListener(e -> dispose());
 
-        JButton btnViewReceipt = new JButton("Xem phiếu nhập");
-        btnViewReceipt.setPreferredSize(new Dimension(150, 38));
+        JButton btnViewReceipt = new JButton("Xem phiếu nhập hàng");
+        btnViewReceipt.setPreferredSize(new Dimension(175, 38));
         btnViewReceipt.addActionListener(e -> viewReceipt());
 
+        JButton btnExportReceipt = new JButton("Xuất phiếu nhập");
+        btnExportReceipt.setPreferredSize(new Dimension(155, 38));
+        btnExportReceipt.addActionListener(e -> exportReceipt());
+
         bottom.add(btnViewReceipt);
+        bottom.add(btnExportReceipt);
         bottom.add(btnClose);
 
         root.add(bottom, BorderLayout.SOUTH);
@@ -152,11 +158,32 @@ public class InventoryHistoryDialog extends JDialog {
     }
 
     private void viewReceipt() {
+        String receiptId = getSelectedReceiptId();
+
+        if (receiptId == null) {
+            return;
+        }
+
+        Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
+        new PurchaseReceiptInvoiceDialog(owner, receiptId).setVisible(true);
+
+        loadData();
+    }
+
+    private void exportReceipt() {
+        String receiptId = getSelectedReceiptId();
+
+        if (receiptId != null) {
+            PurchaseReceiptReportService.showPurchaseReceipt(receiptId);
+        }
+    }
+
+    private String getSelectedReceiptId() {
         int row = table.getSelectedRow();
 
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn một dòng có phiếu nhập.");
-            return;
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn phiếu nhập cần xuất.");
+            return null;
         }
 
         int modelRow = table.convertRowIndexToModel(row);
@@ -174,13 +201,10 @@ public class InventoryHistoryDialog extends JDialog {
                     "Chưa có phiếu nhập",
                     JOptionPane.INFORMATION_MESSAGE
             );
-            return;
+            return null;
         }
 
-        Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
-        new PurchaseReceiptInvoiceDialog(owner, receiptId).setVisible(true);
-
-        loadData();
+        return receiptId.trim();
     }
 
     private String normalizeType(String type) {
