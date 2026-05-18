@@ -55,6 +55,7 @@ public class ProductView extends JPanel {
     private JTable tblProducts;
     private DefaultTableModel tableModel;
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch, btnExportPDF, btnUnitConfig, btnImport;
+    private JPanel btnGrid;
 
     private List<String> categoryList = new ArrayList<>();
     private List<String> productNameList = new ArrayList<>();
@@ -90,7 +91,36 @@ public class ProductView extends JPanel {
             btnDelete.setVisible(false);
             btnUnitConfig.setVisible(false);
             btnImport.setVisible(false);
+            // Giữ lại nút Làm mới — chỉ xóa các nút thừa khỏi grid
+            btnGrid.removeAll();
+            btnGrid.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            btnGrid.setPreferredSize(new Dimension(280, 50));
+            btnGrid.setMinimumSize(new Dimension(280, 50));
+            btnGrid.setMaximumSize(new Dimension(280, 50));
+            btnGrid.add(btnClear);
+            btnGrid.revalidate();
+            btnGrid.repaint();
         }
+        
+        // Manager chỉ xem + làm mới + ẩn nút CSV 
+        if (AuthorizationService.isStoreManager()) {
+            btnAdd.setVisible(false);
+            btnUpdate.setVisible(false);
+            btnDelete.setVisible(false);
+            btnUnitConfig.setVisible(false);
+            btnImport.setVisible(false);
+            // Ẩn Nhập CSV trên toolbar
+            btnImport.getParent().remove(btnImport);
+            // Căn giữa nút Làm mới
+            btnGrid.removeAll();
+            btnGrid.setLayout(new FlowLayout(FlowLayout.CENTER, 0, 5));
+            btnGrid.setPreferredSize(new Dimension(280, 50));
+            btnGrid.setMinimumSize(new Dimension(280, 50));
+            btnGrid.setMaximumSize(new Dimension(280, 50));
+            btnGrid.add(btnClear);
+            btnGrid.revalidate();
+            btnGrid.repaint();
+        }       
 
         // ẨN PHẦN HÌNH ẢNH VỚI NHÂN VIÊN KHO
         if (AuthorizationService.isWarehouseStaff()) {
@@ -98,6 +128,10 @@ public class ProductView extends JPanel {
             btnChooseImage.setVisible(false);
             // Ẩn label "Hình ảnh" — cần tách thành biến. Xem bước dưới:
             lblImageSectionTitle.setVisible(false);
+            // Ẩn luôn cột Ảnh trong bảng
+            tblProducts.getColumnModel().getColumn(5).setMinWidth(0);
+            tblProducts.getColumnModel().getColumn(5).setMaxWidth(0);
+            tblProducts.getColumnModel().getColumn(5).setWidth(0);
         }
     }
 
@@ -294,7 +328,7 @@ public class ProductView extends JPanel {
         btnClear     = createCustomButton("Làm mới", new Color(165, 177, 194), Color.WHITE, IconHelper.refresh(20));
         btnUnitConfig = createCustomButton("Đơn vị", new Color(103, 58, 183), Color.WHITE, IconHelper.settings(20));
 
-        JPanel btnGrid = new JPanel(new GridLayout(3, 2, 12, 12));
+        btnGrid = new JPanel(new GridLayout(3, 2, 12, 12));
         btnGrid.setOpaque(false);
         btnGrid.add(btnAdd);
         btnGrid.add(btnUpdate);
@@ -303,6 +337,8 @@ public class ProductView extends JPanel {
         btnGrid.add(btnUnitConfig);
 
         gbc.gridy = y++;
+        gbc.weighty = 0;
+        gbc.insets = new Insets(10, 0, 10, 0);
         formCard.add(btnGrid, gbc);
         centerPanel.add(formCard, BorderLayout.WEST);
 
@@ -339,6 +375,33 @@ public class ProductView extends JPanel {
         tblProducts.getColumnModel()
                 .getColumn(4)
                 .setCellRenderer(new view.components.CategoryTableRenderer(20));
+        
+        // Tô màu hàng gần hết
+        tblProducts.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                try {
+                    int qty = Integer.parseInt(table.getValueAt(row, 3).toString());
+                    if (!isSelected) {
+                        if (qty <= 0) {
+                            c.setBackground(new Color(255, 205, 210)); // đỏ — hết hàng
+                            c.setForeground(new Color(180, 0, 0));
+                        } else if (qty < 20) {
+                            c.setBackground(new Color(255, 243, 205)); // vàng — sắp hết
+                            c.setForeground(new Color(160, 90, 0));
+                        } else {
+                            c.setBackground(Color.WHITE);
+                            c.setForeground(textDark);
+                        }
+                    }
+                } catch (Exception ignored) {
+                    c.setBackground(Color.WHITE);
+                }
+                return c;
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(tblProducts);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -798,6 +861,14 @@ public class ProductView extends JPanel {
                 }
                 Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
                 tableModel.addRow(row);
+                
+                // Gửi alert real-time đến nhân viên kho nếu sắp hết
+                if ((AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())
+                        && p.getQuantity() < 20) {
+                    RealtimeClient.send("INVENTORY_ALERT:" + p.getProductId()
+                            + ":" + p.getProductName()
+                            + ":" + p.getQuantity());
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
