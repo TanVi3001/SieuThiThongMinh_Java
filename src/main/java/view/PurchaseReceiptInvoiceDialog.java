@@ -202,12 +202,13 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttons.setOpaque(false);
 
-        JButton btnPreview = createButton("Xuất phiếu nhập", GREEN);
+        JButton btnPreview = createButton("Xuất phiếu nhập hàng", GREEN);
         JButton btnPrint = createButton("In phiếu", BLUE);
         JButton btnClose = createButton("Đóng", new Color(142, 153, 176));
 
+        btnPreview.setPreferredSize(new Dimension(170, 40));
         btnPreview.addActionListener(e -> PurchaseReceiptReportService.showPurchaseReceipt(receiptId));
-        btnPrint.addActionListener(e -> PurchaseReceiptReportService.showPurchaseReceipt(receiptId));
+        btnPrint.addActionListener(e -> PurchaseReceiptReportService.printPurchaseReceipt(receiptId));
         btnClose.addActionListener(e -> dispose());
 
         buttons.add(btnPreview);

@@ -1,11 +1,19 @@
 package common.report;
 
 import business.sql.prod_inventory.InventoryTransactionSql;
+import common.db.DatabaseConnection;
 import java.math.BigDecimal;
+import java.io.File;
 import java.nio.file.Paths;
+import java.sql.Connection;
 import java.util.HashMap;
 import java.util.List;
 import javax.swing.JOptionPane;
+import net.sf.jasperreports.engine.JasperCompileManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperPrintManager;
+import net.sf.jasperreports.engine.JasperReport;
 
 public class PurchaseReceiptReportService {
 
@@ -19,11 +27,54 @@ public class PurchaseReceiptReportService {
     }
 
     public static void showPurchaseReceipt(String receiptId) {
+        ReportRequest request = buildRequest(receiptId);
+
+        if (request == null) {
+            return;
+        }
+
+        ReportViewer.showReport(getReportPath(), request.parameters);
+    }
+
+    public static void printPurchaseReceipt(String receiptId) {
+        ReportRequest request = buildRequest(receiptId);
+
+        if (request == null) {
+            return;
+        }
+
+        try (Connection connection = DatabaseConnection.getConnection()) {
+            if (connection == null) {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Không thể kết nối database. Kiểm tra cấu hình Oracle.",
+                        "Lỗi in phiếu",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            File reportFile = new File(getReportPath());
+            JasperReport report = JasperCompileManager.compileReport(reportFile.getAbsolutePath());
+            JasperPrint jasperPrint = JasperFillManager.fillReport(report, request.parameters, connection);
+            JasperPrintManager.printReport(jasperPrint, true);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Không thể in phiếu nhập:\n" + ex.getMessage(),
+                    "Lỗi in phiếu",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private static ReportRequest buildRequest(String receiptId) {
         String cleanReceiptId = receiptId == null ? "" : receiptId.trim();
 
         if (cleanReceiptId.isEmpty()) {
             JOptionPane.showMessageDialog(null, "Vui lòng chọn phiếu nhập cần xuất.");
-            return;
+            return null;
         }
 
         List<InventoryTransactionSql.PurchaseReceiptLineDTO> lines
@@ -36,7 +87,7 @@ public class PurchaseReceiptReportService {
                     "Không có dữ liệu",
                     JOptionPane.WARNING_MESSAGE
             );
-            return;
+            return null;
         }
 
         BigDecimal grandTotal = BigDecimal.ZERO;
@@ -50,11 +101,13 @@ public class PurchaseReceiptReportService {
         params.put("RECEIPT_ID", cleanReceiptId);
         params.put("AMOUNT_IN_WORDS", toVietnameseMoneyWords(grandTotal));
 
-        String reportPath = Paths.get(
+        return new ReportRequest(params);
+    }
+
+    private static String getReportPath() {
+        return Paths.get(
                 "src", "main", "resources", "reports", REPORT_FILE
         ).toAbsolutePath().toString();
-
-        ReportViewer.showReport(reportPath, params);
     }
 
     private static String toVietnameseMoneyWords(BigDecimal amount) {
@@ -152,5 +205,8 @@ public class PurchaseReceiptReportService {
         if (builder.length() > 0) {
             builder.append(' ');
         }
+    }
+
+    private record ReportRequest(HashMap<String, Object> parameters) {
     }
 }

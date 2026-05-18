@@ -100,8 +100,8 @@ public class InventoryHistoryDialog extends JDialog {
         btnViewReceipt.setPreferredSize(new Dimension(175, 38));
         btnViewReceipt.addActionListener(e -> viewReceipt());
 
-        JButton btnExportReceipt = new JButton("Xuất phiếu nhập");
-        btnExportReceipt.setPreferredSize(new Dimension(155, 38));
+        JButton btnExportReceipt = new JButton("Xuất phiếu nhập hàng");
+        btnExportReceipt.setPreferredSize(new Dimension(185, 38));
         btnExportReceipt.addActionListener(e -> exportReceipt());
 
         bottom.add(btnViewReceipt);
