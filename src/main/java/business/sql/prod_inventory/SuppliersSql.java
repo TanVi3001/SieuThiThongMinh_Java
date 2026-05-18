@@ -8,14 +8,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SuppliersSql implements SqlInterface<Supplier> {
 
-    // 1. Áp dụng Singleton chuẩn (Tiết kiệm bộ nhớ)
     private static SuppliersSql instance;
 
-    private SuppliersSql() {} // Ngăn tạo đối tượng tự do
+    private SuppliersSql() {
+    }
 
     public static SuppliersSql getInstance() {
         if (instance == null) {
@@ -24,148 +26,337 @@ public class SuppliersSql implements SqlInterface<Supplier> {
         return instance;
     }
 
+    public static class SupplierProductStat {
+
+        public String supplierId;
+        public String supplierName;
+        public int productCount;
+        public int totalQuantity;
+    }
+
+    public String generateNextSupplierId() {
+        String sql = """
+            SELECT NVL(
+                MAX(TO_NUMBER(REGEXP_SUBSTR(supplier_id, '[0-9]+$'))),
+                0
+            ) + 1 AS next_no
+            FROM SUPPLIERS
+            WHERE REGEXP_LIKE(supplier_id, '^SUP_[0-9]+$')
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                int nextNo = rs.getInt("next_no");
+                return String.format("SUP_%03d", nextNo);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return "SUP_001";
+    }
+
+    public List<SupplierProductStat> getSupplierProductStats() {
+        List<SupplierProductStat> result = new ArrayList<>();
+
+        String sql = """
+        WITH product_supplier_link AS (
+            SELECT
+                p.product_id,
+                p.supplier_id
+            FROM PRODUCTS p
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND p.supplier_id IS NOT NULL
+
+            UNION
+
+            SELECT DISTINCT
+                d.product_id,
+                r.supplier_id
+            FROM PURCHASE_RECEIPTS r
+            JOIN PURCHASE_RECEIPT_DETAILS d
+                ON d.receipt_id = r.receipt_id
+            WHERE NVL(r.is_deleted, 0) = 0
+              AND NVL(d.is_deleted, 0) = 0
+              AND r.supplier_id IS NOT NULL
+        )
+        SELECT
+            s.supplier_id,
+            s.supplier_name,
+            COUNT(DISTINCT l.product_id) AS product_count,
+            NVL(SUM(i.quantity), 0) AS total_quantity
+        FROM SUPPLIERS s
+        LEFT JOIN product_supplier_link l
+            ON l.supplier_id = s.supplier_id
+        LEFT JOIN INVENTORY i
+            ON i.product_id = l.product_id
+            AND NVL(i.is_deleted, 0) = 0
+        WHERE NVL(s.is_deleted, 0) = 0
+        GROUP BY s.supplier_id, s.supplier_name
+        ORDER BY product_count DESC, total_quantity DESC, s.supplier_id
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                SupplierProductStat stat = new SupplierProductStat();
+
+                stat.supplierId = rs.getString("supplier_id");
+                stat.supplierName = rs.getString("supplier_name");
+                stat.productCount = rs.getInt("product_count");
+                stat.totalQuantity = rs.getInt("total_quantity");
+
+                result.add(stat);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+    public Map<String, SupplierProductStat> getSupplierProductStatMap() {
+        Map<String, SupplierProductStat> map = new HashMap<>();
+
+        for (SupplierProductStat stat : getSupplierProductStats()) {
+            map.put(stat.supplierId, stat);
+        }
+
+        return map;
+    }
+
     @Override
     public int insert(Supplier t) {
-        int ketQua = 0;
-        String sql = "INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted) VALUES (?, ?, ?, ?, ?, ?)";
-        
-        // Dùng try-with-resources: Tự động đóng connection khi kết thúc
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
+        if (t.getSupplierId() == null || t.getSupplierId().trim().isEmpty()) {
+            t.setSupplierId(generateNextSupplierId());
+        }
+
+        String sql = """
+            INSERT INTO SUPPLIERS (
+                supplier_id,
+                supplier_name,
+                email,
+                address,
+                phone_number,
+                is_deleted
+            )
+            VALUES (?, ?, ?, ?, ?, 0)
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, t.getSupplierId());
             pst.setString(2, t.getSupplierName());
             pst.setString(3, t.getEmail());
             pst.setString(4, t.getAddress());
             pst.setString(5, t.getPhoneNumber());
-            pst.setInt(6, t.getIsDeleted());
-            
-            ketQua = pst.executeUpdate();
-            // KHÔNG cần gọi closeConnection(con) ở đây nữa vì try-with-resources đã làm rồi
+
+            return pst.executeUpdate();
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return 0;
     }
 
     @Override
     public List<Supplier> selectAll() {
-        List<Supplier> ketQua = new ArrayList<>();
-        String sql = "SELECT * FROM SUPPLIERS WHERE is_deleted = 0";
+        List<Supplier> result = new ArrayList<>();
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql);
-             ResultSet rs = pst.executeQuery()) {
+        String sql = """
+            SELECT supplier_id,
+                   supplier_name,
+                   email,
+                   address,
+                   phone_number,
+                   is_deleted
+            FROM SUPPLIERS
+            WHERE NVL(is_deleted, 0) = 0
+            ORDER BY
+                CASE
+                    WHEN REGEXP_LIKE(supplier_id, '^SUP_[0-9]+$')
+                    THEN TO_NUMBER(REGEXP_SUBSTR(supplier_id, '[0-9]+$'))
+                    ELSE 999999
+                END,
+                supplier_id
+        """;
 
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
-                Supplier s = new Supplier();
-                s.setSupplierId(rs.getString("supplier_id"));
-                s.setSupplierName(rs.getString("supplier_name"));
-                s.setEmail(rs.getString("email"));
-                s.setAddress(rs.getString("address"));
-                s.setPhoneNumber(rs.getString("phone_number"));
-                s.setIsDeleted(rs.getInt("is_deleted"));
-                ketQua.add(s);
+                result.add(mapResultSetToSupplier(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return result;
     }
 
     @Override
-    public int update(Supplier t) { 
-        int ketQua = 0;
-        String sql = "UPDATE SUPPLIERS SET supplier_name = ?, email = ?, address = ?, phone_number = ?, is_deleted = ? WHERE supplier_id = ?";
-        
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
+    public int update(Supplier t) {
+        String sql = """
+            UPDATE SUPPLIERS
+            SET supplier_name = ?,
+                email = ?,
+                address = ?,
+                phone_number = ?,
+                is_deleted = 0
+            WHERE supplier_id = ?
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, t.getSupplierName());
             pst.setString(2, t.getEmail());
             pst.setString(3, t.getAddress());
             pst.setString(4, t.getPhoneNumber());
-            pst.setInt(5, t.getIsDeleted());
-            pst.setString(6, t.getSupplierId());
-            
-            ketQua = pst.executeUpdate();
+            pst.setString(5, t.getSupplierId());
+
+            return pst.executeUpdate();
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return 0;
     }
 
     @Override
-    public int delete(String id) { 
-        int ketQua = 0;
-        String sql = "UPDATE SUPPLIERS SET is_deleted = 1 WHERE supplier_id = ?";
-        
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
+    public int delete(String id) {
+        String sql = """
+            UPDATE SUPPLIERS
+            SET is_deleted = 1
+            WHERE supplier_id = ?
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
-            ketQua = pst.executeUpdate();
+            return pst.executeUpdate();
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return 0;
     }
 
     @Override
-    public Supplier selectById(String id) { 
-        Supplier ketQua = null;
-        String sql = "SELECT * FROM SUPPLIERS WHERE supplier_id = ? AND is_deleted = 0";
-        
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
+    public Supplier selectById(String id) {
+        String sql = """
+            SELECT supplier_id,
+                   supplier_name,
+                   email,
+                   address,
+                   phone_number,
+                   is_deleted
+            FROM SUPPLIERS
+            WHERE supplier_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
+
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
-                    ketQua = new Supplier(
-                        rs.getString("supplier_id"),
-                        rs.getString("supplier_name"),
-                        rs.getString("email"),
-                        rs.getString("address"),
-                        rs.getString("phone_number"),
-                        rs.getInt("is_deleted")
-                    );
+                    return mapResultSetToSupplier(rs);
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return null;
     }
 
     @Override
     public List<Supplier> selectByCondition(String condition) {
-        // Hỗ trợ tìm kiếm theo tên hoặc số điện thoại nhà cung cấp
-        List<Supplier> ketQua = new ArrayList<>();
-        String sql = "SELECT * FROM SUPPLIERS WHERE (supplier_name LIKE ? OR phone_number LIKE ?) AND is_deleted = 0";
-        
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            
-            String searchPattern = "%" + condition + "%";
-            pst.setString(1, searchPattern);
-            pst.setString(2, searchPattern);
-            
+        List<Supplier> result = new ArrayList<>();
+
+        String sql = """
+            SELECT supplier_id,
+                   supplier_name,
+                   email,
+                   address,
+                   phone_number,
+                   is_deleted
+            FROM SUPPLIERS
+            WHERE NVL(is_deleted, 0) = 0
+              AND (
+                    LOWER(supplier_id) LIKE LOWER(?)
+                 OR LOWER(supplier_name) LIKE LOWER(?)
+                 OR LOWER(phone_number) LIKE LOWER(?)
+                 OR LOWER(email) LIKE LOWER(?)
+              )
+            ORDER BY supplier_id
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            String pattern = "%" + condition + "%";
+
+            pst.setString(1, pattern);
+            pst.setString(2, pattern);
+            pst.setString(3, pattern);
+            pst.setString(4, pattern);
+
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
-                    ketQua.add(new Supplier(
-                        rs.getString("supplier_id"),
-                        rs.getString("supplier_name"),
-                        rs.getString("email"),
-                        rs.getString("address"),
-                        rs.getString("phone_number"),
-                        rs.getInt("is_deleted")
-                    ));
+                    result.add(mapResultSetToSupplier(rs));
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return ketQua;
+
+        return result;
+    }
+
+    public boolean existsActiveSupplierName(String supplierName, String exceptSupplierId) {
+        String sql = """
+            SELECT COUNT(*) AS total
+            FROM SUPPLIERS
+            WHERE LOWER(TRIM(supplier_name)) = LOWER(TRIM(?))
+              AND NVL(is_deleted, 0) = 0
+              AND (? IS NULL OR supplier_id <> ?)
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, supplierName);
+            ps.setString(2, exceptSupplierId);
+            ps.setString(3, exceptSupplierId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("total") > 0;
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+    private Supplier mapResultSetToSupplier(ResultSet rs) throws SQLException {
+        Supplier supplier = new Supplier();
+
+        supplier.setSupplierId(rs.getString("supplier_id"));
+        supplier.setSupplierName(rs.getString("supplier_name"));
+        supplier.setEmail(rs.getString("email"));
+        supplier.setAddress(rs.getString("address"));
+        supplier.setPhoneNumber(rs.getString("phone_number"));
+        supplier.setIsDeleted(rs.getInt("is_deleted"));
+
+        return supplier;
     }
 }

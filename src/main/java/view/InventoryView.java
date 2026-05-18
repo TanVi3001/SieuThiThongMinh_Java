@@ -1,5 +1,6 @@
 package view;
 
+import business.service.AuthorizationService;
 import business.service.ProductImportService;
 import business.sql.prod_inventory.InventoryTransactionSql;
 import business.sql.prod_inventory.ProductsSql;
@@ -45,12 +46,10 @@ public class InventoryView extends JPanel {
     private JTextField txtSearch;
 
     private JButton btnInbound;
-    private JButton btnOutbound;
     private JButton btnAuditLog;
     private JButton btnSearch;
     private JButton btnResetSearch;
     private JButton btnImportCsv;
-
     private JLabel lblTotalItems;
     private JLabel lblLowStock;
     private JLabel lblOutOfStock;
@@ -69,6 +68,7 @@ public class InventoryView extends JPanel {
         initUI();
         initEvents();
         loadInventoryData();
+        applyInventoryRolePermission();
     }
 
     private void initUI() {
@@ -108,7 +108,8 @@ public class InventoryView extends JPanel {
         cbStoreFilter = new JComboBox<>(new String[]{
             "Tất cả chi nhánh",
             "ST001 - Kho chính",
-            "ST002 - Kho phụ"
+            "ST002 - Kho phụ",
+            "ST01 - Kho mặc định"
         });
         cbStoreFilter.setPreferredSize(new Dimension(210, 38));
         cbStoreFilter.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -353,15 +354,12 @@ public class InventoryView extends JPanel {
         buttons.setOpaque(false);
 
         btnInbound = createButton("Nhập Kho", GREEN, Color.WHITE, IconHelper.add(18));
-        btnOutbound = createButton("Xuất / Hủy", RED, Color.WHITE, IconHelper.delete(18));
         btnAuditLog = createButton("Lịch sử biến động", PURPLE, Color.WHITE, IconHelper.history(18));
 
         btnInbound.setPreferredSize(new Dimension(130, 38));
-        btnOutbound.setPreferredSize(new Dimension(130, 38));
         btnAuditLog.setPreferredSize(new Dimension(165, 38));
 
         buttons.add(btnInbound);
-        buttons.add(btnOutbound);
         buttons.add(btnAuditLog);
 
         actionBar.add(searchPanel, BorderLayout.WEST);
@@ -604,18 +602,17 @@ public class InventoryView extends JPanel {
     }
 
     private void initEvents() {
+        if (btnImportCsv != null) {
+            btnImportCsv.addActionListener(e -> handleImportCSV());
+        }
+
         btnInbound.addActionListener(e -> openPurchaseReceiptDialog());
 
-        btnOutbound.addActionListener(e -> handleStockAdjustment(false));
 
         btnAuditLog.addActionListener(e -> {
             Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
             new InventoryHistoryDialog(owner).setVisible(true);
         });
-
-        if (btnImportCsv != null) {
-            btnImportCsv.addActionListener(e -> handleImportCSV());
-        }
 
         btnSearch.addActionListener(e -> applySearchFilter());
 
@@ -634,7 +631,30 @@ public class InventoryView extends JPanel {
         cbStoreFilter.addActionListener(e -> applySearchFilter());
     }
 
+    private void applyInventoryRolePermission() {
+        boolean canImportStock = AuthorizationService.isWarehouseStaff()
+                || AuthorizationService.isAdmin();
+
+        if (btnImportCsv != null) {
+            btnImportCsv.setVisible(canImportStock);
+        }
+
+        if (btnInbound != null) {
+            btnInbound.setVisible(canImportStock);
+        }
+    }
+
     private void openPurchaseReceiptDialog() {
+        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền nhập kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         int row = tblInventory.getSelectedRow();
 
         if (row < 0) {
@@ -696,6 +716,16 @@ public class InventoryView extends JPanel {
     }
 
     private void handleStockAdjustment(boolean isInbound) {
+        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền điều chỉnh kho.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         int row = tblInventory.getSelectedRow();
 
         if (row < 0) {
@@ -937,6 +967,16 @@ public class InventoryView extends JPanel {
     }
 
     private void handleImportCSV() {
+        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền nhập CSV kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Chọn file CSV để nhập sản phẩm/tồn kho");
         fileChooser.setFileFilter(new FileNameExtensionFilter("CSV Files (*.csv)", "csv"));
@@ -1004,11 +1044,14 @@ public class InventoryView extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 dialog.dispose();
 
-                SyncVersionDao.bumpVersion("PRODUCTS");
-                SyncVersionDao.bumpVersion("INVENTORY");
+                try {
+                    SyncVersionDao.bumpVersion("PRODUCTS");
+                    SyncVersionDao.bumpVersion("INVENTORY");
 
-                RealtimeClient.send("PRODUCTS_CHANGED");
-                RealtimeClient.send("INVENTORY_CHANGED");
+                    RealtimeClient.send("PRODUCTS_CHANGED");
+                    RealtimeClient.send("INVENTORY_CHANGED");
+                } catch (Exception ignored) {
+                }
 
                 loadInventoryData();
 

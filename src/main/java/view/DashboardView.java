@@ -117,40 +117,81 @@ public class DashboardView extends JFrame {
             currentMenu = title;
 
             switch (title) {
+
                 case "Tổng quan":
                     showPanel(new TongQuanPanel());
                     break;
+
                 case "Bán hàng":
                     showPanel(new SellPanel());
                     break;
+
                 case "Quản lý sản phẩm":
                     showPanel(new ProductView());
                     break;
+
+                case "Quản lý nhà cung cấp":
+                    if (isStaff) {
+                        JOptionPane.showMessageDialog(
+                                this,
+                                "Bạn không có quyền truy cập!",
+                                "Từ chối",
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                    } else {
+                        showPanel(new SupplierManagementView());
+                    }
+                    break;
+
                 case "Quản lý nhân viên":
                     if (isStaff) {
-                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
+                        JOptionPane.showMessageDialog(
+                                this,
+                                "Bạn không có quyền truy cập!",
+                                "Từ chối",
+                                JOptionPane.WARNING_MESSAGE
+                        );
                     } else {
                         showPanel(new view.EmployeeView());
                     }
                     break;
+
                 case "Khách hàng":
                     showPanel(new CustomerView());
                     break;
+
                 case "Hóa đơn":
                     showPanel(new OrderView());
                     break;
+
                 case "Báo cáo & Thống kê":
                     if (isStaff) {
-                        JOptionPane.showMessageDialog(this, "Bạn không có quyền truy cập!", "Từ chối", JOptionPane.WARNING_MESSAGE);
+                        JOptionPane.showMessageDialog(
+                                this,
+                                "Bạn không có quyền truy cập!",
+                                "Từ chối",
+                                JOptionPane.WARNING_MESSAGE
+                        );
                     } else {
                         showPanel(new StatisticView());
                     }
                     break;
+
                 case "Cài đặt":
                     showPanel(new view.components.UnifiedSettingsPanel());
                     break;
+
                 case "Đăng xuất":
                     handleLogout();
+                    break;
+
+                default:
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Chức năng chưa được hỗ trợ!",
+                            "Thông báo",
+                            JOptionPane.INFORMATION_MESSAGE
+                    );
                     break;
             }
         });

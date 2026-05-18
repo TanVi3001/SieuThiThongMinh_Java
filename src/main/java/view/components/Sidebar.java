@@ -62,7 +62,9 @@ public class Sidebar extends JPanel {
             addMenuItem("Bán hàng", IconHelper.order(24));
         }
         addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
+
         if (isManagerOrAdmin) {
+            addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
             addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
         }
         addMenuItem("Khách hàng", IconHelper.customer(24));
@@ -163,6 +165,7 @@ public class Sidebar extends JPanel {
     }
 
     public interface MenuClickListener {
+
         void onMenuClick(String title);
     }
 
@@ -191,6 +194,7 @@ public class Sidebar extends JPanel {
     }
 
     private static class CartLogoIcon implements javax.swing.Icon {
+
         private final int size;
 
         CartLogoIcon(int size) {
