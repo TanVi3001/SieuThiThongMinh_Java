@@ -1153,20 +1153,22 @@ public class ProductView extends JPanel {
     // Load ảnh từ nhiều nguồn — ưu tiên File trực tiếp để tránh lỗi tên có dấu tiếng Việt
     private ImageIcon loadImageThumb(String imageName, int w, int h) {
         try {
-            java.io.File f = new java.io.File("src/main/resources/view/image/products/" + imageName);
-            if (f.exists() && f.isFile()) {
-                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
-                System.out.println("ImageIO.read result: " + img); // thêm dòng này
+            // Ưu tiên classpath — hoạt động trên mọi máy sau khi build
+            java.net.URL url = getClass().getClassLoader()
+                    .getResource("view/image/products/" + imageName);
+            if (url != null) {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(url);
                 if (img != null) {
                     return new ImageIcon(img.getScaledInstance(w, h, Image.SCALE_SMOOTH));
                 }
-                Image img2 = Toolkit.getDefaultToolkit().getImage(f.getAbsolutePath());
-                MediaTracker tracker = new MediaTracker(new java.awt.Canvas());
-                tracker.addImage(img2, 0);
-                tracker.waitForID(0);
-                System.out.println("Toolkit width: " + img2.getWidth(null)); // thêm dòng này
-                if (img2 != null && img2.getWidth(null) > 0) {
-                    return new ImageIcon(img2.getScaledInstance(w, h, Image.SCALE_SMOOTH));
+            }
+            // Fallback: đọc trực tiếp từ file (khi chạy trong NetBeans)
+            java.io.File f = new java.io.File(
+                    "src/main/resources/view/image/products/" + imageName);
+            if (f.exists()) {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
+                if (img != null) {
+                    return new ImageIcon(img.getScaledInstance(w, h, Image.SCALE_SMOOTH));
                 }
             }
         } catch (Exception e) {
