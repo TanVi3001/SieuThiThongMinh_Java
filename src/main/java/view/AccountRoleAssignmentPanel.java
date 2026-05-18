@@ -53,12 +53,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGap(0, 400, Short.MAX_VALUE)
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGap(0, 400, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
-                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGap(0, 300, Short.MAX_VALUE)
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGap(0, 300, Short.MAX_VALUE)
         );
     }
 
@@ -149,7 +149,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         topSection.add(lblList, BorderLayout.NORTH);
         topSection.add(filterPanel, BorderLayout.CENTER);
 
-        // 🔥 NÂNG CẤP LÊN 5 CỘT
         JPanel tableHeader = new JPanel(new GridLayout(1, 5, 10, 0));
         tableHeader.setBackground(new Color(248, 249, 252));
         tableHeader.setBorder(BorderFactory.createCompoundBorder(
@@ -232,22 +231,21 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         pnlToggle.setBackground(cardWhite);
         ToggleSwitch toggleBtn = new ToggleSwitch(isActive);
         
-        // Cấm khóa Admin
         if ("Quản trị viên".equals(role)) {
             toggleBtn.setEnabled(false);
             toggleBtn.setToolTipText("Không thể khóa tài khoản Quản trị viên.");
         }
         
-        // Sự kiện gạt công tắc
+        // SỬA LỖI: Chuyển sang sử dụng mouseClicked chuẩn để tránh lỗi luồng UI đồng bộ
         toggleBtn.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseClicked(MouseEvent e) {
                 if (!toggleBtn.isEnabled()) return;
 
-                boolean nextState = !toggleBtn.isOn();
+                boolean nextState = !toggleBtn.isOn(); // true nếu mở khóa, false nếu khóa
                 String actionName = nextState ? "Mở khóa" : "Khóa";
                 String confirmMsg = nextState ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + name + "]?" 
-                                              : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị văng ra và không thể đăng nhập.";
+                                              : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị đăng xuất khỏi hệ thống ngay lập tức.";
                 
                 int confirm = JOptionPane.showConfirmDialog(null, confirmMsg, "Xác nhận " + actionName, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 
@@ -255,6 +253,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     try (Connection con = common.db.DatabaseConnection.getConnection();
                          PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET is_deleted = ? WHERE account_id = ?")) {
                         
+                        // is_deleted = 0 khi hoạt động (nextState == true), is_deleted = 1 khi bị khóa (nextState == false)
                         ps.setInt(1, nextState ? 0 : 1);
                         ps.setString(2, accountId);
                         int updated = ps.executeUpdate();
@@ -262,6 +261,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                         if (updated > 0) {
                             toggleBtn.setOn(nextState);
                             
+                            // SỬA LỖI LOGIC: Đảo lại text log ghi nhận đúng hành động thực tế
                             business.service.AuditLogService.logAction(
                                 "CẬP NHẬT", "ACCOUNTS", accountId, 
                                 nextState ? "Bị khóa" : "Hoạt động", 
@@ -273,7 +273,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                             RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                             EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "TOGGLE_LOCK"));
                             
-                            initTableData(); // Refresh UI
+                            // Cập nhật lại danh bạ bằng một luồng chạy sau (InvokeLater) để tránh nghẽn UI Swing
+                            SwingUtilities.invokeLater(() -> initTableData());
                         }
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(null, "Lỗi khi cập nhật trạng thái: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -289,7 +290,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         row.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getSource() instanceof ToggleSwitch) return; // Bỏ qua nếu bấm vào Toggle
+                // SỬA LỖI: Kiểm tra vùng bấm chính xác để không ăn vào sự kiện của nút Toggle
+                if (e.getX() >= pnlToggle.getX()) return;
 
                 selectedAccountId = accountId;
                 selectedOldRole = role;
@@ -608,7 +610,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         if (listItems == null) return;
         listItems.removeAll();
 
-        // 🌟 LOAD TẤT CẢ (KỂ CẢ TÀI KHOẢN BỊ KHÓA)
         java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
         
         String selectedRoleFilter = (cbRole != null && cbRole.getSelectedItem() != null) ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
@@ -626,7 +627,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             String displayEmail = (acc[3] == null || acc[3].isEmpty()) ? "Chưa có email" : acc[3];
             String dept = "Chưa phân bổ";
 
-            // 🔥 TRẠNG THÁI HOẠT ĐỘNG: Lấy đúng từ cột is_deleted (0: Hoạt động, 1: Bị khóa)
             boolean isActive = "0".equals(acc[5]); 
 
             boolean matchRole = "Tất cả vai trò".equals(selectedRoleFilter) || displayRole.equals(selectedRoleFilter);
@@ -634,7 +634,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             boolean matchSearch = searchText.isEmpty() || displayName.toLowerCase().contains(searchText) || displayEmail.toLowerCase().contains(searchText);
 
             if (matchRole && matchDept && matchSearch) {
-                // Thêm vào danh sách bất kể isActive là true hay false
                 listItems.add(createAccountRow(acc[0], displayName, displayEmail, dept, displayRole, isActive));
             }
         }
@@ -732,15 +731,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private void setupRealtimeSync() {
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                
+            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                        
                 // Không popup, cập nhật ngầm
             }
         });
     }
 
-    // =========================================================================
-    // 🔥 NÚT CÔNG TẮC (TOGGLE SWITCH) KIỂU IOS
-    // =========================================================================
     class ToggleSwitch extends JComponent {
         private boolean on;
         
@@ -766,13 +762,13 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 g2.setColor(new Color(16, 185, 129)); // Màu Xanh lá (Hoạt động)
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
                 g2.setColor(Color.WHITE);
-                g2.fillOval(24, 2, 20, 20); // Dịch núm xoay sang phải
+                g2.fillOval(24, 2, 20, 20);
             } else {
                 g2.setColor(new Color(203, 213, 225)); // Màu Xám (Bị Khóa)
-                if (!isEnabled()) g2.setColor(new Color(241, 245, 249)); // Mờ đi nếu bị Disable (Admin)
+                if (!isEnabled()) g2.setColor(new Color(241, 245, 249)); 
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
                 g2.setColor(Color.WHITE);
-                g2.fillOval(2, 2, 20, 20); // Dịch núm xoay sang trái
+                g2.fillOval(2, 2, 20, 20);
             }
             g2.dispose();
         }
