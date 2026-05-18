@@ -28,7 +28,7 @@ COMMIT;
 
 -- 1. Thêm 5 Danh mục (Chuẩn 100% theo ảnh)
 INSERT INTO CATEGORIES (category_id, category_name, description)
-VALUES ('CAT001', 'Các loại mì', 'Cung cấp các loại mì');
+VALUES ('CAT001', 'Các loại thực phẩm khô', 'Cung cấp các loại thực phẩm khô');
 
 INSERT INTO CATEGORIES (category_id, category_name, description)
 VALUES ('CAT002', 'Đồ uống', 'Nước giải khát');
