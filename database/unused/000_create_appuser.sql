@@ -1,0 +1,19 @@
+
+CONNECT system/Admin123@//localhost/FREEPDB1
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE USER appuser IDENTIFIED BY apppass';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE = -1920 THEN
+            NULL;
+        ELSE
+            RAISE;
+        END IF;
+END;
+/
+
+GRANT CONNECT, RESOURCE TO appuser;
+GRANT UNLIMITED TABLESPACE TO appuser;
+
+COMMIT;
