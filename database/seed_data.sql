@@ -9,6 +9,63 @@ INSERT INTO STORES (store_id, email, address, phone_number)
 VALUES ('ST01', 'contact@smartmart.vn', 'Dĩ An, Bình Dương', '0123456789');
 
 -- 2. TẠO NHÀ CUNG CẤP CHUẨN (SUPPLIERS)
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_02', 'Công ty TNHH Acecook Việt Nam', 'acecook@acecook.vn', '36 Tân Thắng, Bình Tân, TP.HCM', '02837608888', 0);
+-- Sản phẩm: Mì Hảo Hảo, Mì Omachi
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_03', 'Công ty TNHH Vifon', 'vifon@vifon.com.vn', '28 Đồng Nai, Quận 10, TP.HCM', '02838333888', 0);
+-- Sản phẩm: Phở bò Vifon
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_04', 'Công ty CP Masan Consumer', 'masan@masan.com.vn', '12 Tân Trào, Tân Phú, TP.HCM', '02873008888', 0);
+-- Sản phẩm: Nước mắm Nam Ngư, Nước mắm Chinsu, Tương ớt Chinsu, Dầu Simply
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_05', 'Công ty CP Dầu thực vật Tường An', 'tuongan@tuongan.com.vn', '48 Trường Sơn, Tân Bình, TP.HCM', '02838111333', 0);
+-- Sản phẩm: Dầu ăn Tường An
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_06', 'Công ty CP Sữa Việt Nam (Vinamilk)', 'vinamilk@vinamilk.com.vn', '10 Tân Trào, Quận 7, TP.HCM', '18001557', 0);
+-- Sản phẩm: Sữa đặc Ông Thọ, Đường Biên Hòa
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_07', 'Công ty TNHH Unilever Việt Nam', 'unilever@unilever.com', 'KCN Biên Hòa 2, Đồng Nai', '02513836333', 0);
+-- Sản phẩm: Dầu gội Clear, Sunsilk, Kem đánh răng PS, Sữa tắm Lifebuoy, Hazeline
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_08', 'Công ty TNHH Nestlé Việt Nam', 'nestle@nestle.com.vn', 'KCN Biên Hòa 1, Đồng Nai', '02513836111', 0);
+-- Sản phẩm: Hạt nêm Knorr, Bánh Oreo, KitKat, Milo
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_09', 'Công ty TNHH Coca-Cola Việt Nam', 'cocacola@coca-cola.com.vn', 'KCN Tam Bình, Bình Dương', '02743820222', 0);
+-- Sản phẩm: Coca Cola, Sprite, Aquafina
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_10', 'Công ty CP Pepsico Việt Nam', 'pepsico@pepsico.com.vn', 'KCN Việt Nam Singapore, Bình Dương', '02743750888', 0);
+-- Sản phẩm: Pepsi, Sting, 7Up, Pringles
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_11', 'Công ty CP Tân Hiệp Phát', 'thp@thp.com.vn', 'KCN Mỹ Phước, Bình Dương', '02743771222', 0);
+-- Sản phẩm: Trà Ô Long Tea Plus, Redbull (phân phối)
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_12', 'Công ty CP Orion Vina', 'orion@orion.vn', 'KCN Yên Phong, Bắc Ninh', '02223871999', 0);
+-- Sản phẩm: ChocoPie Orion, Bánh gạo One One
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_13', 'Công ty CP Kinh Đô (Kido)', 'kido@kidobrands.com', '141 Nguyễn Du, Quận 1, TP.HCM', '02839326262', 0);
+-- Sản phẩm: Bánh Cosy
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_14', 'Công ty TNHH Haribo GmbH (Phân phối)', 'haribo@haribo.com.vn', '12 Lê Duẩn, Quận 1, TP.HCM', '02838221111', 0);
+-- Sản phẩm: Kẹo dẻo Haribo
+
+INSERT INTO SUPPLIERS (supplier_id, supplier_name, email, address, phone_number, is_deleted)
+VALUES ('SUP_15', 'Công ty TNHH Thương mại Thực phẩm Tươi Sống Sài Gòn', 'tuoisong@sgfresh.com.vn', '50 Lý Thường Kiệt, Quận 10, TP.HCM', '02838556789', 0);
+-- Sản phẩm: Thịt bò, ức gà, cá hồi, trứng gà, khoai tây
+
+COMMIT;
 -- 3. Thêm Nhà cung cấp mặc định (Để code Java có chỗ bám vào)
 INSERT INTO SUPPLIERS (supplier_id, supplier_name)
 VALUES ('SUP_01', 'Nhà cung cấp Tổng hợp');
