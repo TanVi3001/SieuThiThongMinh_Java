@@ -452,3 +452,18 @@ CREATE TABLE SYSTEM_CONFIG (
     config_key   VARCHAR2(50) PRIMARY KEY,
     config_value VARCHAR2(500)
 );
+
+CREATE TABLE INVENTORY_NOTIFICATIONS (
+    notification_id VARCHAR2(50) PRIMARY KEY,
+    product_id      VARCHAR2(50) NOT NULL,
+    product_name    NVARCHAR2(255),
+    message         NVARCHAR2(1000),
+    target_role     VARCHAR2(50) DEFAULT 'WAREHOUSE',
+    status          VARCHAR2(20) DEFAULT 'PENDING',
+    remind_count    NUMBER DEFAULT 1,
+    created_by      VARCHAR2(50),
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at     TIMESTAMP,
+    is_deleted      NUMBER(1) DEFAULT 0
+);
