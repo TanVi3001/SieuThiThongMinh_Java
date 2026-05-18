@@ -85,6 +85,23 @@ SieuThiOnline [Project Root]
 ├── .gitignore                       <-- Chặn file rác 
 └── README.md                        <-- Hướng dẫn dự án
 ```
+## [HƯỚNG DẪN BACKUP / RESTORE DATABASE](docs/database_backup_guide.md)
+
+Dự án hỗ trợ backup và restore Oracle Database bằng Oracle Data Pump (`expdp/impdp`) để lưu dữ liệu demo, khôi phục database khi lỗi hoặc chuyển dữ liệu sang máy khác.
+
+Tài liệu chi tiết xem tại:
+
+👉 **[docs/database_backup_guide.md](docs/database_backup_guide.md)**
+
+Nội dung hướng dẫn bao gồm:
+
+- Cách cấu hình `DB_HOST`, `DB_PORT`, `DB_SERVICE`, `APP_SCHEMA`
+- Cách chạy `backup/export_dmp.bat` để backup database
+- Cách chạy `backup/import_dmp.bat` để import file `.DMP`
+- Cách chạy `backup/restore_dmp.bat` để restore bản backup mới nhất
+- Các lỗi thường gặp như `ORA-01017`, `ORA-12154`, thiếu `sqlplus`, thiếu `expdp/impdp`
+- Checklist kiểm tra backup thành công trước khi demo
+
 ## [THÀNH VIÊN NHÓM](#)
 
 | STT | MSSV | Họ và Tên | GitHub | Email | 
