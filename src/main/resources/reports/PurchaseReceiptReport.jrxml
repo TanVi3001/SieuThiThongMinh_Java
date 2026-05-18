@@ -195,8 +195,6 @@ ORDER BY d.created_at, d.receipt_detail_id
             <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="166" width="225" height="12"/><textFieldExpression><![CDATA[$F{payment_method}]]></textFieldExpression></textField>
             <staticText><reportElement style="CardLabel" x="427" y="184" width="95" height="12"/><text><![CDATA[Địa chỉ:]]></text></staticText>
             <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="184" width="225" height="12"/><textFieldExpression><![CDATA[$F{warehouse_address}]]></textFieldExpression></textField>
-            <staticText><reportElement style="CardLabel" x="427" y="198" width="95" height="12"/><text><![CDATA[Ghi chú:]]></text></staticText>
-            <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="198" width="225" height="12"/><textFieldExpression><![CDATA[$F{note}]]></textFieldExpression></textField>
         </band>
     </title>
 
@@ -255,7 +253,7 @@ ORDER BY d.created_at, d.receipt_detail_id
     </pageFooter>
 
     <summary>
-        <band height="168" splitType="Stretch">
+        <band height="184" splitType="Stretch">
             <staticText>
                 <reportElement style="Label" x="10" y="12" width="70" height="14"/>
                 <text><![CDATA[Bằng chữ:]]></text>
@@ -289,23 +287,23 @@ ORDER BY d.created_at, d.receipt_detail_id
             <textField pattern="#,##0"><reportElement x="650" y="62" width="120" height="22" forecolor="#0F766E"/><textElement textAlignment="Right" verticalAlignment="Middle"><font size="16" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{grand_total}]]></textFieldExpression></textField>
 
             <rectangle radius="5">
-                <reportElement x="10" y="100" width="782" height="54" backcolor="#FFFFFF"/>
+                <reportElement x="10" y="100" width="782" height="70" backcolor="#FFFFFF"/>
                 <graphicElement>
                     <pen lineWidth="0.5" lineColor="#CBD5E1"/>
                 </graphicElement>
             </rectangle>
             <staticText><reportElement style="Base" x="35" y="112" width="140" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Người giao hàng]]></text></staticText>
             <staticText><reportElement style="Muted" x="35" y="126" width="140" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
-            <line><reportElement x="55" y="147" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <line><reportElement x="55" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
             <staticText><reportElement style="Base" x="225" y="112" width="120" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Thủ kho]]></text></staticText>
             <staticText><reportElement style="Muted" x="225" y="126" width="120" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
-            <line><reportElement x="235" y="147" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <line><reportElement x="235" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
             <staticText><reportElement style="Base" x="420" y="112" width="110" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Kế toán]]></text></staticText>
             <staticText><reportElement style="Muted" x="420" y="126" width="110" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
-            <line><reportElement x="425" y="147" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <line><reportElement x="425" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
             <staticText><reportElement style="Base" x="610" y="112" width="140" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Người lập phiếu]]></text></staticText>
             <staticText><reportElement style="Muted" x="610" y="126" width="140" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
-            <line><reportElement x="630" y="147" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <line><reportElement x="630" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
         </band>
     </summary>
 </jasperReport>
