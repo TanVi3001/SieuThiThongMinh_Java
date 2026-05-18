@@ -76,7 +76,7 @@ public class ProductsSql {
         List<Product> list = new ArrayList<>();
 
         String sql = "SELECT p.product_id, p.product_name, p.base_price, "
-                + "       p.category_id, p.supplier_id, CAST(NULL AS VARCHAR2(255)) AS image_path, "
+                + "       p.category_id, p.supplier_id, p.image_path, "
                 + "       i.store_id, i.quantity, i.unit "
                 + "FROM PRODUCTS p "
                 + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND NVL(i.is_deleted, 0) = 0 "
@@ -115,7 +115,7 @@ public class ProductsSql {
 
     public boolean insert(Product p) {
         String sqlProduct = "INSERT INTO PRODUCTS "
-                + "(product_id, product_name, base_price, category_id, supplier_id, is_deleted) "
+                + "(product_id, product_name, base_price, category_id, supplier_id, image_path, is_deleted) "
                 + "VALUES (?, ?, ?, ?, ?, 0)";
 
         String sqlInventory = "INSERT INTO INVENTORY "
@@ -140,6 +140,7 @@ public class ProductsSql {
                 psProd.setBigDecimal(3, p.getBasePrice());
                 psProd.setString(4, p.getCategoryId());
                 psProd.setString(5, p.getSupplierId());
+                psProd.setString(6, p.getImagePath());
                 int prodRows = psProd.executeUpdate();
 
                 psInv.setString(1, p.getProductId());
@@ -182,7 +183,7 @@ public class ProductsSql {
 
     public boolean update(Product p) {
         String sqlProduct = "UPDATE PRODUCTS "
-                + "SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ? "
+                + "SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ?, image_path = ? "
                 + "WHERE product_id = ? AND is_deleted = 0";
 
         String sqlInventory = "UPDATE INVENTORY "
@@ -210,8 +211,9 @@ public class ProductsSql {
                 psProd.setString(1, p.getProductName() != null ? p.getProductName().trim() : "");
                 psProd.setBigDecimal(2, p.getBasePrice());
                 psProd.setString(3, p.getCategoryId() != null ? p.getCategoryId().trim() : "");
-                psProd.setString(4, p.getSupplierId() != null ? p.getSupplierId().trim() : "SUP001");
-                psProd.setString(5, p.getProductId().trim());
+                psProd.setString(4, p.getSupplierId() != null ? p.getSupplierId().trim() : "SUP_01");
+                psProd.setString(5, p.getImagePath());
+                psProd.setString(6, p.getProductId().trim());
                 int prodRows = psProd.executeUpdate();
 
                 // UPDATE INVENTORY
@@ -387,7 +389,7 @@ public class ProductsSql {
     // 3 HÀM BỔ SUNG CHO GIAO DIỆN PRODUCTVIEW
     // ==========================================
     public Product findById(String productId) {
-        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, CAST(NULL AS VARCHAR2(255)) AS image_path, "
+        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, p.image_path, "
                 + "i.store_id, i.quantity, i.unit "
                 + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
                 + "WHERE p.is_deleted = 0 AND p.product_id = ? FETCH FIRST 1 ROWS ONLY";

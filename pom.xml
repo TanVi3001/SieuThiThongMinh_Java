@@ -130,6 +130,18 @@
             <version>25-ea+21</version>
             <type>jar</type>
         </dependency>
+        <dependency>
+            <groupId>com.ericsson.research.trap</groupId>
+            <artifactId>trap-network-nio</artifactId>
+            <version>1.4.2</version>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.ericsson.research.trap</groupId>
+            <artifactId>trap-android</artifactId>
+            <version>1.4.2</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
 
     <build>

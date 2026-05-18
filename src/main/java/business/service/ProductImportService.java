@@ -82,16 +82,11 @@ public class ProductImportService {
                             psInsertProd.setString(5, defaultUnitId);
                             psInsertProd.executeUpdate();
 
-                            try (ResultSet rsKeys = psInsertProd.getGeneratedKeys()) {
-                                if (rsKeys.next()) {
-                                    productId = rsKeys.getString(1);
-                                } else {
-                                    // Fallback tìm lại ID nếu Oracle không trả về key qua trigger
-                                    try (ResultSet rsProd2 = psCheckProd.executeQuery()) {
-                                        if (rsProd2.next()) {
-                                            productId = rsProd2.getString("product_id");
-                                        }
-                                    }
+                            // Query lại để lấy ID vừa được trigger sinh ra
+                            psCheckProd.setString(1, productName);
+                            try (ResultSet rsProd2 = psCheckProd.executeQuery()) {
+                                if (rsProd2.next()) {
+                                    productId = rsProd2.getString("product_id");
                                 }
                             }
                         }

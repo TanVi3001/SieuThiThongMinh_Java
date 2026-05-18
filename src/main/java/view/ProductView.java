@@ -24,15 +24,10 @@ import javax.swing.table.DefaultTableModel;
 import model.product.Product;
 import model.product.ProductUnit;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.nio.charset.StandardCharsets;
 import javax.swing.filechooser.FileNameExtensionFilter;
-
+ 
 import view.components.IconHelper;
-
-// Events + realtime + sync
+ 
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
@@ -54,6 +49,8 @@ public class ProductView extends JPanel {
     private JComboBox<String> cbCategory, cbSearch;
     private JLabel lblImagePreview;
     private String selectedImagePath = null;
+    private String selectedSupplierId = "SUP_01";  
+    private String selectedStoreId = "ST01";     
 
     private JTable tblProducts;
     private DefaultTableModel tableModel;
@@ -63,7 +60,7 @@ public class ProductView extends JPanel {
     private List<String> productNameList = new ArrayList<>();
     
     private JLabel lblImageSectionTitle;
-private JButton btnChooseImage;
+    private JButton btnChooseImage;
 
     public ProductView() {
         setLayout(new BorderLayout(20, 20));
@@ -169,9 +166,9 @@ private JButton btnChooseImage;
         searchFieldWrapper.add(searchIconLabel, BorderLayout.WEST);
         searchFieldWrapper.add(cbSearch, BorderLayout.CENTER);
 
-        btnSearch  = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
+        btnSearch   = createCustomButton("Tìm kiếm", primaryBlue, Color.WHITE, IconHelper.search(20));
         btnExportPDF = createCustomButton("Xuất Excel", new Color(0, 163, 108), Color.WHITE, IconHelper.export(20));
-        btnImport  = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, IconHelper.file(20));
+        btnImport   = createCustomButton("Nhập CSV", new Color(103, 58, 183), Color.WHITE, IconHelper.file(20));
 
         toolPanel.add(searchFieldWrapper);
         toolPanel.add(btnSearch);
@@ -195,8 +192,8 @@ private JButton btnChooseImage;
         gbc.weightx = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
 
-        txtName = createTextField("Nhập tên...");
-        txtPrice = createTextField("Nhập giá (VNĐ)...");
+        txtName     = createTextField("Nhập tên...");
+        txtPrice    = createTextField("Nhập giá (VNĐ)...");
         txtQuantity = createTextField("Nhập số lượng...");
 
         cbCategory = new JComboBox<>();
@@ -248,26 +245,41 @@ private JButton btnChooseImage;
         gbc.insets = new Insets(0, 0, 5, 0);
         formCard.add(lblImagePreview, gbc);
 
+        // FIX: dùng lambda thay vì anonymous ActionListener class để tránh thiếu import
         btnChooseImage = createCustomButton("Chọn ảnh", new Color(108, 117, 125), Color.WHITE, null);
         btnChooseImage.addActionListener(e -> {
             JFileChooser fc = new JFileChooser();
-            fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Ảnh (jpg, png, gif)", "jpg", "jpeg", "png", "gif"));
-            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            fc.setFileFilter(new FileNameExtensionFilter("Ảnh (jpg, png, gif)", "jpg", "jpeg", "png", "gif"));
+            if (fc.showOpenDialog(ProductView.this) == JFileChooser.APPROVE_OPTION) {
                 java.io.File srcFile = fc.getSelectedFile();
                 String fileName = srcFile.getName();
-                // Copy ảnh vào resources/view/image/
                 try {
-                    java.net.URL resUrl = getClass().getClassLoader().getResource("view/image");
+                    // Lưu vào src/main/resources để không bị mất khi Clean and Build
+                    java.io.File destDir = new java.io.File("src/main/resources/view/image/products/");
+                    destDir.mkdirs();
+                    java.nio.file.Files.copy(srcFile.toPath(),
+                            new java.io.File(destDir, fileName).toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+                    // Copy luôn vào target để dùng được ngay không cần build lại
+                    java.net.URL resUrl = ProductView.this.getClass().getClassLoader().getResource("view/image/products");
                     if (resUrl != null) {
-                        java.io.File destDir = new java.io.File(resUrl.toURI());
-                        java.io.File destFile = new java.io.File(destDir, fileName);
-                        java.nio.file.Files.copy(srcFile.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        java.io.File targetDir = new java.io.File(resUrl.toURI());
+                        java.nio.file.Files.copy(srcFile.toPath(),
+                                new java.io.File(targetDir, fileName).toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
-                selectedImagePath = fileName; // Chỉ lưu tên file
-                ImageIcon icon = new ImageIcon(new ImageIcon(srcFile.getAbsolutePath()).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
+
+                // FIX: gán selectedImagePath và hiển thị preview nằm TRONG block if, sau try-catch
+                selectedImagePath = fileName;
+                ImageIcon icon = new ImageIcon(
+                        new ImageIcon(srcFile.getAbsolutePath())
+                                .getImage()
+                                .getScaledInstance(180, 120, Image.SCALE_SMOOTH)
+                );
                 lblImagePreview.setIcon(icon);
                 lblImagePreview.setText("");
             }
@@ -276,10 +288,10 @@ private JButton btnChooseImage;
         gbc.insets = new Insets(0, 0, 30, 0);
         formCard.add(btnChooseImage, gbc);
 
-        btnAdd = createCustomButton("Thêm", primaryBlue, Color.WHITE, IconHelper.add(20));
-        btnUpdate = createCustomButton("Cập nhật", new Color(255, 153, 0), Color.BLACK, IconHelper.edit(20));
-        btnDelete = createCustomButton("Xóa", new Color(220, 53, 69), Color.WHITE, IconHelper.delete(20));
-        btnClear = createCustomButton("Làm mới", new Color(165, 177, 194), Color.WHITE, IconHelper.refresh(20));
+        btnAdd       = createCustomButton("Thêm", primaryBlue, Color.WHITE, IconHelper.add(20));
+        btnUpdate    = createCustomButton("Cập nhật", new Color(255, 153, 0), Color.BLACK, IconHelper.edit(20));
+        btnDelete    = createCustomButton("Xóa", new Color(220, 53, 69), Color.WHITE, IconHelper.delete(20));
+        btnClear     = createCustomButton("Làm mới", new Color(165, 177, 194), Color.WHITE, IconHelper.refresh(20));
         btnUnitConfig = createCustomButton("Đơn vị", new Color(103, 58, 183), Color.WHITE, IconHelper.settings(20));
 
         JPanel btnGrid = new JPanel(new GridLayout(3, 2, 12, 12));
@@ -310,7 +322,6 @@ private JButton btnChooseImage;
             }
         };
         tblProducts = new JTable(tableModel);
-        tblProducts.setRowHeight(35);
         tblProducts.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         tblProducts.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
         tblProducts.getTableHeader().setBackground(bgLight);
@@ -320,21 +331,9 @@ private JButton btnChooseImage;
         tblProducts.setSelectionForeground(textDark);
         tblProducts.setRowHeight(60); // tăng chiều cao hàng cho ảnh
 
-        tblProducts.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
-                JLabel lbl = new JLabel();
-                lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon imageIcon) {
-                    lbl.setIcon(imageIcon);
-                } else {
-                    lbl.setText("—");
-                    lbl.setForeground(textGray);
-                }
-                return lbl;
-            }
-        });
-        tblProducts.getColumnModel().getColumn(5).setPreferredWidth(80);
+        tblProducts.getColumnModel().getColumn(5).setPreferredWidth(100);
+        tblProducts.getColumnModel().getColumn(5).setMinWidth(80);
+        tblProducts.setRowHeight(70);
         
         // Cột "Loại SP" (index 4) hiển thị icon + text
         tblProducts.getColumnModel()
@@ -562,10 +561,10 @@ private JButton btnChooseImage;
         } else {
             p.setProductId(dao.generateNextProductId());
             if (p.getSupplierId() == null || p.getSupplierId().trim().isEmpty()) {
-                p.setSupplierId("SUP001");
+                p.setSupplierId("SUP_01");
             }
             if (p.getStoreId() == null || p.getStoreId().trim().isEmpty()) {
-                p.setStoreId("ST001");
+                p.setStoreId("ST01");
             }
             if (p.getUnit() == null || p.getUnit().trim().isEmpty()) {
                 p.setUnit("Cái");
@@ -631,7 +630,7 @@ private JButton btnChooseImage;
             return;
         }
 
-        String id = tblProducts.getValueAt(row, 0).toString().trim();
+        String id   = tblProducts.getValueAt(row, 0).toString().trim();
         String name = tblProducts.getValueAt(row, 1).toString().trim();
 
         int confirm = JOptionPane.showConfirmDialog(this,
@@ -726,9 +725,9 @@ private JButton btnChooseImage;
             return;
         }
 
-        Object nameObj = tblProducts.getValueAt(row, 1);
-        Object priceObj = tblProducts.getValueAt(row, 2);
-        Object qtyObj = tblProducts.getValueAt(row, 3);
+        Object nameObj     = tblProducts.getValueAt(row, 1);
+        Object priceObj    = tblProducts.getValueAt(row, 2);
+        Object qtyObj      = tblProducts.getValueAt(row, 3);
         Object categoryObj = tblProducts.getValueAt(row, 4);
 
         txtName.setText(nameObj == null ? "" : nameObj.toString().trim());
@@ -741,21 +740,21 @@ private JButton btnChooseImage;
         // Hiển thị ảnh nếu có
         String productId = tblProducts.getValueAt(row, 0).toString().trim();
         Product selected = ProductsSql.getInstance().findById(productId);
+        if (selected != null) {
+            selectedSupplierId = selected.getSupplierId() != null ? selected.getSupplierId() : "SUP_01";
+            selectedStoreId    = selected.getStoreId()    != null ? selected.getStoreId()    : "ST01";
+        }
+
         if (selected != null && selected.getImagePath() != null && !selected.getImagePath().isEmpty()) {
             selectedImagePath = selected.getImagePath();
-            try {
-                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + selectedImagePath);
-                if (imgUrl != null) {
-                    ImageIcon icon = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
-                    lblImagePreview.setIcon(icon);
-                    lblImagePreview.setText("");
-                } else {
-                    lblImagePreview.setIcon(null);
-                    lblImagePreview.setText("Không tìm thấy ảnh");
-                }
-            } catch (Exception e) {
+            // Dùng helper — hỗ trợ tên file có dấu tiếng Việt
+            ImageIcon icon = loadImageThumb(selectedImagePath, 180, 120);
+            if (icon != null) {
+                lblImagePreview.setIcon(icon);
+                lblImagePreview.setText("");
+            } else {
                 lblImagePreview.setIcon(null);
-                lblImagePreview.setText("Không tải được ảnh");
+                lblImagePreview.setText("Không tìm thấy: " + selectedImagePath);
             }
         } else {
             selectedImagePath = null;
@@ -769,28 +768,35 @@ private JButton btnChooseImage;
         int rowCount = tblProducts.getRowCount();
         for (int i = 0; i < rowCount; i++) {
             Map<String, Object> row = new HashMap<>();
-            row.put("productId", tblProducts.getValueAt(i, 0));
+            row.put("productId",   tblProducts.getValueAt(i, 0));
             row.put("productName", tblProducts.getValueAt(i, 1));
-            row.put("price", tblProducts.getValueAt(i, 2));
-            row.put("quantity", tblProducts.getValueAt(i, 3));
+            row.put("price",       tblProducts.getValueAt(i, 2));
+            row.put("quantity",    tblProducts.getValueAt(i, 3));
             list.add(row);
         }
         return list;
     }
 
     public void loadDataToTable() {
+        System.out.println("Working dir: " + System.getProperty("user.dir"));
         tableModel.setRowCount(0);
         try {
             List<Product> list = ProductsSql.getInstance().selectAll();
             for (Product p : list) {
                 ImageIcon thumb = null;
-        if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
-            java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
-            if (imgUrl != null) {
-                thumb = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH));
-            }
-        }
-        Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
+                System.out.println("SP: " + p.getProductId() + " | image: " + p.getImagePath()); // thêm dòng này
+                if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
+                    // DEBUG - xem đường dẫn thực tế
+                    java.io.File debug = new java.io.File("src/main/resources/view/image/" + p.getImagePath());
+                    System.out.println("=== DEBUG ảnh ===");
+                    System.out.println("imagePath từ DB : " + p.getImagePath());
+                    System.out.println("Tìm file ở      : " + debug.getAbsolutePath());
+                    System.out.println("File tồn tại?   : " + debug.exists());
+                
+                    thumb = loadImageThumb(p.getImagePath(), 60, 45);
+                    System.out.println("thumb loaded?   : " + (thumb != null));
+                }
+                Object[] row = {p.getProductId(), p.getProductName(), p.getBasePrice(), p.getQuantity(), p.getCategoryId(), thumb};
                 tableModel.addRow(row);
             }
         } catch (Exception e) {
@@ -829,9 +835,9 @@ private JButton btnChooseImage;
 
     private Product getProductFromForm() {
         Product p = new Product();
-        String name = txtName.getText().trim();
+        String name      = txtName.getText().trim();
         String priceText = txtPrice.getText().trim();
-        String qtyText = txtQuantity.getText().trim();
+        String qtyText   = txtQuantity.getText().trim();
 
         JTextField editor = (JTextField) cbCategory.getEditor().getEditorComponent();
         String categoryId = editor.getText().trim();
@@ -851,6 +857,8 @@ private JButton btnChooseImage;
             p.setQuantity(Integer.parseInt(qtyText));
             p.setCategoryId(categoryId);
             p.setImagePath(selectedImagePath);
+            p.setSupplierId(selectedSupplierId);
+            p.setStoreId(selectedStoreId);
             return p;
         } catch (Exception e) {
             return null;
@@ -932,8 +940,8 @@ private JButton btnChooseImage;
         gbc.insets = new Insets(5, 5, 5, 5);
 
         JTextField txtUnitName = createTextField("VD: Thùng, Lốc, Hộp...");
-        JTextField txtRate = createTextField("VD: 1, 6, 24...");
-        JCheckBox chkBase = new JCheckBox("Đây là đơn vị gốc (Tỷ lệ = 1)");
+        JTextField txtRate     = createTextField("VD: 1, 6, 24...");
+        JCheckBox  chkBase     = new JCheckBox("Đây là đơn vị gốc (Tỷ lệ = 1)");
         chkBase.setOpaque(false);
         chkBase.setFont(new Font("Segoe UI", Font.BOLD, 13));
         chkBase.setForeground(textDark);
@@ -997,7 +1005,7 @@ private JButton btnChooseImage;
                 if (ok) {
                     SyncVersionDao.bumpVersion("PRODUCTS");
 
-                    // REALTIME: báo “product metadata” đổi
+                    // REALTIME: báo "product metadata" đổi
                     RealtimeClient.send("PRODUCTS_CHANGED");
 
                     JOptionPane.showMessageDialog(dialog, "✅ Đã lưu cấu hình đơn vị tính thành công!");
@@ -1041,7 +1049,8 @@ private JButton btnChooseImage;
         }
     }
 
-    private void handleImportCSV() {        // Lấy frame cha chứa View này
+    private void handleImportCSV() {
+        // Lấy frame cha chứa View này
         JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         
         // Gọi Dialog Import chuyên dụng mà chúng ta đã sửa (có ProgressBar chạy ngầm)
@@ -1050,7 +1059,6 @@ private JButton btnChooseImage;
         dialog.setVisible(true);
     }
     
-
     private void styleSearchBox(JComboBox<String> cb, String placeholder) {
         cb.setEditable(true);
         cb.setBorder(null);
@@ -1058,5 +1066,34 @@ private JButton btnChooseImage;
         JTextField editor = (JTextField) cb.getEditor().getEditorComponent();
         editor.putClientProperty("JTextField.placeholderText", placeholder);
         editor.setBorder(new EmptyBorder(0, 5, 0, 5));
+    }
+
+    // Load ảnh từ nhiều nguồn — ưu tiên File trực tiếp để tránh lỗi tên có dấu tiếng Việt
+    private ImageIcon loadImageThumb(String imageName, int w, int h) {
+        try {
+            java.io.File f = new java.io.File("src/main/resources/view/image/products/" + imageName);
+            if (f.exists() && f.isFile()) {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
+                System.out.println("ImageIO.read result: " + img); // thêm dòng này
+                if (img != null) {
+                    return new ImageIcon(img.getScaledInstance(w, h, Image.SCALE_SMOOTH));
+                }
+                Image img2 = Toolkit.getDefaultToolkit().getImage(f.getAbsolutePath());
+                MediaTracker tracker = new MediaTracker(new java.awt.Canvas());
+                tracker.addImage(img2, 0);
+                tracker.waitForID(0);
+                System.out.println("Toolkit width: " + img2.getWidth(null)); // thêm dòng này
+                if (img2 != null && img2.getWidth(null) > 0) {
+                    return new ImageIcon(img2.getScaledInstance(w, h, Image.SCALE_SMOOTH));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private ImageIcon scale(ImageIcon icon, int w, int h) {
+        return new ImageIcon(icon.getImage().getScaledInstance(w, h, Image.SCALE_SMOOTH));
     }
 }
