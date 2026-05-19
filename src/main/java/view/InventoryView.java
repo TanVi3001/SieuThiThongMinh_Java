@@ -28,6 +28,8 @@ import model.product.Product;
 import view.components.IconHelper;
 import business.sql.prod_inventory.InventoryNotificationSql;
 import javax.swing.SwingUtilities;
+import java.text.SimpleDateFormat;
+import java.sql.Timestamp;
 
 public class InventoryView extends JPanel {
 
@@ -939,7 +941,7 @@ public class InventoryView extends JPanel {
                 safe(p.getUnit(), "Cái"),
                 safe(p.getStoreId(), "ST001"),
                 status,
-                "30/04/2026"
+                formatLastUpdated(p.getLastUpdated())
             });
         }
     }
@@ -1341,5 +1343,13 @@ public class InventoryView extends JPanel {
         }
 
         return false;
+    }
+
+    private String formatLastUpdated(Timestamp time) {
+        if (time == null) {
+            return "Chưa cập nhật";
+        }
+
+        return new SimpleDateFormat("dd/MM/yyyy HH:mm").format(time);
     }
 }

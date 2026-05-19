@@ -33,7 +33,7 @@ public class ProductsSql {
         int baseQuantity = ProductUnitsSql.getInstance()
                 .convertToBaseQuantityWithConn(con, productId, unitId, quantity);
         String sql = "UPDATE INVENTORY "
-                + "SET quantity = quantity - ? "
+                + "SET quantity = quantity - ?, last_updated = SYSDATE "
                 + "WHERE product_id = ? AND quantity >= ? AND is_deleted = 0";
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
@@ -57,7 +57,7 @@ public class ProductsSql {
         int baseQuantity = ProductUnitsSql.getInstance()
                 .convertToBaseQuantityWithConn(con, productId, unitId, quantity);
         String sql = "UPDATE INVENTORY "
-                + "SET quantity = quantity + ? "
+                + "SET quantity = quantity + ?, last_updated = SYSDATE "
                 + "WHERE product_id = ? AND is_deleted = 0";
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
@@ -77,7 +77,7 @@ public class ProductsSql {
 
         String sql = "SELECT p.product_id, p.product_name, p.base_price, "
                 + "       p.category_id, p.supplier_id, p.image_path, "
-                + "       i.store_id, i.quantity, i.unit "
+                + "       i.store_id, i.quantity, i.unit, i.last_updated "
                 + "FROM PRODUCTS p "
                 + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND NVL(i.is_deleted, 0) = 0 "
                 + "WHERE NVL(p.is_deleted, 0) = 0 "
@@ -107,6 +107,10 @@ public class ProductsSql {
                 }
 
                 p.setQuantity(rs.getInt("quantity"));
+                try {
+                    p.setLastUpdated(rs.getTimestamp("last_updated"));
+                } catch (Exception ignored) {
+                }
                 p.setIsDeleted(0);
                 list.add(p);
             }
@@ -331,7 +335,7 @@ public class ProductsSql {
         List<Product> list = new ArrayList<>();
         String sql = "SELECT p.product_id, p.product_name, p.base_price, "
                 + "       p.category_id, p.supplier_id, "
-                + "       i.store_id, i.quantity, i.unit "
+                + "       i.store_id, i.quantity, i.unit, i.last_updated "
                 + "FROM PRODUCTS p "
                 + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
                 + "WHERE p.is_deleted = 0 AND LOWER(p.product_name) LIKE LOWER(?) "
@@ -356,6 +360,10 @@ public class ProductsSql {
                     } catch (Exception ignored) {
                     }
                     p.setQuantity(rs.getInt("quantity"));
+                    try {
+                        p.setLastUpdated(rs.getTimestamp("last_updated"));
+                    } catch (Exception ignored) {
+                    }
                     p.setIsDeleted(0);
                     list.add(p);
                 }

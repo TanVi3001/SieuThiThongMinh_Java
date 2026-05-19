@@ -1,6 +1,7 @@
 package model.product;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 
 /**
  * @author nguye - Fixed by Leader Vi
@@ -15,7 +16,7 @@ public class Product {
     private String baseUnitId;
     private int isDeleted;
     private int quantity;
-
+    private Timestamp lastUpdated;
     // THÊM MỚI để khớp INVENTORY
     private String storeId;
     private String unit;
@@ -150,5 +151,13 @@ public class Product {
 
     public void setImagePath(String imagePath) {
         this.imagePath = imagePath;
+    }
+
+    public Timestamp getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(Timestamp lastUpdated) {
+        this.lastUpdated = lastUpdated;
     }
 }
