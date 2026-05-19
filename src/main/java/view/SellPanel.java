@@ -49,6 +49,8 @@ public class SellPanel extends JPanel {
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
     // Đổi Hint hiển thị đẹp hơn
     private static final String SEARCH_HINT = "🔍 Gõ mã hoặc tên SP vào đây để tìm nè...";
+    private volatile boolean paymentProcessing = false;
+    private volatile boolean paymentJustSucceeded = false;
 
     // =========================================================
     // UI COMPONENTS
@@ -116,9 +118,15 @@ public class SellPanel extends JPanel {
             if (e.getType() == AppEventType.PRODUCTS
                     || e.getType() == AppEventType.INVENTORY
                     || e.getType() == AppEventType.ORDERS) {
+
                 SwingUtilities.invokeLater(() -> {
                     loadProducts();
-                    validateCartAgainstDatabase();
+
+                    // Nếu vừa thanh toán xong hoặc đang xử lý thanh toán thì không validate giỏ cũ nữa.
+                    // Tránh hiện cảnh báo "vượt tồn" trong lúc DB đã trừ kho nhưng UI chưa clear cart.
+                    if (!paymentProcessing && !paymentJustSucceeded && modCart.getRowCount() > 0) {
+                        validateCartAgainstDatabase();
+                    }
                 });
             }
         });
@@ -1048,6 +1056,9 @@ public class SellPanel extends JPanel {
     }
 
     private void validateCartAgainstDatabase() {
+        if (paymentProcessing || paymentJustSucceeded) {
+            return;
+        }
         boolean hasError = false;
 
         isUpdatingCart = true;
@@ -1265,7 +1276,8 @@ public class SellPanel extends JPanel {
         if (modCart.getRowCount() <= 0) {
             return;
         }
-
+        paymentProcessing = true;
+        paymentJustSucceeded = false;
         btnPay.setEnabled(false);
         btnPay.setText("⏳ ĐANG XỬ LÝ...");
         btnPay.setBackground(Color.GRAY);
@@ -1299,27 +1311,50 @@ public class SellPanel extends JPanel {
         Thread.ofVirtual().start(() -> {
             try {
                 boolean success = PaymentService.thanhToan(o, dt);
+
                 SwingUtilities.invokeLater(() -> {
                     if (success) {
+                        paymentJustSucceeded = true;
                         handlePaymentSuccess(o.getOrderId());
+                    } else {
+                        JOptionPane.showMessageDialog(
+                                this,
+                                "Thanh toán thất bại. Có thể tồn kho đã thay đổi, vui lòng làm mới giỏ hàng.",
+                                "Thanh toán thất bại",
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                        loadProducts();
+                        validateCartAgainstDatabase();
                     }
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> handleGeneralError(ex));
             } finally {
-                SwingUtilities.invokeLater(SellPanel.this::resetPaymentUI);
+                SwingUtilities.invokeLater(() -> {
+                    paymentProcessing = false;
+                    resetPaymentUI();
+
+                    Timer t = new Timer(700, ev -> paymentJustSucceeded = false);
+                    t.setRepeats(false);
+                    t.start();
+                });
             }
         });
     }
 
     private void handlePaymentSuccess(String orderId) {
+        // Clear UI trước để tránh giỏ hàng cũ bị validate lại khi realtime vừa bắn về
+        clearCart();
+        resetCustomerAfterPayment();
+
+        // Reload danh sách sản phẩm sau khi cart đã trống
+        loadProducts();
+
         JOptionPane.showMessageDialog(this, "✅ Thanh toán thành công! Hóa đơn: " + orderId);
+
         if (chkPrintBill.isSelected()) {
             JOptionPane.showMessageDialog(this, "Đang gửi lệnh in hóa đơn...");
         }
-        clearCart();
-        resetCustomerAfterPayment();
-        loadProducts();
     }
 
     private void handleGeneralError(Exception ex) {
@@ -1329,7 +1364,9 @@ public class SellPanel extends JPanel {
     private void resetPaymentUI() {
         btnPay.setText("THANH TOÁN");
         btnPay.setBackground(SUCCESS_GREEN);
-        btnPay.setEnabled(modCart.getRowCount() > 0);
+
+        boolean hasCart = modCart.getRowCount() > 0;
+        btnPay.setEnabled(hasCart && !paymentProcessing);
         btnCancel.setEnabled(true);
         btnRemove.setEnabled(true);
     }
@@ -1434,7 +1471,7 @@ public class SellPanel extends JPanel {
         }
     }
 
-   class RoundedButton extends JButton {
+    class RoundedButton extends JButton {
 
         public RoundedButton(String text) {
             super(text);
@@ -1443,7 +1480,7 @@ public class SellPanel extends JPanel {
             setBorderPainted(false);
             setCursor(new Cursor(Cursor.HAND_CURSOR));
             setVerticalAlignment(SwingConstants.CENTER);
-            
+
             // 🐛 FIX Ở ĐÂY: Thêm chữ "set" vào và đưa vào trong ngoặc tròn
             setHorizontalAlignment(SwingConstants.CENTER);
         }

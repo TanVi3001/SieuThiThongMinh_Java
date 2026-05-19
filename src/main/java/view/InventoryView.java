@@ -1,5 +1,8 @@
 package view;
 
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.events.EventBus;
 import business.service.AuthorizationService;
 import business.service.ProductImportService;
 import business.sql.prod_inventory.InventoryTransactionSql;
@@ -23,6 +26,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import model.product.Product;
 import view.components.IconHelper;
+import business.sql.prod_inventory.InventoryNotificationSql;
+import javax.swing.SwingUtilities;
 
 public class InventoryView extends JPanel {
 
@@ -57,7 +62,6 @@ public class InventoryView extends JPanel {
 
     private JPanel alertListPanel;
     private JPanel recentActivityPanel;
-
     private final List<Product> cachedInventory = new ArrayList<>();
 
     public InventoryView() {
@@ -67,6 +71,7 @@ public class InventoryView extends JPanel {
 
         initUI();
         initEvents();
+        subscribeRealtimeInventory();
         loadInventoryData();
         applyInventoryRolePermission();
     }
@@ -74,6 +79,24 @@ public class InventoryView extends JPanel {
     private void initUI() {
         add(buildHeader(), BorderLayout.NORTH);
         add(buildBody(), BorderLayout.CENTER);
+    }
+
+    private void subscribeRealtimeInventory() {
+        EventBus.subscribe(AppDataChangedEvent.class, e -> {
+            if (e == null || e.getType() == null) {
+                return;
+            }
+
+            if (e.getType() == AppEventType.INVENTORY
+                    || e.getType() == AppEventType.PRODUCTS
+                    || e.getType() == AppEventType.ORDERS
+                    || e.getType() == AppEventType.INVENTORY_ALERT) {
+
+                SwingUtilities.invokeLater(() -> {
+                    loadInventoryData();
+                });
+            }
+        });
     }
 
     private JPanel buildHeader() {
@@ -483,31 +506,30 @@ public class InventoryView extends JPanel {
     }
 
     private JPanel buildRecentActivityPanel() {
-        RoundedPanel card = new RoundedPanel(18, CARD);
+        RoundedPanel card = new RoundedPanel(18, Color.WHITE);
         card.setLayout(new BorderLayout(0, 12));
-        card.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(BORDER, 18),
-                new EmptyBorder(16, 18, 16, 18)
-        ));
-
-        JLabel title = new JLabel("Biến động kho gần đây");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 17));
-        title.setForeground(NAVY);
-
-        JLabel subtitle = new JLabel("<html><div style='width:250px;'>Theo dõi nhanh các thao tác nhập, xuất, điều chỉnh hoặc hủy hàng.</div></html>");
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        subtitle.setForeground(MUTED);
+        card.setBorder(new EmptyBorder(22, 22, 22, 22));
 
         JPanel titleBox = new JPanel();
         titleBox.setOpaque(false);
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
+
+        JLabel title = new JLabel("Biến động kho gần đây");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(NAVY);
+
+        JLabel sub = new JLabel("Theo dõi nhanh giao dịch kho.");
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        sub.setForeground(MUTED);
+
         titleBox.add(title);
-        titleBox.add(Box.createVerticalStrut(4));
-        titleBox.add(subtitle);
+        titleBox.add(Box.createVerticalStrut(6));
+        titleBox.add(sub);
 
         recentActivityPanel = new JPanel();
         recentActivityPanel.setOpaque(false);
         recentActivityPanel.setLayout(new BoxLayout(recentActivityPanel, BoxLayout.Y_AXIS));
+        recentActivityPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         card.add(titleBox, BorderLayout.NORTH);
         card.add(recentActivityPanel, BorderLayout.CENTER);
@@ -518,36 +540,52 @@ public class InventoryView extends JPanel {
     private JPanel createActivityItem(String type, String product, String time, Color color) {
         JPanel item = new JPanel(new BorderLayout(10, 0));
         item.setOpaque(false);
-        item.setBorder(new EmptyBorder(8, 0, 8, 0));
+        item.setBorder(new EmptyBorder(10, 0, 10, 0));
+        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 78));
+
+        JPanel dotWrap = new JPanel(new GridBagLayout());
+        dotWrap.setOpaque(false);
+        dotWrap.setPreferredSize(new Dimension(22, 58));
+        dotWrap.setMinimumSize(new Dimension(22, 58));
+        dotWrap.setMaximumSize(new Dimension(22, 58));
 
         JLabel dot = new JLabel("●");
-        dot.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        dot.setFont(new Font("Segoe UI", Font.BOLD, 14));
         dot.setForeground(color);
-        dot.setPreferredSize(new Dimension(20, 0));
+
+        dotWrap.add(dot);
 
         JPanel textBox = new JPanel();
         textBox.setOpaque(false);
         textBox.setLayout(new BoxLayout(textBox, BoxLayout.Y_AXIS));
+        textBox.setBorder(new EmptyBorder(0, 4, 0, 0));
 
         JLabel lblType = new JLabel(type);
         lblType.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblType.setForeground(NAVY);
+        lblType.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel lblProduct = new JLabel("<html><div style='width:220px;'>" + escapeHtml(product) + "</div></html>");
+        JLabel lblProduct = new JLabel(
+                "<html><div style='width:190px;'>"
+                + escapeHtml(product)
+                + "</div></html>"
+        );
         lblProduct.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblProduct.setForeground(MUTED);
+        lblProduct.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel lblTime = new JLabel(time);
         lblTime.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         lblTime.setForeground(SOFT_MUTED);
+        lblTime.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         textBox.add(lblType);
-        textBox.add(Box.createVerticalStrut(2));
+        textBox.add(Box.createVerticalStrut(3));
         textBox.add(lblProduct);
-        textBox.add(Box.createVerticalStrut(2));
+        textBox.add(Box.createVerticalStrut(3));
         textBox.add(lblTime);
 
-        item.add(dot, BorderLayout.WEST);
+        item.add(dotWrap, BorderLayout.WEST);
         item.add(textBox, BorderLayout.CENTER);
 
         return item;
@@ -583,7 +621,17 @@ public class InventoryView extends JPanel {
                     ));
 
                     if (i < list.size() - 1) {
-                        recentActivityPanel.add(new JSeparator());
+                        JSeparator sep = new JSeparator();
+                        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+                        sep.setForeground(new Color(225, 225, 225));
+
+                        JPanel sepWrap = new JPanel(new BorderLayout());
+                        sepWrap.setOpaque(false);
+                        sepWrap.setBorder(new EmptyBorder(4, 0, 4, 0));
+                        sepWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 10));
+                        sepWrap.add(sep, BorderLayout.CENTER);
+
+                        recentActivityPanel.add(sepWrap);
                     }
                 }
             }
@@ -607,7 +655,6 @@ public class InventoryView extends JPanel {
         }
 
         btnInbound.addActionListener(e -> openPurchaseReceiptDialog());
-
 
         btnAuditLog.addActionListener(e -> {
             Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
@@ -676,6 +723,10 @@ public class InventoryView extends JPanel {
                 owner,
                 productId,
                 () -> {
+                    try {
+                        InventoryNotificationSql.getInstance().resolveByProductId(productId);
+                    } catch (Exception ignored) {
+                    }
                     loadInventoryData();
                     refreshRecentActivities();
                 }
@@ -947,23 +998,6 @@ public class InventoryView extends JPanel {
 
         alertListPanel.revalidate();
         alertListPanel.repaint();
-    }
-
-    private void selectProductInTable(String productId) {
-        if (productId == null) {
-            return;
-        }
-
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            Object value = tableModel.getValueAt(i, 0);
-
-            if (productId.equals(String.valueOf(value))) {
-                int viewRow = tblInventory.convertRowIndexToView(i);
-                tblInventory.setRowSelectionInterval(viewRow, viewRow);
-                tblInventory.scrollRectToVisible(tblInventory.getCellRect(viewRow, 0, true));
-                return;
-            }
-        }
     }
 
     private void handleImportCSV() {
@@ -1243,5 +1277,69 @@ public class InventoryView extends JPanel {
         public boolean isBorderOpaque() {
             return false;
         }
+    }
+
+    public void focusProduct(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return;
+        }
+
+        String targetId = productId.trim();
+
+        SwingUtilities.invokeLater(() -> {
+            try {
+                if (txtSearch != null) {
+                    txtSearch.setText("");
+                }
+
+                if (cbStoreFilter != null && cbStoreFilter.getItemCount() > 0) {
+                    cbStoreFilter.setSelectedIndex(0);
+                }
+
+                loadInventoryData();
+
+                boolean found = selectProductInTable(targetId);
+
+                if (!found) {
+                    if (txtSearch != null) {
+                        txtSearch.setText(targetId);
+                        applySearchFilter();
+                    }
+
+                    if (tableModel.getRowCount() > 0) {
+                        tblInventory.setRowSelectionInterval(0, 0);
+                        tblInventory.scrollRectToVisible(tblInventory.getCellRect(0, 0, true));
+                        tblInventory.requestFocusInWindow();
+                    }
+                }
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+    }
+
+    private boolean selectProductInTable(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return false;
+        }
+
+        String targetId = productId.trim();
+
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            Object value = tableModel.getValueAt(i, 0);
+
+            if (targetId.equalsIgnoreCase(String.valueOf(value))) {
+                int viewRow = tblInventory.convertRowIndexToView(i);
+
+                tblInventory.setRowSelectionInterval(viewRow, viewRow);
+                tblInventory.scrollRectToVisible(tblInventory.getCellRect(viewRow, 0, true));
+                tblInventory.requestFocusInWindow();
+
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -1,21 +1,34 @@
 package view;
 
+import business.service.AccountService;
+import business.service.HeartbeatService;
+import business.service.LoginService;
+import business.service.SessionManager;
+import common.auth.UserSession;
+import common.security.UIPermissionGuard;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+import model.account.Account;
 import view.components.NotificationBell;
+import view.components.TongQuanPanel;
+import view.components.UnifiedSettingsPanel;
 import view.components.WarehouseSidebar;
 
 public class WarehouseDashboardView extends JFrame {
 
     private JPanel mainContentPanel;
     private WarehouseSidebar warehouseSidebar;
+    private NotificationBell notificationBell;
 
     private final Color BACKGROUND_COLOR = new Color(246, 247, 251);
     private final Color TOPBAR_BORDER = new Color(230, 230, 230);
@@ -25,7 +38,7 @@ public class WarehouseDashboardView extends JFrame {
     }
 
     private void setupWarehouseUI() {
-        model.account.Account currentUser = business.service.LoginService.getCurrentUser();
+        Account currentUser = LoginService.getCurrentUser();
 
         String username = (currentUser != null && currentUser.getUsername() != null)
                 ? currentUser.getUsername().trim()
@@ -34,9 +47,9 @@ public class WarehouseDashboardView extends JFrame {
         setTitle("SMART SUPERMARKET - WAREHOUSE PORTAL | " + username);
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
-        addWindowListener(new java.awt.event.WindowAdapter() {
+        addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(java.awt.event.WindowEvent e) {
+            public void windowClosing(WindowEvent e) {
                 handleCloseApp();
             }
         });
@@ -62,14 +75,14 @@ public class WarehouseDashboardView extends JFrame {
         getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
         warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_INVENTORY);
-        showPanel(new InventoryView());
+        showInventoryPanel(null);
     }
 
     private void handleSidebarMenuClick(String title) {
         switch (title) {
             case WarehouseSidebar.MENU_INVENTORY -> {
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_INVENTORY);
-                showPanel(new InventoryView());
+                showInventoryPanel(null);
             }
 
             case WarehouseSidebar.MENU_PRODUCTS -> {
@@ -89,7 +102,7 @@ public class WarehouseDashboardView extends JFrame {
 
             case WarehouseSidebar.MENU_SETTINGS -> {
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SETTINGS);
-                showPanel(new view.components.UnifiedSettingsPanel());
+                showPanel(new UnifiedSettingsPanel());
             }
 
             case WarehouseSidebar.MENU_LOGOUT ->
@@ -113,44 +126,78 @@ public class WarehouseDashboardView extends JFrame {
                 TOPBAR_BORDER
         ));
 
-        NotificationBell bell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
-        topBar.add(bell);
+        notificationBell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
+
+        /*
+         * Khi nhân viên kho bấm vào thông báo tồn kho:
+         * 1. NotificationBell tự đóng popup.
+         * 2. Dashboard chuyển sang menu Quản lý tồn kho.
+         * 3. Mở InventoryView mới.
+         * 4. Focus đúng productId trong bảng tồn kho.
+         *
+         * Điều kiện:
+         * - NotificationBell phải có setProductClickListener(...).
+         * - InventoryView phải có public void focusProduct(String productId).
+         */
+        notificationBell.setProductClickListener(productId -> {
+            if (productId == null || productId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không tìm thấy mã sản phẩm trong thông báo.",
+                        "Không thể mở sản phẩm",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_INVENTORY);
+            showInventoryPanel(productId.trim());
+        });
+
+        topBar.add(notificationBell);
 
         return topBar;
     }
 
+    private void showInventoryPanel(String focusProductId) {
+        InventoryView inventoryView = new InventoryView();
+        showPanel(inventoryView);
+
+        if (focusProductId != null && !focusProductId.trim().isEmpty()) {
+            SwingUtilities.invokeLater(() -> inventoryView.focusProduct(focusProductId.trim()));
+        }
+    }
+
     public void showPanel(JPanel panel) {
+        if (panel == null) {
+            return;
+        }
+
         mainContentPanel.removeAll();
 
         JPanel panelToDisplay = panel;
 
         /*
-     * Warehouse Portal:
-     * - Nhân viên kho được thao tác đầy đủ ở các màn thuộc nghiệp vụ kho:
-     *   + Quản lý tồn kho
-     *   + Quản lý sản phẩm
-     *   + Quản lý nhà cung cấp ở chế độ xem
-     *   + Danh mục & Thuế VAT
-     *
-     * Không bọc UIPermissionGuard cho các màn này để tránh bị khóa nút Thêm/Sửa/Xóa.
+         * Warehouse Portal:
+         * - Nhân viên kho được thao tác đầy đủ ở các màn nghiệp vụ kho.
+         * - Không bọc UIPermissionGuard cho các màn này để tránh khóa nút Thêm/Sửa/Xóa/Nhập kho.
          */
         boolean isWarehouseAllowedPanel
                 = (panel instanceof InventoryView)
                 || (panel instanceof ProductView)
                 || (panel instanceof SupplierManagementView)
                 || (panel instanceof CategoryTaxView)
-                || (panel instanceof view.components.UnifiedSettingsPanel)
-                || (panel instanceof view.components.TongQuanPanel);
+                || (panel instanceof UnifiedSettingsPanel)
+                || (panel instanceof TongQuanPanel);
 
         if (!isWarehouseAllowedPanel) {
-            panelToDisplay = common.security.UIPermissionGuard.protect(panel);
+            panelToDisplay = UIPermissionGuard.protect(panel);
         }
 
         panelToDisplay.setMinimumSize(new Dimension(900, 600));
         panelToDisplay.setBackground(BACKGROUND_COLOR);
 
         JScrollPane scrollPane = new JScrollPane(panelToDisplay);
-
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(BACKGROUND_COLOR);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
@@ -159,7 +206,6 @@ public class WarehouseDashboardView extends JFrame {
         scrollPane.getVerticalScrollBar().putClientProperty("ScrollBar.showButtons", false);
 
         mainContentPanel.add(scrollPane, BorderLayout.CENTER);
-
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
     }
@@ -204,27 +250,27 @@ public class WarehouseDashboardView extends JFrame {
 
     private void updateLogoutSession(String logPrefix) {
         try {
-            model.account.Account currentUser = business.service.SessionManager.getCurrentUser();
-            String sessionId = business.service.SessionManager.getCurrentSessionId();
+            Account currentUser = SessionManager.getCurrentUser();
+            String sessionId = SessionManager.getCurrentSessionId();
 
             if (currentUser != null
                     && currentUser.getAccountId() != null
                     && sessionId != null) {
 
-                if (business.service.HeartbeatService.markLogoutOnce()) {
-                    business.service.HeartbeatService.stop();
+                if (HeartbeatService.markLogoutOnce()) {
+                    HeartbeatService.stop();
 
-                    business.service.AccountService.onLogoutOrCloseApp(
+                    AccountService.onLogoutOrCloseApp(
                             currentUser.getAccountId(),
                             sessionId
                     );
                 }
             }
 
-            business.service.SessionManager.clear();
+            SessionManager.clear();
 
             try {
-                common.auth.UserSession.getInstance().clear();
+                UserSession.getInstance().clear();
             } catch (Exception ignored) {
             }
 
@@ -233,7 +279,7 @@ public class WarehouseDashboardView extends JFrame {
         }
     }
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         try {
             com.formdev.flatlaf.FlatLightLaf.setup();
         } catch (Exception ex) {

@@ -21,17 +21,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Hộp thư thông báo – hiển thị chuông ở góc trên phải, khi click sẽ mở popup
- * danh sách thông báo. Hỗ trợ real-time khi nhận event INVENTORY hoặc PRODUCTS.
+ * Hộp thư thông báo ở góc trên phải.
  *
- * Nghiệp vụ mới: - Cảnh báo do Manager gửi cho Kho sẽ được lưu DB. - Cảnh báo
- * đó không mất khi tắt app / mở lại app. - Nút "Xóa tất cả" không xóa cảnh báo
- * Manager. - Cảnh báo Manager chỉ mất khi sản phẩm đó được nhập thêm và DB
- * chuyển sang RESOLVED.
+ * Chức năng: - Hiển thị cảnh báo tồn kho tự động. - Hiển thị cảnh báo nhập hàng
+ * do Manager/Staff gửi cho Kho. - Cảnh báo Manager/Staff được lưu DB nên không
+ * mất khi tắt app. - Click vào thông báo có mã SP sẽ gọi callback để mở đúng
+ * sản phẩm bên InventoryView.
  */
 public class NotificationBell extends JPanel {
 
-    // Mốc cảnh báo
     public static final int THRESHOLD_DANGER = 5;
     public static final int THRESHOLD_WARNING = 20;
 
@@ -40,25 +38,29 @@ public class NotificationBell extends JPanel {
     private final JLabel lblBadge;
     private int unreadCount = 0;
 
-    // Popup dropdown
     private JWindow popup;
     private final JPanel popupList;
 
-    // Màu sắc
     private static final Color COLOR_DANGER = new Color(220, 53, 69);
     private static final Color COLOR_WARNING = new Color(255, 152, 0);
     private static final Color COLOR_INFO = new Color(67, 97, 238);
     private static final Color COLOR_BG = new Color(255, 255, 255);
+
     private static final int POPUP_WIDTH = 720;
     private static final int POPUP_HEIGHT = 560;
     private static final int NOTIF_TEXT_WIDTH = 545;
 
-    // Phân loại: ai nhận gì
     public enum Audience {
         WAREHOUSE, MANAGER, SALE, ALL
     }
 
     private final Audience audience;
+
+    /**
+     * Callback dùng để màn cha xử lý khi bấm vào thông báo có productId. Ví dụ
+     * WarehouseDashboardView sẽ mở InventoryView và focus đúng sản phẩm.
+     */
+    private java.util.function.Consumer<String> productClickListener;
 
     public NotificationBell(Audience audience) {
         this.audience = audience;
@@ -113,12 +115,21 @@ public class NotificationBell extends JPanel {
         });
 
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            if (event.getType() == AppEventType.INVENTORY_ALERT) {
-                SwingUtilities.invokeLater(() -> handleInventoryAlert(event.getMessage()));
+            if (event == null || event.getType() == null) {
                 return;
             }
 
-            if (event.getType() == AppEventType.INVENTORY || event.getType() == AppEventType.PRODUCTS) {
+            if (event.getType() == AppEventType.INVENTORY_ALERT) {
+                SwingUtilities.invokeLater(() -> {
+                    handleInventoryAlert(event.getMessage());
+                    refreshPersistentWarehouseAlerts();
+                });
+                return;
+            }
+
+            if (event.getType() == AppEventType.INVENTORY
+                    || event.getType() == AppEventType.PRODUCTS
+                    || event.getType() == AppEventType.ORDERS) {
                 SwingUtilities.invokeLater(() -> {
                     checkLowStock();
                     refreshPersistentWarehouseAlerts();
@@ -132,9 +143,12 @@ public class NotificationBell extends JPanel {
         });
     }
 
+    public void setProductClickListener(java.util.function.Consumer<String> productClickListener) {
+        this.productClickListener = productClickListener;
+    }
+
     /**
-     * Load lại cảnh báo Manager còn PENDING trong DB. Trước khi load, xóa các
-     * cảnh báo Manager trong RAM để những cái đã RESOLVED biến mất.
+     * Load lại cảnh báo PENDING trong DB. Chỉ áp dụng cho Warehouse/ALL.
      */
     private void refreshPersistentWarehouseAlerts() {
         if (this.audience != Audience.WAREHOUSE && this.audience != Audience.ALL) {
@@ -144,19 +158,30 @@ public class NotificationBell extends JPanel {
         notifications.removeIf(n -> n.urgentManagerAlert && n.key.startsWith("MANAGER_STOCK_ALERT_"));
 
         try {
-            List<InventoryNotificationSql.InventoryNotifDTO> list
-                    = InventoryNotificationSql.getInstance().getPendingWarehouseAlerts();
+            List<?> rawList = InventoryNotificationSql.getInstance().getPendingWarehouseAlerts();
 
-            for (InventoryNotificationSql.InventoryNotifDTO dto : list) {
-                String key = "MANAGER_STOCK_ALERT_" + dto.productId;
+            for (Object raw : rawList) {
+                String productId = readStringField(raw, "productId");
+                String productName = readStringField(raw, "productName");
+                String message = readStringField(raw, "message");
+                int remindCount = readIntField(raw, "remindCount", 1);
 
-                String title = "🚨 QUẢN LÝ NHẮC NHẬP HÀNG: " + dto.productName;
+                if (productId == null || productId.isBlank()) {
+                    continue;
+                }
 
-                String body = dto.message;
+                if (productName == null || productName.isBlank()) {
+                    productName = "Sản phẩm";
+                }
 
-                if (dto.remindCount >= 2) {
+                String key = "MANAGER_STOCK_ALERT_" + productId;
+                String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+
+                String body = message == null ? "" : message;
+
+                if (remindCount >= 2) {
                     body += "<br><br><b style='color:#DC3545'>"
-                            + "Manager đã nhắc " + dto.remindCount
+                            + "Đã nhắc " + remindCount
                             + " lần. Thông báo này sẽ chỉ mất khi sản phẩm được nhập thêm."
                             + "</b>";
                 }
@@ -180,35 +205,39 @@ public class NotificationBell extends JPanel {
     }
 
     /**
-     * Kiểm tra tồn kho tự động. Các cảnh báo auto này chỉ là cảnh báo UI, có
-     * thể xóa bằng "Xóa tất cả".
+     * Kiểm tra tồn kho tự động. Cảnh báo auto chỉ nằm ở UI, có thể xóa bằng
+     * "Xóa tất cả".
      */
     public void checkLowStock() {
         try {
             List<Product> products = ProductsSql.getInstance().selectAll();
 
             for (Product p : products) {
+                if (p == null) {
+                    continue;
+                }
+
                 int qty = p.getQuantity();
 
                 if (qty <= 0) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "❌ HẾT HÀNG: " + p.getProductName(),
-                            "Sản phẩm [" + p.getProductId() + "] đã hết hoàn toàn. Cần nhập khẩn!",
+                            "❌ HẾT HÀNG: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] đã hết hoàn toàn. Cần nhập khẩn!",
                             Audience.ALL
                     );
                 } else if (qty <= THRESHOLD_DANGER) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "⚠️ SẮP HẾT: " + p.getProductName(),
-                            "Chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
+                            "⚠️ SẮP HẾT: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
                             Audience.ALL
                     );
                 } else if (qty <= THRESHOLD_WARNING) {
                     addNotification(
                             NotifItem.Type.WARNING,
-                            "📦 Tồn kho thấp: " + p.getProductName(),
-                            "Còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
+                            "📦 Tồn kho thấp: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
                             Audience.WAREHOUSE
                     );
                 }
@@ -220,8 +249,8 @@ public class NotificationBell extends JPanel {
     }
 
     /**
-     * Xử lý cảnh báo do Manager gửi. Format: INVENTORY_ALERT:SP0000038:Cá hồi
-     * phi lê tươi 200g:0
+     * Xử lý realtime message dạng: INVENTORY_ALERT:SP0000038:Cá hồi phi lê tươi
+     * 200g:0
      */
     private void handleInventoryAlert(String rawMessage) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
@@ -254,33 +283,12 @@ public class NotificationBell extends JPanel {
         }
 
         String key = "MANAGER_STOCK_ALERT_" + productId;
+        String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
 
-        String title = "🚨 QUẢN LÝ NHẮC NHẬP HÀNG: " + productName;
-
-        String body = "Manager đã gửi cảnh báo khẩn. "
+        String body = "Có cảnh báo nhập hàng. "
                 + "Sản phẩm [" + productId + "] hiện còn " + quantity
-                + " sản phẩm. CẦN KIỂM TRA VÀ NHẬP HÀNG NGAY.";
+                + " sản phẩm. Cần kiểm tra và nhập hàng.";
 
-        // Lưu xuống DB để tắt app / mở lại vẫn còn thông báo.
-        try {
-            String createdBy = null;
-
-            if (business.service.SessionManager.getCurrentUser() != null) {
-                createdBy = business.service.SessionManager.getCurrentUser().getAccountId();
-            }
-
-            InventoryNotificationSql.getInstance().createOrRemindAlert(
-                    productId,
-                    productName,
-                    body,
-                    createdBy
-            );
-
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        // Hiển thị realtime ngay trên chuông.
         addOrUpdateNotification(
                 key,
                 NotifItem.Type.DANGER,
@@ -296,7 +304,7 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        String key = "AUTO_" + title;
+        String key = "AUTO_" + title + "_" + extractProductIdFromText(title + " " + body);
 
         boolean exists = notifications.stream().anyMatch(n -> n.key.equals(key));
 
@@ -345,16 +353,8 @@ public class NotificationBell extends JPanel {
                 n.title = title;
                 n.time = time;
                 n.urgentManagerAlert = urgentManagerAlert;
-
-                if (n.remindCount >= 2) {
-                    n.body = body
-                            + "<br><br><b style='color:#DC3545'>"
-                            + "Manager đã nhắc " + n.remindCount
-                            + " lần. Việc này RẤT CẦN THIẾT, vui lòng xử lý ngay."
-                            + "</b>";
-                } else {
-                    n.body = body;
-                }
+                n.body = body;
+                n.productId = extractProductIdFromText(key + " " + title + " " + body);
 
                 notifications.remove(i);
                 notifications.add(0, n);
@@ -479,8 +479,7 @@ public class NotificationBell extends JPanel {
         btnClear.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnClear.setBorder(new EmptyBorder(4, 10, 4, 10));
 
-        // Chỉ xóa thông báo thường.
-        // Không xóa thông báo Manager nhập hàng.
+        // Chỉ xóa thông báo tự động. Thông báo từ Manager/Staff vẫn giữ cho tới khi kho xử lý/resolve.
         btnClear.addActionListener(e -> {
             notifications.removeIf(n -> !n.urgentManagerAlert);
 
@@ -722,12 +721,7 @@ public class NotificationBell extends JPanel {
 
         textPanel.add(lblTitle, gc);
 
-        String bodyHtml = escapeHtml(n.body)
-                .replace("&lt;br&gt;", "<br>")
-                .replace("&lt;br/&gt;", "<br>")
-                .replace("&lt;br /&gt;", "<br>")
-                .replace("&lt;b style=&#39;color:#DC3545&#39;&gt;", "<b style='color:#DC3545'>")
-                .replace("&lt;/b&gt;", "</b>");
+        String bodyHtml = toAllowedHtml(n.body);
 
         JLabel lblBody = new JLabel(
                 "<html><div style='width:" + NOTIF_TEXT_WIDTH
@@ -780,7 +774,11 @@ public class NotificationBell extends JPanel {
                 Math.max(bgCard.getBlue() - 8, 0)
         );
 
-        card.addMouseListener(new MouseAdapter() {
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        content.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        textPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        MouseAdapter clickAdapter = new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
                 card.setBackground(hoverBg);
@@ -792,9 +790,103 @@ public class NotificationBell extends JPanel {
                 card.setBackground(bgCard);
                 content.setBackground(bgCard);
             }
-        });
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                handleNotificationClick(n);
+            }
+        };
+
+        attachClickListenerRecursive(card, clickAdapter);
 
         return card;
+    }
+
+    private void attachClickListenerRecursive(Component component, MouseAdapter adapter) {
+        if (component == null || adapter == null) {
+            return;
+        }
+
+        component.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        component.addMouseListener(adapter);
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                attachClickListenerRecursive(child, adapter);
+            }
+        }
+    }
+
+    private void handleNotificationClick(NotifItem n) {
+        if (productClickListener == null) {
+            return;
+        }
+
+        String targetProductId = n.productId;
+
+        if (targetProductId == null || targetProductId.isBlank()) {
+            targetProductId = extractProductIdFromNotification(n);
+        }
+
+        if (targetProductId == null || targetProductId.isBlank()) {
+            JOptionPane.showMessageDialog(
+                    NotificationBell.this,
+                    "Không tìm thấy mã sản phẩm trong thông báo này.",
+                    "Không thể mở sản phẩm",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (popup != null) {
+            popup.setVisible(false);
+        }
+
+        productClickListener.accept(targetProductId);
+    }
+
+    private String extractProductIdFromNotification(NotifItem n) {
+        if (n == null) {
+            return "";
+        }
+
+        return extractProductIdFromText(
+                String.valueOf(n.key) + " "
+                + String.valueOf(n.title) + " "
+                + String.valueOf(n.body)
+        );
+    }
+
+    private static String extractProductIdFromText(String text) {
+        if (text == null) {
+            return "";
+        }
+
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(SP\\d{7})")
+                .matcher(text);
+
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        return "";
+    }
+
+    private String toAllowedHtml(String input) {
+        if (input == null) {
+            return "";
+        }
+
+        String escaped = escapeHtml(input);
+
+        return escaped
+                .replace("&lt;br&gt;", "<br>")
+                .replace("&lt;br/&gt;", "<br>")
+                .replace("&lt;br /&gt;", "<br>")
+                .replace("&lt;b style=&#39;color:#DC3545&#39;&gt;", "<b style='color:#DC3545'>")
+                .replace("&lt;b style=&quot;color:#DC3545&quot;&gt;", "<b style='color:#DC3545'>")
+                .replace("&lt;/b&gt;", "</b>");
     }
 
     private String escapeHtml(String input) {
@@ -810,6 +902,53 @@ public class NotificationBell extends JPanel {
                 .replace("'", "&#39;");
     }
 
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    /**
+     * Đọc field bằng reflection để tương thích cả InventoryNotifDTO cũ và DTO
+     * mới.
+     */
+    private String readStringField(Object obj, String fieldName) {
+        if (obj == null) {
+            return "";
+        }
+
+        try {
+            java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
+            f.setAccessible(true);
+            Object v = f.get(obj);
+            return v == null ? "" : String.valueOf(v);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private int readIntField(Object obj, String fieldName, int defaultValue) {
+        if (obj == null) {
+            return defaultValue;
+        }
+
+        try {
+            java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
+            f.setAccessible(true);
+            Object v = f.get(obj);
+
+            if (v == null) {
+                return defaultValue;
+            }
+
+            if (v instanceof Number) {
+                return ((Number) v).intValue();
+            }
+
+            return Integer.parseInt(String.valueOf(v));
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
     public static class NotifItem {
 
         public enum Type {
@@ -823,6 +962,7 @@ public class NotificationBell extends JPanel {
         public String time;
         public int remindCount;
         public boolean urgentManagerAlert;
+        public String productId;
 
         public NotifItem(
                 String key,
@@ -839,6 +979,7 @@ public class NotificationBell extends JPanel {
             this.time = time;
             this.remindCount = 1;
             this.urgentManagerAlert = urgentManagerAlert;
+            this.productId = extractProductIdFromText(this.key + " " + title + " " + body);
         }
     }
 }

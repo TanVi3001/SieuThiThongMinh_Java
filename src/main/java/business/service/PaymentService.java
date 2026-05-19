@@ -96,7 +96,9 @@ public class PaymentService {
             String sqlUpdateStock
                     = "UPDATE INVENTORY "
                     + "SET quantity = quantity - ? "
-                    + "WHERE product_id = ?";
+                    + "WHERE product_id = ? "
+                    + "AND NVL(is_deleted, 0) = 0 "
+                    + "AND quantity >= ?";
 
             try (PreparedStatement psStock = con.prepareStatement(sqlUpdateStock)) {
 
@@ -108,11 +110,15 @@ public class PaymentService {
                     // UPDATE STOCK
                     psStock.setInt(1, ct.getQuantity());
                     psStock.setString(2, ct.getProductId());
+                    psStock.setInt(3, ct.getQuantity());
 
                     int updated = psStock.executeUpdate();
 
                     if (updated <= 0) {
-                        throw new SQLException("Không thể cập nhật tồn kho.");
+                        throw new SQLException(
+                                "Sản phẩm " + ct.getProductId()
+                                + " không đủ tồn kho hoặc đã được máy khác bán trước."
+                        );
                     }
                 }
             }
@@ -142,7 +148,33 @@ public class PaymentService {
             RealtimeClient.send("CUSTOMERS_CHANGED");
             RealtimeClient.send("ORDERS_CHANGED");
             RealtimeClient.send("INVENTORY_CHANGED");
+            common.events.EventBus.publish(
+                    new common.events.AppDataChangedEvent(
+                            common.events.AppEventType.CUSTOMERS,
+                            "CUSTOMERS_CHANGED_LOCAL"
+                    )
+            );
 
+            common.events.EventBus.publish(
+                    new common.events.AppDataChangedEvent(
+                            common.events.AppEventType.ORDERS,
+                            "ORDERS_CHANGED_LOCAL"
+                    )
+            );
+
+            common.events.EventBus.publish(
+                    new common.events.AppDataChangedEvent(
+                            common.events.AppEventType.INVENTORY,
+                            "INVENTORY_CHANGED_LOCAL"
+                    )
+            );
+
+            common.events.EventBus.publish(
+                    new common.events.AppDataChangedEvent(
+                            common.events.AppEventType.PRODUCTS,
+                            "PRODUCTS_CHANGED_LOCAL"
+                    )
+            );
             return true;
 
         } catch (Exception e) {
@@ -434,5 +466,5 @@ public class PaymentService {
         }
         return false;
     }
-    
+
 }
