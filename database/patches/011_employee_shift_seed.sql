@@ -6,7 +6,7 @@
 -- Safe to re-run.
 -- ==========================================================
 
-SET DEFINE OFF;
+--SET DEFINE OFF;
 
 DECLARE
     v_count NUMBER;
