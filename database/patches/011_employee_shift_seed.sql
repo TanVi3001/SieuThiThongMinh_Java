@@ -1,15 +1,64 @@
 -- ==========================================================
--- Local Docker development login accounts
--- Password for all accounts: 123456
--- BCrypt hash generated with the same jBCrypt-compatible format used by PasswordUtils.
--- Role mapping:
---   ADMIN          -> R_ADMIN_ALL
---   STORE_MANAGER  -> R_STORE_MNG
---   SALES          -> R_STAFF_SALE
---   WAREHOUSE      -> R_STAFF_VIEW_PROD
+-- 011_employee_shift_seed.sql
+-- Purpose:
+--   Add the employee shift assignment table and seed enough
+--   sale/cashier + warehouse data for Employee Management > Phan ca.
+-- Safe to re-run.
 -- ==========================================================
 
--- Base function required by ROLES.function_id foreign key.
+SET DEFINE OFF;
+
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM user_tables
+    WHERE table_name = 'EMPLOYEE_SHIFTS';
+
+    IF v_count = 0 THEN
+        EXECUTE IMMEDIATE '
+            CREATE TABLE EMPLOYEE_SHIFTS (
+                assignment_id VARCHAR2(50) PRIMARY KEY,
+                employee_id   VARCHAR2(50) NOT NULL,
+                shift_id      VARCHAR2(50) NOT NULL,
+                work_date     DATE NOT NULL,
+                status        VARCHAR2(20) DEFAULT ''ASSIGNED'' NOT NULL,
+                note          NVARCHAR2(500),
+                is_deleted    NUMBER(1) DEFAULT 0,
+                created_at    TIMESTAMP DEFAULT SYSTIMESTAMP,
+                updated_at    TIMESTAMP,
+                CONSTRAINT FK_EMP_SHIFT_EMP FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id),
+                CONSTRAINT FK_EMP_SHIFT_SHIFT FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id),
+                CONSTRAINT CK_EMP_SHIFT_STATUS CHECK (status IN (''ASSIGNED'', ''COMPLETED'', ''CANCELED''))
+            )
+        ';
+    END IF;
+END;
+/
+
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM user_indexes
+    WHERE index_name = 'UQ_EMP_SHIFT_ACTIVE';
+
+    IF v_count = 0 THEN
+        EXECUTE IMMEDIATE '
+            CREATE UNIQUE INDEX UQ_EMP_SHIFT_ACTIVE
+            ON EMPLOYEE_SHIFTS (
+                employee_id,
+                shift_id,
+                TRUNC(work_date),
+                CASE WHEN NVL(is_deleted, 0) = 0 AND NVL(status, ''ASSIGNED'') <> ''CANCELED'' THEN 1 ELSE NULL END
+            )
+        ';
+    END IF;
+END;
+/
+
 MERGE INTO FUNCTIONS f
 USING (SELECT 'F_LOCAL_DEV' function_id, 'Local development access' function_name FROM dual) src
 ON (f.function_id = src.function_id)
@@ -17,17 +66,10 @@ WHEN MATCHED THEN UPDATE SET f.function_name = src.function_name, f.is_deleted =
 WHEN NOT MATCHED THEN INSERT (function_id, function_name, is_deleted)
 VALUES (src.function_id, src.function_name, 0);
 
--- Role rows used by the current login and authorization flow.
 MERGE INTO ROLES r
 USING (
-    SELECT 'R_ADMIN_ALL' role_id, 'Admin' role_name, 'F_LOCAL_DEV' function_id,
-           1 can_view, 1 can_add, 1 can_edit, 1 can_delete, 1 can_export FROM dual
-    UNION ALL
-    SELECT 'R_STORE_MNG', 'Store Manager', 'F_LOCAL_DEV',
-           1, 1, 1, 1, 1 FROM dual
-    UNION ALL
-    SELECT 'R_STAFF_SALE', 'Sales Staff', 'F_LOCAL_DEV',
-           1, 1, 0, 0, 1 FROM dual
+    SELECT 'R_STAFF_SALE' role_id, 'Sales Staff' role_name, 'F_LOCAL_DEV' function_id,
+           1 can_view, 1 can_add, 0 can_edit, 0 can_delete, 1 can_export FROM dual
     UNION ALL
     SELECT 'R_STAFF_VIEW_PROD', 'Warehouse Staff', 'F_LOCAL_DEV',
            1, 1, 1, 0, 1 FROM dual
@@ -49,36 +91,9 @@ WHEN NOT MATCHED THEN INSERT (
     src.can_delete, src.can_export, 0
 );
 
--- USERS records backing ACCOUNTS.user_id.
-MERGE INTO USERS u
-USING (
-    SELECT 'U_LOCAL_ADMIN' user_id, 'Local Admin' full_name, 'admin@local.dev' email, '0900000001' phone_number FROM dual
-    UNION ALL
-    SELECT 'U_LOCAL_MANAGER', 'Local Store Manager', 'manager@local.dev', '0900000002' FROM dual
-    UNION ALL
-    SELECT 'U_LOCAL_SALE', 'Local Sale Staff', 'sale@local.dev', '0900000003' FROM dual
-    UNION ALL
-    SELECT 'U_LOCAL_WAREHOUSE', 'Local Warehouse Staff', 'warehouse@local.dev', '0900000004' FROM dual
-    UNION ALL
-    SELECT 'U_LOCAL_CASHIER', 'Local Cashier Staff', 'cashier@local.dev', '0900000005' FROM dual
-) src
-ON (u.user_id = src.user_id)
-WHEN MATCHED THEN UPDATE SET
-    u.full_name = src.full_name,
-    u.email = src.email,
-    u.phone_number = src.phone_number,
-    u.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT (user_id, full_name, email, phone_number, is_deleted)
-VALUES (src.user_id, src.full_name, src.email, src.phone_number, 0);
-
--- EMPLOYEES records for modules that expect staff identities with role_id.
 MERGE INTO EMPLOYEES e
 USING (
-    SELECT 'EMP_LOCAL_ADMIN' employee_id, 'Local Admin' employee_name, '0900000001' phone, 'admin@local.dev' email, 'R_ADMIN_ALL' role_id FROM dual
-    UNION ALL
-    SELECT 'EMP_LOCAL_MANAGER', 'Local Store Manager', '0900000002', 'manager@local.dev', 'R_STORE_MNG' FROM dual
-    UNION ALL
-    SELECT 'EMP_LOCAL_SALE', 'Local Sale Staff', '0900000003', 'sale@local.dev', 'R_STAFF_SALE' FROM dual
+    SELECT 'EMP_LOCAL_SALE' employee_id, 'Local Sale Staff' employee_name, '0900000003' phone, 'sale@local.dev' email, 'R_STAFF_SALE' role_id FROM dual
     UNION ALL
     SELECT 'EMP_LOCAL_CASHIER', 'Local Cashier Staff', '0900000005', 'cashier@local.dev', 'R_STAFF_SALE' FROM dual
     UNION ALL
@@ -102,57 +117,6 @@ WHEN NOT MATCHED THEN INSERT (
     src.employee_id, src.employee_name, DATE '2026-01-01', src.phone, src.email, 1.0, src.role_id, 0
 );
 
--- ACCOUNTS. Same BCrypt hash verifies plain password "123456".
-MERGE INTO ACCOUNTS a
-USING (
-    SELECT 'ACC_LOCAL_ADMIN' account_id, 'U_LOCAL_ADMIN' user_id, 'admin' username, 'R_ADMIN_ALL' role_code FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_MANAGER', 'U_LOCAL_MANAGER', 'manager', 'R_STORE_MNG' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_SALE', 'U_LOCAL_SALE', 'sale', 'R_STAFF_SALE' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_WAREHOUSE', 'U_LOCAL_WAREHOUSE', 'warehouse', 'R_STAFF_VIEW_PROD' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_CASHIER', 'U_LOCAL_CASHIER', 'cashier', 'R_STAFF_SALE' FROM dual
-) src
-ON (a.account_id = src.account_id)
-WHEN MATCHED THEN UPDATE SET
-    a.user_id = src.user_id,
-    a.username = src.username,
-    a.password = '$2a$10$Oc0XJHuKZF1sPDhGSpeum.G3pXkPpl46Cq6EgXGHSnTGc/.odACy.',
-    a.status = 'ACTIVE',
-    a.role = src.role_code,
-    a.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT (account_id, user_id, username, password, status, role, is_deleted)
-VALUES (
-    src.account_id,
-    src.user_id,
-    src.username,
-    '$2a$10$Oc0XJHuKZF1sPDhGSpeum.G3pXkPpl46Cq6EgXGHSnTGc/.odACy.',
-    'ACTIVE',
-    src.role_code,
-    0
-);
-
--- Direct role assignment used by AccountSql.selectByUsername and LoginService.
-MERGE INTO ACCOUNT_ASSIGN_ROLE aar
-USING (
-    SELECT 'ACC_LOCAL_ADMIN' account_id, 'R_ADMIN_ALL' role_id FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_MANAGER', 'R_STORE_MNG' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_SALE', 'R_STAFF_SALE' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_WAREHOUSE', 'R_STAFF_VIEW_PROD' FROM dual
-    UNION ALL
-    SELECT 'ACC_LOCAL_CASHIER', 'R_STAFF_SALE' FROM dual
-) src
-ON (aar.account_id = src.account_id AND aar.role_id = src.role_id)
-WHEN MATCHED THEN UPDATE SET aar.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT (account_id, role_id, is_deleted)
-VALUES (src.account_id, src.role_id, 0);
-
--- Shift catalog used by the Employee Management > Phan ca tab.
 MERGE INTO SHIFTS s
 USING (
     SELECT 'SHIFT_MORNING' shift_id, N'Ca sáng' shift_name, '07:00' start_text, '15:00' end_text FROM dual
@@ -170,7 +134,6 @@ WHEN MATCHED THEN UPDATE SET
 WHEN NOT MATCHED THEN INSERT (shift_id, shift_name, start_time, end_time, is_deleted)
 VALUES (src.shift_id, src.shift_name, TO_DATE(src.start_text, 'HH24:MI'), TO_DATE(src.end_text, 'HH24:MI'), 0);
 
--- Sample shift assignments for sale/cashier and warehouse staff.
 MERGE INTO EMPLOYEE_SHIFTS es
 USING (
     SELECT 'PC_LOCAL_001' assignment_id, 'EMP_LOCAL_SALE' employee_id, 'SHIFT_MORNING' shift_id,
