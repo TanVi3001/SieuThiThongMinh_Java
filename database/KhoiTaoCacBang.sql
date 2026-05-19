@@ -643,3 +643,10 @@ SET last_updated = SYSDATE
 WHERE last_updated IS NULL;
 
 COMMIT;
+
+//Thêm thuộc tính cho cửa hàng
+ALTER TABLE STORES ADD (
+    store_name NVARCHAR2(200),
+    status     NVARCHAR2(20) DEFAULT 'Hoạt động'
+);
+COMMIT;
