@@ -6,8 +6,10 @@
 --   1. Removed debug SELECT statements.
 --   2. Moved STORES before EMPLOYEES to fix FK_EMPLOYEES_STORES.
 --   3. Removed extra SQL*Plus slash after CREATE SEQUENCE product_seq.
---   4. Added supplier / receipt / inventory transaction constraints.
---   5. Added helper indexes for supplier dashboard and warehouse flow.
+--   4. Added supplier / product supplier link / receipt / inventory transaction schema.
+--   5. Added INVENTORY_NOTIFICATIONS for Staff/Manager -> Warehouse alerts.
+--   6. Added helper indexes for supplier dashboard, warehouse flow, and notification click-to-product.
+--   7. Manager/Admin reminders are unlimited in Java logic; Staff reminders use REMIND_COUNT + cooldown.
 -- ==========================================================
 
 -- ==========================================================
@@ -259,6 +261,8 @@ CREATE TABLE SUPPLIERS (
     email         VARCHAR2(100),
     address       NVARCHAR2(200),
     phone_number  VARCHAR2(20),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted    NUMBER(1) DEFAULT 0
 );
 
@@ -473,7 +477,9 @@ CREATE TABLE INVENTORY_NOTIFICATIONS (
     notification_id VARCHAR2(50) PRIMARY KEY,
     product_id      VARCHAR2(50) NOT NULL,
     product_name    NVARCHAR2(255),
+    title           NVARCHAR2(255),
     message         NVARCHAR2(1000),
+    notify_type     VARCHAR2(50) DEFAULT 'LOW_STOCK',
     target_role     VARCHAR2(50) DEFAULT 'WAREHOUSE',
     status          VARCHAR2(20) DEFAULT 'PENDING',
     remind_count    NUMBER DEFAULT 1,
@@ -482,7 +488,10 @@ CREATE TABLE INVENTORY_NOTIFICATIONS (
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at     TIMESTAMP,
     is_deleted      NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_INV_NOTI_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id)
+    CONSTRAINT FK_INV_NOTI_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+    CONSTRAINT CK_INV_NOTI_STATUS CHECK (status IN ('PENDING', 'RESOLVED', 'CANCELLED')),
+    CONSTRAINT CK_INV_NOTI_TARGET CHECK (target_role IN ('WAREHOUSE', 'MANAGER', 'STAFF', 'ALL')),
+    CONSTRAINT CK_INV_NOTI_REMIND CHECK (remind_count >= 0)
 );
 
 -- ==========================================================
@@ -533,7 +542,12 @@ CREATE TABLE PURCHASE_RECEIPT_DETAILS (
 
     CONSTRAINT FK_PRD_PRODUCT
         FOREIGN KEY (product_id)
-        REFERENCES PRODUCTS(product_id)
+        REFERENCES PRODUCTS(product_id),
+
+    CONSTRAINT CK_PRD_QTY_POS CHECK (quantity > 0),
+    CONSTRAINT CK_PRD_IMPORT_POS CHECK (unit_import_price >= 0),
+    CONSTRAINT CK_PRD_SALE_POS CHECK (sale_price >= 0),
+    CONSTRAINT CK_PRD_VAT_RANGE CHECK (vat_rate BETWEEN 0 AND 100)
 );
 
 CREATE TABLE INVENTORY_TRANSACTIONS (
@@ -576,18 +590,37 @@ CREATE TABLE INVENTORY_TRANSACTIONS (
         REFERENCES ACCOUNTS(account_id),
 
     CONSTRAINT CK_INV_TRANS_TYPE
-        CHECK (transaction_type IN ('INBOUND', 'OUTBOUND', 'ADJUSTMENT', 'CANCEL'))
+        CHECK (transaction_type IN ('INBOUND', 'OUTBOUND', 'ADJUSTMENT', 'CANCEL')),
+
+    CONSTRAINT CK_INV_TRANS_QTY_POS CHECK (quantity > 0),
+    CONSTRAINT CK_INV_TRANS_PRICE_POS CHECK (
+        NVL(unit_import_price, 0) >= 0
+        AND NVL(sale_price, 0) >= 0
+        AND NVL(vat_rate, 0) BETWEEN 0 AND 100
+        AND NVL(vat_amount, 0) >= 0
+        AND NVL(total_amount, 0) >= 0
+    )
 );
 
 
 CREATE INDEX IDX_PRODUCTS_SUPPLIER
 ON PRODUCTS(supplier_id);
 
+CREATE INDEX IDX_PRODUCTS_CATEGORY
+ON PRODUCTS(category_id);
+
+
 CREATE INDEX IDX_PURCHASE_RECEIPTS_SUPPLIER_CREATED
 ON PURCHASE_RECEIPTS(supplier_id, created_at);
 
 CREATE INDEX IDX_INV_NOTI_STATUS_ROLE
 ON INVENTORY_NOTIFICATIONS(status, target_role);
+
+CREATE INDEX IDX_INV_NOTI_PRODUCT_STATUS
+ON INVENTORY_NOTIFICATIONS(product_id, status, is_deleted);
+
+CREATE INDEX IDX_INV_NOTI_UPDATED_AT
+ON INVENTORY_NOTIFICATIONS(updated_at DESC);
 
 CREATE INDEX IDX_PURCHASE_RECEIPTS_CREATED_AT
 ON PURCHASE_RECEIPTS(created_at);
