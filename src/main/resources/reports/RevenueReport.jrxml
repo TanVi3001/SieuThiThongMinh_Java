@@ -29,9 +29,15 @@
     <parameter name="REPORT_TYPE_LABEL" class="java.lang.String"/>
     <parameter name="PERIOD_HEADER" class="java.lang.String"/>
 
-    <queryString language="SQL">
-        <![CDATA[
-WITH valid_orders AS (
+   <queryString language="SQL">
+    <![CDATA[
+WITH report_params AS (
+    SELECT
+        $P{REPORT_TYPE} AS report_type,
+        TRUNC($P{START_DATE}) AS start_period
+    FROM dual
+),
+valid_orders AS (
     SELECT
         o.order_id,
         o.order_date,
@@ -54,39 +60,39 @@ detail_totals AS (
     WHERE NVL(od.is_deleted, 0) = 0
     GROUP BY od.order_id
 ),
-grouped_revenue AS (
+order_periods AS (
     SELECT
         CASE
-            WHEN $P{REPORT_TYPE} = 'DAY' THEN TRUNC(vo.order_date)
-            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TRUNC(vo.order_date, 'MM')
-            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TRUNC(vo.order_date, 'YYYY')
-            ELSE TRUNC($P{START_DATE})
+            WHEN rp.report_type = 'DAY' THEN TRUNC(vo.order_date)
+            WHEN rp.report_type = 'MONTH' THEN TRUNC(vo.order_date, 'MM')
+            WHEN rp.report_type = 'YEAR' THEN TRUNC(vo.order_date, 'YYYY')
+            ELSE rp.start_period
         END AS period_start,
         CASE
-            WHEN $P{REPORT_TYPE} = 'DAY' THEN TO_CHAR(TRUNC(vo.order_date), 'DD/MM/YYYY')
-            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY')
-            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TO_CHAR(TRUNC(vo.order_date, 'YYYY'), 'YYYY')
+            WHEN rp.report_type = 'DAY' THEN TO_CHAR(TRUNC(vo.order_date), 'DD/MM/YYYY')
+            WHEN rp.report_type = 'MONTH' THEN TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY')
+            WHEN rp.report_type = 'YEAR' THEN TO_CHAR(TRUNC(vo.order_date, 'YYYY'), 'YYYY')
             ELSE 'Toàn kỳ'
         END AS period_label,
-        COUNT(*) AS orders_count,
-        SUM(NVL(dt.products_sold, 0)) AS products_sold,
-        SUM(vo.total_amount) AS revenue
+        vo.order_id,
+        vo.total_amount,
+        NVL(dt.products_sold, 0) AS products_sold
     FROM valid_orders vo
+    CROSS JOIN report_params rp
     LEFT JOIN detail_totals dt
         ON vo.order_id = dt.order_id
+),
+grouped_revenue AS (
+    SELECT
+        period_start,
+        period_label,
+        COUNT(*) AS orders_count,
+        SUM(products_sold) AS products_sold,
+        SUM(total_amount) AS revenue
+    FROM order_periods
     GROUP BY
-        CASE
-            WHEN $P{REPORT_TYPE} = 'DAY' THEN TRUNC(vo.order_date)
-            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TRUNC(vo.order_date, 'MM')
-            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TRUNC(vo.order_date, 'YYYY')
-            ELSE TRUNC($P{START_DATE})
-        END,
-        CASE
-            WHEN $P{REPORT_TYPE} = 'DAY' THEN TO_CHAR(TRUNC(vo.order_date), 'DD/MM/YYYY')
-            WHEN $P{REPORT_TYPE} = 'MONTH' THEN TO_CHAR(TRUNC(vo.order_date, 'MM'), 'MM/YYYY')
-            WHEN $P{REPORT_TYPE} = 'YEAR' THEN TO_CHAR(TRUNC(vo.order_date, 'YYYY'), 'YYYY')
-            ELSE 'Toàn kỳ'
-        END
+        period_start,
+        period_label
 )
 SELECT
     period_start,
@@ -103,8 +109,8 @@ SELECT
     END AS avg_order_value
 FROM grouped_revenue
 ORDER BY period_start
-        ]]>
-    </queryString>
+    ]]>
+</queryString>
 
     <field name="period_start" class="java.util.Date"/>
     <field name="period_label" class="java.lang.String"/>

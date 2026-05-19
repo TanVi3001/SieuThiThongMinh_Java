@@ -5,6 +5,8 @@ import business.sql.prod_inventory.ProductUnitsSql;
 import business.service.UnitOfMeasureService;
 import business.service.AuthorizationService;
 import common.utils.Validator;
+import business.sql.prod_inventory.InventoryNotificationSql;
+import business.service.SessionManager;
 
 import java.awt.*;
 import java.awt.event.KeyAdapter;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.SwingUtilities;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -205,7 +208,7 @@ public class ProductView extends JPanel {
         JLabel lblTitle = new JLabel("Sản phẩm & Danh mục");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(textDark);
-        JLabel lblSub = new JLabel("Theo dõi danh mục, tồn kho và hiệu suất sản phẩm");
+        JLabel lblSub = new JLabel("Theo dõi danh mục, tồn kho");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblSub.setForeground(textGray);
         titlePanel.add(lblTitle);
@@ -1210,7 +1213,7 @@ public class ProductView extends JPanel {
             }
 
             btnImport.setVisible(false);
-
+            btnEmergencyAlert.setVisible(true);
             btnAdd.setVisible(false);
             btnUpdate.setVisible(false);
             btnDelete.setVisible(false);
@@ -1429,14 +1432,19 @@ public class ProductView extends JPanel {
         btnExportPDF.addActionListener(e -> btnExportPDFActionPerformed());
         btnUnitConfig.addActionListener(e -> showUnitConfigDialog());
         btnImport.addActionListener(e -> handleImportCSV());
-        btnEmergencyAlert.addActionListener(e -> sendStockAlert());
+        btnEmergencyAlert.addActionListener(e -> sendLowStockNotification());
     }
 
-    private void sendStockAlert() {
+    private void sendLowStockNotification() {
         int row = tblProducts.getSelectedRow();
 
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn một sản phẩm cần báo kho!");
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn sản phẩm cần báo hết hàng!",
+                    "Chưa chọn sản phẩm",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
@@ -1444,40 +1452,90 @@ public class ProductView extends JPanel {
 
         String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
         String productName = String.valueOf(tableModel.getValueAt(modelRow, 1));
-
-        int quantity = 0;
-        try {
-            quantity = Integer.parseInt(String.valueOf(tableModel.getValueAt(modelRow, 3)).trim());
-        } catch (Exception ignored) {
-        }
+        int quantity = parseIntSafe(tableModel.getValueAt(modelRow, 3));
 
         if (quantity > 20) {
+            int confirm = JOptionPane.showConfirmDialog(
+                    this,
+                    "Sản phẩm này còn " + quantity + " sản phẩm, chưa nằm trong ngưỡng sắp hết.\n"
+                    + "Bạn vẫn muốn gửi thông báo cho kho không?",
+                    "Xác nhận báo tồn kho",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        String createdBy = "UNKNOWN";
+        if (SessionManager.getCurrentUser() != null) {
+            createdBy = SessionManager.getCurrentUser().getAccountId();
+            if (createdBy == null || createdBy.isBlank()) {
+                createdBy = SessionManager.getCurrentUser().getUsername();
+            }
+        }
+
+        InventoryNotificationSql.NotifyResult result = InventoryNotificationSql.getInstance()
+                .createOrIncreaseLowStockNotificationWithCooldown(
+                        productId,
+                        productName,
+                        quantity,
+                        createdBy
+                );
+
+        if (!result.success) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Sản phẩm này vẫn còn tồn kho (" + quantity + ").\n"
-                    + "Chỉ nên cảnh báo khi sản phẩm sắp hết hoặc đã hết hàng.",
-                    "Chưa cần cảnh báo",
-                    JOptionPane.INFORMATION_MESSAGE
+                    result.message,
+                    "Thông báo tồn kho",
+                    JOptionPane.WARNING_MESSAGE
             );
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Gửi cảnh báo cho kho về sản phẩm:\n"
-                + productName + " (" + productId + ")\n"
-                + "Số lượng hiện tại: " + quantity,
-                "Xác nhận gửi cảnh báo",
-                JOptionPane.YES_NO_OPTION
-        );
+        try {
+            SyncVersionDao.bumpVersion("INVENTORY");
 
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
+            String alertMessage = "INVENTORY_ALERT:"
+                    + productId + ":"
+                    + productName.replace(":", " ") + ":"
+                    + quantity;
+
+            /*
+             * Gửi đúng payload có productId để NotificationBell / WarehouseDashboardView
+             * có thể click vào thông báo và nhảy thẳng tới sản phẩm trong InventoryView.
+             */
+            RealtimeClient.send(alertMessage);
+
+            EventBus.publish(new AppDataChangedEvent(
+                    AppEventType.INVENTORY_ALERT,
+                    alertMessage
+            ));
+        } catch (Exception ignored) {
         }
 
-        RealtimeClient.send("INVENTORY_ALERT:" + productId + ":" + productName + ":" + quantity);
+        String waitText = result.waitMinutes <= 0
+                ? "Manager/Admin được phép nhắc lại ngay khi cần."
+                : "Quy định thời gian báo lại: " + result.waitMinutes + " phút/lần.";
 
-        JOptionPane.showMessageDialog(this, "Đã gửi cảnh báo tồn kho cho bộ phận kho!");
+        JOptionPane.showMessageDialog(
+                this,
+                result.message + "\n"
+                + "Sản phẩm: " + productName + "\n"
+                + waitText,
+                "Gửi thông báo thành công",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
+    private int parseIntSafe(Object value) {
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void btnAddActionPerformed() {
@@ -1609,7 +1667,8 @@ public class ProductView extends JPanel {
             return;
         }
 
-        String idOld = tblProducts.getValueAt(row, 0).toString().trim();
+        int modelRow = tblProducts.convertRowIndexToModel(row);
+        String idOld = tblProducts.getModel().getValueAt(modelRow, 0).toString().trim();
         Product p = getProductFromForm();
         if (p == null) {
             return;
@@ -1641,8 +1700,9 @@ public class ProductView extends JPanel {
             return;
         }
 
-        String id = tblProducts.getValueAt(row, 0).toString().trim();
-        String name = tblProducts.getValueAt(row, 1).toString().trim();
+        int modelRow = tblProducts.convertRowIndexToModel(row);
+        String id = tblProducts.getModel().getValueAt(modelRow, 0).toString().trim();
+        String name = tblProducts.getModel().getValueAt(modelRow, 1).toString().trim();
 
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Bạn có chắc chắn muốn ngừng kinh doanh và xóa sản phẩm: " + name + " (" + id + ")?",
@@ -2488,4 +2548,5 @@ public class ProductView extends JPanel {
             return values;
         }
     }
+   
 }

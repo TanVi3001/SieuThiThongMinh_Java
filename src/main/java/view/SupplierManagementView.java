@@ -114,7 +114,7 @@ public class SupplierManagementView extends JPanel {
         title.setForeground(NAVY);
 
         JLabel subtitle = new JLabel(viewMode == SupplierViewMode.WAREHOUSE
-                ? "Tra cứu nhà cung cấp phục vụ nhập kho và phiếu nhập hàng"
+                ? "Tra cứu nhà cung cấp phục vụ nhập kho"
                 : "Quản lý nhà cung cấp, theo dõi số lượng sản phẩm đang được cung cấp");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subtitle.setForeground(MUTED);
