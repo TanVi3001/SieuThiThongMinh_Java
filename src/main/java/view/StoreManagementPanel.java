@@ -28,7 +28,7 @@ public class StoreManagementPanel extends JPanel {
     private JTable tblStores;
     private DefaultTableModel tableModel;
     private JTextField txtSearch;
-    
+
     // --- FORM COMPONENTS ---
     private JTextField txtMaSieuThi;
     private JTextField txtTenSieuThi;
@@ -36,7 +36,7 @@ public class StoreManagementPanel extends JPanel {
     private JTextField txtSoDienThoai;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear;
-    
+
     private boolean isEditMode = false;
 
     public StoreManagementPanel() {
@@ -72,10 +72,7 @@ public class StoreManagementPanel extends JPanel {
         JPanel contentPanel = new JPanel(new BorderLayout(20, 0));
         contentPanel.setOpaque(false);
 
-        // Bên trái: Bảng danh sách
         contentPanel.add(createLeftPanel(), BorderLayout.CENTER);
-        
-        // Bên phải: Form thông tin
         contentPanel.add(createRightPanel(), BorderLayout.EAST);
 
         add(contentPanel, BorderLayout.CENTER);
@@ -89,26 +86,26 @@ public class StoreManagementPanel extends JPanel {
         // Tool bar tìm kiếm
         JPanel toolBar = new JPanel(new BorderLayout());
         toolBar.setOpaque(false);
-        
+
         JLabel lblListTitle = new JLabel("Danh sách chi nhánh");
         lblListTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         lblListTitle.setForeground(textDark);
-        
+
         JPanel searchBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         searchBox.setOpaque(false);
         txtSearch = createTextField("Tra cứu tên hoặc mã...");
         txtSearch.setPreferredSize(new Dimension(250, 38));
-        
+
         JButton btnSearch = createCustomButton("Tìm", primaryBlue, Color.WHITE, IconHelper.search(16));
         btnSearch.setPreferredSize(new Dimension(90, 38));
-        
+
         searchBox.add(txtSearch);
         searchBox.add(btnSearch);
-        
+
         toolBar.add(lblListTitle, BorderLayout.WEST);
         toolBar.add(searchBox, BorderLayout.EAST);
 
-        // Table
+        // Table — cột khớp với STORES: store_id, store_name, status
         tableModel = new DefaultTableModel(new Object[]{"Mã Cửa Hàng", "Tên Siêu Thị", "Trạng Thái"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -143,35 +140,35 @@ public class StoreManagementPanel extends JPanel {
         gbc.weightx = 1.0;
         gbc.insets = new Insets(0, 0, 15, 0);
 
-        // Mã siêu thị
+        // Mã siêu thị (= STORE_ID)
         gbc.gridy = 0;
         formPanel.add(createFormLabel("Mã siêu thị (Tự động hoặc tự nhập):"), gbc);
         gbc.gridy = 1;
         txtMaSieuThi = createTextField("VD: ST001");
         formPanel.add(txtMaSieuThi, gbc);
 
-        // Tên siêu thị
+        // Tên siêu thị (= STORE_NAME)
         gbc.gridy = 2;
         formPanel.add(createFormLabel("Tên siêu thị:"), gbc);
         gbc.gridy = 3;
         txtTenSieuThi = createTextField("Nhập tên chi nhánh...");
         formPanel.add(txtTenSieuThi, gbc);
 
-        // Số điện thoại
+        // Số điện thoại (= PHONE_NUMBER)
         gbc.gridy = 4;
         formPanel.add(createFormLabel("Số điện thoại liên hệ:"), gbc);
         gbc.gridy = 5;
         txtSoDienThoai = createTextField("Nhập số điện thoại...");
         formPanel.add(txtSoDienThoai, gbc);
 
-        // Địa chỉ
+        // Địa chỉ (= ADDRESS)
         gbc.gridy = 6;
         formPanel.add(createFormLabel("Địa chỉ đầy đủ:"), gbc);
         gbc.gridy = 7;
         txtDiaChi = createTextField("Nhập địa chỉ chi nhánh...");
         formPanel.add(txtDiaChi, gbc);
 
-        // Trạng thái
+        // Trạng thái (= STATUS)
         gbc.gridy = 8;
         formPanel.add(createFormLabel("Trạng thái hoạt động:"), gbc);
         gbc.gridy = 9;
@@ -184,10 +181,10 @@ public class StoreManagementPanel extends JPanel {
         JPanel actionPanel = new JPanel(new GridLayout(1, 2, 10, 0));
         actionPanel.setOpaque(false);
         actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
-        
+
         btnClear = createCustomButton("Làm Mới", new Color(235, 238, 244), textDark, null);
         btnSave = createCustomButton("Lưu Thông Tin", primaryBlue, Color.WHITE, null);
-        
+
         actionPanel.add(btnClear);
         actionPanel.add(btnSave);
 
@@ -199,33 +196,28 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void initEvents() {
-        // Nút Làm mới (Hủy bỏ chọn, sẵn sàng thêm mới)
         btnClear.addActionListener(e -> clearForm());
 
-        // Tìm kiếm (Live search)
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { loadStoreData(txtSearch.getText().trim()); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { loadStoreData(txtSearch.getText().trim()); }
             public void changedUpdate(javax.swing.event.DocumentEvent e) { loadStoreData(txtSearch.getText().trim()); }
         });
 
-        // Click bảng để đưa dữ liệu lên Form
         tblStores.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 int row = tblStores.getSelectedRow();
                 if (row >= 0) {
                     isEditMode = true;
-                    txtMaSieuThi.setText(tableModel.getValueAt(row, 0).toString());
-                    txtMaSieuThi.setEnabled(false); // Không cho sửa khóa chính
-                    
                     String ma = tableModel.getValueAt(row, 0).toString();
+                    txtMaSieuThi.setText(ma);
+                    txtMaSieuThi.setEnabled(false); // Không cho sửa khóa chính
                     loadStoreDetailsToForm(ma);
                 }
             }
         });
 
-        // Nút Lưu (Xử lý cả Thêm Mới và Cập Nhật)
         btnSave.addActionListener(e -> saveStore());
     }
 
@@ -241,25 +233,35 @@ public class StoreManagementPanel extends JPanel {
     }
 
     // =========================================================================
-    // KẾT NỐI DATABASE VÀ GHI AUDIT LOG
+    // KẾT NỐI DATABASE — dùng đúng tên bảng STORES và cột theo KhoiTaoCacBang.sql
     // =========================================================================
+
+    /**
+     * Load danh sách chi nhánh lên bảng.
+     * Bảng: STORES  |  Cột: STORE_ID, STORE_NAME, STATUS
+     */
     private void loadStoreData(String keyword) {
         tableModel.setRowCount(0);
-        String sql = "SELECT MASIEUTHI, TENSIEUTHI, TRANGTHAI FROM SIEUTHI " +
-                     "WHERE LOWER(TENSIEUTHI) LIKE LOWER(?) OR LOWER(MASIEUTHI) LIKE LOWER(?) " +
-                     "ORDER BY MASIEUTHI ASC";
+        // Lọc bỏ bản ghi đã xóa mềm (IS_DELETED = 0)
+        String sql = "SELECT store_id, store_name, status "
+                   + "FROM STORES "
+                   + "WHERE is_deleted = 0 "
+                   + "  AND (LOWER(store_name) LIKE LOWER(?) OR LOWER(store_id) LIKE LOWER(?)) "
+                   + "ORDER BY store_id ASC";
 
         try (Connection con = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, "%" + keyword + "%");
-            ps.setString(2, "%" + keyword + "%");
-            
+
+            String kw = "%" + keyword + "%";
+            ps.setString(1, kw);
+            ps.setString(2, kw);
+
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     tableModel.addRow(new Object[]{
-                        rs.getString("MASIEUTHI"),
-                        rs.getString("TENSIEUTHI"),
-                        rs.getString("TRANGTHAI")
+                        rs.getString("store_id"),
+                        rs.getString("store_name"),
+                        rs.getString("status")
                     });
                 }
             }
@@ -268,17 +270,24 @@ public class StoreManagementPanel extends JPanel {
         }
     }
 
-    private void loadStoreDetailsToForm(String maSieuThi) {
-        String sql = "SELECT TENSIEUTHI, DIACHI, SODIENTHOAI, TRANGTHAI FROM SIEUTHI WHERE MASIEUTHI = ?";
+    /**
+     * Load chi tiết 1 chi nhánh vào form khi click dòng trên bảng.
+     * Bảng: STORES  |  Cột: STORE_NAME, ADDRESS, PHONE_NUMBER, STATUS
+     */
+    private void loadStoreDetailsToForm(String storeId) {
+        String sql = "SELECT store_name, address, phone_number, status "
+                   + "FROM STORES "
+                   + "WHERE store_id = ? AND is_deleted = 0";
         try (Connection con = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, maSieuThi);
+            ps.setString(1, storeId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    txtTenSieuThi.setText(rs.getString("TENSIEUTHI"));
-                    txtDiaChi.setText(rs.getString("DIACHI"));
-                    txtSoDienThoai.setText(rs.getString("SODIENTHOAI"));
-                    cbTrangThai.setSelectedItem(rs.getString("TRANGTHAI"));
+                    txtTenSieuThi.setText(rs.getString("store_name"));
+                    txtDiaChi.setText(rs.getString("address"));
+                    txtSoDienThoai.setText(rs.getString("phone_number"));
+                    String status = rs.getString("status");
+                    cbTrangThai.setSelectedItem(status != null ? status : "Hoạt động");
                 }
             }
         } catch (Exception e) {
@@ -286,22 +295,30 @@ public class StoreManagementPanel extends JPanel {
         }
     }
 
+    /**
+     * Lưu (INSERT hoặc UPDATE) vào bảng STORES.
+     * Bảng: STORES  |  Cột: STORE_ID, STORE_NAME, ADDRESS, PHONE_NUMBER, STATUS, IS_DELETED
+     */
     private void saveStore() {
-        String ma = txtMaSieuThi.getText().trim();
-        String ten = txtTenSieuThi.getText().trim();
-        String diaChi = txtDiaChi.getText().trim();
-        String sdt = txtSoDienThoai.getText().trim();
+        String ma      = txtMaSieuThi.getText().trim();
+        String ten     = txtTenSieuThi.getText().trim();
+        String diaChi  = txtDiaChi.getText().trim();
+        String sdt     = txtSoDienThoai.getText().trim();
         String trangThai = cbTrangThai.getSelectedItem().toString();
 
         if (ma.isEmpty() || ten.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập mã và tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                "Vui lòng nhập mã và tên chi nhánh!",
+                "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
             if (isEditMode) {
-                // UPDATE (Cập nhật)
-                String sql = "UPDATE SIEUTHI SET TENSIEUTHI = ?, DIACHI = ?, SODIENTHOAI = ?, TRANGTHAI = ? WHERE MASIEUTHI = ?";
+                // ── UPDATE ──────────────────────────────────────────────────
+                String sql = "UPDATE STORES "
+                           + "SET store_name = ?, address = ?, phone_number = ?, status = ? "
+                           + "WHERE store_id = ? AND is_deleted = 0";
                 try (PreparedStatement ps = con.prepareStatement(sql)) {
                     ps.setString(1, ten);
                     ps.setString(2, diaChi);
@@ -309,18 +326,21 @@ public class StoreManagementPanel extends JPanel {
                     ps.setString(4, trangThai);
                     ps.setString(5, ma);
                     ps.executeUpdate();
-                    
-                    // Ghi Audit Log
-                    business.service.AuditLogService.logAction(
-                        "CẬP NHẬT", "SIEUTHI", ma, 
-                        "Dữ liệu cũ", "Trạng thái: " + trangThai, 
-                        "Admin cập nhật thông tin chi nhánh"
-                    );
-                    JOptionPane.showMessageDialog(this, "Đã cập nhật thông tin chi nhánh!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
                 }
+
+                business.service.AuditLogService.logAction(
+                    "CẬP NHẬT", "STORES", ma,
+                    "Dữ liệu cũ", "Trạng thái: " + trangThai,
+                    "Admin cập nhật thông tin chi nhánh"
+                );
+                JOptionPane.showMessageDialog(this,
+                    "Đã cập nhật thông tin chi nhánh!",
+                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
+
             } else {
-                // INSERT (Thêm mới)
-                String sql = "INSERT INTO SIEUTHI (MASIEUTHI, TENSIEUTHI, DIACHI, SODIENTHOAI, TRANGTHAI) VALUES (?, ?, ?, ?, ?)";
+                // ── INSERT ──────────────────────────────────────────────────
+                String sql = "INSERT INTO STORES (store_id, store_name, address, phone_number, status, is_deleted) "
+                           + "VALUES (?, ?, ?, ?, ?, 0)";
                 try (PreparedStatement ps = con.prepareStatement(sql)) {
                     ps.setString(1, ma);
                     ps.setString(2, ten);
@@ -328,29 +348,31 @@ public class StoreManagementPanel extends JPanel {
                     ps.setString(4, sdt);
                     ps.setString(5, trangThai);
                     ps.executeUpdate();
-                    
-                    // Ghi Audit Log
-                    business.service.AuditLogService.logAction(
-                        "THÊM MỚI", "SIEUTHI", ma, 
-                        "", "Tên: " + ten + ", Trạng thái: " + trangThai, 
-                        "Admin mở chi nhánh mới"
-                    );
-                    JOptionPane.showMessageDialog(this, "Đã mở chi nhánh mới thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
                 }
+
+                business.service.AuditLogService.logAction(
+                    "THÊM MỚI", "STORES", ma,
+                    "", "Tên: " + ten + ", Trạng thái: " + trangThai,
+                    "Admin mở chi nhánh mới"
+                );
+                JOptionPane.showMessageDialog(this,
+                    "Đã mở chi nhánh mới thành công!",
+                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
             }
-            
-            // Làm mới giao diện
+
             clearForm();
             loadStoreData(txtSearch.getText().trim());
             EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
-            
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi lưu dữ liệu (Có thể trùng mã Siêu thị): " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                "Lỗi khi lưu dữ liệu (Có thể trùng mã Siêu thị): " + e.getMessage(),
+                "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     // =========================================================================
-    // CÁC HÀM TIỆN ÍCH UI KHÁC
+    // CÁC HÀM TIỆN ÍCH UI
     // =========================================================================
     private JLabel createFormLabel(String text) {
         JLabel lbl = new JLabel(text);
@@ -364,7 +386,10 @@ public class StoreManagementPanel extends JPanel {
         txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         txt.putClientProperty("JTextField.placeholderText", placeholder);
         txt.setPreferredSize(new Dimension(0, 38));
-        txt.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 8), new EmptyBorder(5, 10, 5, 10)));
+        txt.setBorder(BorderFactory.createCompoundBorder(
+            new RoundBorder(borderGray, 8),
+            new EmptyBorder(5, 10, 5, 10)
+        ));
         return txt;
     }
 
@@ -391,15 +416,21 @@ public class StoreManagementPanel extends JPanel {
         JButton btn = new JButton(t);
         if (icon != null) btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18, 18, 1)));
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(fg); btn.setBackground(bg);
+        btn.setForeground(fg);
+        btn.setBackground(bg);
         btn.setPreferredSize(new Dimension(130, 40));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); btn.setFocusPainted(false); btn.setBorderPainted(false); btn.setContentAreaFilled(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
         btn.setUI(new javax.swing.plaf.basic.BasicButtonUI() {
             @Override public void paint(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.getBackground()); g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10);
-                super.paint(g2, c); g2.dispose();
+                g2.setColor(c.getBackground());
+                g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10);
+                super.paint(g2, c);
+                g2.dispose();
             }
         });
         return btn;
@@ -411,7 +442,8 @@ public class StoreManagementPanel extends JPanel {
         @Override protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bg); g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r);
+            g2.setColor(bg);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r);
             g2.dispose();
         }
     }
@@ -422,7 +454,8 @@ public class StoreManagementPanel extends JPanel {
         @Override public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(this.c); g2.drawRoundRect(x, y, w - 1, h - 1, r, r);
+            g2.setColor(this.c);
+            g2.drawRoundRect(x, y, w - 1, h - 1, r, r);
             g2.dispose();
         }
         @Override public Insets getBorderInsets(Component c) { return new Insets(1, 1, 1, 1); }
