@@ -59,7 +59,7 @@ public class LoginView extends JFrame {
     private static final int CARD_X = 605;
     private static final int CARD_Y = 74;
     private static final int CARD_WIDTH = 410;
-    private static final int CARD_HEIGHT = 635;
+    private static final int CARD_HEIGHT = 660;
 
     private static final int BG_CROP_TOP = 45;
 
@@ -250,14 +250,14 @@ public class LoginView extends JFrame {
         panel.add(lblResendEmail);
 
         btnRegister = new PrimaryButton("Đăng ký  →");
-        btnRegister.setBounds(x, 430, INPUT_WIDTH, 42);
+        btnRegister.setBounds(x, 545, INPUT_WIDTH, 42);
         btnRegister.addActionListener(evt -> activateAccount());
         panel.add(btnRegister);
 
         JLabel back = centeredHtml(
                 "<span style='color:#6B7895'>Đã có tài khoản? </span>"
                 + "<span style='color:#FF5A00'><u>Quay lại đăng nhập</u></span>");
-        back.setBounds(x, CARD_HEIGHT - 95, INPUT_WIDTH, 24);
+        back.setBounds(x, 605, INPUT_WIDTH, 24);
         back.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
