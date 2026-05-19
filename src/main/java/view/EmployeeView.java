@@ -1,6 +1,8 @@
 package view;
 
 import business.sql.hr_kpi.EmployeeSql;
+import business.sql.hr_kpi.EmployeeShiftSql;
+import business.sql.hr_kpi.ShiftSql;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
@@ -9,8 +11,11 @@ import common.sync.SyncVersionDao;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +25,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import model.employee.Employee;
+import model.employee.EmployeeShift;
+import model.employee.Shift;
 import view.components.IconHelper;
 import business.service.ActivationTokenService;
 import model.product.Store;
@@ -36,6 +43,8 @@ public class EmployeeView extends JPanel {
 
     private final Color onlineGreen = new Color(39, 174, 96);
     private final Color offlineRed = new Color(231, 76, 60);
+    private final Color primaryOrange = new Color(255, 112, 28);
+    private final Color successGreen = new Color(22, 163, 74);
 
     private JTextField txtId, txtName, txtPhone, txtEmail;
     private JComboBox<String> cbRole, cbSearch;
@@ -50,10 +59,39 @@ public class EmployeeView extends JPanel {
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch;
 
     private final EmployeeSql employeeSql = new EmployeeSql();
+    private final ShiftSql shiftSql = new ShiftSql();
+    private final EmployeeShiftSql employeeShiftSql = new EmployeeShiftSql();
     private List<String> employeeNameList = new ArrayList<>();
     private List<String> roleList = new ArrayList<>();
 
     private String currentSelectedRawId = "";
+
+    private JComboBox<EmployeeOption> cbShiftEmployee;
+    private JComboBox<ShiftOption> cbWorkShift;
+    private JComboBox<String> cbAssignmentStatus;
+    private JTextField txtWorkDate;
+    private JTextArea txtAssignmentNote;
+    private JLabel lblSelectedShiftEmployeeName;
+    private JLabel lblSelectedShiftEmployeeId;
+    private JLabel lblSelectedShiftEmployeeType;
+    private JTable tblShiftAssignments;
+    private DefaultTableModel shiftTableModel;
+    private JTextField txtShiftKeyword;
+    private JTextField txtShiftFilterDate;
+    private JComboBox<String> cbShiftEmployeeTypeFilter;
+    private JComboBox<ShiftOption> cbShiftFilter;
+    private JComboBox<String> cbShiftStatusFilter;
+    private JButton btnAddAssignment;
+    private JButton btnUpdateAssignment;
+    private JButton btnCancelAssignment;
+    private JButton btnClearAssignment;
+    private JButton btnApplyShiftFilter;
+    private JButton btnResetShiftFilter;
+    private List<Employee> assignableEmployees = new ArrayList<>();
+    private List<Shift> shiftList = new ArrayList<>();
+    private List<EmployeeShift> currentShiftAssignments = new ArrayList<>();
+    private String selectedAssignmentId = "";
+    private final SimpleDateFormat shiftTimeFormat = new SimpleDateFormat("HH:mm");
 
     // Model column indexes
     // Bảng hiện có thêm cột Chi nhánh ở vị trí 2,
@@ -143,6 +181,8 @@ public class EmployeeView extends JPanel {
 
             loadDataToTable();
             loadAutoCompleteData();
+            loadShiftComboboxData();
+            loadShiftAssignments();
         });
     }
 
@@ -202,6 +242,12 @@ public class EmployeeView extends JPanel {
         titlePanel.add(lblTitle);
         titlePanel.add(lblSub);
 
+        headerPanel.add(titlePanel, BorderLayout.WEST);
+        add(headerPanel, BorderLayout.NORTH);
+
+        JPanel profilePanel = new JPanel(new BorderLayout(0, 18));
+        profilePanel.setOpaque(false);
+
         JPanel toolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
         toolPanel.setOpaque(false);
 
@@ -223,9 +269,7 @@ public class EmployeeView extends JPanel {
         toolPanel.add(searchFieldWrapper);
         toolPanel.add(btnSearch);
 
-        headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(toolPanel, BorderLayout.EAST);
-        add(headerPanel, BorderLayout.NORTH);
+        profilePanel.add(toolPanel, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new BorderLayout(25, 0));
         centerPanel.setOpaque(false);
@@ -361,7 +405,289 @@ public class EmployeeView extends JPanel {
         centerPanel.add(formCard, BorderLayout.WEST);
         centerPanel.add(tableCard, BorderLayout.CENTER);
 
-        add(centerPanel, BorderLayout.CENTER);
+        profilePanel.add(centerPanel, BorderLayout.CENTER);
+
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setOpaque(false);
+        tabbedPane.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        tabbedPane.setForeground(textDark);
+        tabbedPane.addTab("Hồ sơ nhân viên", profilePanel);
+        tabbedPane.addTab("Phân ca", createShiftAssignmentTab());
+        tabbedPane.setUI(new UnderlineTabbedPaneUI(primaryOrange, borderGray));
+
+        add(tabbedPane, BorderLayout.CENTER);
+    }
+
+    private JPanel createShiftAssignmentTab() {
+        JPanel root = new JPanel(new BorderLayout(0, 18));
+        root.setOpaque(false);
+        root.setBorder(new EmptyBorder(10, 0, 0, 0));
+
+        root.add(createShiftFilterPanel(), BorderLayout.NORTH);
+
+        JPanel body = new JPanel(new GridBagLayout());
+        body.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(0, 0, 0, 14);
+        gbc.weighty = 1.0;
+
+        gbc.gridx = 0;
+        gbc.weightx = 0.32;
+        body.add(createShiftFormPanel(), gbc);
+
+        gbc.gridx = 1;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        gbc.weightx = 0.68;
+        body.add(createShiftListPanel(), gbc);
+
+        root.add(body, BorderLayout.CENTER);
+        return root;
+    }
+
+    private JPanel createShiftFilterPanel() {
+        RoundedPanel filterCard = new RoundedPanel(18, cardWhite);
+        filterCard.setLayout(new GridBagLayout());
+        filterCard.setBorder(new EmptyBorder(18, 18, 18, 18));
+
+        txtShiftKeyword = createTextField("Tìm theo tên hoặc mã nhân viên...");
+        txtShiftKeyword.setPreferredSize(new Dimension(220, 38));
+
+        txtShiftFilterDate = createTextField("yyyy-MM-dd");
+        txtShiftFilterDate.setPreferredSize(new Dimension(140, 38));
+
+        cbShiftEmployeeTypeFilter = new JComboBox<>(new String[]{
+            "Tất cả", "Nhân viên kho", "Nhân viên sale - thu ngân"
+        });
+        stylePlainCombo(cbShiftEmployeeTypeFilter);
+
+        cbShiftFilter = new JComboBox<>();
+        stylePlainCombo(cbShiftFilter);
+
+        cbShiftStatusFilter = new JComboBox<>(new String[]{
+            "Tất cả trạng thái", "ASSIGNED", "COMPLETED", "CANCELED"
+        });
+        stylePlainCombo(cbShiftStatusFilter);
+
+        btnApplyShiftFilter = createCustomButton("Lọc", primaryOrange, Color.WHITE, null);
+        btnResetShiftFilter = createCustomButton("Đặt lại", new Color(235, 239, 245), textDark, null);
+        btnApplyShiftFilter.setPreferredSize(new Dimension(86, 38));
+        btnResetShiftFilter.setPreferredSize(new Dimension(96, 38));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(0, 0, 6, 12);
+        gbc.weightx = 1.0;
+
+        addFilterField(filterCard, gbc, 0, "Tìm nhân viên", txtShiftKeyword);
+        addFilterField(filterCard, gbc, 1, "Ngày làm việc", txtShiftFilterDate);
+        addFilterField(filterCard, gbc, 2, "Loại nhân viên", cbShiftEmployeeTypeFilter);
+        addFilterField(filterCard, gbc, 3, "Ca làm việc", cbShiftFilter);
+        addFilterField(filterCard, gbc, 4, "Trạng thái", cbShiftStatusFilter);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 20));
+        buttonPanel.setOpaque(false);
+        buttonPanel.add(btnApplyShiftFilter);
+        buttonPanel.add(btnResetShiftFilter);
+        gbc.gridx = 5;
+        gbc.weightx = 0;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        filterCard.add(buttonPanel, gbc);
+
+        return filterCard;
+    }
+
+    private void addFilterField(JPanel parent, GridBagConstraints gbc, int x, String label, JComponent field) {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 6));
+        wrapper.setOpaque(false);
+        wrapper.add(createLabel(label), BorderLayout.NORTH);
+        wrapper.add(field, BorderLayout.CENTER);
+
+        gbc.gridx = x;
+        parent.add(wrapper, gbc);
+    }
+
+    private JPanel createShiftFormPanel() {
+        RoundedPanel card = new RoundedPanel(18, cardWhite);
+        card.setLayout(new GridBagLayout());
+        card.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        JLabel title = new JLabel("Tạo / Cập nhật phân ca");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        title.setForeground(textDark);
+
+        lblSelectedShiftEmployeeName = new JLabel("Chưa chọn nhân viên");
+        lblSelectedShiftEmployeeName.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblSelectedShiftEmployeeName.setForeground(textDark);
+        lblSelectedShiftEmployeeId = new JLabel("Mã nhân viên: —");
+        lblSelectedShiftEmployeeId.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblSelectedShiftEmployeeId.setForeground(new Color(107, 119, 140));
+        lblSelectedShiftEmployeeType = new JLabel("Loại nhân viên: —");
+        lblSelectedShiftEmployeeType.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblSelectedShiftEmployeeType.setForeground(new Color(107, 119, 140));
+
+        JPanel selectedPanel = new JPanel(new GridLayout(3, 1, 0, 3));
+        selectedPanel.setOpaque(false);
+        selectedPanel.add(lblSelectedShiftEmployeeName);
+        selectedPanel.add(lblSelectedShiftEmployeeId);
+        selectedPanel.add(lblSelectedShiftEmployeeType);
+
+        RoundedPanel selectedCard = new RoundedPanel(16, new Color(248, 250, 252));
+        selectedCard.setLayout(new BorderLayout(10, 0));
+        selectedCard.setBorder(new EmptyBorder(14, 14, 14, 14));
+        selectedCard.add(selectedPanel, BorderLayout.CENTER);
+
+        cbShiftEmployee = new JComboBox<>();
+        stylePlainCombo(cbShiftEmployee);
+
+        cbWorkShift = new JComboBox<>();
+        stylePlainCombo(cbWorkShift);
+
+        txtWorkDate = createTextField("yyyy-MM-dd");
+        txtWorkDate.setText(LocalDate.now().toString());
+
+        cbAssignmentStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
+        stylePlainCombo(cbAssignmentStatus);
+
+        txtAssignmentNote = new JTextArea(4, 18);
+        txtAssignmentNote.setLineWrap(true);
+        txtAssignmentNote.setWrapStyleWord(true);
+        txtAssignmentNote.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        txtAssignmentNote.setBorder(new EmptyBorder(8, 10, 8, 10));
+        JScrollPane noteScroll = new JScrollPane(txtAssignmentNote);
+        noteScroll.setBorder(new RoundBorder(borderGray, 8));
+
+        btnAddAssignment = createCustomButton("Thêm phân ca", primaryOrange, Color.WHITE, null);
+        btnUpdateAssignment = createCustomButton("Cập nhật", primaryBlue, Color.WHITE, null);
+        btnCancelAssignment = createCustomButton("Hủy phân ca", offlineRed, Color.WHITE, null);
+        btnClearAssignment = createCustomButton("Làm mới", new Color(148, 163, 184), Color.WHITE, null);
+
+        JPanel buttons = new JPanel(new GridLayout(2, 2, 10, 10));
+        buttons.setOpaque(false);
+        buttons.add(btnAddAssignment);
+        buttons.add(btnUpdateAssignment);
+        buttons.add(btnCancelAssignment);
+        buttons.add(btnClearAssignment);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        int y = 0;
+
+        card.add(title, addGbc(gbc, y++, 14));
+        card.add(selectedCard, addGbc(gbc, y++, 16));
+        card.add(createLabel("Nhân viên (*)"), addGbc(gbc, y++, 5));
+        card.add(cbShiftEmployee, addGbc(gbc, y++, 12));
+        card.add(createLabel("Ca làm việc (*)"), addGbc(gbc, y++, 5));
+        card.add(cbWorkShift, addGbc(gbc, y++, 12));
+        card.add(createLabel("Ngày làm việc (*)"), addGbc(gbc, y++, 5));
+        card.add(txtWorkDate, addGbc(gbc, y++, 12));
+        card.add(createLabel("Trạng thái (*)"), addGbc(gbc, y++, 5));
+        card.add(cbAssignmentStatus, addGbc(gbc, y++, 12));
+        card.add(createLabel("Ghi chú"), addGbc(gbc, y++, 5));
+        card.add(noteScroll, addGbc(gbc, y++, 16));
+        card.add(buttons, addGbc(gbc, y++, 0));
+
+        gbc.gridy = y;
+        gbc.weighty = 1.0;
+        card.add(Box.createVerticalGlue(), gbc);
+        return card;
+    }
+
+    private JPanel createShiftListPanel() {
+        RoundedPanel card = new RoundedPanel(18, cardWhite);
+        card.setLayout(new BorderLayout());
+        card.setBorder(new EmptyBorder(14, 14, 14, 14));
+
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        header.setOpaque(false);
+        JLabel title = new JLabel("Danh sách phân ca");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        title.setForeground(textDark);
+        header.add(title);
+
+        shiftTableModel = new DefaultTableModel(new Object[]{
+            "Mã phân ca", "Nhân viên", "Loại nhân viên", "Ngày làm việc",
+            "Tên ca", "Giờ bắt đầu", "Giờ kết thúc", "Trạng thái", "Ghi chú"
+        }, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tblShiftAssignments = new JTable(shiftTableModel) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getRowCount() == 0) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                    g2.setColor(textDark);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
+                    String line1 = "Chưa có phân ca nào";
+                    int x1 = (getWidth() - g2.getFontMetrics().stringWidth(line1)) / 2;
+                    int y1 = Math.max(70, getHeight() / 2 - 8);
+                    g2.drawString(line1, x1, y1);
+                    g2.setColor(new Color(107, 119, 140));
+                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                    String line2 = "Chọn nhân viên và thêm ca làm việc để bắt đầu.";
+                    int x2 = (getWidth() - g2.getFontMetrics().stringWidth(line2)) / 2;
+                    g2.drawString(line2, x2, y1 + 24);
+                    g2.dispose();
+                }
+            }
+        };
+        setupShiftTableStyle();
+
+        JScrollPane scrollPane = new JScrollPane(tblShiftAssignments);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(Color.WHITE);
+
+        card.add(header, BorderLayout.NORTH);
+        card.add(scrollPane, BorderLayout.CENTER);
+        return card;
+    }
+
+    private void stylePlainCombo(JComboBox<?> combo) {
+        combo.setPreferredSize(new Dimension(180, 38));
+        combo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        combo.setBackground(Color.WHITE);
+        combo.setBorder(new RoundBorder(borderGray, 8));
+    }
+
+    private void setupShiftTableStyle() {
+        tblShiftAssignments.setRowHeight(44);
+        tblShiftAssignments.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        tblShiftAssignments.setShowVerticalLines(true);
+        tblShiftAssignments.setShowHorizontalLines(true);
+        tblShiftAssignments.setGridColor(new Color(235, 239, 245));
+        tblShiftAssignments.setSelectionBackground(new Color(237, 242, 255));
+        tblShiftAssignments.setSelectionForeground(textDark);
+        tblShiftAssignments.getTableHeader().setReorderingAllowed(false);
+        tblShiftAssignments.setFillsViewportHeight(true);
+        tblShiftAssignments.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
+        headerRenderer.setBackground(new Color(248, 250, 252));
+        headerRenderer.setForeground(textDark);
+        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        headerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 6, 10, 6));
+
+        for (int i = 0; i < tblShiftAssignments.getColumnModel().getColumnCount(); i++) {
+            tblShiftAssignments.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
+            tblShiftAssignments.getColumnModel().getColumn(i).setCellRenderer(new ShiftAssignmentRenderer());
+        }
+
+        int[] widths = {105, 170, 160, 120, 100, 100, 100, 110, 220};
+        for (int i = 0; i < widths.length; i++) {
+            tblShiftAssignments.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
     }
 
     private void initEvents() {
@@ -732,6 +1058,375 @@ public class EmployeeView extends JPanel {
 
             updateTable(filtered);
         });
+
+        initShiftEvents();
+    }
+
+    private void initShiftEvents() {
+        if (cbShiftEmployee == null) {
+            return;
+        }
+
+        cbShiftEmployee.addActionListener(e -> updateSelectedShiftEmployeeCard());
+        btnApplyShiftFilter.addActionListener(e -> loadShiftAssignments());
+        btnResetShiftFilter.addActionListener(e -> {
+            txtShiftKeyword.setText("");
+            txtShiftFilterDate.setText("");
+            cbShiftEmployeeTypeFilter.setSelectedIndex(0);
+            cbShiftStatusFilter.setSelectedIndex(0);
+            if (cbShiftFilter.getItemCount() > 0) {
+                cbShiftFilter.setSelectedIndex(0);
+            }
+            loadShiftAssignments();
+        });
+
+        btnAddAssignment.addActionListener(e -> saveShiftAssignment(false));
+        btnUpdateAssignment.addActionListener(e -> saveShiftAssignment(true));
+        btnCancelAssignment.addActionListener(e -> cancelShiftAssignment());
+        btnClearAssignment.addActionListener(e -> {
+            clearShiftForm();
+            loadShiftComboboxData();
+            loadShiftAssignments();
+        });
+
+        tblShiftAssignments.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                int row = tblShiftAssignments.getSelectedRow();
+                if (row < 0) {
+                    return;
+                }
+                int modelRow = tblShiftAssignments.convertRowIndexToModel(row);
+                if (modelRow >= 0 && modelRow < currentShiftAssignments.size()) {
+                    fillShiftForm(currentShiftAssignments.get(modelRow));
+                }
+            }
+        });
+    }
+
+    private void loadShiftComboboxData() {
+        if (cbShiftEmployee == null || cbWorkShift == null) {
+            return;
+        }
+
+        Object selectedEmployee = cbShiftEmployee.getSelectedItem();
+        Object selectedWorkShift = cbWorkShift.getSelectedItem();
+        Object selectedFilterShift = cbShiftFilter.getSelectedItem();
+
+        assignableEmployees = employeeSql.getAllNhanVien(getCurrentUserRole());
+        cbShiftEmployee.removeAllItems();
+        for (Employee emp : assignableEmployees) {
+            if (isShiftAssignableRole(emp.getRoleId())) {
+                cbShiftEmployee.addItem(new EmployeeOption(emp));
+            }
+        }
+
+        shiftList = shiftSql.selectAll();
+        cbWorkShift.removeAllItems();
+        cbShiftFilter.removeAllItems();
+        cbShiftFilter.addItem(new ShiftOption(null, true));
+        for (Shift shift : shiftList) {
+            ShiftOption option = new ShiftOption(shift, false);
+            cbWorkShift.addItem(option);
+            cbShiftFilter.addItem(option);
+        }
+
+        restoreEmployeeSelection(selectedEmployee);
+        restoreShiftSelection(cbWorkShift, selectedWorkShift);
+        restoreShiftSelection(cbShiftFilter, selectedFilterShift);
+        if (cbShiftEmployee.getSelectedIndex() < 0 && cbShiftEmployee.getItemCount() > 0) {
+            cbShiftEmployee.setSelectedIndex(0);
+        }
+        updateSelectedShiftEmployeeCard();
+    }
+
+    private void loadShiftAssignments() {
+        if (shiftTableModel == null) {
+            return;
+        }
+
+        Date filterDate = parseOptionalSqlDate(txtShiftFilterDate != null ? txtShiftFilterDate.getText().trim() : "");
+        String employeeTypeFilter = getEmployeeTypeFilterCode();
+        ShiftOption filterShift = cbShiftFilter != null ? (ShiftOption) cbShiftFilter.getSelectedItem() : null;
+        String shiftId = filterShift != null && !filterShift.all ? filterShift.shift.getShiftId() : "";
+        String status = "";
+        if (cbShiftStatusFilter != null && cbShiftStatusFilter.getSelectedIndex() > 0) {
+            status = String.valueOf(cbShiftStatusFilter.getSelectedItem());
+        }
+
+        currentShiftAssignments = employeeShiftSql.selectAssignments(
+                txtShiftKeyword != null ? txtShiftKeyword.getText().trim() : "",
+                filterDate,
+                employeeTypeFilter,
+                shiftId,
+                status
+        );
+
+        shiftTableModel.setRowCount(0);
+        for (EmployeeShift item : currentShiftAssignments) {
+            shiftTableModel.addRow(new Object[]{
+                item.getAssignmentId(),
+                item.getEmployeeName() + " (" + item.getEmployeeId() + ")",
+                item.getEmployeeType(),
+                item.getWorkDate(),
+                item.getShiftName(),
+                item.getStartTimeText(),
+                item.getEndTimeText(),
+                item.getStatus(),
+                item.getNote() == null ? "" : item.getNote()
+            });
+        }
+        if (tblShiftAssignments != null) {
+            tblShiftAssignments.repaint();
+        }
+    }
+
+    private void saveShiftAssignment(boolean update) {
+        EmployeeShift item = getShiftAssignmentFromForm();
+        if (item == null) {
+            return;
+        }
+
+        if (update) {
+            if (selectedAssignmentId == null || selectedAssignmentId.isBlank()) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn một phân ca trong bảng để cập nhật.");
+                return;
+            }
+            item.setAssignmentId(selectedAssignmentId);
+        } else {
+            item.setAssignmentId("PC" + System.currentTimeMillis());
+        }
+
+        if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(), item.getWorkDate(),
+                update ? item.getAssignmentId() : null)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Nhân viên này đã có phân ca cùng ngày và cùng ca làm việc.",
+                    "Trùng phân ca",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        int rows = update ? employeeShiftSql.update(item) : employeeShiftSql.insert(item);
+        if (rows > 0) {
+            JOptionPane.showMessageDialog(this, update ? "Cập nhật phân ca thành công." : "Thêm phân ca thành công.");
+            clearShiftForm();
+            loadShiftAssignments();
+        } else {
+            JOptionPane.showMessageDialog(
+                    this,
+                    update ? "Cập nhật phân ca thất bại. Vui lòng kiểm tra database." : "Thêm phân ca thất bại. Vui lòng kiểm tra database.",
+                    "Lỗi database",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void cancelShiftAssignment() {
+        if (selectedAssignmentId == null || selectedAssignmentId.isBlank()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn một phân ca trong bảng để hủy.");
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Xác nhận hủy phân ca đang chọn?",
+                "Hủy phân ca",
+                JOptionPane.YES_NO_OPTION
+        );
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        if (employeeShiftSql.cancel(selectedAssignmentId) > 0) {
+            JOptionPane.showMessageDialog(this, "Đã chuyển phân ca sang trạng thái CANCELED.");
+            clearShiftForm();
+            loadShiftAssignments();
+        } else {
+            JOptionPane.showMessageDialog(this, "Hủy phân ca thất bại.", "Lỗi database", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private EmployeeShift getShiftAssignmentFromForm() {
+        EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
+        ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
+        Date workDate = parseRequiredSqlDate(txtWorkDate != null ? txtWorkDate.getText().trim() : "");
+
+        if (employeeOption == null) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên cần phân ca.");
+            return null;
+        }
+        if (shiftOption == null || shiftOption.all) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn ca làm việc.");
+            return null;
+        }
+        if (workDate == null) {
+            return null;
+        }
+
+        EmployeeShift item = new EmployeeShift();
+        item.setEmployeeId(employeeOption.employee.getEmployeeId());
+        item.setShiftId(shiftOption.shift.getShiftId());
+        item.setWorkDate(workDate);
+        item.setStatus(String.valueOf(cbAssignmentStatus.getSelectedItem()));
+        item.setNote(txtAssignmentNote.getText().trim());
+        return item;
+    }
+
+    private void fillShiftForm(EmployeeShift item) {
+        selectedAssignmentId = item.getAssignmentId();
+        selectEmployeeOption(item.getEmployeeId());
+        selectShiftOption(cbWorkShift, item.getShiftId());
+        txtWorkDate.setText(item.getWorkDate() == null ? "" : item.getWorkDate().toString());
+        cbAssignmentStatus.setSelectedItem(item.getStatus());
+        txtAssignmentNote.setText(item.getNote() == null ? "" : item.getNote());
+        updateSelectedShiftEmployeeCard();
+    }
+
+    private void clearShiftForm() {
+        selectedAssignmentId = "";
+        if (cbShiftEmployee != null) {
+            cbShiftEmployee.setSelectedIndex(cbShiftEmployee.getItemCount() > 0 ? 0 : -1);
+        }
+        if (cbWorkShift != null) {
+            cbWorkShift.setSelectedIndex(cbWorkShift.getItemCount() > 0 ? 0 : -1);
+        }
+        if (txtWorkDate != null) {
+            txtWorkDate.setText(LocalDate.now().toString());
+        }
+        if (cbAssignmentStatus != null) {
+            cbAssignmentStatus.setSelectedItem("ASSIGNED");
+        }
+        if (txtAssignmentNote != null) {
+            txtAssignmentNote.setText("");
+        }
+        if (tblShiftAssignments != null) {
+            tblShiftAssignments.clearSelection();
+        }
+        updateSelectedShiftEmployeeCard();
+    }
+
+    private void updateSelectedShiftEmployeeCard() {
+        if (lblSelectedShiftEmployeeName == null) {
+            return;
+        }
+        EmployeeOption option = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
+        if (option == null) {
+            lblSelectedShiftEmployeeName.setText("Chưa chọn nhân viên");
+            lblSelectedShiftEmployeeId.setText("Mã nhân viên: —");
+            lblSelectedShiftEmployeeType.setText("Loại nhân viên: —");
+            return;
+        }
+
+        Employee emp = option.employee;
+        lblSelectedShiftEmployeeName.setText(emp.getEmployeeName());
+        lblSelectedShiftEmployeeId.setText("Mã nhân viên: " + emp.getEmployeeId());
+        lblSelectedShiftEmployeeType.setText("Loại nhân viên: " + getEmployeeTypeLabel(emp.getRoleId()));
+    }
+
+    private Date parseRequiredSqlDate(String value) {
+        if (value == null || value.isBlank()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập ngày làm việc theo định dạng yyyy-MM-dd.");
+            return null;
+        }
+        try {
+            return Date.valueOf(LocalDate.parse(value.trim()));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ngày làm việc không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.",
+                    "Lỗi định dạng",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return null;
+        }
+    }
+
+    private Date parseOptionalSqlDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Date.valueOf(LocalDate.parse(value.trim()));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ngày lọc không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.",
+                    "Lỗi định dạng",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return null;
+        }
+    }
+
+    private boolean isShiftAssignableRole(String roleId) {
+        return "R_STAFF_SALE".equalsIgnoreCase(roleId)
+                || "R_STAFF_VIEW_PROD".equalsIgnoreCase(roleId)
+                || "R_STAFF_STOCK".equalsIgnoreCase(roleId);
+    }
+
+    private String getEmployeeTypeLabel(String roleId) {
+        if ("R_STAFF_VIEW_PROD".equalsIgnoreCase(roleId) || "R_STAFF_STOCK".equalsIgnoreCase(roleId)) {
+            return "Nhân viên kho";
+        }
+        return "Nhân viên sale / Thu ngân";
+    }
+
+    private String getEmployeeTypeFilterCode() {
+        if (cbShiftEmployeeTypeFilter == null) {
+            return "ALL";
+        }
+        int index = cbShiftEmployeeTypeFilter.getSelectedIndex();
+        if (index == 1) {
+            return "WAREHOUSE";
+        }
+        if (index == 2) {
+            return "SALE";
+        }
+        return "ALL";
+    }
+
+    private void restoreEmployeeSelection(Object previous) {
+        if (previous instanceof EmployeeOption option) {
+            selectEmployeeOption(option.employee.getEmployeeId());
+        }
+    }
+
+    private void restoreShiftSelection(JComboBox<ShiftOption> combo, Object previous) {
+        if (previous instanceof ShiftOption option && option.shift != null) {
+            selectShiftOption(combo, option.shift.getShiftId());
+        }
+    }
+
+    private void selectEmployeeOption(String employeeId) {
+        if (employeeId == null || cbShiftEmployee == null) {
+            return;
+        }
+        for (int i = 0; i < cbShiftEmployee.getItemCount(); i++) {
+            EmployeeOption option = cbShiftEmployee.getItemAt(i);
+            if (employeeId.equals(option.employee.getEmployeeId())) {
+                cbShiftEmployee.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private void selectShiftOption(JComboBox<ShiftOption> combo, String shiftId) {
+        if (shiftId == null || combo == null) {
+            return;
+        }
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            ShiftOption option = combo.getItemAt(i);
+            if (!option.all && option.shift != null && shiftId.equals(option.shift.getShiftId())) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private String formatShiftTime(java.util.Date value) {
+        return value == null ? "--:--" : shiftTimeFormat.format(value);
     }
 
     private Employee getEmployeeFromForm() {
@@ -1335,6 +2030,124 @@ public class EmployeeView extends JPanel {
             }
 
             return this;
+        }
+    }
+
+    class ShiftAssignmentRenderer extends DefaultTableCellRenderer {
+
+        private final Color zebraBg = new Color(249, 251, 253);
+        private final Color selectedBg = new Color(237, 242, 255);
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                boolean hasFocus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            int modelColumn = table.convertColumnIndexToModel(column);
+            setOpaque(true);
+            setBorder(new EmptyBorder(0, 10, 0, 10));
+            setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            setHorizontalAlignment(modelColumn == 8 ? JLabel.LEFT : JLabel.CENTER);
+            setBackground(isSelected ? selectedBg : (row % 2 == 0 ? Color.WHITE : zebraBg));
+            setForeground(textDark);
+            setText(value == null ? "" : value.toString());
+
+            if (modelColumn == 7) {
+                String status = value == null ? "" : value.toString();
+                setFont(new Font("Segoe UI", Font.BOLD, 12));
+                if ("ASSIGNED".equalsIgnoreCase(status)) {
+                    setForeground(successGreen);
+                } else if ("COMPLETED".equalsIgnoreCase(status)) {
+                    setForeground(primaryBlue);
+                } else if ("CANCELED".equalsIgnoreCase(status)) {
+                    setForeground(offlineRed);
+                }
+            }
+
+            return this;
+        }
+    }
+
+    class EmployeeOption {
+
+        private final Employee employee;
+
+        EmployeeOption(Employee employee) {
+            this.employee = employee;
+        }
+
+        @Override
+        public String toString() {
+            return employee.getEmployeeName() + " (" + employee.getEmployeeId() + ")";
+        }
+    }
+
+    class ShiftOption {
+
+        private final Shift shift;
+        private final boolean all;
+
+        ShiftOption(Shift shift, boolean all) {
+            this.shift = shift;
+            this.all = all;
+        }
+
+        @Override
+        public String toString() {
+            if (all) {
+                return "Tất cả ca";
+            }
+            return shift.getShiftName() + " (" + formatShiftTime(shift.getStartTime())
+                    + " - " + formatShiftTime(shift.getEndTime()) + ")";
+        }
+    }
+
+    static class UnderlineTabbedPaneUI extends javax.swing.plaf.basic.BasicTabbedPaneUI {
+
+        private final Color activeColor;
+        private final Color lineColor;
+
+        UnderlineTabbedPaneUI(Color activeColor, Color lineColor) {
+            this.activeColor = activeColor;
+            this.lineColor = lineColor;
+        }
+
+        @Override
+        protected void installDefaults() {
+            super.installDefaults();
+            tabAreaInsets = new Insets(0, 0, 0, 0);
+            selectedTabPadInsets = new Insets(0, 0, 0, 0);
+            tabInsets = new Insets(10, 18, 12, 18);
+        }
+
+        @Override
+        protected void paintTabBackground(Graphics g, int tabPlacement, int tabIndex,
+                int x, int y, int w, int h, boolean isSelected) {
+            g.setColor(Color.WHITE);
+            g.fillRect(x, y, w, h);
+        }
+
+        @Override
+        protected void paintContentBorder(Graphics g, int tabPlacement, int selectedIndex) {
+            g.setColor(lineColor);
+            g.drawLine(0, 0, tabPane.getWidth(), 0);
+        }
+
+        @Override
+        protected void paintFocusIndicator(Graphics g, int tabPlacement, Rectangle[] rects,
+                int tabIndex, Rectangle iconRect, Rectangle textRect, boolean isSelected) {
+        }
+
+        @Override
+        protected void paintTabBorder(Graphics g, int tabPlacement, int tabIndex,
+                int x, int y, int w, int h, boolean isSelected) {
+            if (isSelected) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setColor(activeColor);
+                g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(x + 14, y + h - 4, x + w - 14, y + h - 4);
+                g2.dispose();
+            }
         }
     }
 }
