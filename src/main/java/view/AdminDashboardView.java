@@ -16,24 +16,36 @@ public class AdminDashboardView extends javax.swing.JFrame {
         initComponents();
         setupAdminUI();
 
-        // Mặc định khi vào Admin là quản lý cửa hàng trưởng
-        showPanel(new view.ManagerManagementView());
+        // Sidebar mặc định đang active mục đầu tiên là "Quản lý chi nhánh",
+        // nên nội dung mặc định cũng phải là màn hình Quản lý chi nhánh.
+        showPanel(new view.StoreManagementPanel());
+
+        // Đảm bảo JFrame được phóng to sau khi toàn bộ component đã add xong.
+        SwingUtilities.invokeLater(() -> setExtendedState(JFrame.MAXIMIZED_BOTH));
     }
 
     private void setupAdminUI() {
         this.setTitle("SMART SUPERMARKET - CENTRAL ADMIN PORTAL");
         this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        this.setResizable(true);
+        this.setMinimumSize(new Dimension(1100, 700));
+
         this.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowOpened(java.awt.event.WindowEvent e) {
+                setExtendedState(JFrame.MAXIMIZED_BOTH);
+            }
+
+            @Override
+            public void windowActivated(java.awt.event.WindowEvent e) {
+                setExtendedState(JFrame.MAXIMIZED_BOTH);
+            }
+
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
                 handleCloseApp();
             }
         });
-
-        // BẢO VỆ LỚP 1: Luôn mở Full màn hình và khóa mốc thu nhỏ tối thiểu
-        this.setExtendedState(MAXIMIZED_BOTH);
-        this.setMinimumSize(new Dimension(1100, 700));
-        this.setLocationRelativeTo(null);
 
         // Khởi tạo Sidebar Admin
         adminSidebar = new AdminSidebar();
@@ -72,12 +84,19 @@ public class AdminDashboardView extends javax.swing.JFrame {
         });
 
         // Thiết lập Layout chính
+        this.getContentPane().removeAll();
         this.getContentPane().setLayout(new BorderLayout());
         this.getContentPane().add(adminSidebar, BorderLayout.WEST);
 
         mainContentPanel = new JPanel(new BorderLayout());
         mainContentPanel.setBackground(bgAdmin);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);
+
+        // Sau khi add đủ sidebar + content container thì pack lại,
+        // rồi mới set maximize để tránh bị giữ kích thước 400x300 từ initComponents().
+        pack();
+        setLocationRelativeTo(null);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
     }
 
     public void showPanel(JPanel panel) {
@@ -86,7 +105,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
         JPanel panelToDisplay = panel;
 
         // ========================================================
-        // LOGIC MIỄN TRỪ (BYPASS): 
+        // LOGIC MIỄN TRỪ (BYPASS):
         // Bỏ qua Lính gác đối với các trang Tổng quan và Cài đặt cá nhân
         // ========================================================
         boolean isBypassed = (panel instanceof view.components.TongQuanPanel)
