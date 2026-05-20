@@ -522,17 +522,17 @@ public class EmployeeView extends JPanel {
         lblSelectedShiftEmployeeName = new JLabel("Chưa chọn nhân viên");
         lblSelectedShiftEmployeeName.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblSelectedShiftEmployeeName.setForeground(textDark);
-        lblSelectedShiftEmployeeId = new JLabel("Mã nhân viên: —");
+        lblSelectedShiftEmployeeId = new JLabel("");
         lblSelectedShiftEmployeeId.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSelectedShiftEmployeeId.setForeground(new Color(107, 119, 140));
+        lblSelectedShiftEmployeeId.setVisible(false);
         lblSelectedShiftEmployeeType = new JLabel("Loại nhân viên: —");
         lblSelectedShiftEmployeeType.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSelectedShiftEmployeeType.setForeground(new Color(107, 119, 140));
 
-        JPanel selectedPanel = new JPanel(new GridLayout(3, 1, 0, 3));
+        JPanel selectedPanel = new JPanel(new GridLayout(2, 1, 0, 3));
         selectedPanel.setOpaque(false);
         selectedPanel.add(lblSelectedShiftEmployeeName);
-        selectedPanel.add(lblSelectedShiftEmployeeId);
         selectedPanel.add(lblSelectedShiftEmployeeType);
 
         RoundedPanel selectedCard = new RoundedPanel(16, new Color(248, 250, 252));
@@ -1166,7 +1166,7 @@ public class EmployeeView extends JPanel {
         for (EmployeeShift item : currentShiftAssignments) {
             shiftTableModel.addRow(new Object[]{
                 item.getAssignmentId(),
-                item.getEmployeeName() + " (" + item.getEmployeeId() + ")",
+                item.getEmployeeName(),
                 item.getEmployeeType(),
                 item.getWorkDate(),
                 item.getShiftName(),
@@ -1314,14 +1314,14 @@ public class EmployeeView extends JPanel {
         EmployeeOption option = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
         if (option == null) {
             lblSelectedShiftEmployeeName.setText("Chưa chọn nhân viên");
-            lblSelectedShiftEmployeeId.setText("Mã nhân viên: —");
+            lblSelectedShiftEmployeeId.setText("");
             lblSelectedShiftEmployeeType.setText("Loại nhân viên: —");
             return;
         }
 
         Employee emp = option.employee;
         lblSelectedShiftEmployeeName.setText(emp.getEmployeeName());
-        lblSelectedShiftEmployeeId.setText("Mã nhân viên: " + emp.getEmployeeId());
+        lblSelectedShiftEmployeeId.setText("");
         lblSelectedShiftEmployeeType.setText("Loại nhân viên: " + getEmployeeTypeLabel(emp.getRoleId()));
     }
 
@@ -2078,7 +2078,7 @@ public class EmployeeView extends JPanel {
 
         @Override
         public String toString() {
-            return employee.getEmployeeName() + " (" + employee.getEmployeeId() + ")";
+            return employee.getEmployeeName();
         }
     }
 
