@@ -73,6 +73,49 @@ public class InventoryTransactionSql {
         public BigDecimal afterTax;
     }
 
+    public static class PurchaseReceiptInputLine {
+
+        public String productId;
+        public int quantity;
+        public BigDecimal unitImportPrice;
+        public BigDecimal vatRate;
+
+        public PurchaseReceiptInputLine(String productId, int quantity,
+                BigDecimal unitImportPrice, BigDecimal vatRate) {
+            this.productId = productId;
+            this.quantity = quantity;
+            this.unitImportPrice = unitImportPrice;
+            this.vatRate = vatRate;
+        }
+    }
+
+    private static class PreparedLine {
+
+        private final Product product;
+        private final int quantity;
+        private final String unit;
+        private final BigDecimal unitImportPrice;
+        private final BigDecimal salePrice;
+        private final BigDecimal vatRate;
+        private final BigDecimal beforeTax;
+        private final BigDecimal taxAmount;
+        private final BigDecimal afterTax;
+
+        PreparedLine(Product product, int quantity, String unit,
+                BigDecimal unitImportPrice, BigDecimal salePrice, BigDecimal vatRate,
+                BigDecimal beforeTax, BigDecimal taxAmount, BigDecimal afterTax) {
+            this.product = product;
+            this.quantity = quantity;
+            this.unit = unit;
+            this.unitImportPrice = unitImportPrice;
+            this.salePrice = salePrice;
+            this.vatRate = vatRate;
+            this.beforeTax = beforeTax;
+            this.taxAmount = taxAmount;
+            this.afterTax = afterTax;
+        }
+    }
+
     /**
      * Tạo phiếu nhập cho 1 sản phẩm.
      *
@@ -325,6 +368,209 @@ public class InventoryTransactionSql {
      * Xuất/hủy kho và ghi lịch sử biến động. Hiện tại nếu bạn đã bỏ nút
      * Xuất/Hủy khỏi UI thì hàm này vẫn giữ lại để sau này dùng.
      */
+    public String createPurchaseReceiptAndIncreaseStock(
+            List<PurchaseReceiptInputLine> lines,
+            String supplierId,
+            String note
+    ) {
+        if (lines == null || lines.isEmpty()) {
+            throw new IllegalArgumentException("Phieu nhap phai co it nhat 1 san pham.");
+        }
+
+        String storeId = currentStoreIdOrDefault();
+        List<PreparedLine> preparedLines = new ArrayList<>();
+        BigDecimal totalBeforeTax = BigDecimal.ZERO;
+        BigDecimal totalTax = BigDecimal.ZERO;
+        BigDecimal totalAfterTax = BigDecimal.ZERO;
+
+        for (PurchaseReceiptInputLine line : lines) {
+            PreparedLine preparedLine = prepareLine(line, storeId);
+            preparedLines.add(preparedLine);
+            totalBeforeTax = totalBeforeTax.add(preparedLine.beforeTax);
+            totalTax = totalTax.add(preparedLine.taxAmount);
+            totalAfterTax = totalAfterTax.add(preparedLine.afterTax);
+        }
+
+        String receiptId = "PN" + System.currentTimeMillis();
+        String cleanSupplierId = emptyToDefault(supplierId, "SUP_01");
+        String createdBy = getCurrentAccountId();
+        String cleanNote = note == null ? "" : note.trim();
+
+        String sqlReceipt = """
+            INSERT INTO PURCHASE_RECEIPTS
+            (
+                receipt_id,
+                supplier_id,
+                store_id,
+                created_by,
+                note,
+                total_before_tax,
+                total_tax,
+                total_after_tax,
+                created_at,
+                updated_at,
+                is_deleted
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?,
+                ?, ?, ?,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP,
+                0
+            )
+        """;
+
+        String sqlDetail = """
+            INSERT INTO PURCHASE_RECEIPT_DETAILS
+            (
+                receipt_detail_id,
+                receipt_id,
+                product_id,
+                quantity,
+                unit,
+                unit_import_price,
+                sale_price,
+                vat_rate,
+                line_before_tax,
+                line_tax,
+                line_after_tax,
+                created_at,
+                updated_at,
+                is_deleted
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP,
+                0
+            )
+        """;
+
+        String sqlTransaction = """
+            INSERT INTO INVENTORY_TRANSACTIONS
+            (
+                transaction_id,
+                receipt_id,
+                product_id,
+                transaction_type,
+                quantity,
+                unit,
+                store_id,
+                unit_import_price,
+                sale_price,
+                vat_rate,
+                vat_amount,
+                total_amount,
+                note,
+                created_by,
+                created_at,
+                updated_at,
+                is_deleted
+            )
+            VALUES
+            (
+                ?, ?, ?, 'INBOUND',
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP,
+                0
+            )
+        """;
+
+        String sqlUpdateProductSupplier = """
+            UPDATE PRODUCTS
+            SET supplier_id = ?
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection()) {
+            con.setAutoCommit(false);
+
+            try (
+                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt);
+                    PreparedStatement psDetail = con.prepareStatement(sqlDetail);
+                    PreparedStatement psTransaction = con.prepareStatement(sqlTransaction);
+                    PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier)) {
+                psReceipt.setString(1, receiptId);
+                psReceipt.setString(2, cleanSupplierId);
+                psReceipt.setString(3, storeId);
+                psReceipt.setString(4, createdBy);
+                psReceipt.setString(5, cleanNote);
+                psReceipt.setBigDecimal(6, totalBeforeTax.setScale(2, RoundingMode.HALF_UP));
+                psReceipt.setBigDecimal(7, totalTax.setScale(2, RoundingMode.HALF_UP));
+                psReceipt.setBigDecimal(8, totalAfterTax.setScale(2, RoundingMode.HALF_UP));
+                psReceipt.executeUpdate();
+
+                int index = 0;
+                for (PreparedLine line : preparedLines) {
+                    index++;
+                    String suffix = System.nanoTime() + "_" + index;
+
+                    psDetail.setString(1, "PND" + suffix);
+                    psDetail.setString(2, receiptId);
+                    psDetail.setString(3, line.product.getProductId());
+                    psDetail.setInt(4, line.quantity);
+                    psDetail.setString(5, line.unit);
+                    psDetail.setBigDecimal(6, line.unitImportPrice);
+                    psDetail.setBigDecimal(7, line.salePrice);
+                    psDetail.setBigDecimal(8, line.vatRate);
+                    psDetail.setBigDecimal(9, line.beforeTax);
+                    psDetail.setBigDecimal(10, line.taxAmount);
+                    psDetail.setBigDecimal(11, line.afterTax);
+                    psDetail.executeUpdate();
+
+                    ProductsSql.getInstance().addStockWithConn(
+                            con,
+                            line.product.getProductId(),
+                            line.quantity,
+                            null,
+                            storeId
+                    );
+
+                    psTransaction.setString(1, "IVT" + suffix);
+                    psTransaction.setString(2, receiptId);
+                    psTransaction.setString(3, line.product.getProductId());
+                    psTransaction.setInt(4, line.quantity);
+                    psTransaction.setString(5, line.unit);
+                    psTransaction.setString(6, storeId);
+                    psTransaction.setBigDecimal(7, line.unitImportPrice);
+                    psTransaction.setBigDecimal(8, line.salePrice);
+                    psTransaction.setBigDecimal(9, line.vatRate);
+                    psTransaction.setBigDecimal(10, line.taxAmount);
+                    psTransaction.setBigDecimal(11, line.afterTax);
+                    psTransaction.setString(12, cleanNote);
+                    psTransaction.setString(13, createdBy);
+                    psTransaction.executeUpdate();
+
+                    psUpdateProductSupplier.setString(1, cleanSupplierId);
+                    psUpdateProductSupplier.setString(2, line.product.getProductId());
+                    psUpdateProductSupplier.addBatch();
+                }
+
+                psUpdateProductSupplier.executeBatch();
+
+                con.commit();
+                return receiptId;
+
+            } catch (Exception e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(true);
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Khong the tao phieu nhap: " + e.getMessage(), e);
+        }
+    }
+
     public boolean createOutboundTransaction(String productId, int quantity, String note) {
         if (productId == null || productId.trim().isEmpty() || quantity <= 0) {
             return false;
@@ -613,6 +859,84 @@ public class InventoryTransactionSql {
         }
 
         return list;
+    }
+
+    private PreparedLine prepareLine(PurchaseReceiptInputLine line, String storeId) {
+        if (line == null || line.productId == null || line.productId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Ma san pham khong hop le.");
+        }
+
+        if (line.quantity <= 0) {
+            throw new IllegalArgumentException("So luong nhap phai lon hon 0.");
+        }
+
+        if (line.unitImportPrice == null || line.unitImportPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Gia nhap chua VAT phai lon hon 0.");
+        }
+
+        Product product = ProductsSql.getInstance().findByIdInStore(line.productId, storeId);
+        if (product == null) {
+            product = ProductsSql.getInstance().findById(line.productId);
+        }
+
+        if (product == null) {
+            throw new IllegalArgumentException("Khong tim thay san pham: " + line.productId);
+        }
+
+        BigDecimal salePrice = product.getBasePrice();
+        if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("San pham chua co gia ban hop le: " + product.getProductName());
+        }
+
+        BigDecimal unitImportPrice = line.unitImportPrice.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal vatRate = line.vatRate == null ? BigDecimal.ZERO : line.vatRate.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal unitImportAfterVat = calculateImportPriceAfterVat(unitImportPrice, vatRate);
+
+        if (unitImportAfterVat.compareTo(salePrice) >= 0) {
+            throw new IllegalArgumentException(
+                    "Gia nhap sau VAT phai nho hon gia ban.\n\n"
+                    + "San pham: " + product.getProductName() + "\n"
+                    + "Gia nhap chua VAT: " + money(unitImportPrice) + " VND\n"
+                    + "VAT: " + vatRate.stripTrailingZeros().toPlainString() + "%\n"
+                    + "Gia nhap sau VAT: " + money(unitImportAfterVat) + " VND\n"
+                    + "Gia ban hien tai: " + money(salePrice) + " VND"
+            );
+        }
+
+        BigDecimal beforeTax = unitImportPrice
+                .multiply(BigDecimal.valueOf(line.quantity))
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = beforeTax
+                .multiply(vatRate)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal afterTax = beforeTax.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        String unit = product.getUnit() == null || product.getUnit().trim().isEmpty()
+                ? "Cai"
+                : product.getUnit().trim();
+
+        return new PreparedLine(
+                product,
+                line.quantity,
+                unit,
+                unitImportPrice,
+                salePrice,
+                vatRate,
+                beforeTax,
+                taxAmount,
+                afterTax
+        );
+    }
+
+    private String currentStoreIdOrDefault() {
+        try {
+            String storeId = business.service.SessionManager.getCurrentStoreId();
+            if (storeId != null && !storeId.trim().isEmpty()) {
+                return storeId.trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return "ST01";
     }
 
     private BigDecimal calculateImportPriceAfterVat(BigDecimal importPriceBeforeVat, BigDecimal vatRate) {
