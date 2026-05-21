@@ -24,6 +24,8 @@ public class StoreManagementPanel extends JPanel {
     private final Color blue = new Color(37, 99, 235);
     private final Color green = new Color(16, 185, 129);
     private final Color red = new Color(239, 68, 68);
+    private final Color orange = new Color(245, 158, 11);
+    private final Color grayBtn = new Color(148, 163, 184);
 
     private JTable tblStores;
     private DefaultTableModel tableModel;
@@ -138,15 +140,15 @@ public class StoreManagementPanel extends JPanel {
         search.setOpaque(false);
         txtSearch = field("Tìm kiếm chi nhánh...");
         txtSearch.setPreferredSize(new Dimension(285, 40));
-        JButton btnSearch = button("Tìm", blue, Color.WHITE);
-        btnSearch.setPreferredSize(new Dimension(86, 40));
+        JButton btnSearch = button("⌕  Tìm", blue, Color.WHITE);
+        btnSearch.setPreferredSize(new Dimension(92, 40));
         btnSearch.addActionListener(e -> loadStoreData(txtSearch.getText().trim()));
         search.add(txtSearch);
         search.add(btnSearch);
         bar.add(title, BorderLayout.WEST);
         bar.add(search, BorderLayout.EAST);
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã Cửa Hàng", "Tên Siêu Thị", "Trạng Thái"}, 0) {
+        tableModel = new DefaultTableModel(new Object[]{"Mã Cửa Hàng", "Tên Siêu Thị", "Số Điện Thoại", "Địa Chỉ", "Trạng Thái"}, 0) {
             @Override
             public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -202,17 +204,17 @@ public class StoreManagementPanel extends JPanel {
         cbTrangThai.setPreferredSize(new Dimension(0, 42));
         g.gridy = y; g.insets = new Insets(0, 0, 12, 0); form.add(cbTrangThai, g);
 
-        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 10));
+        JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
-        JButton btnAddFromForm = button("+ Thêm Siêu Thị", green, Color.WHITE);
-        btnSave = button("Cập nhật", blue, Color.WHITE);
-        btnClear = button("Làm Mới", new Color(235, 238, 244), text);
-        btnSoftDelete = button("Xóa", red, Color.WHITE);
+        JButton btnAddFromForm = button("⊕  Thêm", blue, Color.WHITE);
+        btnSave = button("✎  Cập nhật", orange, Color.WHITE);
+        btnSoftDelete = button("🗑  Xóa", red, Color.WHITE);
+        btnClear = button("↻  Làm mới", grayBtn, Color.WHITE);
         btnAddFromForm.addActionListener(e -> prepareAddNewStore());
         actions.add(btnAddFromForm);
         actions.add(btnSave);
-        actions.add(btnClear);
         actions.add(btnSoftDelete);
+        actions.add(btnClear);
         card.add(header, BorderLayout.NORTH);
         card.add(form, BorderLayout.CENTER);
         card.add(actions, BorderLayout.SOUTH);
@@ -268,10 +270,12 @@ public class StoreManagementPanel extends JPanel {
             }
         };
         for (int i = 0; i < tblStores.getColumnCount(); i++) { tblStores.getColumnModel().getColumn(i).setHeaderRenderer(header); tblStores.getColumnModel().getColumn(i).setCellRenderer(body); }
-        tblStores.getColumnModel().getColumn(0).setPreferredWidth(130);
-        tblStores.getColumnModel().getColumn(1).setPreferredWidth(360);
-        tblStores.getColumnModel().getColumn(2).setPreferredWidth(150);
-        tblStores.getColumnModel().getColumn(2).setCellRenderer(status);
+        tblStores.getColumnModel().getColumn(0).setPreferredWidth(120);
+        tblStores.getColumnModel().getColumn(1).setPreferredWidth(240);
+        tblStores.getColumnModel().getColumn(2).setPreferredWidth(140);
+        tblStores.getColumnModel().getColumn(3).setPreferredWidth(320);
+        tblStores.getColumnModel().getColumn(4).setPreferredWidth(120);
+        tblStores.getColumnModel().getColumn(4).setCellRenderer(status);
     }
 
     private void initEvents() {
@@ -327,7 +331,7 @@ public class StoreManagementPanel extends JPanel {
     private void loadStoreData(String keyword) {
         tableModel.setRowCount(0); refreshStoreSchemaFlags();
         String name = nameExpr(), stat = statusExpr();
-        String sql = "SELECT store_id, " + name + " display_name, " + stat + " display_status, NVL(is_deleted,0) deleted_flag FROM STORES WHERE LOWER(store_id) LIKE LOWER(?) OR LOWER(" + name + ") LIKE LOWER(?) OR LOWER(NVL(address,'')) LIKE LOWER(?) OR LOWER(NVL(phone_number,'')) LIKE LOWER(?) ORDER BY store_id";
+        String sql = "SELECT store_id, " + name + " display_name, NVL(phone_number,'') phone_number, NVL(address,'') address, " + stat + " display_status, NVL(is_deleted,0) deleted_flag FROM STORES WHERE LOWER(store_id) LIKE LOWER(?) OR LOWER(" + name + ") LIKE LOWER(?) OR LOWER(NVL(address,'')) LIKE LOWER(?) OR LOWER(NVL(phone_number,'')) LIKE LOWER(?) ORDER BY store_id";
         int total = 0, active = 0, inactive = 0;
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             String kw = "%" + (keyword == null ? "" : keyword) + "%"; for (int i = 1; i <= 4; i++) ps.setString(i, kw);
@@ -335,9 +339,11 @@ public class StoreManagementPanel extends JPanel {
                 while (rs.next()) {
                     String id = safe(rs.getString("store_id"));
                     String display = safe(rs.getString("display_name"));
+                    String phone = safe(rs.getString("phone_number"));
+                    String address = safe(rs.getString("address"));
                     String status = normalizeStatus(rs.getString("display_status"), rs.getInt("deleted_flag"));
                     total++; if (INACTIVE.equals(status)) inactive++; else active++;
-                    tableModel.addRow(new Object[]{id, display.isEmpty() ? id : display, status});
+                    tableModel.addRow(new Object[]{id, display.isEmpty() ? id : display, phone, address, status});
                 }
             }
         } catch (Exception e) { System.err.println("Lỗi tải danh sách chi nhánh: " + e.getMessage()); }
