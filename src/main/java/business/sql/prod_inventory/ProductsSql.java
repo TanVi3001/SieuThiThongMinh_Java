@@ -134,9 +134,7 @@ public class ProductsSql {
             ORDER BY p.product_id, i.store_id
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 list.add(mapProduct(rs));
             }
@@ -148,37 +146,63 @@ public class ProductsSql {
 
     public List<Product> selectAllByStore(String storeId) {
         List<Product> list = new ArrayList<>();
-        String sql = """
-            SELECT p.product_id, p.product_name,
-                   NVL(sp.selling_price, p.base_price) AS effective_price,
-                   p.base_price,
-                   p.category_id, p.supplier_id, p.image_path,
-                   i.store_id, NVL(i.quantity, 0) AS quantity, i.unit, i.last_updated
-            FROM INVENTORY i
-            JOIN PRODUCTS p
-                ON p.product_id = i.product_id
-            LEFT JOIN STORE_PRODUCTS sp
-                ON sp.product_id = p.product_id
-               AND sp.store_id = i.store_id
-               AND NVL(sp.is_deleted, 0) = 0
-            WHERE i.store_id = ?
-              AND NVL(i.is_deleted, 0) = 0
-              AND NVL(p.is_deleted, 0) = 0
-              AND NVL(sp.is_active, 1) = 1
-            ORDER BY p.product_id
-        """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        StringBuilder sql = new StringBuilder("""
+        SELECT p.product_id,
+               p.product_name,
+               NVL(sp.selling_price, p.base_price) AS effective_price,
+               p.base_price,
+               p.category_id,
+               p.supplier_id,
+               p.image_path,
+               i.store_id,
+               NVL(i.quantity, 0) AS quantity,
+               i.unit,
+               i.last_updated
+        FROM INVENTORY i
+        JOIN PRODUCTS p
+            ON p.product_id = i.product_id
+        LEFT JOIN STORE_PRODUCTS sp
+            ON sp.product_id = p.product_id
+           AND sp.store_id = i.store_id
+           AND NVL(sp.is_deleted, 0) = 0
+        WHERE i.store_id = ?
+          AND NVL(i.is_deleted, 0) = 0
+          AND NVL(p.is_deleted, 0) = 0
+          AND NVL(sp.is_active, 1) = 1
+    """);
+
+        if (requireImportedStockForStoreView()) {
+            sql.append("""
+          AND EXISTS (
+                SELECT 1
+                FROM PURCHASE_RECEIPTS pr
+                JOIN PURCHASE_RECEIPT_DETAILS prd
+                    ON pr.receipt_id = prd.receipt_id
+                WHERE pr.store_id = i.store_id
+                  AND prd.product_id = i.product_id
+                  AND NVL(pr.is_deleted, 0) = 0
+                  AND NVL(prd.is_deleted, 0) = 0
+          )
+        """);
+        }
+
+        sql.append(" ORDER BY p.product_id ");
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             ps.setString(1, cleanStoreId(storeId));
+
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapProduct(rs));
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
+
         return list;
     }
 
@@ -201,8 +225,7 @@ public class ProductsSql {
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
-            try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
-                 PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
+            try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
 
                 String storeId = safeStoreId(p);
                 if (isBlank(p.getProductId()) || isBlank(p.getProductName())
@@ -296,8 +319,7 @@ public class ProductsSql {
                 }
             }
 
-            try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
-                 PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
+            try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
 
                 String storeId = safeStoreId(p);
 
@@ -359,9 +381,7 @@ public class ProductsSql {
             try {
                 int affected;
                 if (admin || storeId == null || storeId.isBlank()) {
-                    try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
-                         PreparedStatement psInv = con.prepareStatement(sqlInvAll);
-                         PreparedStatement psSp = con.prepareStatement(sqlStoreProductAll)) {
+                    try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInvAll); PreparedStatement psSp = con.prepareStatement(sqlStoreProductAll)) {
                         psProd.setString(1, cleanId);
                         affected = psProd.executeUpdate();
                         psInv.setString(1, cleanId);
@@ -373,8 +393,7 @@ public class ProductsSql {
                         logAuditWithConn(con, "DELETE_PRODUCT", "PRODUCT", cleanId, "is_deleted=0", "is_deleted=1", "Xoa mem san pham toan he thong");
                     }
                 } else {
-                    try (PreparedStatement psInv = con.prepareStatement(sqlInvStore);
-                         PreparedStatement psSp = con.prepareStatement(sqlStoreProductStore)) {
+                    try (PreparedStatement psInv = con.prepareStatement(sqlInvStore); PreparedStatement psSp = con.prepareStatement(sqlStoreProductStore)) {
                         psInv.setString(1, cleanId);
                         psInv.setString(2, storeId);
                         affected = psInv.executeUpdate();
@@ -456,37 +475,65 @@ public class ProductsSql {
 
     public List<Product> searchByNameInStore(String name, String storeId) {
         List<Product> list = new ArrayList<>();
-        String sql = """
-            SELECT p.product_id, p.product_name,
-                   NVL(sp.selling_price, p.base_price) AS effective_price,
-                   p.base_price,
-                   p.category_id, p.supplier_id, p.image_path,
-                   i.store_id, i.quantity, i.unit, i.last_updated
-            FROM INVENTORY i
-            JOIN PRODUCTS p ON p.product_id = i.product_id
-            LEFT JOIN STORE_PRODUCTS sp
-                ON sp.product_id = p.product_id
-               AND sp.store_id = i.store_id
-               AND NVL(sp.is_deleted, 0) = 0
-            WHERE i.store_id = ?
-              AND NVL(i.is_deleted, 0) = 0
-              AND NVL(p.is_deleted, 0) = 0
-              AND NVL(sp.is_active, 1) = 1
-              AND LOWER(p.product_name) LIKE LOWER(?)
-            ORDER BY p.product_id
-        """;
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        StringBuilder sql = new StringBuilder("""
+        SELECT p.product_id,
+               p.product_name,
+               NVL(sp.selling_price, p.base_price) AS effective_price,
+               p.base_price,
+               p.category_id,
+               p.supplier_id,
+               p.image_path,
+               i.store_id,
+               i.quantity,
+               i.unit,
+               i.last_updated
+        FROM INVENTORY i
+        JOIN PRODUCTS p
+            ON p.product_id = i.product_id
+        LEFT JOIN STORE_PRODUCTS sp
+            ON sp.product_id = p.product_id
+           AND sp.store_id = i.store_id
+           AND NVL(sp.is_deleted, 0) = 0
+        WHERE i.store_id = ?
+          AND NVL(i.is_deleted, 0) = 0
+          AND NVL(p.is_deleted, 0) = 0
+          AND NVL(sp.is_active, 1) = 1
+          AND LOWER(p.product_name) LIKE LOWER(?)
+    """);
+
+        if (requireImportedStockForStoreView()) {
+            sql.append("""
+          AND EXISTS (
+                SELECT 1
+                FROM PURCHASE_RECEIPTS pr
+                JOIN PURCHASE_RECEIPT_DETAILS prd
+                    ON pr.receipt_id = prd.receipt_id
+                WHERE pr.store_id = i.store_id
+                  AND prd.product_id = i.product_id
+                  AND NVL(pr.is_deleted, 0) = 0
+                  AND NVL(prd.is_deleted, 0) = 0
+          )
+        """);
+        }
+
+        sql.append(" ORDER BY p.product_id ");
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             ps.setString(1, cleanStoreId(storeId));
             ps.setString(2, "%" + name + "%");
+
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapProduct(rs));
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
+
         return list;
     }
 
@@ -554,35 +601,62 @@ public class ProductsSql {
     }
 
     public Product findByIdInStore(String productId, String storeId) {
-        String sql = """
-            SELECT p.product_id, p.product_name,
-                   NVL(sp.selling_price, p.base_price) AS effective_price,
-                   p.base_price,
-                   p.category_id, p.supplier_id, p.image_path,
-                   i.store_id, i.quantity, i.unit, i.last_updated
-            FROM INVENTORY i
-            JOIN PRODUCTS p ON p.product_id = i.product_id
-            LEFT JOIN STORE_PRODUCTS sp
-                ON sp.product_id = p.product_id
-               AND sp.store_id = i.store_id
-               AND NVL(sp.is_deleted, 0) = 0
-            WHERE NVL(p.is_deleted, 0) = 0
-              AND NVL(i.is_deleted, 0) = 0
-              AND NVL(sp.is_active, 1) = 1
-              AND p.product_id = ?
-              AND i.store_id = ?
-        """;
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        StringBuilder sql = new StringBuilder("""
+        SELECT p.product_id,
+               p.product_name,
+               NVL(sp.selling_price, p.base_price) AS effective_price,
+               p.base_price,
+               p.category_id,
+               p.supplier_id,
+               p.image_path,
+               i.store_id,
+               i.quantity,
+               i.unit,
+               i.last_updated
+        FROM INVENTORY i
+        JOIN PRODUCTS p
+            ON p.product_id = i.product_id
+        LEFT JOIN STORE_PRODUCTS sp
+            ON sp.product_id = p.product_id
+           AND sp.store_id = i.store_id
+           AND NVL(sp.is_deleted, 0) = 0
+        WHERE NVL(p.is_deleted, 0) = 0
+          AND NVL(i.is_deleted, 0) = 0
+          AND NVL(sp.is_active, 1) = 1
+          AND p.product_id = ?
+          AND i.store_id = ?
+    """);
+
+        if (requireImportedStockForStoreView()) {
+            sql.append("""
+          AND EXISTS (
+                SELECT 1
+                FROM PURCHASE_RECEIPTS pr
+                JOIN PURCHASE_RECEIPT_DETAILS prd
+                    ON pr.receipt_id = prd.receipt_id
+                WHERE pr.store_id = i.store_id
+                  AND prd.product_id = i.product_id
+                  AND NVL(pr.is_deleted, 0) = 0
+                  AND NVL(prd.is_deleted, 0) = 0
+          )
+        """);
+        }
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             ps.setString(1, productId.trim());
             ps.setString(2, cleanStoreId(storeId));
+
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return mapProduct(rs);
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
+
         return null;
     }
 
@@ -701,9 +775,7 @@ public class ProductsSql {
             WHERE REGEXP_LIKE(product_id, '^SP[0-9]+$')
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
                 int nextNum = rs.getInt("next_num");
                 return String.format("SP%07d", nextNum);
@@ -799,7 +871,13 @@ public class ProductsSql {
     }
 
     private String cleanStoreId(String storeId) {
-        return storeId == null || storeId.trim().isEmpty() ? "ST001" : storeId.trim();
+        if (storeId == null || storeId.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh."
+            );
+        }
+
+        return storeId.trim();
     }
 
     private boolean isBlank(String s) {
@@ -862,5 +940,9 @@ public class ProductsSql {
         log.setIpAddress("local");
         log.setDeviceInfo(System.getProperty("os.name") + " | Java " + System.getProperty("java.version"));
         AuditLogSql.getInstance().insertWithConn(con, log);
+    }
+
+    private boolean requireImportedStockForStoreView() {
+        return !SessionManager.isAdmin();
     }
 }
