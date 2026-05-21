@@ -9,6 +9,8 @@ import java.awt.event.MouseEvent;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
@@ -17,6 +19,11 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import view.components.IconHelper;
+import business.sql.prod_inventory.CategoriesSql;
+import business.sql.prod_inventory.StoresSql;
+import model.product.Category;
+import model.product.Store;
+import view.JDateChooser;
 
 public class PromotionManagementPanel extends JPanel {
 
@@ -25,6 +32,8 @@ public class PromotionManagementPanel extends JPanel {
     private static final String STATUS_UPCOMING = "Sắp diễn ra";
     private static final String STATUS_ENDED = "Đã kết thúc";
     private static final String STATUS_PAUSED = "Tạm ngưng / Kết thúc";
+
+    private static final String BRANCH_ALL = "Tất cả chi nhánh";
 
     private final Color bg = new Color(244, 246, 250);
     private final Color white = Color.WHITE;
@@ -50,11 +59,11 @@ public class PromotionManagementPanel extends JPanel {
     private JTextField txtMaKM;
     private JTextField txtTenKM;
     private JSpinner spinGiamGia;
-    private JTextField txtTuNgay;
-    private JTextField txtDenNgay;
+    private JDateChooser dtpTuNgay;
+    private JDateChooser dtpDenNgay;
     private JComboBox<String> cbChiNhanh;
-    private JComboBox<String> cbSanPham;
-    private JComboBox<String> cbHangThanhVien;
+    // [REMOVED] cbSanPham has been completely removed to prevent duplicated filtering logic
+    private JComboBox<String> cbLoaiSanPham;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnDeactivate, btnPreview;
     private JLabel lblFormTitle;
@@ -277,19 +286,41 @@ public class PromotionManagementPanel extends JPanel {
         addSection(form, g, y++, "2. Thời gian áp dụng");
         JPanel timeRow = new JPanel(new GridLayout(1, 2, 10, 0));
         timeRow.setOpaque(false);
-        timeRow.add(fieldPanel("Từ ngày", txtTuNgay = createTextField("2026-01-01")));
-        timeRow.add(fieldPanel("Đến ngày", txtDenNgay = createTextField("2026-12-31")));
+        
+        dtpTuNgay = new JDateChooser();
+        dtpTuNgay.setDateFormatString("yyyy-MM-dd");
+        dtpTuNgay.setPreferredSize(new Dimension(0, 40));
+        
+        dtpDenNgay = new JDateChooser();
+        dtpDenNgay.setDateFormatString("yyyy-MM-dd");
+        dtpDenNgay.setPreferredSize(new Dimension(0, 40));
+        
+        timeRow.add(fieldPanel("Từ ngày", dtpTuNgay));
+        timeRow.add(fieldPanel("Đến ngày", dtpDenNgay));
         addComponent(form, g, y++, timeRow, 14);
 
         addSection(form, g, y++, "3. Phạm vi áp dụng");
-        cbChiNhanh = combo(new String[]{"Tất cả chi nhánh", "Chi nhánh đang hoạt động"});
+
+        // Lấy danh sách tất cả các chi nhánh động hiện có thông qua StoresSql
+        cbChiNhanh = new JComboBox<>();
+        cbChiNhanh.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cbChiNhanh.setPreferredSize(new Dimension(0, 40));
+        cbChiNhanh.addItem("Tất cả các chi nhánh");
+        for (Store store : StoresSql.getInstance().selectAll()) {
+            cbChiNhanh.addItem(store.getStoreId() + " - " + store.getAddress());
+        }
         addField(form, g, y, "Áp dụng tại chi nhánh", cbChiNhanh);
         y += 2;
-        cbSanPham = combo(new String[]{"Tất cả mặt hàng", "Chỉ Hàng tiêu dùng", "Chỉ Thực phẩm tươi sống"});
-        addField(form, g, y, "Áp dụng cho sản phẩm", cbSanPham);
-        y += 2;
-        cbHangThanhVien = combo(new String[]{"Tất cả hạng", "Đồng trở lên", "Bạc trở lên", "Vàng trở lên"});
-        addField(form, g, y, "Áp dụng cho hạng thành viên", cbHangThanhVien);
+
+        // Lấy danh sách Loại sản phẩm động hiện có thông qua CategoriesSql
+        cbLoaiSanPham = new JComboBox<>();
+        cbLoaiSanPham.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cbLoaiSanPham.setPreferredSize(new Dimension(0, 40));
+        cbLoaiSanPham.addItem("Tất cả loại sản phẩm");
+        for (Category cat : CategoriesSql.getInstance().selectAll()) {
+            cbLoaiSanPham.addItem(cat.getCategoryName());
+        }
+        addField(form, g, y, "Áp dụng cho loại sản phẩm", cbLoaiSanPham);
         y += 2;
 
         addSection(form, g, y++, "4. Trạng thái chương trình");
@@ -299,7 +330,7 @@ public class PromotionManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
         btnClear = createButton("Làm mới", new Color(235, 238, 244), text, IconHelper.refresh(18));
-        btnPreview = createButton("Xem trước", softBlue, blue, null);
+        btnPreview = createButton("Xem trước", softBlue, blue, null); 
         btnDeactivate = createButton("Tạm ngưng", red, Color.WHITE, IconHelper.delete(18));
         btnSave = createButton("Lưu", blue, Color.WHITE, IconHelper.edit(18));
         actions.add(btnClear);
@@ -356,17 +387,9 @@ public class PromotionManagementPanel extends JPanel {
         btnSave.addActionListener(e -> savePromo());
 
         txtSearch.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) {
-                doSearch();
-            }
-
-            public void removeUpdate(DocumentEvent e) {
-                doSearch();
-            }
-
-            public void changedUpdate(DocumentEvent e) {
-                doSearch();
-            }
+            public void insertUpdate(DocumentEvent e) { doSearch(); }
+            public void removeUpdate(DocumentEvent e) { doSearch(); }
+            public void changedUpdate(DocumentEvent e) { doSearch(); }
         });
         cbFilterStatus.addActionListener(e -> doSearch());
 
@@ -397,11 +420,10 @@ public class PromotionManagementPanel extends JPanel {
         txtMaKM.setEnabled(true);
         txtTenKM.setText("");
         spinGiamGia.setValue(5);
-        txtTuNgay.setText("");
-        txtDenNgay.setText("");
+        dtpTuNgay.setDate(null);
+        dtpDenNgay.setDate(null);
         cbChiNhanh.setSelectedIndex(0);
-        cbSanPham.setSelectedIndex(0);
-        cbHangThanhVien.setSelectedIndex(0);
+        cbLoaiSanPham.setSelectedIndex(0);
         cbTrangThai.setSelectedIndex(0);
         tblPromos.clearSelection();
         lblFormTitle.setText("Cấu Hình Khuyến Mãi");
@@ -427,7 +449,8 @@ public class PromotionManagementPanel extends JPanel {
         }
         sql += "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, "%" + keyword + "%");
             ps.setString(2, "%" + keyword + "%");
@@ -439,21 +462,17 @@ public class PromotionManagementPanel extends JPanel {
                 while (rs.next()) {
                     String trangThai = rs.getString("trangthai");
                     tableModel.addRow(new Object[]{
-                        rs.getString("makm"),
-                        rs.getString("tenkm"),
-                        rs.getInt("phantramgiam") + "%",
-                        rs.getString("tungay"),
-                        rs.getString("denngay"),
-                        trangThai
+                            rs.getString("makm"),
+                            rs.getString("tenkm"),
+                            rs.getInt("phantramgiam") + "%",
+                            rs.getString("tungay"),
+                            rs.getString("denngay"),
+                            trangThai
                     });
                     total++;
-                    if (STATUS_ACTIVE.equals(trangThai)) {
-                        active++;
-                    } else if (STATUS_ENDED.equals(trangThai)) {
-                        ended++;
-                    } else if (STATUS_PAUSED.equals(trangThai)) {
-                        paused++;
-                    }
+                    if (STATUS_ACTIVE.equals(trangThai)) active++;
+                    else if (STATUS_ENDED.equals(trangThai)) ended++;
+                    else if (STATUS_PAUSED.equals(trangThai)) paused++;
                 }
             }
 
@@ -475,15 +494,40 @@ public class PromotionManagementPanel extends JPanel {
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE p.promotion_id = ? AND NVL(p.is_deleted, 0) = 0";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maKM);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     txtTenKM.setText(rs.getString("promotion_name"));
                     spinGiamGia.setValue(rs.getInt("discount_amount"));
-                    txtTuNgay.setText(rs.getString("start_date"));
-                    txtDenNgay.setText(rs.getString("end_date"));
                     cbTrangThai.setSelectedItem(rs.getString("status"));
+
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+
+                    try {
+                        String startDateStr = rs.getString("start_date");
+                        if (startDateStr != null && !startDateStr.trim().isEmpty()) {
+                            dtpTuNgay.setDate(sdf.parse(startDateStr));
+                        } else {
+                            dtpTuNgay.setDate(null);
+                        }
+                    } catch (Exception ex) {
+                        dtpTuNgay.setDate(null);
+                        System.err.println("Lỗi phân tích Từ ngày: " + ex.getMessage());
+                    }
+
+                    try {
+                        String endDateStr = rs.getString("end_date");
+                        if (endDateStr != null && !endDateStr.trim().isEmpty()) {
+                            dtpDenNgay.setDate(sdf.parse(endDateStr));
+                        } else {
+                            dtpDenNgay.setDate(null);
+                        }
+                    } catch (Exception ex) {
+                        dtpDenNgay.setDate(null);
+                        System.err.println("Lỗi phân tích Đến ngày: " + ex.getMessage());
+                    }
                 }
             }
         } catch (Exception e) {
@@ -495,9 +539,18 @@ public class PromotionManagementPanel extends JPanel {
         String ma = txtMaKM.getText().trim();
         String ten = txtTenKM.getText().trim();
         int giam = (int) spinGiamGia.getValue();
-        String tuNgay = txtTuNgay.getText().trim();
-        String denNgay = txtDenNgay.getText().trim();
         String trangThai = cbTrangThai.getSelectedItem().toString();
+
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        String tuNgay = "";
+        String denNgay = "";
+        
+        if (dtpTuNgay.getDate() != null) {
+            tuNgay = sdf.format(dtpTuNgay.getDate());
+        }
+        if (dtpDenNgay.getDate() != null) {
+            denNgay = sdf.format(dtpDenNgay.getDate());
+        }
 
         if (ma.isEmpty() || ten.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Vui lòng nhập mã và tên Khuyến mãi!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
@@ -577,12 +630,11 @@ public class PromotionManagementPanel extends JPanel {
         }
 
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn tạm ngưng khuyến mãi này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
+        if (confirm != JOptionPane.YES_OPTION) return;
 
         String sql = "UPDATE PROMOTIONS SET status = ? WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, STATUS_PAUSED);
             ps.setString(2, ma);
             ps.executeUpdate();
@@ -596,11 +648,18 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     private void previewPromo() {
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        String strTuNgay = (dtpTuNgay.getDate() != null) ? sdf.format(dtpTuNgay.getDate()) : "-";
+        String strDenNgay = (dtpDenNgay.getDate() != null) ? sdf.format(dtpDenNgay.getDate()) : "-";
+
         String message = "Mã khuyến mãi: " + valueOrDash(txtMaKM.getText()) + "\n"
                 + "Tên chương trình: " + valueOrDash(txtTenKM.getText()) + "\n"
                 + "Mức giảm: " + spinGiamGia.getValue() + "%\n"
-                + "Thời gian: " + valueOrDash(txtTuNgay.getText()) + " đến " + valueOrDash(txtDenNgay.getText()) + "\n"
+                + "Thời gian: " + strTuNgay + " đến " + strDenNgay + "\n"
+                + "Chi nhánh: " + cbChiNhanh.getSelectedItem() + "\n"
+                + "Loại sản phẩm: " + cbLoaiSanPham.getSelectedItem() + "\n"
                 + "Trạng thái: " + cbTrangThai.getSelectedItem();
+                
         JOptionPane.showMessageDialog(this, message, "Xem trước khuyến mãi", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -750,15 +809,14 @@ public class PromotionManagementPanel extends JPanel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(c.getBackground());
                 g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10);
-                super.paint(g2, c);
                 g2.dispose();
+                super.paint(g, c);
             }
         });
         return button;
     }
 
     class RoundedPanel extends JPanel {
-
         private final int radius;
         private final Color backgroundColor;
 

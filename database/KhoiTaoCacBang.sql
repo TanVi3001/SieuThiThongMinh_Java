@@ -10,6 +10,7 @@
 --   5. Added INVENTORY_NOTIFICATIONS for Staff/Manager -> Warehouse alerts.
 --   6. Added helper indexes for supplier dashboard, warehouse flow, and notification click-to-product.
 --   7. Manager/Admin reminders are unlimited in Java logic; Staff reminders use REMIND_COUNT + cooldown.
+--   8. Added store scope columns for ORDERS, PURCHASE_RECEIPTS, INVENTORY_NOTIFICATIONS and STORE_PRODUCTS.
 -- ==========================================================
 
 -- ==========================================================
@@ -58,7 +59,6 @@ CREATE TABLE ACCOUNTS (
     is_deleted         NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_ACCOUNTS_USERS FOREIGN KEY (user_id) REFERENCES USERS (user_id)
 );
-
 
 CREATE TABLE ROLES (
     role_id     VARCHAR2(50) PRIMARY KEY,
@@ -153,7 +153,6 @@ CREATE INDEX IDX_AUDIT_CREATED ON AUDIT_LOG (CREATED_AT DESC);
 CREATE INDEX IDX_AUDIT_ACCOUNT ON AUDIT_LOG (ACCOUNT_ID);
 CREATE INDEX IDX_AUDIT_ACTION ON AUDIT_LOG (ACTION_TYPE);
 
-
 -- ==========================================================
 -- 2. HUMAN RESOURCES AND KPI MANAGEMENT
 -- ==========================================================
@@ -169,9 +168,11 @@ CREATE TABLE SHIFTS (
 -- Stores must be created before EMPLOYEES because EMPLOYEES.store_id references STORES.store_id
 CREATE TABLE STORES (
     store_id     VARCHAR2(50) PRIMARY KEY,
+    store_name   NVARCHAR2(200),
     email        VARCHAR2(100),
     address      NVARCHAR2(200),
     phone_number VARCHAR2(20),
+    status       NVARCHAR2(20) DEFAULT N'Hoạt động',
     is_deleted   NUMBER(1) DEFAULT 0
 );
 
@@ -186,12 +187,14 @@ CREATE TABLE EMPLOYEES (
     total_completed_orders NUMBER(10) DEFAULT 0,
     role_id                VARCHAR2(50),
     shift_id               VARCHAR2(50),
-    store_id               VARCHAR2(50), -- Gộp trực tiếp Chi nhánh
+    store_id               VARCHAR2(50),
     is_deleted             NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_EMPLOYEES_ROLES FOREIGN KEY (role_id) REFERENCES ROLES (role_id),
     CONSTRAINT FK_EMPLOYEES_SHIFTS FOREIGN KEY (shift_id) REFERENCES SHIFTS (shift_id),
     CONSTRAINT FK_EMPLOYEES_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
 );
+
+CREATE INDEX IDX_EMPLOYEES_STORE_ROLE ON EMPLOYEES(store_id, role_id, is_deleted);
 
 CREATE TABLE EMPLOYEE_SHIFTS (
     assignment_id VARCHAR2(50) PRIMARY KEY,
@@ -263,7 +266,6 @@ CREATE TABLE KPI_EVALUATION (
     CONSTRAINT FK_EVAL_KPI FOREIGN KEY (kpi_id) REFERENCES KPI_CRITERIA (kpi_id)
 );
 
-
 -- ==========================================================
 -- 3. PRODUCTS AND INVENTORY MANAGEMENT
 -- ==========================================================
@@ -275,8 +277,6 @@ CREATE TABLE CATEGORIES (
     is_deleted    NUMBER(1) DEFAULT 0
 );
 
-
-
 CREATE TABLE SUPPLIERS (
     supplier_id   VARCHAR2(50) PRIMARY KEY,
     supplier_name NVARCHAR2(150) NOT NULL,
@@ -287,8 +287,6 @@ CREATE TABLE SUPPLIERS (
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted    NUMBER(1) DEFAULT 0
 );
-
-
 
 CREATE TABLE UNITS (
     unit_id     VARCHAR2(50) PRIMARY KEY,
@@ -311,7 +309,7 @@ CREATE TABLE PRODUCTS (
     CONSTRAINT FK_PRODUCTS_SUPPLIERS FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS (supplier_id),
     CONSTRAINT FK_PRODUCTS_BASE_UNIT FOREIGN KEY (base_unit_id) REFERENCES UNITS (unit_id)
 );
--- Khởi tạo Sequence và Trigger sinh mã Sản phẩm tự động (SP0000001)
+
 CREATE SEQUENCE product_seq START WITH 1 INCREMENT BY 1;
 CREATE OR REPLACE TRIGGER trg_product_id
     BEFORE INSERT ON PRODUCTS
@@ -334,6 +332,24 @@ CREATE TABLE PRODUCT_UNITS (
     CONSTRAINT CK_PU_CONVERSION_POSITIVE CHECK (conversion_rate_to_base > 0)
 );
 
+-- Store-specific selling configuration. PRODUCTS remains global, STORE_PRODUCTS decides
+-- whether a product is active and which price/min-stock policy is used in each branch.
+CREATE TABLE STORE_PRODUCTS (
+    store_id      VARCHAR2(50) NOT NULL,
+    product_id    VARCHAR2(50) NOT NULL,
+    selling_price NUMBER(15, 2),
+    is_active     NUMBER(1) DEFAULT 1,
+    min_stock     NUMBER DEFAULT 0,
+    max_stock     NUMBER,
+    is_deleted    NUMBER(1) DEFAULT 0,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT PK_STORE_PRODUCTS PRIMARY KEY (store_id, product_id),
+    CONSTRAINT FK_STORE_PRODUCTS_STORE FOREIGN KEY (store_id) REFERENCES STORES(store_id),
+    CONSTRAINT FK_STORE_PRODUCTS_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+    CONSTRAINT CK_STORE_PRODUCTS_ACTIVE CHECK (is_active IN (0, 1)),
+    CONSTRAINT CK_STORE_PRODUCTS_STOCK CHECK (NVL(min_stock, 0) >= 0 AND NVL(max_stock, 0) >= 0)
+);
 
 CREATE TABLE INVENTORY (
     product_id   VARCHAR2(50),
@@ -395,10 +411,12 @@ CREATE TABLE ORDERS (
     total_amount      NUMBER(15, 2),
     note              NVARCHAR2(255),
     employee_id       VARCHAR2(50),
+    store_id          VARCHAR2(50),
     is_deleted        NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_ORDERS_CUSTOMERS FOREIGN KEY (customer_id) REFERENCES CUSTOMERS (customer_id),
     CONSTRAINT FK_ORDERS_PM FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS (payment_method_id),
-    CONSTRAINT FK_ORDERS_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id)
+    CONSTRAINT FK_ORDERS_EMPLOYEES FOREIGN KEY (employee_id) REFERENCES EMPLOYEES (employee_id),
+    CONSTRAINT FK_ORDERS_STORES FOREIGN KEY (store_id) REFERENCES STORES (store_id)
 );
 
 CREATE TABLE ORDER_DETAILS (
@@ -450,7 +468,6 @@ CREATE TABLE HOME_DELIVERY (
     CONSTRAINT FK_HD_DM FOREIGN KEY (delivery_id) REFERENCES DELIVERY_MANAGEMENT (delivery_id)
 );
 
-
 -- ==========================================================
 -- 5. PROMOTION CAMPAIGNS & APP SETTINGS
 -- ==========================================================
@@ -473,8 +490,8 @@ CREATE TABLE PROMOTIONS (
     order_detail_id       VARCHAR2(50),
     discount_amount       NUMBER(15, 2),
     is_deleted            NUMBER(1) DEFAULT 0,
-    CONSTRAINT FK_PROMOTIONS_CAMPAIGNS FOREIGN KEY (campaign_id) REFERENCES PROMOTION_CAMPAIGNS (campaign_id),
-    CONSTRAINT FK_PROMOTIONS_OD FOREIGN KEY (order_detail_id) REFERENCES ORDER_DETAILS (order_detail_id)
+    CONSTRAINT FK_PROMOTIONS_CAMPAIGNS FOREIGN KEY (campaign_id) REFERENCES PROMOTION_CAMPAIGNS(campaign_id),
+    CONSTRAINT FK_PROMOTIONS_OD FOREIGN KEY (order_detail_id) REFERENCES ORDER_DETAILS(order_detail_id)
 );
 
 CREATE TABLE OTP_STORAGE (
@@ -494,10 +511,10 @@ CREATE TABLE SYSTEM_CONFIG (
     config_value VARCHAR2(500)
 );
 
--- Thêm mới các bảng ===
 CREATE TABLE INVENTORY_NOTIFICATIONS (
     notification_id VARCHAR2(50) PRIMARY KEY,
     product_id      VARCHAR2(50) NOT NULL,
+    store_id        VARCHAR2(50),
     product_name    NVARCHAR2(255),
     title           NVARCHAR2(255),
     message         NVARCHAR2(1000),
@@ -511,6 +528,7 @@ CREATE TABLE INVENTORY_NOTIFICATIONS (
     resolved_at     TIMESTAMP,
     is_deleted      NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_INV_NOTI_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+    CONSTRAINT FK_INV_NOTI_STORE FOREIGN KEY (store_id) REFERENCES STORES(store_id),
     CONSTRAINT CK_INV_NOTI_STATUS CHECK (status IN ('PENDING', 'RESOLVED', 'CANCELLED')),
     CONSTRAINT CK_INV_NOTI_TARGET CHECK (target_role IN ('WAREHOUSE', 'MANAGER', 'STAFF', 'ALL')),
     CONSTRAINT CK_INV_NOTI_REMIND CHECK (remind_count >= 0)
@@ -524,17 +542,17 @@ CREATE TABLE INVENTORY_NOTIFICATIONS (
 CREATE TABLE PURCHASE_RECEIPTS (
     receipt_id         VARCHAR2(50) PRIMARY KEY,
     supplier_id        VARCHAR2(50),
+    store_id           VARCHAR2(50),
     created_by         VARCHAR2(50),
     note               NVARCHAR2(1000),
-
     total_before_tax   NUMBER(18,2) DEFAULT 0,
     total_tax          NUMBER(18,2) DEFAULT 0,
     total_after_tax    NUMBER(18,2) DEFAULT 0,
-
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted         NUMBER(1) DEFAULT 0,
     CONSTRAINT FK_PR_SUPPLIER FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS(supplier_id),
+    CONSTRAINT FK_PR_STORE FOREIGN KEY (store_id) REFERENCES STORES(store_id),
     CONSTRAINT FK_PR_CREATED_BY FOREIGN KEY (created_by) REFERENCES ACCOUNTS(account_id)
 );
 
@@ -542,30 +560,19 @@ CREATE TABLE PURCHASE_RECEIPT_DETAILS (
     receipt_detail_id  VARCHAR2(50) PRIMARY KEY,
     receipt_id         VARCHAR2(50) NOT NULL,
     product_id         VARCHAR2(50) NOT NULL,
-
     quantity           NUMBER(10) NOT NULL,
     unit               NVARCHAR2(50),
-
     unit_import_price  NUMBER(18,2) NOT NULL,
     sale_price         NUMBER(18,2) NOT NULL,
     vat_rate           NUMBER(5,2) DEFAULT 0,
-
     line_before_tax    NUMBER(18,2) DEFAULT 0,
     line_tax           NUMBER(18,2) DEFAULT 0,
     line_after_tax     NUMBER(18,2) DEFAULT 0,
-
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted         NUMBER(1) DEFAULT 0,
-
-    CONSTRAINT FK_PRD_RECEIPT
-        FOREIGN KEY (receipt_id)
-        REFERENCES PURCHASE_RECEIPTS(receipt_id),
-
-    CONSTRAINT FK_PRD_PRODUCT
-        FOREIGN KEY (product_id)
-        REFERENCES PRODUCTS(product_id),
-
+    CONSTRAINT FK_PRD_RECEIPT FOREIGN KEY (receipt_id) REFERENCES PURCHASE_RECEIPTS(receipt_id),
+    CONSTRAINT FK_PRD_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
     CONSTRAINT CK_PRD_QTY_POS CHECK (quantity > 0),
     CONSTRAINT CK_PRD_IMPORT_POS CHECK (unit_import_price >= 0),
     CONSTRAINT CK_PRD_SALE_POS CHECK (sale_price >= 0),
@@ -576,44 +583,25 @@ CREATE TABLE INVENTORY_TRANSACTIONS (
     transaction_id     VARCHAR2(50) PRIMARY KEY,
     receipt_id         VARCHAR2(50),
     product_id         VARCHAR2(50) NOT NULL,
-
     transaction_type   VARCHAR2(30) NOT NULL,
     quantity           NUMBER(10) NOT NULL,
     unit               NVARCHAR2(50),
     store_id           VARCHAR2(50),
-
     unit_import_price  NUMBER(18,2),
     sale_price         NUMBER(18,2),
     vat_rate           NUMBER(5,2),
     vat_amount         NUMBER(18,2),
     total_amount       NUMBER(18,2),
-
     note               NVARCHAR2(1000),
     created_by         VARCHAR2(50),
-
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted         NUMBER(1) DEFAULT 0,
-
-    CONSTRAINT FK_INV_TRANS_RECEIPT
-        FOREIGN KEY (receipt_id)
-        REFERENCES PURCHASE_RECEIPTS(receipt_id),
-
-    CONSTRAINT FK_INV_TRANS_PRODUCT
-        FOREIGN KEY (product_id)
-        REFERENCES PRODUCTS(product_id),
-
-    CONSTRAINT FK_INV_TRANS_STORE
-        FOREIGN KEY (store_id)
-        REFERENCES STORES(store_id),
-
-    CONSTRAINT FK_INV_TRANS_CREATED_BY
-        FOREIGN KEY (created_by)
-        REFERENCES ACCOUNTS(account_id),
-
-    CONSTRAINT CK_INV_TRANS_TYPE
-        CHECK (transaction_type IN ('INBOUND', 'OUTBOUND', 'ADJUSTMENT', 'CANCEL')),
-
+    CONSTRAINT FK_INV_TRANS_RECEIPT FOREIGN KEY (receipt_id) REFERENCES PURCHASE_RECEIPTS(receipt_id),
+    CONSTRAINT FK_INV_TRANS_PRODUCT FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id),
+    CONSTRAINT FK_INV_TRANS_STORE FOREIGN KEY (store_id) REFERENCES STORES(store_id),
+    CONSTRAINT FK_INV_TRANS_CREATED_BY FOREIGN KEY (created_by) REFERENCES ACCOUNTS(account_id),
+    CONSTRAINT CK_INV_TRANS_TYPE CHECK (transaction_type IN ('INBOUND', 'OUTBOUND', 'ADJUSTMENT', 'CANCEL')),
     CONSTRAINT CK_INV_TRANS_QTY_POS CHECK (quantity > 0),
     CONSTRAINT CK_INV_TRANS_PRICE_POS CHECK (
         NVL(unit_import_price, 0) >= 0
@@ -624,51 +612,26 @@ CREATE TABLE INVENTORY_TRANSACTIONS (
     )
 );
 
-
-CREATE INDEX IDX_PRODUCTS_SUPPLIER
-ON PRODUCTS(supplier_id);
-
-CREATE INDEX IDX_PRODUCTS_CATEGORY
-ON PRODUCTS(category_id);
-
-
-CREATE INDEX IDX_PURCHASE_RECEIPTS_SUPPLIER_CREATED
-ON PURCHASE_RECEIPTS(supplier_id, created_at);
-
-CREATE INDEX IDX_INV_NOTI_STATUS_ROLE
-ON INVENTORY_NOTIFICATIONS(status, target_role);
-
-CREATE INDEX IDX_INV_NOTI_PRODUCT_STATUS
-ON INVENTORY_NOTIFICATIONS(product_id, status, is_deleted);
-
-CREATE INDEX IDX_INV_NOTI_UPDATED_AT
-ON INVENTORY_NOTIFICATIONS(updated_at DESC);
-
-CREATE INDEX IDX_PURCHASE_RECEIPTS_CREATED_AT
-ON PURCHASE_RECEIPTS(created_at);
-
-CREATE INDEX IDX_PURCHASE_DETAILS_RECEIPT
-ON PURCHASE_RECEIPT_DETAILS(receipt_id);
-
-CREATE INDEX IDX_PURCHASE_DETAILS_PRODUCT
-ON PURCHASE_RECEIPT_DETAILS(product_id);
-
-CREATE INDEX IDX_INV_TRANS_PRODUCT_TIME
-ON INVENTORY_TRANSACTIONS(product_id, created_at);
-
-CREATE INDEX IDX_INV_TRANS_RECEIPT
-ON INVENTORY_TRANSACTIONS(receipt_id);
-
+CREATE INDEX IDX_PRODUCTS_SUPPLIER ON PRODUCTS(supplier_id);
+CREATE INDEX IDX_PRODUCTS_CATEGORY ON PRODUCTS(category_id);
+CREATE INDEX IDX_STORE_PRODUCTS_PRODUCT ON STORE_PRODUCTS(product_id, is_active, is_deleted);
+CREATE INDEX IDX_INVENTORY_STORE ON INVENTORY(store_id, is_deleted);
+CREATE INDEX IDX_ORDERS_STORE_DATE ON ORDERS(store_id, order_date, status, is_deleted);
+CREATE INDEX IDX_PURCHASE_RECEIPTS_SUPPLIER_CREATED ON PURCHASE_RECEIPTS(supplier_id, created_at);
+CREATE INDEX IDX_PURCHASE_RECEIPTS_STORE_CREATED ON PURCHASE_RECEIPTS(store_id, created_at);
+CREATE INDEX IDX_INV_NOTI_STATUS_ROLE ON INVENTORY_NOTIFICATIONS(status, target_role);
+CREATE INDEX IDX_INV_NOTI_STORE_STATUS ON INVENTORY_NOTIFICATIONS(store_id, status, is_deleted);
+CREATE INDEX IDX_INV_NOTI_PRODUCT_STATUS ON INVENTORY_NOTIFICATIONS(product_id, status, is_deleted);
+CREATE INDEX IDX_INV_NOTI_UPDATED_AT ON INVENTORY_NOTIFICATIONS(updated_at DESC);
+CREATE INDEX IDX_PURCHASE_RECEIPTS_CREATED_AT ON PURCHASE_RECEIPTS(created_at);
+CREATE INDEX IDX_PURCHASE_DETAILS_RECEIPT ON PURCHASE_RECEIPT_DETAILS(receipt_id);
+CREATE INDEX IDX_PURCHASE_DETAILS_PRODUCT ON PURCHASE_RECEIPT_DETAILS(product_id);
+CREATE INDEX IDX_INV_TRANS_PRODUCT_TIME ON INVENTORY_TRANSACTIONS(product_id, created_at);
+CREATE INDEX IDX_INV_TRANS_RECEIPT ON INVENTORY_TRANSACTIONS(receipt_id);
+CREATE INDEX IDX_INV_TRANS_STORE_TIME ON INVENTORY_TRANSACTIONS(store_id, created_at);
 
 UPDATE INVENTORY
 SET last_updated = SYSDATE
 WHERE last_updated IS NULL;
 
-COMMIT;
-
-//Thêm thuộc tính cho cửa hàng
-ALTER TABLE STORES ADD (
-    store_name NVARCHAR2(200),
-    status     NVARCHAR2(20) DEFAULT 'Hoạt động'
-);
 COMMIT;

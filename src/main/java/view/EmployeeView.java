@@ -1,5 +1,6 @@
 package view;
 
+import business.service.SessionManager;
 import business.sql.hr_kpi.EmployeeSql;
 import business.sql.hr_kpi.EmployeeShiftSql;
 import business.sql.hr_kpi.ShiftSql;
@@ -176,6 +177,7 @@ public class EmployeeView extends JPanel {
                 }
 
                 cbStoreForm.setSelectedIndex(-1);
+                applyStoreScopeForManager();
             }
             // -----------------------------------------------------------------------
 
@@ -197,7 +199,15 @@ public class EmployeeView extends JPanel {
 
         try {
             String currentRole = getCurrentUserRole();
-            List<Employee> list = employeeSql.getAllNhanVien(currentRole);
+            String storeId = getCurrentStoreId();
+
+            List<Employee> list;
+
+            if (SessionManager.isStoreManager()) {
+                list = employeeSql.getAllNhanVien(currentRole, storeId);
+            } else {
+                list = employeeSql.getAllNhanVien(currentRole, null);
+            }
 
             for (Employee e : list) {
                 if (e.getEmployeeName() != null && !e.getEmployeeName().isEmpty()) {
@@ -207,6 +217,53 @@ public class EmployeeView extends JPanel {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void selectStoreComboByStoreId(String storeId) {
+        if (cbStoreForm == null || storeId == null || storeId.trim().isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
+            String item = String.valueOf(cbStoreForm.getItemAt(i));
+
+            if (item.contains("(" + storeId + ")") || item.endsWith(storeId + ")")) {
+                cbStoreForm.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private void applyStoreScopeForManager() {
+        if (!SessionManager.isStoreManager()) {
+            if (cbStoreForm != null) {
+                cbStoreForm.setEnabled(true);
+            }
+            return;
+        }
+
+        String storeId = getCurrentStoreId();
+
+        if (storeId == null || storeId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                    "Chưa phân chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            if (cbStoreForm != null) {
+                cbStoreForm.setEnabled(false);
+            }
+            return;
+        }
+
+        selectStoreComboByStoreId(storeId);
+
+        // Manager không được đổi chi nhánh
+        if (cbStoreForm != null) {
+            cbStoreForm.setEnabled(false);
         }
     }
 
@@ -723,14 +780,22 @@ public class EmployeeView extends JPanel {
                 txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_NAME)));
 
                 String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, COL_STORE));
-                cbStoreForm.setSelectedIndex(-1);
 
-                for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
-                    String item = String.valueOf(cbStoreForm.getItemAt(i));
-                    if (item.contains(storeNameInTable)) {
-                        cbStoreForm.setSelectedIndex(i);
-                        break;
+                if (SessionManager.isStoreManager()) {
+                    selectStoreComboByStoreId(getCurrentStoreId());
+                    cbStoreForm.setEnabled(false);
+                } else {
+                    cbStoreForm.setSelectedIndex(-1);
+
+                    for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
+                        String item = String.valueOf(cbStoreForm.getItemAt(i));
+                        if (item.contains(storeNameInTable)) {
+                            cbStoreForm.setSelectedIndex(i);
+                            break;
+                        }
                     }
+
+                    cbStoreForm.setEnabled(true);
                 }
 
                 txtPhone.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_PHONE)));
@@ -764,6 +829,10 @@ public class EmployeeView extends JPanel {
 
             if (emp == null) {
                 return;
+            }
+
+            if (SessionManager.isStoreManager()) {
+                emp.setStoreId(getCurrentStoreId());
             }
 
             if (isEmailDuplicate(emp.getEmail(), null)) {
@@ -919,7 +988,16 @@ public class EmployeeView extends JPanel {
 
             emp.setEmployeeId(idToUpdate);
 
-            if (employeeSql.update(emp) > 0) {
+            int updateRows;
+
+            if (SessionManager.isStoreManager()) {
+                emp.setStoreId(getCurrentStoreId());
+                updateRows = employeeSql.updateInStore(emp, getCurrentStoreId());
+            } else {
+                updateRows = employeeSql.update(emp);
+            }
+
+            if (updateRows > 0) {
                 RealtimeClient.send("EMPLOYEES_CHANGED");
 
                 if (emailChanged && !isActivated) {
@@ -997,7 +1075,7 @@ public class EmployeeView extends JPanel {
             } else {
                 JOptionPane.showMessageDialog(
                         this,
-                        "Cập nhật thất bại!",
+                        "Cập nhật thất bại hoặc bạn không có quyền thao tác nhân viên ngoài chi nhánh!",
                         "Lỗi",
                         JOptionPane.ERROR_MESSAGE
                 );
@@ -1016,10 +1094,25 @@ public class EmployeeView extends JPanel {
                     JOptionPane.YES_NO_OPTION
             ) == JOptionPane.YES_OPTION) {
 
-                if (employeeSql.delete(currentSelectedRawId) > 0) {
+                int deleteRows;
+
+                if (SessionManager.isStoreManager()) {
+                    deleteRows = employeeSql.deleteInStore(currentSelectedRawId, getCurrentStoreId());
+                } else {
+                    deleteRows = employeeSql.delete(currentSelectedRawId);
+                }
+
+                if (deleteRows > 0) {
                     RealtimeClient.send("EMPLOYEES_CHANGED");
                     refreshAllData();
                     clearForm();
+                } else {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Xóa thất bại hoặc bạn không có quyền xóa nhân viên ngoài chi nhánh!",
+                            "Không có quyền",
+                            JOptionPane.WARNING_MESSAGE
+                    );
                 }
             }
         });
@@ -1033,7 +1126,26 @@ public class EmployeeView extends JPanel {
                     .toLowerCase();
 
             String currentRole = getCurrentUserRole();
-            List<Employee> list = employeeSql.getAllNhanVien(currentRole);
+            String storeId = getCurrentStoreId();
+
+            List<Employee> list;
+
+            if (SessionManager.isStoreManager()) {
+                if (storeId == null || storeId.trim().isEmpty()) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                            "Chưa phân chi nhánh",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+                    updateTable(new ArrayList<>());
+                    return;
+                }
+
+                list = employeeSql.getAllNhanVien(currentRole, storeId);
+            } else {
+                list = employeeSql.getAllNhanVien(currentRole, null);
+            }
 
             if (kw.isEmpty()) {
                 updateTable(list);
@@ -1047,11 +1159,15 @@ public class EmployeeView extends JPanel {
                 String name = emp.getEmployeeName() != null ? emp.getEmployeeName().toLowerCase() : "";
                 String phone = emp.getPhone() != null ? emp.getPhone().toLowerCase() : "";
                 String email = emp.getEmail() != null ? emp.getEmail().toLowerCase() : "";
+                String role = emp.getRole() != null ? emp.getRole().toLowerCase() : "";
+                String storeName = emp.getStoreName() != null ? emp.getStoreName().toLowerCase() : "";
 
                 if (id.contains(kw)
                         || name.contains(kw)
                         || phone.contains(kw)
-                        || email.contains(kw)) {
+                        || email.contains(kw)
+                        || role.contains(kw)
+                        || storeName.contains(kw)) {
                     filtered.add(emp);
                 }
             }
@@ -1113,7 +1229,14 @@ public class EmployeeView extends JPanel {
         Object selectedWorkShift = cbWorkShift.getSelectedItem();
         Object selectedFilterShift = cbShiftFilter.getSelectedItem();
 
-        assignableEmployees = employeeSql.getAllNhanVien(getCurrentUserRole());
+        String currentRole = getCurrentUserRole();
+        String storeId = getCurrentStoreId();
+
+        if (SessionManager.isStoreManager()) {
+            assignableEmployees = employeeSql.getAllNhanVien(currentRole, storeId);
+        } else {
+            assignableEmployees = employeeSql.getAllNhanVien(currentRole, null);
+        }
         cbShiftEmployee.removeAllItems();
         for (Employee emp : assignableEmployees) {
             if (isShiftAssignableRole(emp.getRoleId())) {
@@ -1162,6 +1285,18 @@ public class EmployeeView extends JPanel {
                 status
         );
 
+        if (SessionManager.isStoreManager()) {
+            String storeId = getCurrentStoreId();
+
+            List<String> allowedEmployeeIds = new ArrayList<>();
+            List<Employee> employeesInStore = employeeSql.getAllNhanVien(getCurrentUserRole(), storeId);
+
+            for (Employee emp : employeesInStore) {
+                allowedEmployeeIds.add(emp.getEmployeeId());
+            }
+
+            currentShiftAssignments.removeIf(item -> !allowedEmployeeIds.contains(item.getEmployeeId()));
+        }
         shiftTableModel.setRowCount(0);
         for (EmployeeShift item : currentShiftAssignments) {
             shiftTableModel.addRow(new Object[]{
@@ -1438,16 +1573,33 @@ public class EmployeeView extends JPanel {
                 ? "Nam"
                 : (rdoFemale.isSelected() ? "Nữ" : "");
 
-        // --- ĐÃ SỬA THEO BƯỚC 2: Lấy Role từ ComboBox không cho phép gõ ---
         String role = "";
         if (cbRole.getSelectedIndex() >= 0) {
             role = cbRole.getSelectedItem().toString().trim().toUpperCase();
         }
-        // -------------------------------------------------------------------
 
-        // --- CẬP NHẬT: Thêm điều kiện bắt buộc chọn Chi nhánh ---
-        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty() || role.isEmpty() || cbStoreForm.getSelectedIndex() < 0) {
-            JOptionPane.showMessageDialog(this, "Vui lòng điền đầy đủ các thông tin cá nhân, chức vụ và chi nhánh (*)");
+        String storeId = "";
+
+        if (SessionManager.isStoreManager()) {
+            storeId = getCurrentStoreId();
+        } else {
+            if (cbStoreForm.getSelectedIndex() >= 0 && cbStoreForm.getSelectedItem() != null) {
+                storeId = extractStoreIdFromComboText(cbStoreForm.getSelectedItem().toString());
+            }
+        }
+
+        if (name.isEmpty()
+                || phone.isEmpty()
+                || email.isEmpty()
+                || gender.isEmpty()
+                || role.isEmpty()
+                || storeId == null
+                || storeId.trim().isEmpty()) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng điền đầy đủ thông tin cá nhân, chức vụ và chi nhánh (*)"
+            );
             return null;
         }
 
@@ -1494,14 +1646,25 @@ public class EmployeeView extends JPanel {
         e.setRole(role);
         e.setRoleId(role);
 
-        // --- CẬP NHẬT: Lấy Store ID từ ComboBox gán vào Employee ---
-        String selectedStore = cbStoreForm.getSelectedItem().toString();
-        // Cắt lấy đoạn ID nằm trong dấu ngoặc tròn, ví dụ: Siêu thị Quận 1 (ST001) -> lấy ST001
-        String storeId = selectedStore.substring(selectedStore.lastIndexOf("(") + 1, selectedStore.length() - 1);
-        e.setStoreId(storeId);
-        // -----------------------------------------------------------
+        // Quan trọng: Manager luôn bị ép store_id theo session
+        e.setStoreId(storeId.trim());
 
         return e;
+    }
+
+    private String extractStoreIdFromComboText(String selectedStore) {
+        if (selectedStore == null || selectedStore.trim().isEmpty()) {
+            return "";
+        }
+
+        int open = selectedStore.lastIndexOf("(");
+        int close = selectedStore.lastIndexOf(")");
+
+        if (open >= 0 && close > open) {
+            return selectedStore.substring(open + 1, close).trim();
+        }
+
+        return selectedStore.trim();
     }
 
     private void clearForm() {
@@ -1521,7 +1684,13 @@ public class EmployeeView extends JPanel {
 
         // --- BỔ SUNG: Xóa lựa chọn Chi nhánh ---
         if (cbStoreForm != null) {
-            cbStoreForm.setSelectedIndex(-1);
+            if (SessionManager.isStoreManager()) {
+                selectStoreComboByStoreId(getCurrentStoreId());
+                cbStoreForm.setEnabled(false);
+            } else {
+                cbStoreForm.setSelectedIndex(-1);
+                cbStoreForm.setEnabled(true);
+            }
         }
 
         // --- ĐÃ SỬA THEO BƯỚC 4: Reset ComboBox Chức vụ liền mạch ---
@@ -1533,7 +1702,24 @@ public class EmployeeView extends JPanel {
 
     private void loadDataToTable() {
         String currentRole = getCurrentUserRole();
-        updateTable(employeeSql.getAllNhanVien(currentRole));
+        String storeId = getCurrentStoreId();
+
+        if (SessionManager.isStoreManager()) {
+            if (storeId == null || storeId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                        "Chưa phân chi nhánh",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                updateTable(new ArrayList<>());
+                return;
+            }
+
+            updateTable(employeeSql.getAllNhanVien(currentRole, storeId));
+        } else {
+            updateTable(employeeSql.getAllNhanVien(currentRole, null));
+        }
     }
 
     private String getCurrentUserRole() {
@@ -1562,6 +1748,15 @@ public class EmployeeView extends JPanel {
         }
 
         return "";
+    }
+
+    private String getCurrentStoreId() {
+        try {
+            return SessionManager.getCurrentStoreId();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return "";
+        }
     }
 
     private String safeCell(String value) {

@@ -26,8 +26,8 @@ public class EmployeeSql implements SqlInterface<Employee> {
     public int insert(Employee t) {
         int res = 0;
         // Bơm tự động: hire_date (SYSDATE) và salary_coefficient (1.0) để thỏa mãn Schema mới
-        String sql = "INSERT INTO EMPLOYEES (employee_id, employee_name, phone, email, role_id, gender, hire_date, salary_coefficient, is_deleted) "
-                + "VALUES (?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
+        String sql = "INSERT INTO EMPLOYEES (employee_id, employee_name, phone, email, role_id, gender, store_id, hire_date, salary_coefficient, is_deleted) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
             con.setAutoCommit(false); // Bắt đầu giao dịch an toàn
@@ -41,7 +41,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 pst.setString(4, t.getEmail());
                 pst.setString(5, roleId);
                 pst.setString(6, t.getGender());
-
+                pst.setString(7, t.getStoreId());
                 res = pst.executeUpdate();
 
                 // Ghi Audit Log nếu Insert thành công (Nếu hệ thống bác có Audit Log)
@@ -70,7 +70,8 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     @Override
     public int update(Employee t) {
-        String sql = "UPDATE EMPLOYEES SET employee_name = ?, phone = ?, email = ?, role_id = ?, gender = ? WHERE employee_id = ? AND is_deleted = 0";
+        String sql = "UPDATE EMPLOYEES SET employee_name = ?, phone = ?, email = ?, role_id = ?, gender = ?, store_id = ? "
+                + "WHERE employee_id = ? AND is_deleted = 0";
         String sqlOld = "SELECT employee_name, phone, email, role_id, gender FROM EMPLOYEES WHERE employee_id = ? AND is_deleted = 0";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
@@ -97,7 +98,8 @@ public class EmployeeSql implements SqlInterface<Employee> {
                 pst.setString(3, t.getEmail());
                 pst.setString(4, newRole);
                 pst.setString(5, t.getGender());
-                pst.setString(6, t.getEmployeeId());
+                pst.setString(6, t.getStoreId());
+                pst.setString(7, t.getEmployeeId());
                 int rows = pst.executeUpdate();
 
                 if (rows > 0) {
@@ -308,6 +310,15 @@ public class EmployeeSql implements SqlInterface<Employee> {
             e.setGender(rs.getString("gender"));
         } catch (SQLException ignored) {
         }
+        try {
+            e.setStoreId(rs.getString("store_id"));
+        } catch (SQLException ignored) {
+        }
+
+        try {
+            e.setStoreName(rs.getString("store_name"));
+        } catch (SQLException ignored) {
+        }
         return e;
     }
 
@@ -380,8 +391,10 @@ public class EmployeeSql implements SqlInterface<Employee> {
         return false;
     }
 
-    public List<Employee> getAllNhanVien(String currentUserRole) {
+    public List<Employee> getAllNhanVien(String currentUserRole, String storeId) {
         List<Employee> list = new ArrayList<>();
+
+        boolean isStoreManager = "R_STORE_MNG".equalsIgnoreCase(currentUserRole);
 
         StringBuilder sql = new StringBuilder();
 
@@ -392,6 +405,8 @@ public class EmployeeSql implements SqlInterface<Employee> {
         sql.append("    e.email, ");
         sql.append("    e.role_id, ");
         sql.append("    e.gender, ");
+        sql.append("    e.store_id, ");
+        sql.append("    NVL(s.store_name, N'Chưa phân chi nhánh') AS store_name, ");
         sql.append("    CASE ");
         sql.append("        WHEN a.account_id IS NOT NULL THEN N'Đã cấp' ");
         sql.append("        ELSE N'Chưa cấp' ");
@@ -405,9 +420,18 @@ public class EmployeeSql implements SqlInterface<Employee> {
         sql.append("FROM EMPLOYEES e ");
         sql.append("LEFT JOIN ACCOUNTS a ");
         sql.append("       ON e.employee_id = a.user_id ");
+        sql.append("LEFT JOIN STORES s ");
+        sql.append("       ON e.store_id = s.store_id ");
         sql.append("WHERE NVL(e.is_deleted, 0) = 0 ");
 
-        if ("R_STORE_MNG".equalsIgnoreCase(currentUserRole)) {
+        /*
+     * Phân quyền theo chi nhánh:
+     * - Admin: không truyền storeId hoặc role khác R_STORE_MNG => xem toàn bộ.
+     * - Manager: bắt buộc lọc e.store_id = storeId.
+     * - Manager không xem Admin.
+         */
+        if (isStoreManager) {
+            sql.append("AND e.store_id = ? ");
             sql.append("AND NVL(e.role_id, 'UNKNOWN') <> 'R_ADMIN_ALL' ");
         }
 
@@ -418,23 +442,40 @@ public class EmployeeSql implements SqlInterface<Employee> {
         sql.append("    ELSE 3 ");
         sql.append("END, e.employee_name ASC");
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString()); ResultSet rs = ps.executeQuery()) {
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
+            if (isStoreManager) {
+                if (storeId == null || storeId.trim().isEmpty()) {
+                    System.err.println("Manager chưa có store_id, không load danh sách nhân viên.");
+                    return list;
+                }
 
-            while (rs.next()) {
-                Employee emp = new Employee();
+                ps.setString(1, storeId.trim());
+            }
 
-                emp.setEmployeeId(rs.getString("employee_id"));
-                emp.setEmployeeName(rs.getString("employee_name"));
-                emp.setPhone(rs.getString("phone"));
-                emp.setEmail(rs.getString("email"));
-                emp.setRoleId(rs.getString("role_id"));
-                emp.setRole(rs.getString("role_id"));
-                emp.setGender(rs.getString("gender"));
-                emp.setAccountStatus(rs.getString("account_status"));
-                emp.setOnlineStatus(rs.getString("online_status"));
-                emp.setActiveSessions(rs.getInt("active_sessions"));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Employee emp = new Employee();
 
-                list.add(emp);
+                    emp.setEmployeeId(rs.getString("employee_id"));
+                    emp.setEmployeeName(rs.getString("employee_name"));
+                    emp.setPhone(rs.getString("phone"));
+                    emp.setEmail(rs.getString("email"));
+
+                    emp.setRoleId(rs.getString("role_id"));
+                    emp.setRole(rs.getString("role_id"));
+
+                    emp.setGender(rs.getString("gender"));
+
+                    emp.setStoreId(rs.getString("store_id"));
+                    emp.setStoreName(rs.getString("store_name"));
+
+                    emp.setAccountStatus(rs.getString("account_status"));
+                    emp.setOnlineStatus(rs.getString("online_status"));
+                    emp.setActiveSessions(rs.getInt("active_sessions"));
+
+                    list.add(emp);
+                }
             }
 
         } catch (Exception ex) {
@@ -442,5 +483,141 @@ public class EmployeeSql implements SqlInterface<Employee> {
         }
 
         return list;
+    }
+
+    public List<Employee> selectByStoreId(String storeId) {
+        List<Employee> list = new ArrayList<>();
+
+        String sql
+                = "SELECT e.*, "
+                + "NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
+                + "NVL(a.status, N'Chưa cấp') AS account_status, "
+                + "CASE "
+                + "    WHEN a.account_id IS NULL THEN 'N/A' "
+                + "    WHEN NVL(a.active_sessions, 0) > 0 THEN 'ONLINE' "
+                + "    ELSE 'OFFLINE' "
+                + "END AS online_status, "
+                + "NVL(a.active_sessions, 0) AS active_sessions, "
+                + "s.store_name AS store_name "
+                + "FROM EMPLOYEES e "
+                + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
+                + "LEFT JOIN STORES s ON e.store_id = s.store_id "
+                + "WHERE NVL(e.is_deleted, 0) = 0 "
+                + "AND e.store_id = ? "
+                + "ORDER BY e.employee_name ASC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, storeId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Employee emp = map(rs);
+                    emp.setRole(rs.getString("actual_role"));
+                    emp.setRoleId(rs.getString("actual_role"));
+                    emp.setAccountStatus(rs.getString("account_status"));
+                    emp.setOnlineStatus(rs.getString("online_status"));
+                    emp.setActiveSessions(rs.getInt("active_sessions"));
+                    list.add(emp);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    public ArrayList<Employee> searchByStoreId(String keyword, String storeId) {
+        ArrayList<Employee> list = new ArrayList<>();
+
+        String sql
+                = "SELECT e.*, "
+                + "NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
+                + "NVL(a.status, N'Chưa cấp') AS account_status, "
+                + "CASE "
+                + "    WHEN a.account_id IS NULL THEN 'N/A' "
+                + "    WHEN NVL(a.active_sessions, 0) > 0 THEN 'ONLINE' "
+                + "    ELSE 'OFFLINE' "
+                + "END AS online_status, "
+                + "NVL(a.active_sessions, 0) AS active_sessions, "
+                + "s.store_name AS store_name "
+                + "FROM EMPLOYEES e "
+                + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id "
+                + "LEFT JOIN STORES s ON e.store_id = s.store_id "
+                + "WHERE NVL(e.is_deleted, 0) = 0 "
+                + "AND e.store_id = ? "
+                + "AND (LOWER(e.employee_name) LIKE LOWER(?) OR e.phone LIKE ? OR LOWER(e.email) LIKE LOWER(?)) "
+                + "ORDER BY e.employee_name ASC";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            String pattern = "%" + keyword + "%";
+
+            ps.setString(1, storeId);
+            ps.setString(2, pattern);
+            ps.setString(3, pattern);
+            ps.setString(4, pattern);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Employee emp = map(rs);
+                    emp.setRole(rs.getString("actual_role"));
+                    emp.setRoleId(rs.getString("actual_role"));
+                    emp.setAccountStatus(rs.getString("account_status"));
+                    emp.setOnlineStatus(rs.getString("online_status"));
+                    emp.setActiveSessions(rs.getInt("active_sessions"));
+                    list.add(emp);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    public int updateInStore(Employee t, String storeId) {
+        String sql = "UPDATE EMPLOYEES SET employee_name = ?, phone = ?, email = ?, role_id = ?, gender = ?, store_id = ? "
+                + "WHERE employee_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            String roleId = (t.getRoleId() != null && !t.getRoleId().isEmpty()) ? t.getRoleId() : t.getRole();
+
+            pst.setString(1, t.getEmployeeName());
+            pst.setString(2, t.getPhone());
+            pst.setString(3, t.getEmail());
+            pst.setString(4, roleId);
+            pst.setString(5, t.getGender());
+            pst.setString(6, storeId);
+            pst.setString(7, t.getEmployeeId());
+            pst.setString(8, storeId);
+
+            return pst.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public int deleteInStore(String employeeId, String storeId) {
+        String sql = "UPDATE EMPLOYEES SET is_deleted = 1 "
+                + "WHERE employee_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+
+            pst.setString(1, employeeId);
+            pst.setString(2, storeId);
+
+            return pst.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
     }
 }
