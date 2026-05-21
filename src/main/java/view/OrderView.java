@@ -33,6 +33,7 @@ import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import model.order.Customer;
 import model.order.Order;
+import javax.swing.RowSorter;
 
 public class OrderView extends javax.swing.JPanel {
 
@@ -425,7 +426,15 @@ public class OrderView extends javax.swing.JPanel {
         cbStatus.setSelectedItem(STATUS_ALL);
     }
 
+    private volatile boolean loadingOrders = false;
+
     private void loadDataToTable() {
+        if (loadingOrders) {
+            return;
+        }
+
+        loadingOrders = true;
+
         new SwingWorker<List<Order>, Void>() {
             @Override
             protected List<Order> doInBackground() {
@@ -435,29 +444,70 @@ public class OrderView extends javax.swing.JPanel {
             @Override
             protected void done() {
                 try {
-                    fillTable(get());
+                    fillTableSafely(get());
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                } finally {
+                    loadingOrders = false;
                 }
             }
         }.execute();
     }
 
     private void fillTable(List<Order> list) {
+        fillTableSafely(list);
+    }
+
+    private void fillTableSafely(List<Order> list) {
         if (list == null) {
-            return;
+            list = java.util.Collections.emptyList();
         }
-        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
-        model.setRowCount(0);
-        for (Order o : list) {
-            model.addRow(new Object[]{
-                o.getOrderId(),
-                o.getCustomerId() != null ? o.getCustomerId() : "Khách vãng lai",
-                o.getOrderDate(),
-                moneyFormat.format(o.getTotalAmount()) + " đ",
-                normalizeDisplayStatus(o.getStatus())
-            });
-        }
+
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            RowSorter<? extends javax.swing.table.TableModel> oldSorter = jTable1.getRowSorter();
+
+            try {
+                jTable1.clearSelection();
+
+                // Tắt sorter tạm thời trước khi xóa/add row để tránh warning:
+                // row index is bigger than sorter's row count.
+                jTable1.setRowSorter(null);
+
+                DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+                model.setRowCount(0);
+
+                for (Order o : list) {
+                    if (o == null) {
+                        continue;
+                    }
+
+                    model.addRow(new Object[]{
+                        o.getOrderId(),
+                        o.getCustomerId() != null && !o.getCustomerId().trim().isEmpty()
+                        ? o.getCustomerId()
+                        : "Khách vãng lai",
+                        o.getOrderDate(),
+                        moneyFormat.format(o.getTotalAmount()) + " đ",
+                        normalizeDisplayStatus(o.getStatus())
+                    });
+                }
+
+            } finally {
+                // Bật sorter lại sau khi model đã ổn định.
+                jTable1.setAutoCreateRowSorter(true);
+
+                if (oldSorter != null) {
+                    try {
+                        jTable1.setRowSorter(oldSorter);
+                    } catch (Exception ignored) {
+                        jTable1.setAutoCreateRowSorter(true);
+                    }
+                }
+
+                jTable1.revalidate();
+                jTable1.repaint();
+            }
+        });
     }
 
     private String normalizeDisplayStatus(String status) {
@@ -478,18 +528,54 @@ public class OrderView extends javax.swing.JPanel {
 
     private int getSelectedModelRow() {
         int viewRow = jTable1.getSelectedRow();
+
         if (viewRow < 0) {
             return -1;
         }
-        return jTable1.convertRowIndexToModel(viewRow);
+
+        if (viewRow >= jTable1.getRowCount()) {
+            jTable1.clearSelection();
+            return -1;
+        }
+
+        try {
+            int modelRow = jTable1.convertRowIndexToModel(viewRow);
+
+            if (modelRow < 0 || modelRow >= jTable1.getModel().getRowCount()) {
+                jTable1.clearSelection();
+                return -1;
+            }
+
+            return modelRow;
+
+        } catch (Exception ex) {
+            jTable1.clearSelection();
+            return -1;
+        }
     }
 
     private String getSelectedOrderId() {
         int modelRow = getSelectedModelRow();
+
         if (modelRow < 0) {
             return null;
         }
-        return String.valueOf(jTable1.getModel().getValueAt(modelRow, 0));
+
+        try {
+            Object value = jTable1.getModel().getValueAt(modelRow, 0);
+
+            if (value == null) {
+                return null;
+            }
+
+            String orderId = value.toString().trim();
+
+            return orderId.isEmpty() ? null : orderId;
+
+        } catch (Exception ex) {
+            jTable1.clearSelection();
+            return null;
+        }
     }
 
     private void showOrderDetailsDialog(String orderId) {
@@ -825,12 +911,15 @@ public class OrderView extends javax.swing.JPanel {
 
     private void cbStatusActionPerformed(java.awt.event.ActionEvent evt) {
         Object selectedObj = cbStatus.getSelectedItem();
+
         if (selectedObj == null) {
             return;
         }
+
         String selected = selectedObj.toString();
+
         try {
-            fillTable(loadOrdersByStatusCurrentScope(selected));
+            fillTableSafely(loadOrdersByStatusCurrentScope(selected));
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi lọc hóa đơn: " + ex.getMessage());
         }
