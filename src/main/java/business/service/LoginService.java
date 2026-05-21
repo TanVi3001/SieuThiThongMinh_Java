@@ -6,21 +6,21 @@ import business.sql.rbac.TokenSql;
 import common.utils.PasswordUtils;
 import model.account.Account;
 import model.account.Token;
-import business.service.HeartbeatService;
 
 import java.sql.Timestamp;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import javax.swing.JOptionPane;
 
 /**
  * LoginService (BCrypt-only)
  *
  * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ. - Nếu hash bị sửa /
- * xóa / sai format -> đăng nhập thất bại (không ném exception). - Không
- * fallback plain text, không auto-upgrade.
+ * xóa / sai format -> đăng nhập thất bại. - Không fallback plain text, không
+ * auto-upgrade.
  *
- * Sau dán file này, làm Clean -> Rebuild -> Stop app cũ -> Run lại để đảm bảo
- * app dùng code mới.
+ * Bổ sung: - Sau khi login thành công, load store scope cho user hiện tại. -
+ * Nếu user là Store Manager nhưng chưa có store_id thì chặn đăng nhập.
  */
 public class LoginService {
 
@@ -39,8 +39,14 @@ public class LoginService {
 
         if (acc == null) {
             LoginHistorySql.getInstance().log(
-                    null, "LOGIN_FAILED", "FAILURE", "ACCOUNT_NOT_FOUND", localIp(), deviceInfo()
+                    null,
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "ACCOUNT_NOT_FOUND",
+                    localIp(),
+                    deviceInfo()
             );
+
             System.out.println("[" + LOGIN_VERSION + "] FAIL: ACCOUNT_NOT_FOUND");
             return null;
         }
@@ -52,50 +58,82 @@ public class LoginService {
             System.out.println("[" + LOGIN_VERSION + "] storedHash=null");
         } else {
             String prefix = storedHash.length() > 8 ? storedHash.substring(0, 8) : storedHash;
-            System.out.println("[" + LOGIN_VERSION + "] storedHash.len=" + storedHash.length() + " prefix=" + prefix);
+            System.out.println(
+                    "[" + LOGIN_VERSION + "] storedHash.len="
+                    + storedHash.length()
+                    + " prefix="
+                    + prefix
+            );
         }
 
         if (storedHash == null || storedHash.isBlank()) {
             LoginHistorySql.getInstance().log(
-                    acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "EMPTY_PASSWORD_HASH", localIp(), deviceInfo()
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "EMPTY_PASSWORD_HASH",
+                    localIp(),
+                    deviceInfo()
             );
+
             System.out.println("[" + LOGIN_VERSION + "] FAIL: EMPTY_PASSWORD_HASH");
             return null;
         }
 
-        // Bắt buộc hash đúng chuẩn BCrypt, nếu không -> fail (đây là requirement)
+        // Bắt buộc hash đúng chuẩn BCrypt
         boolean isBcrypt = PasswordUtils.isBCryptHash(storedHash);
         System.out.println("[" + LOGIN_VERSION + "] isBCrypt=" + isBcrypt);
+
         if (!isBcrypt) {
             LoginHistorySql.getInstance().log(
-                    acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "INVALID_PASSWORD_HASH", localIp(), deviceInfo()
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "INVALID_PASSWORD_HASH",
+                    localIp(),
+                    deviceInfo()
             );
+
             System.out.println("[" + LOGIN_VERSION + "] FAIL: INVALID_PASSWORD_HASH (manual tampering?)");
             return null;
         }
 
-        // Verify bằng BCrypt.checkpw (bên trong PasswordUtils đã bọc try/catch)
+        // Verify password bằng BCrypt
         final boolean ok;
+
         try {
             ok = PasswordUtils.checkPassword(password, storedHash);
         } catch (Exception ex) {
-            // Phòng thủ: nếu verify ném bất kỳ lỗi runtime nào thì fail
             LoginHistorySql.getInstance().log(
-                    acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "BCRYPT_VERIFY_ERROR", localIp(), deviceInfo()
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "BCRYPT_VERIFY_ERROR",
+                    localIp(),
+                    deviceInfo()
             );
+
             System.out.println("[" + LOGIN_VERSION + "] FAIL: BCRYPT_VERIFY_ERROR - " + ex.getMessage());
             return null;
         }
 
         if (!ok) {
             LoginHistorySql.getInstance().log(
-                    acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "WRONG_PASSWORD", localIp(), deviceInfo()
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "WRONG_PASSWORD",
+                    localIp(),
+                    deviceInfo()
             );
+
             System.out.println("[" + LOGIN_VERSION + "] FAIL: WRONG_PASSWORD");
             return null;
         }
 
-        // Tạo token và lưu DB
+        // =========================================================
+        // 1. Tạo token đăng nhập
+        // =========================================================
         String tokenValue = UUID.randomUUID().toString();
         acc.setToken(tokenValue);
 
@@ -103,30 +141,85 @@ public class LoginService {
         token.setTokenId(UUID.randomUUID().toString());
         token.setAccountId(acc.getAccountId());
         token.setTokenValue(tokenValue);
-        token.setExpiryDate(new Timestamp(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45))); // sau 45 phút thì hết hạn token
+        token.setExpiryDate(
+                new Timestamp(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45))
+        );
 
         int inserted = TokenSql.getInstance().insert(token);
+
         if (inserted <= 0) {
             System.out.println("[" + LOGIN_VERSION + "] WARN: token insert failed");
+
+            LoginHistorySql.getInstance().log(
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "TOKEN_INSERT_FAILED",
+                    localIp(),
+                    deviceInfo()
+            );
+
             return null;
-        } else {
-            System.out.println("[" + LOGIN_VERSION + "] token saved (rows=" + inserted + ")");
         }
 
-        // Lưu session RAM
-        String sessionId = java.util.UUID.randomUUID().toString();
+        System.out.println("[" + LOGIN_VERSION + "] token saved (rows=" + inserted + ")");
 
+        // =========================================================
+        // 2. Lưu session RAM
+        // =========================================================
+        String sessionId = UUID.randomUUID().toString();
         SessionManager.startSession(acc, tokenValue, sessionId);
 
-        AccountService.onLoginSuccessByRole(
-                acc,
-                sessionId
+        // =========================================================
+        // 3. Load scope chi nhánh của user đăng nhập
+        // =========================================================
+        SessionScopeService.loadEmployeeStoreScope(acc);
+
+        System.out.println(
+                "[" + LOGIN_VERSION + "] session scope: "
+                + "role=" + acc.getRole()
+                + ", employeeId=" + SessionManager.getCurrentEmployeeId()
+                + ", storeId=" + SessionManager.getCurrentStoreId()
+                + ", storeName=" + SessionManager.getCurrentStoreName()
         );
+
+        // =========================================================
+        // 4. Chặn Store Manager chưa được phân chi nhánh
+        // =========================================================
+        if (SessionManager.isStoreManager() && !SessionManager.hasStoreScope()) {
+            LoginHistorySql.getInstance().log(
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "MANAGER_WITHOUT_STORE",
+                    localIp(),
+                    deviceInfo()
+            );
+
+            TokenSql.getInstance().revokeToken(tokenValue);
+            SessionManager.clear();
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Tài khoản quản lý chưa được phân chi nhánh.\nVui lòng liên hệ Admin.",
+                    "Chưa phân chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            System.out.println("[" + LOGIN_VERSION + "] FAIL: MANAGER_WITHOUT_STORE");
+            return null;
+        }
+
+        // =========================================================
+        // 5. Login hợp lệ -> cập nhật trạng thái tài khoản/session
+        // =========================================================
+        AccountService.onLoginSuccessByRole(acc, sessionId);
 
         HeartbeatService.start(
                 acc.getAccountId(),
                 sessionId
         );
+
         return acc;
     }
 
@@ -142,20 +235,22 @@ public class LoginService {
         Account currentUser = SessionManager.getCurrentUser();
         String currentToken = SessionManager.getToken();
 
-        // Xử lý các tác vụ liên quan đến User ID
-        if (currentUser != null && currentUser.getAccountId() != null && !currentUser.getAccountId().isBlank()) {
+        if (currentUser != null
+                && currentUser.getAccountId() != null
+                && !currentUser.getAccountId().isBlank()) {
+
             String accountId = currentUser.getAccountId();
 
-            // 1. Dừng luồng Ping ngầm
+            // 1. Dừng luồng ping ngầm
             HeartbeatService.stop();
 
-            // 2. Trừ active_sessions trong Database (Thay thế hoàn toàn cho setOffline)
-            String sessionId = business.service.SessionManager.getCurrentSessionId();
+            // 2. Trừ active_sessions trong database
+            String sessionId = SessionManager.getCurrentSessionId();
 
-            if (business.service.HeartbeatService.markLogoutOnce()) {
-                business.service.HeartbeatService.stop();
+            if (HeartbeatService.markLogoutOnce()) {
+                HeartbeatService.stop();
 
-                business.service.AccountService.onLogoutOrCloseApp(
+                AccountService.onLogoutOrCloseApp(
                         currentUser.getAccountId(),
                         sessionId
                 );
@@ -172,13 +267,14 @@ public class LoginService {
             );
         }
 
-        // 4. Thu hồi Token (đặt riêng biệt phòng trường hợp có token nhưng user bị null)
+        // 4. Thu hồi token
         if (currentToken != null && !currentToken.isBlank()) {
             TokenSql.getInstance().revokeToken(currentToken);
         }
 
-        // 5. Dọn dẹp dữ liệu cục bộ trên máy
+        // 5. Dọn session local
         SessionManager.clear();
+
         System.out.println("[" + LOGIN_VERSION + "] user logged out");
     }
 
@@ -191,6 +287,8 @@ public class LoginService {
     }
 
     private static String deviceInfo() {
-        return System.getProperty("os.name") + " | Java " + System.getProperty("java.version");
+        return System.getProperty("os.name")
+                + " | Java "
+                + System.getProperty("java.version");
     }
 }
