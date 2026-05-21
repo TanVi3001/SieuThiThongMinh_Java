@@ -7,6 +7,7 @@ import view.components.IconHelper;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import business.service.SessionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -24,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 
 import common.events.AppDataChangedEvent;
@@ -110,7 +110,11 @@ public class StatisticView extends JPanel {
         lblTitle.setFont(titleFont);
         lblTitle.setForeground(textDark);
 
-        JLabel lblSub = new JLabel("Power BI style analytics: doanh thu, hàng hóa và hiệu suất nhân viên");
+        JLabel lblSub = new JLabel(
+                "Power BI style analytics: doanh thu, hàng hóa và hiệu suất nhân viên"
+                + " | Phạm vi: "
+                + statisticService.getCurrentReportStoreName()
+        );
         lblSub.setFont(normalFont);
         lblSub.setForeground(textGray);
 
@@ -792,7 +796,11 @@ public class StatisticView extends JPanel {
             Date endDatePlusOne = addDays(endDate, 1);
             RevenueReportType reportType = getSelectedReportType();
 
+            String scopedStoreId = statisticService.getCurrentReportStoreId();
+            boolean scoped = scopedStoreId != null && !scopedStoreId.trim().isEmpty();
+
             HashMap<String, Object> params = new HashMap<>();
+
             params.put("START_DATE", new java.sql.Date(startDate.getTime()));
             params.put("END_DATE", new java.sql.Date(endDate.getTime()));
             params.put("END_DATE_PLUS_ONE", new java.sql.Date(endDatePlusOne.getTime()));
@@ -800,11 +808,29 @@ public class StatisticView extends JPanel {
             params.put("REPORT_TYPE_LABEL", reportType.label);
             params.put("PERIOD_HEADER", reportType.periodHeader);
 
+            // Thêm scope chi nhánh cho Jasper.
+            // Admin: STORE_ID = null => báo cáo toàn hệ thống.
+            // Manager/Staff: STORE_ID = currentStoreId => báo cáo chi nhánh hiện tại.
+            params.put("STORE_ID", scoped ? scopedStoreId.trim() : null);
+            params.put("STORE_NAME", statisticService.getCurrentReportStoreName());
+            params.put("IS_ADMIN_REPORT", !scoped);
+
             ReportViewer.showReport("src/main/resources/reports/RevenueReport.jrxml", params);
+
         } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Khoảng ngày không hợp lệ", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    ex.getMessage(),
+                    "Khoảng ngày không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Lỗi xuất báo cáo doanh thu: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi xuất báo cáo doanh thu: " + ex.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
