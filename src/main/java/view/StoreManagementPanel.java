@@ -416,8 +416,16 @@ public class StoreManagementPanel extends JPanel {
 
     private void prepareAddNewStore() {
         clearForm();
+
+        String nextStoreId = generateNextStoreId();
+
+        if (nextStoreId == null || nextStoreId.trim().isEmpty()) {
+            lblHint.setText("Không thể tự sinh mã chi nhánh. Vui lòng kiểm tra database.");
+            return;
+        }
+
         isEditMode = false;
-        txtMaChiNhanh.setText(generateNextStoreId());
+        txtMaChiNhanh.setText(nextStoreId);
         txtMaChiNhanh.setEditable(false);
         lblFormTitle.setText("Thêm Thông Tin Chi Nhánh");
         lblHint.setText("Mã chi nhánh được tự sinh, không cho chỉnh thủ công");
@@ -494,6 +502,16 @@ public class StoreManagementPanel extends JPanel {
         if (id.isEmpty()) {
             id = generateNextStoreId();
             txtMaChiNhanh.setText(id);
+        }
+
+        if (id == null || id.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể lưu chi nhánh vì chưa sinh được mã chi nhánh.",
+                    "Thiếu mã chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
         }
         if (name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Vui lòng nhập tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
@@ -597,15 +615,38 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private String generateNextStoreId() {
-        String sql = "SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(store_id, '[0-9]+'))), 0) + 1 AS next_no FROM STORES WHERE REGEXP_LIKE(store_id, '^ST[0-9]+$')";
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        String sql = """
+        SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(store_id, '[0-9]+'))), 0) + 1 AS next_no
+        FROM STORES
+        WHERE REGEXP_LIKE(store_id, '^ST[0-9]+$')
+    """;
+
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
                 int next = rs.getInt("next_no");
+
+                if (next <= 0) {
+                    next = 1;
+                }
+
                 return String.format("ST%03d", next);
             }
-        } catch (Exception ignored) {
+
+        } catch (Exception e) {
+            e.printStackTrace();
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể tự sinh mã chi nhánh từ database.\n"
+                    + "Vui lòng kiểm tra kết nối hoặc bảng STORES.\n\n"
+                    + "Chi tiết: " + e.getMessage(),
+                    "Lỗi sinh mã chi nhánh",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
-        return "ST001";
+
+        return "";
     }
 
     private void refreshStoreSchemaFlags() {
