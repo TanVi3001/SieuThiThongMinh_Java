@@ -7,11 +7,8 @@ public class Order {
     private String orderId;
     private String customerId;
     private String employeeId;
+    private String storeId;
     private String paymentMethodId;
-
-    // =====================================================
-    // BỔ SUNG MỚI
-    // =====================================================
     private String employeeName;
 
     private Date orderDate;
@@ -23,9 +20,6 @@ public class Order {
     public Order() {
     }
 
-    /**
-     * Constructor đầy đủ 10 tham số
-     */
     public Order(String orderId,
             String customerId,
             String employeeId,
@@ -49,9 +43,6 @@ public class Order {
         this.isDeleted = isDeleted;
     }
 
-    /**
-     * Constructor POS
-     */
     public Order(String orderId,
             String customerId,
             String employeeId,
@@ -67,16 +58,13 @@ public class Order {
                 employeeId,
                 paymentMethodId,
                 null,
-                orderDate,
+                dateOrToday(orderDate),
                 totalAmount,
                 status,
                 note,
                 isDeleted);
     }
 
-    /**
-     * Constructor tương thích ngược
-     */
     public Order(String orderId,
             String customerId,
             String employeeId,
@@ -90,16 +78,13 @@ public class Order {
                 employeeId,
                 null,
                 null,
-                orderDate,
+                dateOrToday(orderDate),
                 totalAmount,
                 status,
                 null,
                 isDeleted);
     }
 
-    /**
-     * Constructor tương thích ngược
-     */
     public Order(String id,
             String cusId,
             String empId,
@@ -112,16 +97,17 @@ public class Order {
                 empId,
                 null,
                 null,
-                date,
+                dateOrToday(date),
                 total,
+                "Đang xử lý",
                 note,
-                null,
                 false);
     }
 
-    // =====================================================
-    // GETTERS
-    // =====================================================
+    private static Date dateOrToday(Date date) {
+        return date != null ? date : new Date(System.currentTimeMillis());
+    }
+
     public String getOrderId() {
         return orderId;
     }
@@ -132,6 +118,10 @@ public class Order {
 
     public String getEmployeeId() {
         return employeeId;
+    }
+
+    public String getStoreId() {
+        return storeId;
     }
 
     public String getPaymentMethodId() {
@@ -162,9 +152,6 @@ public class Order {
         return isDeleted;
     }
 
-    // =====================================================
-    // SETTERS
-    // =====================================================
     public void setOrderId(String orderId) {
         this.orderId = orderId;
     }
@@ -175,6 +162,10 @@ public class Order {
 
     public void setEmployeeId(String employeeId) {
         this.employeeId = employeeId;
+    }
+
+    public void setStoreId(String storeId) {
+        this.storeId = storeId;
     }
 
     public void setPaymentMethodId(String pmId) {

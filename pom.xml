@@ -22,11 +22,13 @@
             <version>23.26.1.0.0</version>
         </dependency>
 
-        <!-- JasperReports for JRXML report compile/fill/viewer -->
+        <!-- JasperReports for JRXML report compile/fill/viewer.
+             Keep jasperreports and jasperreports-fonts on the same 6.x line because
+             the current JRXML templates were authored in the classic 6.x format. -->
         <dependency>
             <groupId>net.sf.jasperreports</groupId>
             <artifactId>jasperreports</artifactId>
-            <version>7.0.3</version>
+            <version>6.21.3</version>
             <type>jar</type>
         </dependency>
 
