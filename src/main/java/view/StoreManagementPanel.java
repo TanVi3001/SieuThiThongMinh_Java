@@ -24,14 +24,12 @@ public class StoreManagementPanel extends JPanel {
     private final Color blue = new Color(37, 99, 235);
     private final Color green = new Color(16, 185, 129);
     private final Color red = new Color(239, 68, 68);
-    private final Color softGreen = new Color(236, 253, 245);
-    private final Color softRed = new Color(254, 242, 242);
 
     private JTable tblStores;
     private DefaultTableModel tableModel;
     private JTextField txtSearch, txtMaSieuThi, txtTenSieuThi, txtDiaChi, txtSoDienThoai;
     private JComboBox<String> cbTrangThai;
-    private JButton btnAddNew, btnSave, btnClear, btnSoftDelete;
+    private JButton btnSave, btnClear, btnSoftDelete;
     private JLabel lblTotal, lblActive, lblInactive, lblHint, lblFormTitle;
     private boolean isEditMode = false, hasNameColumn = false, hasStatusColumn = false;
 
@@ -55,28 +53,18 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private JPanel createHeaderPanel() {
-        JPanel p = new JPanel(new BorderLayout());
+        JPanel p = new JPanel();
         p.setOpaque(false);
-
-        JPanel titleBox = new JPanel();
-        titleBox.setOpaque(false);
-        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("Quản Lý Chuỗi Siêu Thị");
         title.setFont(new Font("Segoe UI", Font.BOLD, 28));
         title.setForeground(text);
         JLabel sub = new JLabel("Theo dõi, thêm mới, cập nhật và kiểm soát trạng thái toàn bộ chi nhánh trong hệ thống");
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         sub.setForeground(muted);
-        titleBox.add(title);
-        titleBox.add(Box.createVerticalStrut(5));
-        titleBox.add(sub);
-
-        JButton quickAdd = button("+ Thêm Siêu Thị", green, Color.WHITE);
-        quickAdd.setPreferredSize(new Dimension(155, 42));
-        quickAdd.addActionListener(e -> prepareAddNewStore());
-
-        p.add(titleBox, BorderLayout.WEST);
-        p.add(quickAdd, BorderLayout.EAST);
+        p.add(title);
+        p.add(Box.createVerticalStrut(5));
+        p.add(sub);
         return p;
     }
 
@@ -148,14 +136,11 @@ public class StoreManagementPanel extends JPanel {
         title.setForeground(text);
         JPanel search = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         search.setOpaque(false);
-        btnAddNew = button("+ Thêm", green, Color.WHITE);
-        btnAddNew.setPreferredSize(new Dimension(92, 40));
         txtSearch = field("Tìm kiếm chi nhánh...");
         txtSearch.setPreferredSize(new Dimension(285, 40));
         JButton btnSearch = button("Tìm", blue, Color.WHITE);
         btnSearch.setPreferredSize(new Dimension(86, 40));
         btnSearch.addActionListener(e -> loadStoreData(txtSearch.getText().trim()));
-        search.add(btnAddNew);
         search.add(txtSearch);
         search.add(btnSearch);
         bar.add(title, BorderLayout.WEST);
@@ -170,7 +155,7 @@ public class StoreManagementPanel extends JPanel {
         JScrollPane sp = new JScrollPane(tblStores);
         sp.setBorder(BorderFactory.createLineBorder(border));
         sp.getViewport().setBackground(Color.WHITE);
-        JLabel hint = new JLabel("Gợi ý: Bấm + Thêm để tạo siêu thị mới hoặc click một chi nhánh để chỉnh sửa.");
+        JLabel hint = new JLabel("Gợi ý: Bấm nút + Thêm Siêu Thị ở form bên phải để tạo mới, hoặc click một chi nhánh để chỉnh sửa.");
         hint.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         hint.setForeground(muted);
         area.add(bar, BorderLayout.NORTH);
@@ -269,7 +254,10 @@ public class StoreManagementPanel extends JPanel {
                 l.setHorizontalAlignment(SwingConstants.CENTER);
                 l.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 l.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
-                if (!selected) { l.setForeground(ACTIVE.equals(s) ? green : red); l.setBackground(ACTIVE.equals(s) ? softGreen : softRed); }
+                if (!selected) {
+                    l.setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 252, 255));
+                    l.setForeground(ACTIVE.equals(s) ? green : red);
+                }
                 return l;
             }
         };
@@ -281,7 +269,6 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void initEvents() {
-        btnAddNew.addActionListener(e -> prepareAddNewStore());
         btnClear.addActionListener(e -> clearForm());
         btnSave.addActionListener(e -> saveStore());
         btnSoftDelete.addActionListener(e -> softDeleteStore());
