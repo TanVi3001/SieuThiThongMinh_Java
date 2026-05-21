@@ -9,6 +9,8 @@ import java.awt.event.MouseEvent;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
@@ -17,6 +19,10 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import view.components.IconHelper;
+import business.sql.prod_inventory.CategoriesSql;
+import business.sql.prod_inventory.StoresSql;
+import model.product.Category;
+import model.product.Store;
 
 public class PromotionManagementPanel extends JPanel {
 
@@ -25,6 +31,8 @@ public class PromotionManagementPanel extends JPanel {
     private static final String STATUS_UPCOMING = "Sắp diễn ra";
     private static final String STATUS_ENDED = "Đã kết thúc";
     private static final String STATUS_PAUSED = "Tạm ngưng / Kết thúc";
+
+    private static final String BRANCH_ALL = "Tất cả chi nhánh";
 
     private final Color bg = new Color(244, 246, 250);
     private final Color white = Color.WHITE;
@@ -54,7 +62,8 @@ public class PromotionManagementPanel extends JPanel {
     private JTextField txtDenNgay;
     private JComboBox<String> cbChiNhanh;
     private JComboBox<String> cbSanPham;
-    private JComboBox<String> cbHangThanhVien;
+    // [CHANGED] Renamed from cbHangThanhVien to cbLoaiSanPham
+    private JComboBox<String> cbLoaiSanPham;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnDeactivate, btnPreview;
     private JLabel lblFormTitle;
@@ -226,6 +235,41 @@ public class PromotionManagementPanel extends JPanel {
         return area;
     }
 
+    // [NEW] Load danh sách chi nhánh từ DB, luôn có "Tất cả chi nhánh" ở đầu
+    private String[] loadBranchOptions() {
+        List<String> options = new ArrayList<>();
+        options.add(BRANCH_ALL);
+
+        String sql = "SELECT store_name FROM STORES WHERE NVL(is_deleted, 0) = 0 ORDER BY store_name";
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String name = rs.getString("store_name");
+                if (name != null && !name.isBlank()) {
+                    options.add(name);
+                }
+            }
+        } catch (Exception e) {
+            // Thử fallback với tên bảng BRANCHES nếu STORES không tồn tại
+            String sqlFallback = "SELECT branch_name FROM BRANCHES WHERE NVL(is_deleted, 0) = 0 ORDER BY branch_name";
+            try (Connection con = common.db.DatabaseConnection.getConnection();
+                 PreparedStatement ps = con.prepareStatement(sqlFallback);
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString("branch_name");
+                    if (name != null && !name.isBlank()) {
+                        options.add(name);
+                    }
+                }
+            } catch (Exception ex) {
+                System.err.println("Lỗi tải danh sách chi nhánh: " + ex.getMessage());
+            }
+        }
+
+        return options.toArray(new String[0]);
+    }
+
     private JPanel createRightPanel() {
         RoundedPanel card = new RoundedPanel(20, white);
         card.setPreferredSize(new Dimension(430, 0));
@@ -282,14 +326,31 @@ public class PromotionManagementPanel extends JPanel {
         addComponent(form, g, y++, timeRow, 14);
 
         addSection(form, g, y++, "3. Phạm vi áp dụng");
-        cbChiNhanh = combo(new String[]{"Tất cả chi nhánh", "Chi nhánh đang hoạt động"});
+
+        // Lấy danh sách chi nhánh tự động từ DB thông qua StoresSql
+        cbChiNhanh = new JComboBox<>();
+        cbChiNhanh.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cbChiNhanh.setPreferredSize(new Dimension(0, 40));
+        cbChiNhanh.addItem("Tất cả các chi nhánh");
+        for (Store store : StoresSql.getInstance().selectAll()) {
+            cbChiNhanh.addItem(store.getStoreId() + " - " + store.getAddress());
+        }
         addField(form, g, y, "Áp dụng tại chi nhánh", cbChiNhanh);
         y += 2;
+
         cbSanPham = combo(new String[]{"Tất cả mặt hàng", "Chỉ Hàng tiêu dùng", "Chỉ Thực phẩm tươi sống"});
         addField(form, g, y, "Áp dụng cho sản phẩm", cbSanPham);
         y += 2;
-        cbHangThanhVien = combo(new String[]{"Tất cả hạng", "Đồng trở lên", "Bạc trở lên", "Vàng trở lên"});
-        addField(form, g, y, "Áp dụng cho hạng thành viên", cbHangThanhVien);
+
+        // Lấy danh sách Loại sản phẩm tự động từ DB thông qua CategoriesSql
+        cbLoaiSanPham = new JComboBox<>();
+        cbLoaiSanPham.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cbLoaiSanPham.setPreferredSize(new Dimension(0, 40));
+        cbLoaiSanPham.addItem("Tất cả loại sản phẩm");
+        for (Category cat : CategoriesSql.getInstance().selectAll()) {
+            cbLoaiSanPham.addItem(cat.getCategoryName());
+        }
+        addField(form, g, y, "Áp dụng cho loại sản phẩm", cbLoaiSanPham);
         y += 2;
 
         addSection(form, g, y++, "4. Trạng thái chương trình");
@@ -299,7 +360,10 @@ public class PromotionManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
         btnClear = createButton("Làm mới", new Color(235, 238, 244), text, IconHelper.refresh(18));
-        btnPreview = createButton("Xem trước", softBlue, blue, null);
+        
+        // Đưa icon xem trước về null để tránh lỗi không tìm thấy icon
+        btnPreview = createButton("Xem trước", softBlue, blue, null); 
+        
         btnDeactivate = createButton("Tạm ngưng", red, Color.WHITE, IconHelper.delete(18));
         btnSave = createButton("Lưu", blue, Color.WHITE, IconHelper.edit(18));
         actions.add(btnClear);
@@ -356,17 +420,9 @@ public class PromotionManagementPanel extends JPanel {
         btnSave.addActionListener(e -> savePromo());
 
         txtSearch.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) {
-                doSearch();
-            }
-
-            public void removeUpdate(DocumentEvent e) {
-                doSearch();
-            }
-
-            public void changedUpdate(DocumentEvent e) {
-                doSearch();
-            }
+            public void insertUpdate(DocumentEvent e) { doSearch(); }
+            public void removeUpdate(DocumentEvent e) { doSearch(); }
+            public void changedUpdate(DocumentEvent e) { doSearch(); }
         });
         cbFilterStatus.addActionListener(e -> doSearch());
 
@@ -401,7 +457,7 @@ public class PromotionManagementPanel extends JPanel {
         txtDenNgay.setText("");
         cbChiNhanh.setSelectedIndex(0);
         cbSanPham.setSelectedIndex(0);
-        cbHangThanhVien.setSelectedIndex(0);
+        cbLoaiSanPham.setSelectedIndex(0); // [CHANGED]
         cbTrangThai.setSelectedIndex(0);
         tblPromos.clearSelection();
         lblFormTitle.setText("Cấu Hình Khuyến Mãi");
@@ -427,7 +483,8 @@ public class PromotionManagementPanel extends JPanel {
         }
         sql += "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, "%" + keyword + "%");
             ps.setString(2, "%" + keyword + "%");
@@ -439,21 +496,17 @@ public class PromotionManagementPanel extends JPanel {
                 while (rs.next()) {
                     String trangThai = rs.getString("trangthai");
                     tableModel.addRow(new Object[]{
-                        rs.getString("makm"),
-                        rs.getString("tenkm"),
-                        rs.getInt("phantramgiam") + "%",
-                        rs.getString("tungay"),
-                        rs.getString("denngay"),
-                        trangThai
+                            rs.getString("makm"),
+                            rs.getString("tenkm"),
+                            rs.getInt("phantramgiam") + "%",
+                            rs.getString("tungay"),
+                            rs.getString("denngay"),
+                            trangThai
                     });
                     total++;
-                    if (STATUS_ACTIVE.equals(trangThai)) {
-                        active++;
-                    } else if (STATUS_ENDED.equals(trangThai)) {
-                        ended++;
-                    } else if (STATUS_PAUSED.equals(trangThai)) {
-                        paused++;
-                    }
+                    if (STATUS_ACTIVE.equals(trangThai)) active++;
+                    else if (STATUS_ENDED.equals(trangThai)) ended++;
+                    else if (STATUS_PAUSED.equals(trangThai)) paused++;
                 }
             }
 
@@ -475,7 +528,8 @@ public class PromotionManagementPanel extends JPanel {
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE p.promotion_id = ? AND NVL(p.is_deleted, 0) = 0";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maKM);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -577,12 +631,11 @@ public class PromotionManagementPanel extends JPanel {
         }
 
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn tạm ngưng khuyến mãi này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
+        if (confirm != JOptionPane.YES_OPTION) return;
 
         String sql = "UPDATE PROMOTIONS SET status = ? WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, STATUS_PAUSED);
             ps.setString(2, ma);
             ps.executeUpdate();
@@ -600,6 +653,8 @@ public class PromotionManagementPanel extends JPanel {
                 + "Tên chương trình: " + valueOrDash(txtTenKM.getText()) + "\n"
                 + "Mức giảm: " + spinGiamGia.getValue() + "%\n"
                 + "Thời gian: " + valueOrDash(txtTuNgay.getText()) + " đến " + valueOrDash(txtDenNgay.getText()) + "\n"
+                + "Chi nhánh: " + cbChiNhanh.getSelectedItem() + "\n"
+                + "Loại sản phẩm: " + cbLoaiSanPham.getSelectedItem() + "\n" // [CHANGED]
                 + "Trạng thái: " + cbTrangThai.getSelectedItem();
         JOptionPane.showMessageDialog(this, message, "Xem trước khuyến mãi", JOptionPane.INFORMATION_MESSAGE);
     }
@@ -758,7 +813,6 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     class RoundedPanel extends JPanel {
-
         private final int radius;
         private final Color backgroundColor;
 
