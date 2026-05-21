@@ -189,7 +189,10 @@ public class StoreManagementPanel extends JPanel {
         g.fill = GridBagConstraints.HORIZONTAL;
         g.weightx = 1;
         int y = 0;
-        txtMaSieuThi = field("VD: ST001"); addField(form, g, y, "Mã siêu thị", txtMaSieuThi); y += 2;
+        txtMaSieuThi = field("Mã tự sinh");
+        txtMaSieuThi.setEditable(false);
+        txtMaSieuThi.setBackground(new Color(248, 250, 252));
+        addField(form, g, y, "Mã siêu thị", txtMaSieuThi); y += 2;
         txtTenSieuThi = field("Nhập tên chi nhánh..."); addField(form, g, y, "Tên siêu thị", txtTenSieuThi); y += 2;
         txtSoDienThoai = field("Nhập số điện thoại..."); addField(form, g, y, "Số điện thoại", txtSoDienThoai); y += 2;
         txtDiaChi = field("Nhập địa chỉ chi nhánh..."); addField(form, g, y, "Địa chỉ", txtDiaChi); y += 2;
@@ -202,9 +205,9 @@ public class StoreManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(4, 1, 0, 10));
         actions.setOpaque(false);
         JButton btnAddFromForm = button("+ Thêm Siêu Thị", green, Color.WHITE);
-        btnSave = button("Lưu Thông Tin", blue, Color.WHITE);
+        btnSave = button("Cập nhật", blue, Color.WHITE);
         btnClear = button("Làm Mới", new Color(235, 238, 244), text);
-        btnSoftDelete = button("Xóa mềm", red, Color.WHITE);
+        btnSoftDelete = button("Xóa", red, Color.WHITE);
         btnAddFromForm.addActionListener(e -> prepareAddNewStore());
         actions.add(btnAddFromForm);
         actions.add(btnSave);
@@ -242,7 +245,10 @@ public class StoreManagementPanel extends JPanel {
                 JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, col);
                 l.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
                 l.setFont(new Font("Segoe UI", col == 0 ? Font.BOLD : Font.PLAIN, 13));
-                if (!selected) { l.setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 252, 255)); l.setForeground(col == 0 ? blue : text); }
+                if (!selected) {
+                    l.setBackground(Color.WHITE);
+                    l.setForeground(col == 0 ? blue : text);
+                }
                 return l;
             }
         };
@@ -255,7 +261,7 @@ public class StoreManagementPanel extends JPanel {
                 l.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 l.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
                 if (!selected) {
-                    l.setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 252, 255));
+                    l.setBackground(Color.WHITE);
                     l.setForeground(ACTIVE.equals(s) ? green : red);
                 }
                 return l;
@@ -286,7 +292,7 @@ public class StoreManagementPanel extends JPanel {
                     isEditMode = true;
                     String id = String.valueOf(tableModel.getValueAt(modelRow, 0));
                     txtMaSieuThi.setText(id);
-                    txtMaSieuThi.setEnabled(false);
+                    txtMaSieuThi.setEditable(false);
                     lblFormTitle.setText("Thông Tin Siêu Thị");
                     lblHint.setText("Đang cập nhật chi nhánh " + id);
                     loadStoreDetailsToForm(id);
@@ -299,15 +305,15 @@ public class StoreManagementPanel extends JPanel {
         clearForm();
         isEditMode = false;
         txtMaSieuThi.setText(generateNextStoreId());
-        txtMaSieuThi.setEnabled(true);
+        txtMaSieuThi.setEditable(false);
         lblFormTitle.setText("Thêm Thông Tin Siêu Thị");
-        lblHint.setText("Đang nhập chi nhánh mới - bấm Lưu Thông Tin để tạo");
+        lblHint.setText("Mã siêu thị được tự sinh, không cho chỉnh thủ công");
         txtTenSieuThi.requestFocusInWindow();
     }
 
     private void clearForm() {
         isEditMode = false;
-        txtMaSieuThi.setEnabled(true);
+        txtMaSieuThi.setEditable(false);
         txtMaSieuThi.setText("");
         txtTenSieuThi.setText("");
         txtDiaChi.setText("");
@@ -357,7 +363,8 @@ public class StoreManagementPanel extends JPanel {
 
     private void saveStore() {
         String id = txtMaSieuThi.getText().trim(), name = txtTenSieuThi.getText().trim(), address = txtDiaChi.getText().trim(), phone = txtSoDienThoai.getText().trim(), status = String.valueOf(cbTrangThai.getSelectedItem());
-        if (id.isEmpty() || name.isEmpty()) { JOptionPane.showMessageDialog(this, "Vui lòng nhập mã và tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE); return; }
+        if (id.isEmpty()) { id = generateNextStoreId(); txtMaSieuThi.setText(id); }
+        if (name.isEmpty()) { JOptionPane.showMessageDialog(this, "Vui lòng nhập tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE); return; }
         refreshStoreSchemaFlags();
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
             if (isEditMode) updateStore(con, id, name, address, phone, status); else insertStore(con, id, name, address, phone, status);
@@ -388,27 +395,26 @@ public class StoreManagementPanel extends JPanel {
 
     private void softDeleteStore() {
         String id = txtMaSieuThi.getText().trim();
-        if (id.isEmpty() || !isEditMode) { JOptionPane.showMessageDialog(this, "Vui lòng chọn một chi nhánh để xóa mềm.", "Cảnh báo", JOptionPane.WARNING_MESSAGE); return; }
-        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn tạm ngưng chi nhánh " + id + "?", "Xác nhận xóa mềm", JOptionPane.YES_NO_OPTION);
+        if (id.isEmpty() || !isEditMode) { JOptionPane.showMessageDialog(this, "Vui lòng chọn một chi nhánh để xóa.", "Cảnh báo", JOptionPane.WARNING_MESSAGE); return; }
+        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa chi nhánh " + id + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
         refreshStoreSchemaFlags();
         String sql = hasStatusColumn ? "UPDATE STORES SET is_deleted=1, status=? WHERE store_id=?" : "UPDATE STORES SET is_deleted=1 WHERE store_id=?";
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             if (hasStatusColumn) { ps.setString(1, INACTIVE); ps.setString(2, id); } else ps.setString(1, id);
-            ps.executeUpdate(); business.service.AuditLogService.logAction("XÓA MỀM", "STORES", id, "", "is_deleted=1", "Admin tạm ngưng chi nhánh"); clearForm(); loadStoreData(txtSearch.getText().trim()); EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
-        } catch (Exception e) { JOptionPane.showMessageDialog(this, "Lỗi khi xóa mềm: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE); }
+            ps.executeUpdate(); business.service.AuditLogService.logAction("XÓA", "STORES", id, "", "is_deleted=1", "Admin xóa chi nhánh"); clearForm(); loadStoreData(txtSearch.getText().trim()); EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+        } catch (Exception e) { JOptionPane.showMessageDialog(this, "Lỗi khi xóa: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE); }
     }
 
     private String generateNextStoreId() {
-        int max = 0;
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT store_id FROM STORES"); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String id = safe(rs.getString(1));
-                String digits = id.replaceAll("\\D+", "");
-                if (!digits.isEmpty()) max = Math.max(max, Integer.parseInt(digits));
+        String sql = "SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(store_id, '[0-9]+'))), 0) + 1 AS next_no FROM STORES WHERE REGEXP_LIKE(store_id, '^ST[0-9]+$')";
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                int next = rs.getInt("next_no");
+                return String.format("ST%03d", next);
             }
         } catch (Exception ignored) {}
-        return String.format("ST%03d", max + 1);
+        return "ST001";
     }
 
     private void refreshStoreSchemaFlags() { hasNameColumn = hasColumn("STORES", "STORE_NAME"); hasStatusColumn = hasColumn("STORES", "STATUS"); }
