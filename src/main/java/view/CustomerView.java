@@ -22,7 +22,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import model.order.Customer;
 import view.components.IconHelper;
-import java.util.Arrays;
 import business.service.AuthorizationService;
 import view.components.CustomerAnalyticsPanel;
 
@@ -209,7 +208,9 @@ public class CustomerView extends JPanel {
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 28));
         lblTitle.setForeground(textDark);
 
-        JLabel lblSub = new JLabel("Quản lý hồ sơ khách hàng, thông tin liên hệ và hạng thành viên");
+        JLabel lblSub = new JLabel(
+                "Quản lý hồ sơ khách hàng toàn hệ thống; chi nhánh nào cũng có thể tra SĐT để áp hạng/voucher"
+        );
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblSub.setForeground(textGray);
 
@@ -240,7 +241,6 @@ public class CustomerView extends JPanel {
         customerToolPanel.add(btnSearch);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(customerToolPanel, BorderLayout.EAST);
         headerPanel.add(customerToolPanel, BorderLayout.EAST);
         return headerPanel;
     }
@@ -514,6 +514,10 @@ public class CustomerView extends JPanel {
             tblCustomers.clearSelection();
 
             loadCustomerData();
+            if ("OVERVIEW".equals(currentCustomerTab)
+                    && (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())) {
+                refreshTable();
+            }
         });
 
         btnSearch.addActionListener(e -> {
@@ -616,8 +620,8 @@ public class CustomerView extends JPanel {
         loadAutoCompleteData();
         loadCustomerData();
 
-        if (overviewPanel != null && (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin())) {
-            String oldTab = currentCustomerTab;
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isAdmin()) {
+            String oldTab = currentCustomerTab == null ? "OVERVIEW" : currentCustomerTab;
 
             overviewPanel = new CustomerAnalyticsPanel();
 
@@ -625,9 +629,15 @@ public class CustomerView extends JPanel {
                 tabContentPanel.removeAll();
                 tabContentPanel.add(overviewPanel, "OVERVIEW");
                 tabContentPanel.add(detailPanel, "DETAIL");
+
                 switchCustomerTab(oldTab);
             }
+        } else {
+            switchCustomerTab("DETAIL");
         }
+
+        revalidate();
+        repaint();
     }
 
     private String maskPhone(String phone) {

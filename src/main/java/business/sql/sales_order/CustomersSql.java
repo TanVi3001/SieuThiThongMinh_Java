@@ -17,6 +17,18 @@ public class CustomersSql implements SqlInterface<Customer> {
         return new CustomersSql();
     }
 
+    private static String completedCondition(String columnName) {
+        return "("
+                + "UPPER(NVL(" + columnName + ", '')) = 'COMPLETED' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HOÀN THÀNH%' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HOAN THANH%'"
+                + ")";
+    }
+
+    private static String cleanStoreId(String storeId) {
+        return storeId == null || storeId.trim().isEmpty() ? null : storeId.trim();
+    }
+
     @Override
     public int insert(Customer t) {
         String sql = "INSERT INTO CUSTOMERS ("
@@ -142,81 +154,112 @@ public class CustomersSql implements SqlInterface<Customer> {
     }
 
     /**
-     * CUSTOMERS là global toàn chuỗi. Method này chỉ scope CHỈ SỐ PHÂN TÍCH theo ORDERS.store_id,
-     * không tách dữ liệu khách hàng theo chi nhánh và không yêu cầu CUSTOMERS.store_id.
+     * CUSTOMERS là global toàn chuỗi.
+     *
+     * Hàm này chỉ scope CHỈ SỐ PHÂN TÍCH theo ORDERS.store_id: - Không tách
+     * khách hàng theo chi nhánh. - Không cần CUSTOMERS.store_id. - Manager chi
+     * nhánh nào thì chỉ thấy khách có phát sinh đơn hoàn thành ở chi nhánh đó.
+     * - total_spending trong object trả về là chi tiêu tại chi nhánh hiện tại,
+     * không phải tổng global.
      */
     public List<Customer> selectAllWithRankForStoreAnalytics(String storeId) {
-        if (storeId == null || storeId.trim().isEmpty()) {
+        String sid = cleanStoreId(storeId);
+
+        if (sid == null) {
             return selectAllWithRank();
         }
 
         List<Customer> list = new ArrayList<>();
-        String sql = """
-            SELECT
-                c.customer_id,
-                c.customer_name,
-                c.reward_points,
-                NVL(SUM(CASE
-                    WHEN o.store_id = ?
-                     AND NVL(o.is_deleted, 0) = 0
-                     AND o.status = N'Hoàn thành'
-                    THEN o.total_amount ELSE 0 END), 0) AS total_spending,
-                c.member_rank,
-                c.is_deleted,
-                c.phone,
-                c.email,
-                c.address
-            FROM CUSTOMERS c
-            LEFT JOIN ORDERS o
-                   ON o.customer_id = c.customer_id
-            WHERE NVL(c.is_deleted, 0) = 0
-            GROUP BY c.customer_id, c.customer_name, c.reward_points,
-                     c.member_rank, c.is_deleted, c.phone, c.email, c.address
-            HAVING NVL(SUM(CASE
-                    WHEN o.store_id = ?
-                     AND NVL(o.is_deleted, 0) = 0
-                     AND o.status = N'Hoàn thành'
-                    THEN o.total_amount ELSE 0 END), 0) > 0
-            ORDER BY total_spending DESC
-        """;
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, storeId.trim());
-            pst.setString(2, storeId.trim());
+        String sql = """
+        SELECT
+            c.customer_id,
+            c.customer_name,
+            c.reward_points,
+            NVL(SUM(CASE
+                WHEN o.store_id = ?
+                 AND NVL(o.is_deleted, 0) = 0
+                 AND %s
+                THEN NVL(o.total_amount, 0)
+                ELSE 0
+            END), 0) AS total_spending,
+            c.member_rank,
+            c.is_deleted,
+            c.phone,
+            c.email,
+            c.address
+        FROM CUSTOMERS c
+        LEFT JOIN ORDERS o
+            ON o.customer_id = c.customer_id
+        WHERE NVL(c.is_deleted, 0) = 0
+        GROUP BY
+            c.customer_id,
+            c.customer_name,
+            c.reward_points,
+            c.member_rank,
+            c.is_deleted,
+            c.phone,
+            c.email,
+            c.address
+        HAVING NVL(SUM(CASE
+            WHEN o.store_id = ?
+             AND NVL(o.is_deleted, 0) = 0
+             AND %s
+            THEN NVL(o.total_amount, 0)
+            ELSE 0
+        END), 0) > 0
+        ORDER BY total_spending DESC
+    """.formatted(completedCondition("o.status"), completedCondition("o.status"));
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, sid);
+            pst.setString(2, sid);
+
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
                     list.add(map(rs));
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         return list;
     }
 
     public int countNewCustomersByFirstPurchaseInStoreThisMonth(String storeId) {
-        if (storeId == null || storeId.trim().isEmpty()) {
+        String sid = cleanStoreId(storeId);
+
+        if (sid == null) {
             return 0;
         }
+
         String sql = """
-            SELECT COUNT(*) AS total
-            FROM (
-                SELECT customer_id, MIN(order_date) AS first_order_date
-                FROM ORDERS
-                WHERE customer_id IS NOT NULL
-                  AND store_id = ?
-                  AND NVL(is_deleted, 0) = 0
-                  AND status = N'Hoàn thành'
-                GROUP BY customer_id
-            ) x
-            WHERE x.first_order_date >= TRUNC(SYSDATE, 'MM')
-              AND x.first_order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
-        """;
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, storeId.trim());
+        SELECT COUNT(*) AS total
+        FROM (
+            SELECT customer_id,
+                   MIN(order_date) AS first_order_date
+            FROM ORDERS
+            WHERE customer_id IS NOT NULL
+              AND store_id = ?
+              AND NVL(is_deleted, 0) = 0
+              AND %s
+            GROUP BY customer_id
+        ) x
+        WHERE x.first_order_date >= TRUNC(SYSDATE, 'MM')
+          AND x.first_order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+    """.formatted(completedCondition("status"));
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, sid);
+
             try (ResultSet rs = pst.executeQuery()) {
                 return rs.next() ? rs.getInt("total") : 0;
             }
+
         } catch (Exception e) {
             e.printStackTrace();
             return 0;
@@ -240,7 +283,7 @@ public class CustomersSql implements SqlInterface<Customer> {
                 + "FROM ORDERS "
                 + "WHERE CUSTOMER_ID = ? "
                 + "AND NVL(IS_DELETED, 0) = 0 "
-                + "AND STATUS = N'Hoàn thành'";
+                + "AND " + completedCondition("STATUS");
 
         try (PreparedStatement pst = con.prepareStatement(spendingSql)) {
             pst.setString(1, customerId);
@@ -292,5 +335,31 @@ public class CustomersSql implements SqlInterface<Customer> {
         c.setAddress(rs.getString("ADDRESS"));
         c.setIsDeleted(rs.getInt("IS_DELETED"));
         return c;
+    }
+
+    // Đếm khách cho Admin
+    public int countNewCustomersThisMonthGlobal() {
+        String sql = """
+        SELECT COUNT(*) AS total
+        FROM (
+            SELECT customer_id,
+                   MIN(order_date) AS first_order_date
+            FROM ORDERS
+            WHERE customer_id IS NOT NULL
+              AND NVL(is_deleted, 0) = 0
+              AND %s
+            GROUP BY customer_id
+        ) x
+        WHERE x.first_order_date >= TRUNC(SYSDATE, 'MM')
+          AND x.first_order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+    """.formatted(completedCondition("status"));
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+            return rs.next() ? rs.getInt("total") : 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
     }
 }
