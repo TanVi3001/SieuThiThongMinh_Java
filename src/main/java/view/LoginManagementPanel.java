@@ -190,7 +190,7 @@ public class LoginManagementPanel extends JPanel {
         loadLoginData(keyword, status, fromDateStr, toDateStr);
     }
 
-    // 🌟 KẾT NỐI TRỰC TIẾP VỚI BẢNG LOGIN_HISTORY TRONG DATABASE
+    // KẾT NỐI TRỰC TIẾP VỚI BẢNG LOGIN_HISTORY TRONG DATABASE
     private void loadLoginData(String keyword, String statusFilter, String fromDate, String toDate) {
         tableModel.setRowCount(0);
         int total = 0, failed = 0, active = 0;
@@ -202,11 +202,15 @@ public class LoginManagementPanel extends JPanel {
             "l.status, l.action_type " +
             "FROM LOGIN_HISTORY l " +
             "LEFT JOIN ACCOUNTS a ON l.account_id = a.account_id " +
-            "WHERE (LOWER(l.log_id) LIKE LOWER(?) OR LOWER(a.username) LIKE LOWER(?) OR l.ip_address LIKE ?) "
+            "WHERE (TO_CHAR(l.log_id) LIKE ? " +           // fix bug 1
+            "   OR LOWER(NVL(a.username,'')) LIKE LOWER(?) " + // fix bug 3
+            "   OR l.ip_address LIKE ?) "
         );
 
-        if (statusFilter.equals("Thành công")) sql.append(" AND LOWER(l.status) = 'thành công' ");
-        else if (statusFilter.equals("Thất bại")) sql.append(" AND LOWER(l.status) != 'thành công' ");
+        if (statusFilter.equals("Thành công"))
+            sql.append(" AND UPPER(l.status) = 'SUCCESS' ");  // hoặc đúng với giá trị trong DB của bạn
+        else if (statusFilter.equals("Thất bại"))
+            sql.append(" AND UPPER(l.status) != 'SUCCESS' ");
         
         if (!fromDate.isEmpty()) sql.append(" AND l.login_time >= TO_DATE(?, 'DD/MM/YYYY') ");
         if (!toDate.isEmpty()) sql.append(" AND l.login_time <= TO_DATE(? || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS') ");
