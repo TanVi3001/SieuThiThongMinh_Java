@@ -16,6 +16,9 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import java.awt.Font;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -183,7 +186,7 @@ public class TongQuanPanel extends JPanel {
         bottomPanel.add(statsPanel);
         bottomPanel.add(createOrderTablePanel());
         add(bottomPanel);
-        
+
     }
 
     // =============================================
@@ -641,113 +644,333 @@ public class TongQuanPanel extends JPanel {
     // LOAD DỮ LIỆU TỪ DATABASE
     // =============================================
     public void loadRealData() {
+        String currentStoreId = business.service.SessionManager.getCurrentStoreId();
+
+        boolean scoped = !business.service.SessionManager.isAdmin()
+                && currentStoreId != null
+                && !currentStoreId.trim().isEmpty();
+
+        if (currentStoreId != null) {
+            currentStoreId = currentStoreId.trim();
+        }
+
         try (Connection con = DatabaseConnection.getConnection()) {
             DecimalFormat df = new DecimalFormat("#,###");
 
-            // 1. THẺ TỔNG QUAN
-            String sqlRev = "SELECT NVL(SUM(total_amount), 0) FROM ORDERS "
+            // =========================================================
+            // 1. THẺ TỔNG QUAN - THEO CHI NHÁNH HIỆN TẠI
+            // =========================================================
+            String sqlRev = ""
+                    + "SELECT NVL(SUM(total_amount), 0) "
+                    + "FROM ORDERS "
                     + "WHERE NVL(is_deleted, 0) = 0 "
-                    + "AND UPPER(NVL(status, '')) <> 'CANCELLED' AND UPPER(NVL(status, '')) <> 'ĐÃ HỦY' "
-                    + "AND TRUNC(order_date) = TRUNC(SYSDATE)";
-            try (PreparedStatement ps = con.prepareStatement(sqlRev); ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    lblRevenue.setText(df.format(rs.getDouble(1)));
+                    + "  AND UPPER(NVL(status, '')) <> 'CANCELLED' "
+                    + "  AND UPPER(NVL(status, '')) NOT LIKE '%HỦY%' "
+                    + "  AND UPPER(NVL(status, '')) NOT LIKE '%HUY%' "
+                    + "  AND TRUNC(order_date) = TRUNC(SYSDATE) "
+                    + (scoped ? "  AND store_id = ? " : "");
+
+            try (PreparedStatement ps = con.prepareStatement(sqlRev)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        lblRevenue.setText(df.format(rs.getDouble(1)));
+                    }
                 }
             }
 
-            String sqlCus = "SELECT COUNT(*) FROM CUSTOMERS WHERE NVL(is_deleted, 0) = 0";
-            try (PreparedStatement ps = con.prepareStatement(sqlCus); ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    lblCustomers.setText(String.valueOf(rs.getInt(1)));
+            // CUSTOMERS vẫn global, nhưng "khách hôm nay" của dashboard chi nhánh
+            // phải tính theo khách có phát sinh đơn ở chi nhánh hiện tại.
+            String sqlCus = ""
+                    + "SELECT COUNT(DISTINCT customer_id) "
+                    + "FROM ORDERS "
+                    + "WHERE NVL(is_deleted, 0) = 0 "
+                    + "  AND customer_id IS NOT NULL "
+                    + "  AND TRUNC(order_date) = TRUNC(SYSDATE) "
+                    + (scoped ? "  AND store_id = ? " : "");
+
+            try (PreparedStatement ps = con.prepareStatement(sqlCus)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        lblCustomers.setText(String.valueOf(rs.getInt(1)));
+                    }
                 }
             }
 
-            String sqlOrd = "SELECT COUNT(*) FROM ORDERS "
-                    + "WHERE NVL(is_deleted, 0) = 0 AND TRUNC(order_date) = TRUNC(SYSDATE)";
-            try (PreparedStatement ps = con.prepareStatement(sqlOrd); ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    lblOrders.setText(String.valueOf(rs.getInt(1)));
+            String sqlOrd = ""
+                    + "SELECT COUNT(*) "
+                    + "FROM ORDERS "
+                    + "WHERE NVL(is_deleted, 0) = 0 "
+                    + "  AND TRUNC(order_date) = TRUNC(SYSDATE) "
+                    + (scoped ? "  AND store_id = ? " : "");
+
+            try (PreparedStatement ps = con.prepareStatement(sqlOrd)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        lblOrders.setText(String.valueOf(rs.getInt(1)));
+                    }
                 }
             }
 
-            // 2. BIỂU ĐỒ
-            StatisticSql sqlDao = StatisticSql.getInstance();
-
+            // =========================================================
+            // 2. BIỂU ĐỒ DOANH THU 5 THÁNG - THEO CHI NHÁNH
+            // =========================================================
             barDataset.clear();
-            for (Map.Entry<String, Double> e : sqlDao.getRevenueByMonth().entrySet()) {
-                barDataset.addValue(e.getValue() / 1_000_000.0, "Doanh thu", e.getKey());
+
+            String sqlRevenueByMonth = ""
+                    + "SELECT month_label, revenue "
+                    + "FROM ( "
+                    + "    SELECT TRUNC(order_date, 'MM') AS month_start, "
+                    + "           TO_CHAR(order_date, 'MM/YY') AS month_label, "
+                    + "           NVL(SUM(total_amount), 0) AS revenue "
+                    + "    FROM ORDERS "
+                    + "    WHERE NVL(is_deleted, 0) = 0 "
+                    + "      AND UPPER(NVL(status, '')) <> 'CANCELLED' "
+                    + "      AND UPPER(NVL(status, '')) NOT LIKE '%HỦY%' "
+                    + "      AND UPPER(NVL(status, '')) NOT LIKE '%HUY%' "
+                    + (scoped ? "      AND store_id = ? " : "")
+                    + "    GROUP BY TRUNC(order_date, 'MM'), TO_CHAR(order_date, 'MM/YY') "
+                    + "    ORDER BY month_start DESC "
+                    + ") "
+                    + "WHERE ROWNUM <= 5 "
+                    + "ORDER BY month_label";
+
+            try (PreparedStatement ps = con.prepareStatement(sqlRevenueByMonth)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String month = rs.getString("month_label");
+                        double revenue = rs.getDouble("revenue");
+
+                        barDataset.addValue(revenue / 1_000_000.0, "Doanh thu", month);
+                    }
+                }
             }
 
+            // =========================================================
+            // 3. BIỂU ĐỒ LƯỢT KHÁCH / ĐƠN 7 NGÀY - THEO CHI NHÁNH
+            // =========================================================
             lineDataset.clear();
-            for (Map.Entry<String, Integer> e : sqlDao.getOrdersByDay().entrySet()) {
-                lineDataset.addValue(e.getValue(), "Đơn", e.getKey());
+
+            String sqlOrdersByDay = ""
+                    + "SELECT order_day, order_count "
+                    + "FROM ( "
+                    + "    SELECT TRUNC(order_date) AS real_day, "
+                    + "           TO_CHAR(order_date, 'DD/MM') AS order_day, "
+                    + "           COUNT(*) AS order_count "
+                    + "    FROM ORDERS "
+                    + "    WHERE NVL(is_deleted, 0) = 0 "
+                    + "      AND order_date >= TRUNC(SYSDATE) - 6 "
+                    + "      AND order_date < TRUNC(SYSDATE) + 1 "
+                    + (scoped ? "      AND store_id = ? " : "")
+                    + "    GROUP BY TRUNC(order_date), TO_CHAR(order_date, 'DD/MM') "
+                    + "    ORDER BY real_day ASC "
+                    + ")";
+
+            try (PreparedStatement ps = con.prepareStatement(sqlOrdersByDay)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        lineDataset.addValue(
+                                rs.getInt("order_count"),
+                                "Đơn",
+                                rs.getString("order_day")
+                        );
+                    }
+                }
             }
 
+            // =========================================================
+            // 4. PIE CHART TỶ TRỌNG NGÀNH HÀNG - THEO TỒN KHO CHI NHÁNH
+            // =========================================================
             pieDataset.clear();
-            for (Map.Entry<String, Integer> e : sqlDao.getCategoryDistribution().entrySet()) {
-                pieDataset.setValue(e.getKey(), e.getValue());
+
+            String sqlCategoryDistribution = ""
+                    + "SELECT NVL(c.category_name, 'Khác') AS category_name, "
+                    + "       SUM(NVL(i.quantity, 0)) AS total_qty "
+                    + "FROM INVENTORY i "
+                    + "JOIN PRODUCTS p "
+                    + "  ON p.product_id = i.product_id "
+                    + "LEFT JOIN CATEGORIES c "
+                    + "  ON c.category_id = p.category_id "
+                    + "WHERE NVL(i.is_deleted, 0) = 0 "
+                    + "  AND NVL(p.is_deleted, 0) = 0 "
+                    + (scoped ? "  AND i.store_id = ? " : "")
+                    + "GROUP BY c.category_name "
+                    + "HAVING SUM(NVL(i.quantity, 0)) > 0 "
+                    + "ORDER BY total_qty DESC";
+
+            try (PreparedStatement ps = con.prepareStatement(sqlCategoryDistribution)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        pieDataset.setValue(
+                                rs.getString("category_name"),
+                                rs.getInt("total_qty")
+                        );
+                    }
+                }
             }
 
-            // 3. TỒN KHO THEO NGÀNH HÀNG (TÍCH HỢP CODE GROUP BY TỪ VERSION TRƯỚC)
+            // =========================================================
+            // 5. THỐNG KÊ TỒN KHO THEO NGÀNH HÀNG - THEO CHI NHÁNH
+            // =========================================================
             statsPanel.removeAll();
             statsPanel.add(createBoxTitle("THỐNG KÊ TỒN KHO", IconHelper.stock(16)));
             statsPanel.add(Box.createRigidArea(new Dimension(0, 14)));
 
-            String sqlStock = "SELECT c.category_name, SUM(NVL(i.quantity, 0)) as total_qty "
-                    + "FROM CATEGORIES c "
-                    + "JOIN PRODUCTS p ON c.category_id = p.category_id "
-                    + "JOIN INVENTORY i ON p.product_id = i.product_id "
-                    + "WHERE c.is_deleted = 0 AND p.is_deleted = 0 AND i.is_deleted = 0 "
-                    + "GROUP BY c.category_name "
-                    + "ORDER BY total_qty DESC "
-                    + "FETCH FIRST 5 ROWS ONLY";
-
-            Color[] colors = {COLOR_GREEN, COLOR_BLUE, COLOR_ORANGE, COLOR_PURPLE, COLOR_PINK};
             List<Object[]> categoryData = new ArrayList<>();
             int maxQty = 0;
 
-            try (PreparedStatement ps = con.prepareStatement(sqlStock); ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String catName = rs.getString("category_name");
-                    int totalQty = rs.getInt("total_qty");
-                    if (categoryData.isEmpty()) {
-                        maxQty = totalQty;
+            String sqlStock = ""
+                    + "SELECT c.category_name, "
+                    + "       SUM(NVL(i.quantity, 0)) AS total_qty "
+                    + "FROM CATEGORIES c "
+                    + "JOIN PRODUCTS p "
+                    + "  ON c.category_id = p.category_id "
+                    + "JOIN INVENTORY i "
+                    + "  ON p.product_id = i.product_id "
+                    + "WHERE NVL(c.is_deleted, 0) = 0 "
+                    + "  AND NVL(p.is_deleted, 0) = 0 "
+                    + "  AND NVL(i.is_deleted, 0) = 0 "
+                    + (scoped ? "  AND i.store_id = ? " : "")
+                    + "GROUP BY c.category_name "
+                    + "HAVING SUM(NVL(i.quantity, 0)) > 0 "
+                    + "ORDER BY total_qty DESC "
+                    + "FETCH FIRST 5 ROWS ONLY";
+
+            try (PreparedStatement ps = con.prepareStatement(sqlStock)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String catName = rs.getString("category_name");
+                        int totalQty = rs.getInt("total_qty");
+
+                        if (totalQty > maxQty) {
+                            maxQty = totalQty;
+                        }
+
+                        categoryData.add(new Object[]{catName, totalQty});
                     }
-                    categoryData.add(new Object[]{catName, totalQty});
                 }
             }
-            if (maxQty == 0) {
+
+            if (maxQty <= 0) {
                 maxQty = 1;
             }
 
+            Color[] colors = {
+                COLOR_GREEN,
+                COLOR_BLUE,
+                COLOR_ORANGE,
+                COLOR_PURPLE,
+                COLOR_PINK
+            };
+
             int idx = 0;
             for (Object[] row : categoryData) {
-                String name = (String) row[0];
+                String name = String.valueOf(row[0]);
                 int qty = (Integer) row[1];
+
                 statsPanel.add(createProgressRow(name, maxQty, qty, colors[idx % colors.length]));
                 statsPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+
                 idx++;
             }
+
+            if (categoryData.isEmpty()) {
+                JLabel emptyLabel = new JLabel("Chưa có dữ liệu tồn kho cho chi nhánh này");
+                emptyLabel.setFont(new Font("Segoe UI", Font.ITALIC, 13));
+                emptyLabel.setForeground(new Color(120, 130, 150));
+                statsPanel.add(emptyLabel);
+            }
+
             statsPanel.revalidate();
             statsPanel.repaint();
 
-            // 4. BẢNG ĐƠN HÀNG MỚI
+            // =========================================================
+            // 6. BẢNG ĐƠN HÀNG MỚI NHẤT - THEO CHI NHÁNH
+            // =========================================================
             tableModel.setRowCount(0);
-            int stt = 1;
-            for (Map<String, Object> order : sqlDao.getRecentOrders(4)) {
-                String orderId = (String) order.get("order_id");
-                String status = (String) order.get("status");
-                String progress = (status.equalsIgnoreCase("Hoàn thành") || status.equalsIgnoreCase("COMPLETED")) ? "100%"
-                        : (status.equalsIgnoreCase("Đang xử lý") || status.equalsIgnoreCase("PROCESSING")) ? "50%"
-                        : "20%";
-                tableModel.addRow(new Object[]{stt++, orderId, status, progress});
+
+            String sqlRecentOrders = ""
+                    + "SELECT * "
+                    + "FROM ( "
+                    + "    SELECT order_id, status, order_date "
+                    + "    FROM ORDERS "
+                    + "    WHERE NVL(is_deleted, 0) = 0 "
+                    + (scoped ? "      AND store_id = ? " : "")
+                    + "    ORDER BY order_date DESC, order_id DESC "
+                    + ") "
+                    + "WHERE ROWNUM <= 4";
+
+            try (PreparedStatement ps = con.prepareStatement(sqlRecentOrders)) {
+                if (scoped) {
+                    ps.setString(1, currentStoreId);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    int stt = 1;
+
+                    while (rs.next()) {
+                        String orderId = rs.getString("order_id");
+                        String status = rs.getString("status");
+
+                        String safeStatus = status == null ? "" : status.trim();
+
+                        String progress;
+                        if (safeStatus.equalsIgnoreCase("Hoàn thành")
+                                || safeStatus.equalsIgnoreCase("COMPLETED")) {
+                            progress = "100%";
+                        } else if (safeStatus.equalsIgnoreCase("Đang xử lý")
+                                || safeStatus.equalsIgnoreCase("PROCESSING")) {
+                            progress = "50%";
+                        } else {
+                            progress = "20%";
+                        }
+
+                        tableModel.addRow(new Object[]{
+                            stt++,
+                            orderId,
+                            safeStatus,
+                            progress
+                        });
+                    }
+                }
             }
 
         } catch (Exception ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(this,
+
+            JOptionPane.showMessageDialog(
+                    this,
                     "Lỗi khi kết nối dữ liệu: " + ex.getMessage(),
-                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 }
