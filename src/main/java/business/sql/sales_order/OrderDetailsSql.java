@@ -155,6 +155,112 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
         return rows;
     }
 
+    public List<Map<String, Object>> selectDetailRowsByOrderIdAndStore(String orderId, String storeId) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        if (orderId == null || orderId.trim().isEmpty()
+                || storeId == null || storeId.trim().isEmpty()) {
+            return rows;
+        }
+
+        String sql = "SELECT od.order_detail_id, od.order_id, od.product_id, "
+                + "       p.product_name, od.quantity, od.unit_price, od.unit_id, od.quantity_base, "
+                + "       (od.quantity * od.unit_price) AS line_total "
+                + "FROM ORDER_DETAILS od "
+                + "JOIN ORDERS o ON o.order_id = od.order_id "
+                + "LEFT JOIN PRODUCTS p ON od.product_id = p.product_id "
+                + "WHERE od.order_id = ? "
+                + "  AND o.store_id = ? "
+                + "  AND NVL(o.is_deleted, 0) = 0 "
+                + "  AND NVL(od.is_deleted, 0) = 0 "
+                + "ORDER BY od.order_detail_id";
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, orderId.trim());
+            pst.setString(2, storeId.trim());
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new HashMap<>();
+
+                    row.put("order_detail_id", rs.getString("order_detail_id"));
+                    row.put("order_id", rs.getString("order_id"));
+                    row.put("product_id", rs.getString("product_id"));
+                    row.put("product_name", rs.getString("product_name"));
+                    row.put("quantity", rs.getInt("quantity"));
+                    row.put("unit_price", rs.getDouble("unit_price"));
+                    row.put("unit_id", getNullableString(rs, "unit_id"));
+                    row.put("quantity_base", getNullableInt(rs, "quantity_base"));
+                    row.put("line_total", rs.getDouble("line_total"));
+
+                    rows.add(row);
+                }
+            }
+
+        } catch (SQLException e) {
+            if (e.getErrorCode() == 904) {
+                return selectLegacyDetailRowsByOrderIdAndStore(orderId, storeId);
+            }
+
+            System.err.println("Loi tai OrderDetailsSql.selectDetailRowsByOrderIdAndStore: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return rows;
+    }
+
+    private List<Map<String, Object>> selectLegacyDetailRowsByOrderIdAndStore(String orderId, String storeId) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        if (orderId == null || orderId.trim().isEmpty()
+                || storeId == null || storeId.trim().isEmpty()) {
+            return rows;
+        }
+
+        String sql = "SELECT od.order_detail_id, od.order_id, od.product_id, "
+                + "       p.product_name, od.quantity, od.unit_price, "
+                + "       (od.quantity * od.unit_price) AS line_total "
+                + "FROM ORDER_DETAILS od "
+                + "JOIN ORDERS o ON o.order_id = od.order_id "
+                + "LEFT JOIN PRODUCTS p ON od.product_id = p.product_id "
+                + "WHERE od.order_id = ? "
+                + "  AND o.store_id = ? "
+                + "  AND NVL(o.is_deleted, 0) = 0 "
+                + "  AND NVL(od.is_deleted, 0) = 0 "
+                + "ORDER BY od.order_detail_id";
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, orderId.trim());
+            pst.setString(2, storeId.trim());
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new HashMap<>();
+
+                    row.put("order_detail_id", rs.getString("order_detail_id"));
+                    row.put("order_id", rs.getString("order_id"));
+                    row.put("product_id", rs.getString("product_id"));
+                    row.put("product_name", rs.getString("product_name"));
+                    row.put("quantity", rs.getInt("quantity"));
+                    row.put("unit_price", rs.getDouble("unit_price"));
+                    row.put("unit_id", null);
+                    row.put("quantity_base", rs.getInt("quantity"));
+                    row.put("line_total", rs.getDouble("line_total"));
+
+                    rows.add(row);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Loi tai OrderDetailsSql.selectLegacyDetailRowsByOrderIdAndStore: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return rows;
+    }
+
     private List<Map<String, Object>> selectLegacyDetailRowsByOrderId(String orderId) {
         List<Map<String, Object>> rows = new ArrayList<>();
         String sql = "SELECT od.order_detail_id, od.order_id, od.product_id, "

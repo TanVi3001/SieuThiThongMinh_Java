@@ -505,7 +505,19 @@ public class OrderView extends javax.swing.JPanel {
                 customer = CustomersSql.getInstance().selectById(order.getCustomerId());
             }
 
-            List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+            List<Map<String, Object>> details;
+
+            if (isStoreScopedUser()) {
+                String storeId = getCurrentStoreIdOrWarn();
+
+                if (storeId == null) {
+                    return;
+                }
+
+                details = OrderDetailsSql.getInstance().selectDetailRowsByOrderIdAndStore(orderId, storeId);
+            } else {
+                details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+            }
 
             if (details == null || details.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Không tìm thấy chi tiết sản phẩm cho hóa đơn này!", "Trống", JOptionPane.WARNING_MESSAGE);
@@ -535,7 +547,19 @@ public class OrderView extends javax.swing.JPanel {
             return;
         }
 
-        List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+        List<Map<String, Object>> details;
+
+        if (isStoreScopedUser()) {
+            String storeId = getCurrentStoreIdOrWarn();
+
+            if (storeId == null) {
+                throw new IOException("Không xác định được chi nhánh hiện tại.");
+            }
+
+            details = OrderDetailsSql.getInstance().selectDetailRowsByOrderIdAndStore(orderId, storeId);
+        } else {
+            details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+        }
 
         try {
             com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(chooser.getSelectedFile().getAbsolutePath());
