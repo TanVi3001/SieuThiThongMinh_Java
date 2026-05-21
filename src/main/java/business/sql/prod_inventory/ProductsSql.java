@@ -943,6 +943,8 @@ public class ProductsSql {
     }
 
     private boolean requireImportedStockForStoreView() {
-        return !SessionManager.isAdmin();
+        // Không ép phải có phiếu nhập, vì data cũ đã tồn tại trong INVENTORY.
+        // Chi nhánh được xem sản phẩm nếu sản phẩm có INVENTORY/STORE_PRODUCTS theo store_id.
+        return false;
     }
 }
