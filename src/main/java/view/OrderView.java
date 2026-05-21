@@ -31,18 +31,15 @@ import common.events.EventBus;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.report.ReportViewer;
-import java.awt.GridBagConstraints;
-import java.awt.Insets;
-import java.nio.file.Paths;
 import java.util.Calendar;
 import java.util.HashMap;
-import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.SwingWorker;
 
 public class OrderView extends javax.swing.JPanel {
 
     private static final String STATUS_ALL = "Tất cả";
+    private static final String SALES_INVOICE_REPORT = "/reports/SalesInvoiceReport.jrxml";
+
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0.##");
     private JDateChooser dcFromDate;
     private JDateChooser dcToDate;
@@ -159,7 +156,6 @@ public class OrderView extends javax.swing.JPanel {
         jTable1.getColumnModel().getColumn(3).setPreferredWidth(140);
         jTable1.getColumnModel().getColumn(4).setPreferredWidth(140);
 
-        // 🌟 Bổ sung: Bắt sự kiện Click đúp vào bảng để mở chi tiết hóa đơn
         jTable1.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
@@ -190,16 +186,11 @@ public class OrderView extends javax.swing.JPanel {
                 c.setForeground(Color.WHITE);
 
                 switch (column) {
-                    case 0 ->
-                        c.setBackground(new Color(59, 130, 246));
-                    case 1 ->
-                        c.setBackground(new Color(16, 185, 129));
-                    case 2 ->
-                        c.setBackground(new Color(245, 158, 11));
-                    case 3 ->
-                        c.setBackground(new Color(139, 92, 246));
-                    case 4 ->
-                        c.setBackground(new Color(239, 68, 68));
+                    case 0 -> c.setBackground(new Color(59, 130, 246));
+                    case 1 -> c.setBackground(new Color(16, 185, 129));
+                    case 2 -> c.setBackground(new Color(245, 158, 11));
+                    case 3 -> c.setBackground(new Color(139, 92, 246));
+                    case 4 -> c.setBackground(new Color(239, 68, 68));
                 }
 
                 ((javax.swing.JLabel) c).setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -401,25 +392,19 @@ public class OrderView extends javax.swing.JPanel {
         return String.valueOf(jTable1.getModel().getValueAt(modelRow, 0));
     }
 
-    // =========================================================
-    // 🌟 MỞ FORM CHI TIẾT HÓA ĐƠN MỚI
-    // =========================================================
     private void showOrderDetailsDialog(String orderId) {
         try {
-            // 1. Lấy thông tin Hóa Đơn
             Order order = OrdersSql.getInstance().selectById(orderId);
             if (order == null) {
                 JOptionPane.showMessageDialog(this, "Lỗi: Không tìm thấy dữ liệu hóa đơn gốc!");
                 return;
             }
 
-            // 2. Lấy thông tin Khách Hàng (nếu không phải khách vãng lai)
             Customer customer = null;
             if (order.getCustomerId() != null && !order.getCustomerId().equalsIgnoreCase("Khách vãng lai")) {
                 customer = CustomersSql.getInstance().selectById(order.getCustomerId());
             }
 
-            // 3. Lấy Danh sách Chi Tiết Sản Phẩm
             List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
 
             if (details == null || details.isEmpty()) {
@@ -427,7 +412,6 @@ public class OrderView extends javax.swing.JPanel {
                 return;
             }
 
-            // 4. Mở Dialog Giao diện mới
             java.awt.Window win = javax.swing.SwingUtilities.getWindowAncestor(this);
             OrderDetailDialog dialog = new OrderDetailDialog((java.awt.Frame) win, order, customer, details);
             dialog.setVisible(true);
@@ -535,12 +519,8 @@ public class OrderView extends javax.swing.JPanel {
         add(pnTop, java.awt.BorderLayout.PAGE_START);
 
         jTable1.setModel(new javax.swing.table.DefaultTableModel(
-                new Object[][]{
-                    {null, null, null, null, null}
-                },
-                new String[]{
-                    "Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"
-                }
+                new Object[][]{{null, null, null, null, null}},
+                new String[]{"Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"}
         ));
         tbOrder.setViewportView(jTable1);
 
@@ -620,7 +600,8 @@ public class OrderView extends javax.swing.JPanel {
             }
 
             String hashFromDb = null;
-            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
+            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection();
+                 java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
                 ps.setString(1, user.getUsername());
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -752,15 +733,9 @@ public class OrderView extends javax.swing.JPanel {
     private void openSalesInvoiceReport(String orderId) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("ORDER_ID", orderId);
-
-        String reportPath = Paths.get(
-                "src", "main", "resources", "reports", "SalesInvoiceReport.jrxml"
-        ).toAbsolutePath().toString();
-
-        ReportViewer.showReport(reportPath, params);
+        ReportViewer.showReport(SALES_INVOICE_REPORT, params);
     }
 
-    // Variables declaration
     private javax.swing.JLabel Status;
     private javax.swing.JButton btnDetail;
     private javax.swing.JButton btnIssueAnInvoice;
@@ -770,5 +745,4 @@ public class OrderView extends javax.swing.JPanel {
     private javax.swing.JPanel pnButton;
     private javax.swing.JPanel pnTop;
     private javax.swing.JScrollPane tbOrder;
-    // End of variables declaration
 }
