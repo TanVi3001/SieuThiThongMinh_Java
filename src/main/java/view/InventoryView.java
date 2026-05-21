@@ -65,6 +65,7 @@ public class InventoryView extends JPanel {
     private JPanel alertListPanel;
     private JPanel recentActivityPanel;
     private final List<Product> cachedInventory = new ArrayList<>();
+    private boolean updatingStoreFilter = false;
 
     public InventoryView() {
         setLayout(new BorderLayout(0, 18));
@@ -130,12 +131,8 @@ public class InventoryView extends JPanel {
         lblFilter.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblFilter.setForeground(NAVY);
 
-        cbStoreFilter = new JComboBox<>(new String[]{
-            "Tất cả chi nhánh",
-            "ST001 - Kho chính",
-            "ST002 - Kho phụ",
-            "ST01 - Kho mặc định"
-        });
+        cbStoreFilter = new JComboBox<>();
+        cbStoreFilter.addItem("Tất cả chi nhánh");
         cbStoreFilter.setPreferredSize(new Dimension(210, 38));
         cbStoreFilter.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         cbStoreFilter.setBackground(Color.WHITE);
@@ -677,7 +674,11 @@ public class InventoryView extends JPanel {
             }
         });
 
-        cbStoreFilter.addActionListener(e -> applySearchFilter());
+        cbStoreFilter.addActionListener(e -> {
+            if (!updatingStoreFilter) {
+                applySearchFilter();
+            }
+        });
     }
 
     private void applyInventoryRolePermission() {
@@ -746,19 +747,28 @@ public class InventoryView extends JPanel {
                 ? "Tất cả chi nhánh"
                 : cbStoreFilter.getSelectedItem().toString();
 
+        boolean scopedUser = !business.service.SessionManager.isAdmin();
+        String currentStoreId = getCurrentStoreIdOrNull();
+
         List<Product> result = new ArrayList<>();
 
         for (Product p : cachedInventory) {
             String id = safe(p.getProductId(), "").toLowerCase();
             String name = safe(p.getProductName(), "").toLowerCase();
-            String storeId = safe(p.getStoreId(), "ST001");
+            String storeId = safe(p.getStoreId(), "Chưa xác định");
 
             boolean matchKeyword = keyword.isEmpty()
                     || id.contains(keyword)
                     || name.contains(keyword);
 
-            boolean matchStore = storeFilter.equals("Tất cả chi nhánh")
-                    || storeFilter.contains(storeId);
+            boolean matchStore;
+
+            if (scopedUser) {
+                matchStore = currentStoreId != null && currentStoreId.equalsIgnoreCase(storeId);
+            } else {
+                matchStore = storeFilter.equals("Tất cả chi nhánh")
+                        || storeFilter.contains(storeId);
+            }
 
             if (matchKeyword && matchStore) {
                 result.add(p);
@@ -766,6 +776,8 @@ public class InventoryView extends JPanel {
         }
 
         fillInventoryTable(result);
+        updateKpi(result);
+        refreshAlertZone(result);
     }
 
     private void handleStockAdjustment(boolean isInbound) {
@@ -887,8 +899,29 @@ public class InventoryView extends JPanel {
         cachedInventory.clear();
 
         try {
-            List<Product> list = ProductsSql.getInstance().selectAll();
+            List<Product> list;
+
+            if (business.service.SessionManager.isAdmin()) {
+                list = ProductsSql.getInstance().selectAll();
+            } else {
+                String currentStoreId = getCurrentStoreIdOrNull();
+
+                if (currentStoreId == null) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại bằng tài khoản đã được phân chi nhánh.",
+                            "Thiếu chi nhánh",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+                    return;
+                }
+
+                list = ProductsSql.getInstance().selectAllByStore(currentStoreId);
+            }
+
             cachedInventory.addAll(list);
+
+            rebuildStoreFilter(cachedInventory);
 
             fillInventoryTable(cachedInventory);
             updateKpi(cachedInventory);
@@ -899,7 +932,7 @@ public class InventoryView extends JPanel {
             e.printStackTrace();
             JOptionPane.showMessageDialog(
                     this,
-                    "Lỗi khi tải dữ liệu tồn kho!",
+                    "Lỗi khi tải dữ liệu tồn kho!\n" + e.getMessage(),
                     "Lỗi",
                     JOptionPane.ERROR_MESSAGE
             );
@@ -939,10 +972,77 @@ public class InventoryView extends JPanel {
                 qty,
                 threshold,
                 safe(p.getUnit(), "Cái"),
-                safe(p.getStoreId(), "ST001"),
+                safe(p.getStoreId(), "Chưa xác định"),
                 status,
                 formatLastUpdated(p.getLastUpdated())
             });
+        }
+    }
+
+    private String getCurrentStoreIdOrNull() {
+        try {
+            String storeId = business.service.SessionManager.getCurrentStoreId();
+            return storeId == null || storeId.trim().isEmpty() ? null : storeId.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void rebuildStoreFilter(List<Product> list) {
+        updatingStoreFilter = true;
+
+        try {
+            Object selected = cbStoreFilter.getSelectedItem();
+
+            cbStoreFilter.removeAllItems();
+
+            if (business.service.SessionManager.isAdmin()) {
+                cbStoreFilter.addItem("Tất cả chi nhánh");
+
+                List<String> storeIds = new ArrayList<>();
+
+                if (list != null) {
+                    for (Product p : list) {
+                        String storeId = safe(p.getStoreId(), "");
+
+                        if (!storeId.isEmpty()
+                                && !"Chưa xác định".equalsIgnoreCase(storeId)
+                                && !storeIds.contains(storeId)) {
+                            storeIds.add(storeId);
+                        }
+                    }
+                }
+
+                storeIds.sort(String::compareToIgnoreCase);
+
+                for (String storeId : storeIds) {
+                    cbStoreFilter.addItem(storeId);
+                }
+
+                if (selected != null) {
+                    cbStoreFilter.setSelectedItem(selected);
+                }
+
+                if (cbStoreFilter.getSelectedItem() == null && cbStoreFilter.getItemCount() > 0) {
+                    cbStoreFilter.setSelectedIndex(0);
+                }
+
+                cbStoreFilter.setEnabled(true);
+            } else {
+                String currentStoreId = getCurrentStoreIdOrNull();
+
+                if (currentStoreId == null) {
+                    cbStoreFilter.addItem("Chưa xác định");
+                } else {
+                    cbStoreFilter.addItem(currentStoreId);
+                }
+
+                cbStoreFilter.setSelectedIndex(0);
+                cbStoreFilter.setEnabled(false);
+            }
+
+        } finally {
+            updatingStoreFilter = false;
         }
     }
 
@@ -1294,7 +1394,7 @@ public class InventoryView extends JPanel {
                     txtSearch.setText("");
                 }
 
-                if (cbStoreFilter != null && cbStoreFilter.getItemCount() > 0) {
+                if (cbStoreFilter != null && cbStoreFilter.getItemCount() > 0 && business.service.SessionManager.isAdmin()) {
                     cbStoreFilter.setSelectedIndex(0);
                 }
 
