@@ -299,7 +299,7 @@ public class PromotionManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
         btnClear = createButton("Làm mới", new Color(235, 238, 244), text, IconHelper.refresh(18));
-        btnPreview = createButton("Xem trước", softBlue, blue, IconHelper.view(18));
+        btnPreview = createButton("Xem trước", softBlue, blue, null);
         btnDeactivate = createButton("Tạm ngưng", red, Color.WHITE, IconHelper.delete(18));
         btnSave = createButton("Lưu", blue, Color.WHITE, IconHelper.edit(18));
         actions.add(btnClear);
@@ -356,9 +356,17 @@ public class PromotionManagementPanel extends JPanel {
         btnSave.addActionListener(e -> savePromo());
 
         txtSearch.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { doSearch(); }
-            public void removeUpdate(DocumentEvent e) { doSearch(); }
-            public void changedUpdate(DocumentEvent e) { doSearch(); }
+            public void insertUpdate(DocumentEvent e) {
+                doSearch();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                doSearch();
+            }
+
+            public void changedUpdate(DocumentEvent e) {
+                doSearch();
+            }
         });
         cbFilterStatus.addActionListener(e -> doSearch());
 
@@ -419,8 +427,7 @@ public class PromotionManagementPanel extends JPanel {
         }
         sql += "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, "%" + keyword + "%");
             ps.setString(2, "%" + keyword + "%");
@@ -432,17 +439,21 @@ public class PromotionManagementPanel extends JPanel {
                 while (rs.next()) {
                     String trangThai = rs.getString("trangthai");
                     tableModel.addRow(new Object[]{
-                            rs.getString("makm"),
-                            rs.getString("tenkm"),
-                            rs.getInt("phantramgiam") + "%",
-                            rs.getString("tungay"),
-                            rs.getString("denngay"),
-                            trangThai
+                        rs.getString("makm"),
+                        rs.getString("tenkm"),
+                        rs.getInt("phantramgiam") + "%",
+                        rs.getString("tungay"),
+                        rs.getString("denngay"),
+                        trangThai
                     });
                     total++;
-                    if (STATUS_ACTIVE.equals(trangThai)) active++;
-                    else if (STATUS_ENDED.equals(trangThai)) ended++;
-                    else if (STATUS_PAUSED.equals(trangThai)) paused++;
+                    if (STATUS_ACTIVE.equals(trangThai)) {
+                        active++;
+                    } else if (STATUS_ENDED.equals(trangThai)) {
+                        ended++;
+                    } else if (STATUS_PAUSED.equals(trangThai)) {
+                        paused++;
+                    }
                 }
             }
 
@@ -464,8 +475,7 @@ public class PromotionManagementPanel extends JPanel {
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE p.promotion_id = ? AND NVL(p.is_deleted, 0) = 0";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maKM);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -567,11 +577,12 @@ public class PromotionManagementPanel extends JPanel {
         }
 
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn tạm ngưng khuyến mãi này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
 
         String sql = "UPDATE PROMOTIONS SET status = ? WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, STATUS_PAUSED);
             ps.setString(2, ma);
             ps.executeUpdate();
@@ -747,6 +758,7 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     class RoundedPanel extends JPanel {
+
         private final int radius;
         private final Color backgroundColor;
 
