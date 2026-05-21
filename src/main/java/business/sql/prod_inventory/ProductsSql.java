@@ -1,5 +1,6 @@
 package business.sql.prod_inventory;
 
+import business.service.SessionManager;
 import business.sql.rbac.AuditLogSql;
 import common.db.DatabaseConnection;
 import java.math.BigDecimal;
@@ -25,94 +26,119 @@ public class ProductsSql {
         return instance;
     }
 
+    // =========================================================
+    // STOCK OPERATIONS - ALWAYS STORE-SCOPED WHEN POSSIBLE
+    // =========================================================
     public int subtractStockWithConn(Connection con, String productId, int quantity) throws SQLException {
-        return subtractStockWithConn(con, productId, quantity, null);
+        return subtractStockWithConn(con, productId, quantity, null, currentStoreIdOrDefault());
     }
 
     public int subtractStockWithConn(Connection con, String productId, int quantity, String unitId) throws SQLException {
+        return subtractStockWithConn(con, productId, quantity, unitId, currentStoreIdOrDefault());
+    }
+
+    public int subtractStockWithConn(Connection con, String productId, int quantity, String unitId, String storeId) throws SQLException {
         int baseQuantity = ProductUnitsSql.getInstance()
                 .convertToBaseQuantityWithConn(con, productId, unitId, quantity);
-        String sql = "UPDATE INVENTORY "
-                + "SET quantity = quantity - ?, last_updated = SYSDATE "
-                + "WHERE product_id = ? AND quantity >= ? AND is_deleted = 0";
+
+        String sql = """
+            UPDATE INVENTORY
+            SET quantity = quantity - ?, last_updated = SYSDATE
+            WHERE product_id = ?
+              AND store_id = ?
+              AND quantity >= ?
+              AND NVL(is_deleted, 0) = 0
+        """;
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setInt(1, baseQuantity);
             pst.setString(2, productId);
-            pst.setInt(3, baseQuantity);
+            pst.setString(3, cleanStoreId(storeId));
+            pst.setInt(4, baseQuantity);
 
             int res = pst.executeUpdate();
             if (res == 0) {
-                throw new SQLException("Không đủ tồn kho hoặc không tìm thấy sản phẩm: " + productId);
+                throw new SQLException("Không đủ tồn kho hoặc không tìm thấy sản phẩm trong chi nhánh: " + productId);
             }
             return res;
         }
     }
 
     public int addStockWithConn(Connection con, String productId, int quantity) throws SQLException {
-        return addStockWithConn(con, productId, quantity, null);
+        return addStockWithConn(con, productId, quantity, null, currentStoreIdOrDefault());
     }
 
     public int addStockWithConn(Connection con, String productId, int quantity, String unitId) throws SQLException {
+        return addStockWithConn(con, productId, quantity, unitId, currentStoreIdOrDefault());
+    }
+
+    public int addStockWithConn(Connection con, String productId, int quantity, String unitId, String storeId) throws SQLException {
         int baseQuantity = ProductUnitsSql.getInstance()
                 .convertToBaseQuantityWithConn(con, productId, unitId, quantity);
-        String sql = "UPDATE INVENTORY "
-                + "SET quantity = quantity + ?, last_updated = SYSDATE "
-                + "WHERE product_id = ? AND is_deleted = 0";
+
+        String sql = """
+            MERGE INTO INVENTORY i
+            USING (
+                SELECT ? AS product_id, ? AS store_id, ? AS quantity, ? AS unit_name FROM dual
+            ) src
+            ON (i.product_id = src.product_id AND i.store_id = src.store_id)
+            WHEN MATCHED THEN
+                UPDATE SET
+                    i.quantity = NVL(i.quantity, 0) + src.quantity,
+                    i.unit = src.unit_name,
+                    i.last_updated = SYSDATE,
+                    i.is_deleted = 0
+            WHEN NOT MATCHED THEN
+                INSERT (product_id, store_id, quantity, unit, last_updated, is_deleted)
+                VALUES (src.product_id, src.store_id, src.quantity, src.unit_name, SYSDATE, 0)
+        """;
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setInt(1, baseQuantity);
-            pst.setString(2, productId);
-
+            pst.setString(1, productId);
+            pst.setString(2, cleanStoreId(storeId));
+            pst.setInt(3, baseQuantity);
+            pst.setString(4, safeUnit(unitId));
             int res = pst.executeUpdate();
             if (res == 0) {
-                throw new SQLException("Không tìm thấy sản phẩm để hoàn kho: " + productId);
+                throw new SQLException("Không thể cộng tồn kho cho sản phẩm: " + productId);
             }
+            ensureStoreProductWithConn(con, cleanStoreId(storeId), productId, null, 1);
             return res;
         }
     }
 
+    // =========================================================
+    // SELECT
+    // =========================================================
     public List<Product> selectAll() {
+        String scopedStoreId = shouldScopeByCurrentStore() ? currentStoreIdOrDefault() : null;
+        if (scopedStoreId != null) {
+            return selectAllByStore(scopedStoreId);
+        }
+
         List<Product> list = new ArrayList<>();
+        String sql = """
+            SELECT p.product_id, p.product_name, p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated,
+                   NVL(sp.selling_price, p.base_price) AS effective_price
+            FROM PRODUCTS p
+            LEFT JOIN INVENTORY i
+                ON p.product_id = i.product_id
+               AND NVL(i.is_deleted, 0) = 0
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+            ORDER BY p.product_id, i.store_id
+        """;
 
-        String sql = "SELECT p.product_id, p.product_name, p.base_price, "
-                + "       p.category_id, p.supplier_id, p.image_path, "
-                + "       i.store_id, i.quantity, i.unit, i.last_updated "
-                + "FROM PRODUCTS p "
-                + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND NVL(i.is_deleted, 0) = 0 "
-                + "WHERE NVL(p.is_deleted, 0) = 0 "
-                + "ORDER BY p.product_id";
-
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                Product p = new Product();
-                p.setProductId(rs.getString("product_id"));
-                p.setProductName(rs.getString("product_name"));
-                p.setBasePrice(rs.getBigDecimal("base_price"));
-                p.setCategoryId(rs.getString("category_id"));
-                p.setSupplierId(rs.getString("supplier_id"));
-                try {
-                    p.setImagePath(rs.getString("image_path"));
-                } catch (Exception ignored) {
-                }
-
-                try {
-                    p.setStoreId(rs.getString("store_id"));
-                } catch (Exception ignored) {
-                }
-                try {
-                    p.setUnit(rs.getString("unit"));
-                } catch (Exception ignored) {
-                }
-
-                p.setQuantity(rs.getInt("quantity"));
-                try {
-                    p.setLastUpdated(rs.getTimestamp("last_updated"));
-                } catch (Exception ignored) {
-                }
-                p.setIsDeleted(0);
-                list.add(p);
+                list.add(mapProduct(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -120,25 +146,70 @@ public class ProductsSql {
         return list;
     }
 
-    public boolean insert(Product p) {
-        String sqlProduct = "INSERT INTO PRODUCTS "
-                + "(product_id, product_name, base_price, category_id, supplier_id, image_path, is_deleted) "
-                + "VALUES (?, ?, ?, ?, ?, 0)";
+    public List<Product> selectAllByStore(String storeId) {
+        List<Product> list = new ArrayList<>();
+        String sql = """
+            SELECT p.product_id, p.product_name,
+                   NVL(sp.selling_price, p.base_price) AS effective_price,
+                   p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, NVL(i.quantity, 0) AS quantity, i.unit, i.last_updated
+            FROM INVENTORY i
+            JOIN PRODUCTS p
+                ON p.product_id = i.product_id
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE i.store_id = ?
+              AND NVL(i.is_deleted, 0) = 0
+              AND NVL(p.is_deleted, 0) = 0
+              AND NVL(sp.is_active, 1) = 1
+            ORDER BY p.product_id
+        """;
 
-        String sqlInventory = "INSERT INTO INVENTORY "
-                + "(product_id, store_id, quantity, unit, last_updated, is_deleted) "
-                + "VALUES (?, ?, ?, ?, SYSDATE, 0)";
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, cleanStoreId(storeId));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapProduct(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    // =========================================================
+    // INSERT / UPDATE / DELETE
+    // =========================================================
+    public boolean insert(Product p) {
+        String sqlProduct = """
+            INSERT INTO PRODUCTS
+            (product_id, product_name, base_price, category_id, supplier_id, image_path, is_deleted)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+        """;
+
+        String sqlInventory = """
+            INSERT INTO INVENTORY
+            (product_id, store_id, quantity, unit, last_updated, is_deleted)
+            VALUES (?, ?, ?, ?, SYSDATE, 0)
+        """;
 
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
-            try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
+            try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
+                 PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
 
+                String storeId = safeStoreId(p);
                 if (isBlank(p.getProductId()) || isBlank(p.getProductName())
                         || p.getBasePrice() == null
                         || isBlank(p.getCategoryId())
                         || isBlank(p.getSupplierId())
-                        || isBlank(safeStoreId(p))) {
+                        || isBlank(storeId)) {
                     throw new SQLException("Thiếu dữ liệu bắt buộc khi thêm sản phẩm.");
                 }
 
@@ -151,11 +222,13 @@ public class ProductsSql {
                 int prodRows = psProd.executeUpdate();
 
                 psInv.setString(1, p.getProductId());
-                psInv.setString(2, safeStoreId(p));
+                psInv.setString(2, storeId);
                 psInv.setInt(3, p.getQuantity());
                 psInv.setString(4, safeUnit(p));
                 int invRows = psInv.executeUpdate();
+
                 ProductUnitsSql.getInstance().ensureBaseUnitWithConn(con, p.getProductId(), safeUnit(p));
+                ensureStoreProductWithConn(con, storeId, p.getProductId(), p.getBasePrice(), 1);
 
                 if (prodRows > 0) {
                     String newValue = joinPairs(
@@ -163,17 +236,15 @@ public class ProductsSql {
                             pair("base_price", p.getBasePrice()),
                             pair("category_id", p.getCategoryId()),
                             pair("supplier_id", p.getSupplierId()),
-                            pair("store_id", safeStoreId(p)),
+                            pair("store_id", storeId),
                             pair("quantity", p.getQuantity()),
                             pair("unit", safeUnit(p))
                     );
-
                     logAuditWithConn(con, "CREATE_PRODUCT", "PRODUCT", p.getProductId(), null, newValue, "Tao moi san pham");
                 }
 
                 con.commit();
                 return prodRows > 0 && invRows > 0;
-
             } catch (Exception e) {
                 con.rollback();
                 e.printStackTrace();
@@ -181,7 +252,6 @@ public class ProductsSql {
             } finally {
                 con.setAutoCommit(true);
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -189,21 +259,35 @@ public class ProductsSql {
     }
 
     public boolean update(Product p) {
-        String sqlProduct = "UPDATE PRODUCTS "
-                + "SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ?, image_path = ? "
-                + "WHERE product_id = ? AND is_deleted = 0";
+        String sqlProduct = """
+            UPDATE PRODUCTS
+            SET product_name = ?, base_price = ?, category_id = ?, supplier_id = ?, image_path = ?
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
 
-        String sqlInventory = "UPDATE INVENTORY "
-                + "SET quantity = ?, unit = ?, last_updated = SYSDATE "
-                + "WHERE product_id = ? AND store_id = ? AND is_deleted = 0";
+        String sqlInventory = """
+            MERGE INTO INVENTORY i
+            USING (
+                SELECT ? AS product_id, ? AS store_id, ? AS quantity, ? AS unit_name FROM dual
+            ) src
+            ON (i.product_id = src.product_id AND i.store_id = src.store_id)
+            WHEN MATCHED THEN
+                UPDATE SET
+                    i.quantity = src.quantity,
+                    i.unit = src.unit_name,
+                    i.last_updated = SYSDATE,
+                    i.is_deleted = 0
+            WHEN NOT MATCHED THEN
+                INSERT (product_id, store_id, quantity, unit, last_updated, is_deleted)
+                VALUES (src.product_id, src.store_id, src.quantity, src.unit_name, SYSDATE, 0)
+        """;
 
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
-            // BƯỚC 1: Lấy giá cũ TRƯỚC KHI cập nhật để ghi Audit Log
             BigDecimal oldPrice = null;
-            String sqlGetOld = "SELECT base_price FROM PRODUCTS WHERE product_id = ?";
-            try (PreparedStatement psOld = con.prepareStatement(sqlGetOld)) {
+            try (PreparedStatement psOld = con.prepareStatement("SELECT base_price FROM PRODUCTS WHERE product_id = ?")) {
                 psOld.setString(1, p.getProductId());
                 try (ResultSet rsOld = psOld.executeQuery()) {
                     if (rsOld.next()) {
@@ -212,51 +296,37 @@ public class ProductsSql {
                 }
             }
 
-            try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
+            try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
+                 PreparedStatement psInv = con.prepareStatement(sqlInventory)) {
 
-                // UPDATE PRODUCTS
+                String storeId = safeStoreId(p);
+
                 psProd.setString(1, p.getProductName() != null ? p.getProductName().trim() : "");
                 psProd.setBigDecimal(2, p.getBasePrice());
                 psProd.setString(3, p.getCategoryId() != null ? p.getCategoryId().trim() : "");
-                psProd.setString(4, p.getSupplierId() != null ? p.getSupplierId().trim() : "SUP_01");
+                psProd.setString(4, p.getSupplierId() != null ? p.getSupplierId().trim() : "SUP001");
                 psProd.setString(5, p.getImagePath());
                 psProd.setString(6, p.getProductId().trim());
                 int prodRows = psProd.executeUpdate();
 
-                // UPDATE INVENTORY
-                psInv.setInt(1, p.getQuantity());
-                psInv.setString(2, safeUnit(p));
-                psInv.setString(3, p.getProductId().trim());
-                psInv.setString(4, safeStoreId(p));
-                int invRows = psInv.executeUpdate();
+                psInv.setString(1, p.getProductId().trim());
+                psInv.setString(2, storeId);
+                psInv.setInt(3, p.getQuantity());
+                psInv.setString(4, safeUnit(p));
+                psInv.executeUpdate();
 
-                if (invRows == 0) {
-                    String insertInv = "INSERT INTO INVENTORY (product_id, store_id, quantity, unit, last_updated, is_deleted) VALUES (?, ?, ?, ?, SYSDATE, 0)";
-                    try (PreparedStatement psInsInv = con.prepareStatement(insertInv)) {
-                        psInsInv.setString(1, p.getProductId().trim());
-                        psInsInv.setString(2, safeStoreId(p));
-                        psInsInv.setInt(3, p.getQuantity());
-                        psInsInv.setString(4, safeUnit(p));
-                        psInsInv.executeUpdate();
-                    }
-                }
+                ensureStoreProductWithConn(con, storeId, p.getProductId(), p.getBasePrice(), 1);
 
-                // BƯỚC 2: GHI AUDIT LOG GỌN GÀNG
                 if (prodRows > 0) {
                     ProductUnitsSql.getInstance().ensureBaseUnitWithConn(con, p.getProductId(), safeUnit(p));
-                    try {
-                        String oldValStr = "price=" + (oldPrice != null ? oldPrice.toPlainString() : "unknown");
-                        String newValStr = "price=" + (p.getBasePrice() != null ? p.getBasePrice().toPlainString() : "null");
-
-                        logAuditWithConn(con, "UPDATE_PRICE", "PRODUCT", p.getProductId(), oldValStr, newValStr, "Cập nhật giá/thông tin sản phẩm");
-                    } catch (Exception auditEx) {
-                        System.err.println("CẢNH BÁO: Lỗi ghi Audit Log: " + auditEx.getMessage());
-                    }
+                    String oldValStr = "price=" + (oldPrice != null ? oldPrice.toPlainString() : "unknown");
+                    String newValStr = "price=" + (p.getBasePrice() != null ? p.getBasePrice().toPlainString() : "null")
+                            + ", store_id=" + storeId + ", quantity=" + p.getQuantity();
+                    logAuditWithConn(con, "UPDATE_PRICE", "PRODUCT", p.getProductId(), oldValStr, newValStr, "Cập nhật giá/thông tin sản phẩm");
                 }
 
                 con.commit();
                 return prodRows > 0;
-
             } catch (Exception e) {
                 con.rollback();
                 e.printStackTrace();
@@ -264,8 +334,8 @@ public class ProductsSql {
             } finally {
                 con.setAutoCommit(true);
             }
-
         } catch (SQLException e) {
+            e.printStackTrace();
             return false;
         }
     }
@@ -274,46 +344,58 @@ public class ProductsSql {
         if (productId == null || productId.trim().isEmpty()) {
             return false;
         }
-        String cleanId = productId.trim(); // Dọn dẹp khoảng trắng thừa
+        String cleanId = productId.trim();
+        String storeId = currentStoreIdOrNull();
+        boolean admin = SessionManager.isAdmin();
 
-        // Dùng NVL để phòng hờ trường hợp is_deleted đang mang giá trị NULL trong DB
         String sqlProduct = "UPDATE PRODUCTS SET is_deleted = 1 WHERE product_id = ? AND NVL(is_deleted, 0) = 0";
-        String sqlInv = "UPDATE INVENTORY SET is_deleted = 1 WHERE product_id = ? AND NVL(is_deleted, 0) = 0";
+        String sqlInvAll = "UPDATE INVENTORY SET is_deleted = 1 WHERE product_id = ? AND NVL(is_deleted, 0) = 0";
+        String sqlInvStore = "UPDATE INVENTORY SET is_deleted = 1 WHERE product_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
+        String sqlStoreProductStore = "UPDATE STORE_PRODUCTS SET is_deleted = 1, is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE product_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
+        String sqlStoreProductAll = "UPDATE STORE_PRODUCTS SET is_deleted = 1, is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE product_id = ? AND NVL(is_deleted, 0) = 0";
 
         try (Connection con = DatabaseConnection.getConnection()) {
-            con.setAutoCommit(false); // Bắt đầu Transaction
-
-            try (PreparedStatement psProd = con.prepareStatement(sqlProduct); PreparedStatement psInv = con.prepareStatement(sqlInv)) {
-
-                // 1. Cập nhật bảng PRODUCTS
-                psProd.setString(1, cleanId);
-                int prodRows = psProd.executeUpdate();
-
-                // 2. Cập nhật bảng INVENTORY (Không tìm thấy kho cũng không sao)
-                psInv.setString(1, cleanId);
-                psInv.executeUpdate();
-
-                // 3. Ghi Audit Log nếu xóa thành công
-                if (prodRows > 0) {
-                    logAuditWithConn(con, "DELETE_PRODUCT", "PRODUCT", cleanId, "is_deleted=0", "is_deleted=1", "Xoa mem san pham");
+            con.setAutoCommit(false);
+            try {
+                int affected;
+                if (admin || storeId == null || storeId.isBlank()) {
+                    try (PreparedStatement psProd = con.prepareStatement(sqlProduct);
+                         PreparedStatement psInv = con.prepareStatement(sqlInvAll);
+                         PreparedStatement psSp = con.prepareStatement(sqlStoreProductAll)) {
+                        psProd.setString(1, cleanId);
+                        affected = psProd.executeUpdate();
+                        psInv.setString(1, cleanId);
+                        psInv.executeUpdate();
+                        psSp.setString(1, cleanId);
+                        psSp.executeUpdate();
+                    }
+                    if (affected > 0) {
+                        logAuditWithConn(con, "DELETE_PRODUCT", "PRODUCT", cleanId, "is_deleted=0", "is_deleted=1", "Xoa mem san pham toan he thong");
+                    }
                 } else {
-                    System.err.println("CẢNH BÁO: Không tìm thấy SP [" + cleanId + "] hoặc SP đã bị xóa trước đó!");
+                    try (PreparedStatement psInv = con.prepareStatement(sqlInvStore);
+                         PreparedStatement psSp = con.prepareStatement(sqlStoreProductStore)) {
+                        psInv.setString(1, cleanId);
+                        psInv.setString(2, storeId);
+                        affected = psInv.executeUpdate();
+                        psSp.setString(1, cleanId);
+                        psSp.setString(2, storeId);
+                        psSp.executeUpdate();
+                    }
+                    if (affected > 0) {
+                        logAuditWithConn(con, "DELETE_PRODUCT", "PRODUCT", cleanId, "store_id=" + storeId + ", is_deleted=0", "store_id=" + storeId + ", is_deleted=1", "Xoa mem san pham tai chi nhanh");
+                    }
                 }
-
-                con.commit(); // Chốt sổ thành công
-                return prodRows > 0;
-
+                con.commit();
+                return affected > 0;
             } catch (Exception e) {
                 con.rollback();
-                System.err.println("=== LỖI LOGIC KHI XÓA SẢN PHẨM ===");
-                e.printStackTrace(); // IN LỖI RA CONSOLE ĐỂ BẮT BUG
+                e.printStackTrace();
                 return false;
             } finally {
                 con.setAutoCommit(true);
             }
-
         } catch (SQLException e) {
-            System.err.println("=== LỖI KẾT NỐI KHI XÓA SẢN PHẨM ===");
             e.printStackTrace();
             return false;
         }
@@ -331,44 +413,79 @@ public class ProductsSql {
         }
     }
 
+    // =========================================================
+    // SEARCH/FIND
+    // =========================================================
     public List<Product> searchByName(String name) {
+        String storeId = shouldScopeByCurrentStore() ? currentStoreIdOrDefault() : null;
+        if (storeId != null) {
+            return searchByNameInStore(name, storeId);
+        }
+
         List<Product> list = new ArrayList<>();
-        String sql = "SELECT p.product_id, p.product_name, p.base_price, "
-                + "       p.category_id, p.supplier_id, "
-                + "       i.store_id, i.quantity, i.unit, i.last_updated "
-                + "FROM PRODUCTS p "
-                + "LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
-                + "WHERE p.is_deleted = 0 AND LOWER(p.product_name) LIKE LOWER(?) "
-                + "ORDER BY p.product_id";
+        String sql = """
+            SELECT p.product_id, p.product_name, p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated,
+                   NVL(sp.selling_price, p.base_price) AS effective_price
+            FROM PRODUCTS p
+            LEFT JOIN INVENTORY i
+                ON p.product_id = i.product_id
+               AND NVL(i.is_deleted, 0) = 0
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND LOWER(p.product_name) LIKE LOWER(?)
+            ORDER BY p.product_id, i.store_id
+        """;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, "%" + name + "%");
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Product p = new Product();
-                    p.setProductId(rs.getString("product_id"));
-                    p.setProductName(rs.getString("product_name"));
-                    p.setBasePrice(rs.getBigDecimal("base_price"));
-                    p.setCategoryId(rs.getString("category_id"));
-                    p.setSupplierId(rs.getString("supplier_id"));
-                    try {
-                        p.setStoreId(rs.getString("store_id"));
-                    } catch (Exception ignored) {
-                    }
-                    try {
-                        p.setUnit(rs.getString("unit"));
-                    } catch (Exception ignored) {
-                    }
-                    p.setQuantity(rs.getInt("quantity"));
-                    try {
-                        p.setLastUpdated(rs.getTimestamp("last_updated"));
-                    } catch (Exception ignored) {
-                    }
-                    p.setIsDeleted(0);
-                    list.add(p);
+                    list.add(mapProduct(rs));
                 }
             }
         } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    public List<Product> searchByNameInStore(String name, String storeId) {
+        List<Product> list = new ArrayList<>();
+        String sql = """
+            SELECT p.product_id, p.product_name,
+                   NVL(sp.selling_price, p.base_price) AS effective_price,
+                   p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated
+            FROM INVENTORY i
+            JOIN PRODUCTS p ON p.product_id = i.product_id
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE i.store_id = ?
+              AND NVL(i.is_deleted, 0) = 0
+              AND NVL(p.is_deleted, 0) = 0
+              AND NVL(sp.is_active, 1) = 1
+              AND LOWER(p.product_name) LIKE LOWER(?)
+            ORDER BY p.product_id
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, cleanStoreId(storeId));
+            ps.setString(2, "%" + name + "%");
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapProduct(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return list;
     }
@@ -377,9 +494,9 @@ public class ProductsSql {
         List<String> list = new ArrayList<>();
         String sql;
         if (keyword == null || keyword.trim().isEmpty()) {
-            sql = "SELECT DISTINCT product_name FROM PRODUCTS WHERE is_deleted = 0 AND ROWNUM <= 15";
+            sql = "SELECT DISTINCT product_name FROM PRODUCTS WHERE NVL(is_deleted, 0) = 0 AND ROWNUM <= 15";
         } else {
-            sql = "SELECT DISTINCT product_name FROM PRODUCTS WHERE is_deleted = 0 AND LOWER(product_name) LIKE LOWER(?) AND ROWNUM <= 15";
+            sql = "SELECT DISTINCT product_name FROM PRODUCTS WHERE NVL(is_deleted, 0) = 0 AND LOWER(product_name) LIKE LOWER(?) AND ROWNUM <= 15";
         }
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
@@ -392,39 +509,75 @@ public class ProductsSql {
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
         }
         return list;
     }
 
-    // ==========================================
-    // 3 HÀM BỔ SUNG CHO GIAO DIỆN PRODUCTVIEW
-    // ==========================================
     public Product findById(String productId) {
-        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, p.image_path, "
-                + "i.store_id, i.quantity, i.unit "
-                + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
-                + "WHERE p.is_deleted = 0 AND p.product_id = ? FETCH FIRST 1 ROWS ONLY";
+        String storeId = shouldScopeByCurrentStore() ? currentStoreIdOrDefault() : null;
+        if (storeId != null) {
+            Product scoped = findByIdInStore(productId, storeId);
+            if (scoped != null) {
+                return scoped;
+            }
+        }
+
+        String sql = """
+            SELECT p.product_id, p.product_name, p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated,
+                   NVL(sp.selling_price, p.base_price) AS effective_price
+            FROM PRODUCTS p
+            LEFT JOIN INVENTORY i
+                ON p.product_id = i.product_id
+               AND NVL(i.is_deleted, 0) = 0
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND p.product_id = ?
+            FETCH FIRST 1 ROWS ONLY
+        """;
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, productId.trim());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    Product p = new Product();
-                    p.setProductId(rs.getString("product_id"));
-                    p.setProductName(rs.getString("product_name"));
-                    p.setBasePrice(rs.getBigDecimal("base_price"));
-                    p.setCategoryId(rs.getString("category_id"));
-                    p.setSupplierId(rs.getString("supplier_id"));
-                    p.setImagePath(rs.getString("image_path"));
-                    try {
-                        p.setStoreId(rs.getString("store_id"));
-                    } catch (Exception ignored) {
-                    }
-                    try {
-                        p.setUnit(rs.getString("unit"));
-                    } catch (Exception ignored) {
-                    }
-                    p.setQuantity(rs.getInt("quantity"));
-                    return p;
+                    return mapProduct(rs);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public Product findByIdInStore(String productId, String storeId) {
+        String sql = """
+            SELECT p.product_id, p.product_name,
+                   NVL(sp.selling_price, p.base_price) AS effective_price,
+                   p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated
+            FROM INVENTORY i
+            JOIN PRODUCTS p ON p.product_id = i.product_id
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND NVL(i.is_deleted, 0) = 0
+              AND NVL(sp.is_active, 1) = 1
+              AND p.product_id = ?
+              AND i.store_id = ?
+        """;
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId.trim());
+            ps.setString(2, cleanStoreId(storeId));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapProduct(rs);
                 }
             }
         } catch (SQLException e) {
@@ -434,133 +587,221 @@ public class ProductsSql {
     }
 
     public Product findByExactName(String name) {
-        String sql = "SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id, i.store_id, i.quantity, i.unit "
-                + "FROM PRODUCTS p LEFT JOIN INVENTORY i ON p.product_id = i.product_id AND i.is_deleted = 0 "
-                + "WHERE p.is_deleted = 0 AND LOWER(p.product_name) = LOWER(?) FETCH FIRST 1 ROWS ONLY";
+        return findByExactNameAndCategory(name, null);
+    }
+
+    public Product findByExactNameAndCategory(String name, String categoryId) {
+        String storeId = currentStoreIdOrNull();
+        if (storeId != null && !storeId.isBlank()) {
+            Product scoped = findByExactNameAndCategory(name, categoryId, storeId);
+            if (scoped != null) {
+                return scoped;
+            }
+        }
+        return findByExactNameAndCategoryGlobal(name, categoryId);
+    }
+
+    public Product findByExactNameAndCategory(String name, String categoryId, String storeId) {
+        String sql = """
+            SELECT p.product_id, p.product_name,
+                   NVL(sp.selling_price, p.base_price) AS effective_price,
+                   p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated
+            FROM INVENTORY i
+            JOIN PRODUCTS p
+                ON p.product_id = i.product_id
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND NVL(i.is_deleted, 0) = 0
+              AND i.store_id = ?
+              AND LOWER(TRIM(p.product_name)) = LOWER(TRIM(?))
+              AND (? IS NULL OR TRIM(p.category_id) = TRIM(?))
+            FETCH FIRST 1 ROWS ONLY
+        """;
+
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, name.trim());
+            ps.setString(1, cleanStoreId(storeId));
+            ps.setString(2, name != null ? name.trim() : "");
+            ps.setString(3, categoryId == null || categoryId.isBlank() ? null : categoryId.trim());
+            ps.setString(4, categoryId == null || categoryId.isBlank() ? null : categoryId.trim());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    Product p = new Product();
-                    p.setProductId(rs.getString("product_id"));
-                    p.setProductName(rs.getString("product_name"));
-                    p.setBasePrice(rs.getBigDecimal("base_price"));
-                    p.setCategoryId(rs.getString("category_id"));
-                    p.setSupplierId(rs.getString("supplier_id"));
-                    try {
-                        p.setStoreId(rs.getString("store_id"));
-                    } catch (Exception e) {
-                    }
-                    p.setQuantity(rs.getInt("quantity"));
-                    try {
-                        p.setUnit(rs.getString("unit"));
-                    } catch (Exception e) {
-                    }
-                    return p;
+                    return mapProduct(rs);
                 }
             }
         } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private Product findByExactNameAndCategoryGlobal(String name, String categoryId) {
+        String sql = """
+            SELECT p.product_id, p.product_name, p.base_price,
+                   p.category_id, p.supplier_id, p.image_path,
+                   i.store_id, i.quantity, i.unit, i.last_updated,
+                   NVL(sp.selling_price, p.base_price) AS effective_price
+            FROM PRODUCTS p
+            LEFT JOIN INVENTORY i
+                ON p.product_id = i.product_id
+               AND NVL(i.is_deleted, 0) = 0
+            LEFT JOIN STORE_PRODUCTS sp
+                ON sp.product_id = p.product_id
+               AND sp.store_id = i.store_id
+               AND NVL(sp.is_deleted, 0) = 0
+            WHERE NVL(p.is_deleted, 0) = 0
+              AND LOWER(TRIM(p.product_name)) = LOWER(TRIM(?))
+              AND (? IS NULL OR TRIM(p.category_id) = TRIM(?))
+            FETCH FIRST 1 ROWS ONLY
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, name != null ? name.trim() : "");
+            ps.setString(2, categoryId == null || categoryId.isBlank() ? null : categoryId.trim());
+            ps.setString(3, categoryId == null || categoryId.isBlank() ? null : categoryId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapProduct(rs);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return null;
     }
 
     public boolean addQuantity(String productId, int addedQuantity, String storeId) {
-        if (storeId == null || storeId.trim().isEmpty()) {
-            storeId = "ST001";
-        }
-        String sqlUpdate = "UPDATE INVENTORY SET quantity = quantity + ?, last_updated = SYSDATE WHERE product_id = ? AND store_id = ? AND is_deleted = 0";
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement psUpdate = con.prepareStatement(sqlUpdate)) {
-            psUpdate.setInt(1, addedQuantity);
-            psUpdate.setString(2, productId);
-            psUpdate.setString(3, storeId);
-            int rows = psUpdate.executeUpdate();
-            if (rows == 0) {
-                String sqlInsert = "INSERT INTO INVENTORY (product_id, store_id, quantity, unit, last_updated, is_deleted) VALUES (?, ?, ?, 'Cái', SYSDATE, 0)";
-                try (PreparedStatement psInsert = con.prepareStatement(sqlInsert)) {
-                    psInsert.setString(1, productId);
-                    psInsert.setString(2, storeId);
-                    psInsert.setInt(3, addedQuantity);
-                    rows = psInsert.executeUpdate();
-                }
+        try (Connection con = DatabaseConnection.getConnection()) {
+            con.setAutoCommit(false);
+            try {
+                int rows = addStockWithConn(con, productId, addedQuantity, null, cleanStoreId(storeId));
+                con.commit();
+                return rows > 0;
+            } catch (Exception e) {
+                con.rollback();
+                e.printStackTrace();
+                return false;
+            } finally {
+                con.setAutoCommit(true);
             }
-            return rows > 0;
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
     }
 
     public String generateNextProductId() {
         String sql = """
-        SELECT NVL(MAX(TO_NUMBER(SUBSTR(product_id, 3))), 0) + 1 AS next_num
-        FROM PRODUCTS
-        WHERE REGEXP_LIKE(product_id, '^SP[0-9]+$')
-    """;
+            SELECT NVL(MAX(TO_NUMBER(SUBSTR(product_id, 3))), 0) + 1 AS next_num
+            FROM PRODUCTS
+            WHERE REGEXP_LIKE(product_id, '^SP[0-9]+$')
+        """;
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
                 int nextNum = rs.getInt("next_num");
                 return String.format("SP%07d", nextNum);
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
-
         return "SP0000001";
     }
 
-    public Product findByExactNameAndCategory(String name, String categoryId) {
-        String sql = """
-        SELECT p.product_id, p.product_name, p.base_price, p.category_id, p.supplier_id,
-               i.store_id, i.quantity, i.unit
-        FROM PRODUCTS p
-        LEFT JOIN INVENTORY i 
-            ON p.product_id = i.product_id 
-            AND NVL(i.is_deleted, 0) = 0
-        WHERE NVL(p.is_deleted, 0) = 0
-          AND LOWER(TRIM(p.product_name)) = LOWER(TRIM(?))
-          AND TRIM(p.category_id) = TRIM(?)
-        FETCH FIRST 1 ROWS ONLY
-    """;
-
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setString(1, name != null ? name.trim() : "");
-            ps.setString(2, categoryId != null ? categoryId.trim() : "");
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    Product p = new Product();
-                    p.setProductId(rs.getString("product_id"));
-                    p.setProductName(rs.getString("product_name"));
-                    p.setBasePrice(rs.getBigDecimal("base_price"));
-                    p.setCategoryId(rs.getString("category_id"));
-                    p.setSupplierId(rs.getString("supplier_id"));
-
-                    try {
-                        p.setStoreId(rs.getString("store_id"));
-                    } catch (Exception ignored) {
-                    }
-
-                    try {
-                        p.setUnit(rs.getString("unit"));
-                    } catch (Exception ignored) {
-                    }
-
-                    p.setQuantity(rs.getInt("quantity"));
-                    return p;
-                }
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+    // =========================================================
+    // HELPERS
+    // =========================================================
+    private Product mapProduct(ResultSet rs) throws SQLException {
+        Product p = new Product();
+        p.setProductId(rs.getString("product_id"));
+        p.setProductName(rs.getString("product_name"));
+        try {
+            p.setBasePrice(rs.getBigDecimal("effective_price"));
+        } catch (Exception e) {
+            p.setBasePrice(rs.getBigDecimal("base_price"));
         }
-
-        return null;
+        p.setCategoryId(rs.getString("category_id"));
+        p.setSupplierId(rs.getString("supplier_id"));
+        try {
+            p.setImagePath(rs.getString("image_path"));
+        } catch (Exception ignored) {
+        }
+        try {
+            p.setStoreId(rs.getString("store_id"));
+        } catch (Exception ignored) {
+        }
+        try {
+            p.setUnit(rs.getString("unit"));
+        } catch (Exception ignored) {
+        }
+        try {
+            p.setQuantity(rs.getInt("quantity"));
+        } catch (Exception ignored) {
+            p.setQuantity(0);
+        }
+        try {
+            p.setLastUpdated(rs.getTimestamp("last_updated"));
+        } catch (Exception ignored) {
+        }
+        p.setIsDeleted(0);
+        return p;
     }
 
-    // ===== helpers =====
+    private void ensureStoreProductWithConn(Connection con, String storeId, String productId, BigDecimal price, int isActive) throws SQLException {
+        String sql = """
+            MERGE INTO STORE_PRODUCTS sp
+            USING (
+                SELECT ? AS store_id, ? AS product_id, ? AS selling_price, ? AS is_active FROM dual
+            ) src
+            ON (sp.store_id = src.store_id AND sp.product_id = src.product_id)
+            WHEN MATCHED THEN
+                UPDATE SET
+                    sp.selling_price = NVL(src.selling_price, sp.selling_price),
+                    sp.is_active = src.is_active,
+                    sp.is_deleted = 0,
+                    sp.updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (store_id, product_id, selling_price, is_active, min_stock, is_deleted, created_at, updated_at)
+                VALUES (src.store_id, src.product_id, src.selling_price, src.is_active, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """;
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, cleanStoreId(storeId));
+            ps.setString(2, productId);
+            ps.setBigDecimal(3, price);
+            ps.setInt(4, isActive);
+            ps.executeUpdate();
+        }
+    }
+
+    private boolean shouldScopeByCurrentStore() {
+        return !SessionManager.isAdmin()
+                && currentStoreIdOrNull() != null
+                && !currentStoreIdOrNull().isBlank();
+    }
+
+    private String currentStoreIdOrNull() {
+        try {
+            return SessionManager.getCurrentStoreId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String currentStoreIdOrDefault() {
+        String storeId = currentStoreIdOrNull();
+        return cleanStoreId(storeId);
+    }
+
+    private String cleanStoreId(String storeId) {
+        return storeId == null || storeId.trim().isEmpty() ? "ST001" : storeId.trim();
+    }
+
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }
@@ -568,19 +809,25 @@ public class ProductsSql {
     private String safeStoreId(Product p) {
         try {
             String s = p.getStoreId();
-            return (s == null || s.isBlank()) ? "ST001" : s.trim();
-        } catch (Exception e) {
-            return "ST001";
+            if (s != null && !s.isBlank()) {
+                return s.trim();
+            }
+        } catch (Exception ignored) {
         }
+        return currentStoreIdOrDefault();
     }
 
     private String safeUnit(Product p) {
         try {
-            String u = (String) p.getUnit();
+            String u = p.getUnit();
             return (u == null || u.isBlank()) ? "Cái" : u.trim();
         } catch (Exception e) {
             return "Cái";
         }
+    }
+
+    private String safeUnit(String unitId) {
+        return (unitId == null || unitId.isBlank()) ? "Cái" : unitId.trim();
     }
 
     private String pair(String col, Object val) {
@@ -605,7 +852,7 @@ public class ProductsSql {
     private void logAuditWithConn(Connection con, String actionType, String entityType, String entityId,
             String oldValue, String newValue, String reason) throws SQLException {
         model.account.AuditLog log = new model.account.AuditLog();
-        log.setAccountId(business.service.SessionManager.getCurrentUser() != null ? business.service.SessionManager.getCurrentUser().getAccountId() : null);
+        log.setAccountId(SessionManager.getCurrentUser() != null ? SessionManager.getCurrentUser().getAccountId() : null);
         log.setActionType(actionType);
         log.setEntityType(entityType);
         log.setEntityId(entityId);

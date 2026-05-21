@@ -1,39 +1,38 @@
 package view;
 
+import business.service.SessionManager;
+import business.sql.sales_order.CustomersSql;
 import business.sql.sales_order.OrderDetailsSql;
 import business.sql.sales_order.OrdersSql;
-import business.sql.sales_order.CustomersSql; // Thêm dòng này để gọi được Customer
-import java.io.IOException;
-import java.text.DecimalFormat;
-import java.util.List;
-import java.util.Map;
-import javax.swing.JFileChooser;
-import javax.swing.JOptionPane;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.table.DefaultTableModel;
-import model.order.Order;
-import model.order.Customer;
-import java.awt.Font;
-import java.awt.Dimension;
+import com.toedter.calendar.JDateChooser;
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.events.EventBus;
+import common.report.ReportViewer;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
-import javax.swing.BorderFactory;
-import javax.swing.table.DefaultTableCellRenderer;
-import com.toedter.calendar.JDateChooser;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.SwingWorker;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
-import javax.swing.JTextField;
-
-import common.events.EventBus;
-import common.events.AppDataChangedEvent;
-import common.events.AppEventType;
-import common.report.ReportViewer;
-import java.util.Calendar;
-import java.util.HashMap;
-import javax.swing.SwingWorker;
+import model.order.Customer;
+import model.order.Order;
 
 public class OrderView extends javax.swing.JPanel {
 
@@ -49,19 +48,25 @@ public class OrderView extends javax.swing.JPanel {
     private String empId;
 
     public OrderView() {
-        if (business.service.SessionManager.getCurrentUser() != null) {
-            this.userRole = business.service.SessionManager.getCurrentUser().getRoleId();
-            this.empId = business.service.SessionManager.getCurrentUser().getAccountId();
+        if (SessionManager.getCurrentUser() != null) {
+            this.userRole = SessionManager.getCurrentUser().getRoleId();
+            this.empId = SessionManager.getCurrentEmployeeId();
+            if (this.empId == null || this.empId.isBlank()) {
+                this.empId = SessionManager.getCurrentUser().getUserId();
+            }
+            if (this.empId == null || this.empId.isBlank()) {
+                this.empId = SessionManager.getCurrentUser().getAccountId();
+            }
         } else {
             this.userRole = "R_ADMIN_ALL";
             this.empId = "EMP_TEST";
         }
+
         initComponents();
         initDateFilter();
         setupModernUI();
         initTableModel();
         initStatusFilter();
-
         loadDataToTable();
 
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
@@ -73,6 +78,86 @@ public class OrderView extends javax.swing.JPanel {
 
         this.revalidate();
         this.repaint();
+    }
+
+    private boolean isStoreScopedUser() {
+        return SessionManager.isStoreManager()
+                || "R_STAFF_SALE".equalsIgnoreCase(userRole)
+                || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole);
+    }
+
+    private String getCurrentStoreIdOrWarn() {
+        String storeId = SessionManager.getCurrentStoreId();
+
+        if (isStoreScopedUser() && (storeId == null || storeId.trim().isEmpty())) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Tài khoản hiện tại chưa được phân chi nhánh. Không thể tải hóa đơn.",
+                    "Thiếu chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return null;
+        }
+
+        return storeId != null ? storeId.trim() : null;
+    }
+
+    private List<Order> loadOrdersByCurrentScope() {
+        String storeId = getCurrentStoreIdOrWarn();
+        if (isStoreScopedUser() && storeId == null) {
+            return java.util.Collections.emptyList();
+        }
+
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().selectAll(userRole, empId, storeId);
+        }
+
+        if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().selectAllByStoreId(storeId);
+        }
+
+        return OrdersSql.getInstance().selectAll();
+    }
+
+    private List<Order> loadOrdersByStatusCurrentScope(String status) {
+        String storeId = getCurrentStoreIdOrWarn();
+        if (isStoreScopedUser() && storeId == null) {
+            return java.util.Collections.emptyList();
+        }
+
+        if (status == null || status.equals(STATUS_ALL)) {
+            return loadOrdersByCurrentScope();
+        }
+
+        if (isStoreScopedUser()) {
+            return OrdersSql.getInstance().selectByConditionAndStore(status, storeId);
+        }
+
+        return OrdersSql.getInstance().selectByCondition(status);
+    }
+
+    private List<Order> loadOrdersByDateCurrentScope(java.sql.Date fromDate, java.sql.Date toDate) {
+        String storeId = getCurrentStoreIdOrWarn();
+        if (isStoreScopedUser() && storeId == null) {
+            return java.util.Collections.emptyList();
+        }
+
+        if (isStoreScopedUser()) {
+            return OrdersSql.getInstance().findByDateRangeAndStore(fromDate, toDate, storeId);
+        }
+
+        return OrdersSql.getInstance().findByDateRange(fromDate, toDate);
+    }
+
+    private Order selectOrderByIdCurrentScope(String orderId) {
+        String storeId = getCurrentStoreIdOrWarn();
+        if (isStoreScopedUser()) {
+            if (storeId == null) {
+                return null;
+            }
+            return OrdersSql.getInstance().selectByIdInStore(orderId, storeId);
+        }
+        return OrdersSql.getInstance().selectById(orderId);
     }
 
     private void setupModernUI() {
@@ -103,11 +188,7 @@ public class OrderView extends javax.swing.JPanel {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
                 if (!isSelected) {
-                    if (row % 2 == 0) {
-                        c.setBackground(Color.WHITE);
-                    } else {
-                        c.setBackground(new Color(248, 249, 250));
-                    }
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 249, 250));
                 }
 
                 c.setForeground(new Color(40, 40, 40));
@@ -116,11 +197,11 @@ public class OrderView extends javax.swing.JPanel {
                 if (column == 4) {
                     String status = value != null ? value.toString() : "";
                     c.setFont(new Font("Segoe UI", Font.BOLD, 13));
-                    if (status.equalsIgnoreCase("Hoàn thành")) {
+                    if (status.equalsIgnoreCase("Hoàn thành") || status.equalsIgnoreCase("COMPLETED")) {
                         c.setForeground(new Color(16, 185, 129));
-                    } else if (status.equalsIgnoreCase("Đang xử lý")) {
+                    } else if (status.equalsIgnoreCase("Đang xử lý") || status.equalsIgnoreCase("PENDING")) {
                         c.setForeground(new Color(245, 158, 11));
-                    } else if (status.equalsIgnoreCase("Đã hủy") || status.equalsIgnoreCase("Đã huỷ")) {
+                    } else if (status.equalsIgnoreCase("Đã hủy") || status.equalsIgnoreCase("Đã huỷ") || status.equalsIgnoreCase("CANCELLED")) {
                         c.setForeground(new Color(239, 68, 68));
                     }
                 }
@@ -191,6 +272,7 @@ public class OrderView extends javax.swing.JPanel {
                     case 2 -> c.setBackground(new Color(245, 158, 11));
                     case 3 -> c.setBackground(new Color(139, 92, 246));
                     case 4 -> c.setBackground(new Color(239, 68, 68));
+                    default -> c.setBackground(new Color(59, 130, 246));
                 }
 
                 ((javax.swing.JLabel) c).setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -221,30 +303,24 @@ public class OrderView extends javax.swing.JPanel {
 
         dcFromDate.setPreferredSize(new Dimension(200, 38));
         dcFromDate.setMinimumSize(new Dimension(200, 38));
-
         dcToDate.setPreferredSize(new Dimension(200, 38));
         dcToDate.setMinimumSize(new Dimension(200, 38));
-
         dcFromDate.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         dcToDate.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
         btnFilterDate = new javax.swing.JButton("Lọc");
         btnResetFilter = new javax.swing.JButton("Đặt lại");
-
         styleButton(btnFilterDate, new Color(59, 130, 246));
         styleButton(btnResetFilter, new Color(107, 114, 128));
-
         btnFilterDate.setPreferredSize(new Dimension(100, 38));
         btnResetFilter.setPreferredSize(new Dimension(110, 38));
 
         btnFilterDate.addActionListener(e -> filterByDate());
-
         btnResetFilter.addActionListener(e -> {
             Calendar resetCal = Calendar.getInstance();
             resetCal.set(2020, Calendar.JANUARY, 1);
             dcFromDate.setDate(resetCal.getTime());
             dcToDate.setDate(new Date());
-
             cbStatus.setSelectedItem(STATUS_ALL);
             loadDataToTable();
         });
@@ -257,19 +333,14 @@ public class OrderView extends javax.swing.JPanel {
 
         gbc.gridx = 2;
         pnTop.add(new javax.swing.JLabel("Từ ngày"), gbc);
-
         gbc.gridx = 3;
         pnTop.add(dcFromDate, gbc);
-
         gbc.gridx = 4;
         pnTop.add(new javax.swing.JLabel("Đến ngày"), gbc);
-
         gbc.gridx = 5;
         pnTop.add(dcToDate, gbc);
-
         gbc.gridx = 6;
         pnTop.add(btnFilterDate, gbc);
-
         gbc.gridx = 7;
         pnTop.add(btnResetFilter, gbc);
     }
@@ -302,16 +373,9 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         try {
-            List<Order> allOrders = OrdersSql.getInstance().selectAll();
-            java.util.ArrayList<Order> filtered = new java.util.ArrayList<>();
-
-            for (Order o : allOrders) {
-                java.util.Date orderDate = java.sql.Date.valueOf(o.getOrderDate().toString());
-                if (!orderDate.before(from) && !orderDate.after(to)) {
-                    filtered.add(o);
-                }
-            }
-            fillTable(filtered);
+            java.sql.Date sqlFrom = new java.sql.Date(from.getTime());
+            java.sql.Date sqlTo = new java.sql.Date(to.getTime());
+            fillTable(loadOrdersByDateCurrentScope(sqlFrom, sqlTo));
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi lọc theo ngày: " + ex.getMessage());
         }
@@ -340,12 +404,8 @@ public class OrderView extends javax.swing.JPanel {
     private void loadDataToTable() {
         new SwingWorker<List<Order>, Void>() {
             @Override
-            protected List<Order> doInBackground() throws Exception {
-                List<Order> list = OrdersSql.getInstance().selectAll();
-                if (list == null || list.isEmpty()) {
-                    list = OrdersSql.getInstance().selectByCondition("Hoàn thành");
-                }
-                return list;
+            protected List<Order> doInBackground() {
+                return loadOrdersByCurrentScope();
             }
 
             @Override
@@ -371,9 +431,25 @@ public class OrderView extends javax.swing.JPanel {
                 o.getCustomerId() != null ? o.getCustomerId() : "Khách vãng lai",
                 o.getOrderDate(),
                 moneyFormat.format(o.getTotalAmount()) + " đ",
-                o.getStatus()
+                normalizeDisplayStatus(o.getStatus())
             });
         }
+    }
+
+    private String normalizeDisplayStatus(String status) {
+        if (status == null) {
+            return "";
+        }
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            return "Hoàn thành";
+        }
+        if ("PENDING".equalsIgnoreCase(status)) {
+            return "Đang xử lý";
+        }
+        if ("CANCELLED".equalsIgnoreCase(status)) {
+            return "Đã hủy";
+        }
+        return status;
     }
 
     private int getSelectedModelRow() {
@@ -394,9 +470,9 @@ public class OrderView extends javax.swing.JPanel {
 
     private void showOrderDetailsDialog(String orderId) {
         try {
-            Order order = OrdersSql.getInstance().selectById(orderId);
+            Order order = selectOrderByIdCurrentScope(orderId);
             if (order == null) {
-                JOptionPane.showMessageDialog(this, "Lỗi: Không tìm thấy dữ liệu hóa đơn gốc!");
+                JOptionPane.showMessageDialog(this, "Không tìm thấy hóa đơn hoặc bạn không có quyền xem hóa đơn này!");
                 return;
             }
 
@@ -423,9 +499,9 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private void exportInvoice(String orderId) throws IOException {
-        Order order = OrdersSql.getInstance().selectById(orderId);
+        Order order = selectOrderByIdCurrentScope(orderId);
         if (order == null) {
-            throw new IOException("Khong tim thay hoa don: " + orderId);
+            throw new IOException("Khong tim thay hoa don hoac khong co quyen xem: " + orderId);
         }
 
         JFileChooser chooser = new JFileChooser();
@@ -449,8 +525,9 @@ public class OrderView extends javax.swing.JPanel {
             document.add(new com.itextpdf.layout.element.Paragraph("Mã đơn: " + order.getOrderId()));
             document.add(new com.itextpdf.layout.element.Paragraph("Khách hàng: " + order.getCustomerId()));
             document.add(new com.itextpdf.layout.element.Paragraph("Nhân viên: " + order.getEmployeeId()));
+            document.add(new com.itextpdf.layout.element.Paragraph("Chi nhánh: " + (order.getStoreId() != null ? order.getStoreId() : "")));
             document.add(new com.itextpdf.layout.element.Paragraph("Ngày: " + order.getOrderDate()));
-            document.add(new com.itextpdf.layout.element.Paragraph("Trạng thái: " + order.getStatus()));
+            document.add(new com.itextpdf.layout.element.Paragraph("Trạng thái: " + normalizeDisplayStatus(order.getStatus())));
             document.add(new com.itextpdf.layout.element.Paragraph("Tổng tiền: " + moneyFormat.format(order.getTotalAmount()) + " VNĐ").setBold());
             document.add(new com.itextpdf.layout.element.Paragraph("\n"));
 
@@ -462,9 +539,9 @@ public class OrderView extends javax.swing.JPanel {
             table.addHeaderCell("Thành tiền");
 
             for (Map<String, Object> detail : details) {
-                table.addCell(detail.get("product_id").toString());
-                table.addCell(detail.get("product_name") != null ? detail.get("product_name").toString() : detail.get("product_id").toString());
-                table.addCell(detail.get("quantity").toString());
+                table.addCell(String.valueOf(detail.get("product_id")));
+                table.addCell(detail.get("product_name") != null ? detail.get("product_name").toString() : String.valueOf(detail.get("product_id")));
+                table.addCell(String.valueOf(detail.get("quantity")));
                 table.addCell(moneyFormat.format(detail.get("unit_price")));
                 table.addCell(moneyFormat.format(detail.get("line_total")));
             }
@@ -563,8 +640,7 @@ public class OrderView extends javax.swing.JPanel {
 
         add(pnButton, java.awt.BorderLayout.PAGE_END);
 
-        String currentUserRole = business.service.SessionManager.getCurrentUser().getRoleId();
-        if ("R_STAFF_SALE".equalsIgnoreCase(currentUserRole)) {
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
             btnUpdate.setVisible(false);
         }
     }
@@ -593,7 +669,7 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         try {
-            model.account.Account user = business.service.SessionManager.getCurrentUser();
+            model.account.Account user = SessionManager.getCurrentUser();
             if (user == null || user.getUsername() == null) {
                 JOptionPane.showMessageDialog(this, "Không xác định được tài khoản hiện tại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                 return false;
@@ -612,10 +688,10 @@ public class OrderView extends javax.swing.JPanel {
 
             if (common.utils.PasswordUtils.checkPassword(enteredPass, hashFromDb)) {
                 return true;
-            } else {
-                JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác!", "Từ chối truy cập", JOptionPane.ERROR_MESSAGE);
-                return false;
             }
+
+            JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác!", "Từ chối truy cập", JOptionPane.ERROR_MESSAGE);
+            return false;
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi hệ thống khi xác thực: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -638,7 +714,6 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         String[] statuses = {"Đang xử lý", "Hoàn thành", "Đã hủy"};
-
         String newStatus = (String) JOptionPane.showInputDialog(
                 this,
                 "Chọn trạng thái mới",
@@ -669,11 +744,21 @@ public class OrderView extends javax.swing.JPanel {
                     JOptionPane.showMessageDialog(this, "❌ Không thể hủy đơn hàng. Vui lòng kiểm tra lại!");
                 }
             } else {
-                int result = OrdersSql.getInstance().updateStatus(orderId, newStatus);
+                int result;
+                if (isStoreScopedUser()) {
+                    String storeId = getCurrentStoreIdOrWarn();
+                    if (storeId == null) {
+                        return;
+                    }
+                    result = OrdersSql.getInstance().updateStatusInStore(orderId, newStatus, storeId);
+                } else {
+                    result = OrdersSql.getInstance().updateStatus(orderId, newStatus);
+                }
+
                 if (result > 0) {
                     JOptionPane.showMessageDialog(this, "Cập nhật trạng thái thành công!");
                 } else {
-                    JOptionPane.showMessageDialog(this, "Cập nhật thất bại!");
+                    JOptionPane.showMessageDialog(this, "Cập nhật thất bại hoặc bạn không có quyền thao tác hóa đơn này!");
                 }
             }
 
@@ -685,7 +770,6 @@ public class OrderView extends javax.swing.JPanel {
 
             EventBus.publish(new AppDataChangedEvent(AppEventType.ORDERS, "Cập nhật trạng thái bill"));
             loadDataToTable();
-
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
@@ -693,14 +777,13 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private void cbStatusActionPerformed(java.awt.event.ActionEvent evt) {
-        String selected = cbStatus.getSelectedItem().toString();
+        Object selectedObj = cbStatus.getSelectedItem();
+        if (selectedObj == null) {
+            return;
+        }
+        String selected = selectedObj.toString();
         try {
-            if (selected.equals(STATUS_ALL)) {
-                loadDataToTable();
-                return;
-            }
-            fillTable(OrdersSql.getInstance().selectByCondition(selected));
-
+            fillTable(loadOrdersByStatusCurrentScope(selected));
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi lọc hóa đơn: " + ex.getMessage());
         }
@@ -717,13 +800,17 @@ public class OrderView extends javax.swing.JPanel {
 
     private void btnIssueAnInvoiceActionPerformed(java.awt.event.ActionEvent evt) {
         String orderId = getSelectedOrderId();
-
         if (orderId == null || orderId.trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một hóa đơn trong bảng để xuất!", "Chưa chọn hóa đơn", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         try {
+            Order order = selectOrderByIdCurrentScope(orderId.trim());
+            if (order == null) {
+                JOptionPane.showMessageDialog(this, "Bạn không có quyền xuất hóa đơn này!", "Không có quyền", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             openSalesInvoiceReport(orderId.trim());
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi khi xuất hóa đơn: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
