@@ -26,7 +26,8 @@
         <dependency>
             <groupId>net.sf.jasperreports</groupId>
             <artifactId>jasperreports</artifactId>
-            <version>6.21.3</version>
+            <version>7.0.3</version>
+            <type>jar</type>
         </dependency>
 
         <dependency>

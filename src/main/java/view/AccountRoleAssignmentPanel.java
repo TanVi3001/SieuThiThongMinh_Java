@@ -25,14 +25,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
     private JLabel lblSelectedUser;
     private JLabel lblSelectedEmail;
-    private JLabel lblSelectedDept;
     private JPanel pnlCurrRole;
     private String selectedAccountId = "";
     private String selectedOldRole = "";
 
     private JPanel listItems;
     private JTextField txtSearch;
-    private JComboBox<String> cbDept;
     private JComboBox<String> cbRole;
 
     private Map<String, JRadioButton> radioMap = new HashMap<>();
@@ -130,18 +128,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 new RoundBorder(borderGray, 10), new EmptyBorder(5, 15, 5, 15)
         ));
 
-        cbDept = new JComboBox<>(new String[]{"Tất cả phòng ban", "CNTT", "Vận hành", "Tài chính", "Nhân sự"});
-        cbDept.setPreferredSize(new Dimension(130, 35));
-        cbDept.setBackground(Color.WHITE);
-        cbDept.setBorder(new RoundBorder(borderGray, 10));
-
         cbRole = new JComboBox<>(new String[]{"Tất cả vai trò", "Quản trị viên", "Quản lý cửa hàng", "Nhân viên bán hàng", "Nhân viên kho"});
         cbRole.setPreferredSize(new Dimension(150, 35));
         cbRole.setBackground(Color.WHITE);
         cbRole.setBorder(new RoundBorder(borderGray, 10));
 
         filterPanel.add(txtSearch);
-        filterPanel.add(cbDept);
         filterPanel.add(cbRole);
 
         JPanel topSection = new JPanel(new BorderLayout(0, 15));
@@ -149,12 +141,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         topSection.add(lblList, BorderLayout.NORTH);
         topSection.add(filterPanel, BorderLayout.CENTER);
 
-        JPanel tableHeader = new JPanel(new GridLayout(1, 5, 10, 0));
+        JPanel tableHeader = new JPanel(new GridLayout(1, 4, 10, 0));
         tableHeader.setBackground(new Color(248, 249, 252));
         tableHeader.setBorder(BorderFactory.createCompoundBorder(
                 new RoundBorder(borderGray, 10), new EmptyBorder(10, 15, 10, 15)
         ));
-        String[] headers = {"Tài khoản", "Phòng ban", "Vai trò hiện tại", "Trạng thái", "Khóa / Mở"};
+        String[] headers = {"Tài khoản", "Vai trò hiện tại", "Trạng thái", "Khóa / Mở"};
         for (String h : headers) {
             JLabel l = new JLabel(h);
             l.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -172,7 +164,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         initTableData();
 
         cbRole.addActionListener(e -> initTableData());
-        cbDept.addActionListener(e -> initTableData());
 
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
@@ -189,8 +180,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         return container;
     }
 
-    private JPanel createAccountRow(String accountId, String name, String email, String dept, String role, boolean isActive) {
-        JPanel row = new JPanel(new GridLayout(1, 5, 10, 0));
+    private JPanel createAccountRow(String accountId, String name, String email, String role, boolean isActive) {
+        JPanel row = new JPanel(new GridLayout(1, 4, 10, 0));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
         row.setBackground(cardWhite);
         row.setBorder(BorderFactory.createCompoundBorder(
@@ -210,11 +201,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         pnlName.add(lblEmail);
         row.add(pnlName);
 
-        JLabel lblDept = new JLabel(dept);
-        lblDept.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        lblDept.setForeground(textDark);
-        row.add(lblDept);
-
         JPanel pnlRoleBadge = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 10));
         pnlRoleBadge.setBackground(cardWhite);
         pnlRoleBadge.add(createBadge(role));
@@ -226,7 +212,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         row.add(lblStatus);
 
-        // 🔥 THÊM CÔNG TẮC TOGGLE Ở CỘT 5
         JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
         pnlToggle.setBackground(cardWhite);
         ToggleSwitch toggleBtn = new ToggleSwitch(isActive);
@@ -236,13 +221,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             toggleBtn.setToolTipText("Không thể khóa tài khoản Quản trị viên.");
         }
         
-        // SỬA LỖI: Chuyển sang sử dụng mouseClicked chuẩn để tránh lỗi luồng UI đồng bộ
         toggleBtn.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (!toggleBtn.isEnabled()) return;
 
-                boolean nextState = !toggleBtn.isOn(); // true nếu mở khóa, false nếu khóa
+                boolean nextState = !toggleBtn.isOn(); 
                 String actionName = nextState ? "Mở khóa" : "Khóa";
                 String confirmMsg = nextState ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + name + "]?" 
                                               : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị đăng xuất khỏi hệ thống ngay lập tức.";
@@ -253,7 +237,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     try (Connection con = common.db.DatabaseConnection.getConnection();
                          PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET is_deleted = ? WHERE account_id = ?")) {
                         
-                        // is_deleted = 0 khi hoạt động (nextState == true), is_deleted = 1 khi bị khóa (nextState == false)
                         ps.setInt(1, nextState ? 0 : 1);
                         ps.setString(2, accountId);
                         int updated = ps.executeUpdate();
@@ -261,7 +244,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                         if (updated > 0) {
                             toggleBtn.setOn(nextState);
                             
-                            // SỬA LỖI LOGIC: Đảo lại text log ghi nhận đúng hành động thực tế
                             business.service.AuditLogService.logAction(
                                 "CẬP NHẬT", "ACCOUNTS", accountId, 
                                 nextState ? "Bị khóa" : "Hoạt động", 
@@ -273,7 +255,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                             RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                             EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "TOGGLE_LOCK"));
                             
-                            // Cập nhật lại danh bạ bằng một luồng chạy sau (InvokeLater) để tránh nghẽn UI Swing
                             SwingUtilities.invokeLater(() -> initTableData());
                         }
                     } catch (Exception ex) {
@@ -290,14 +271,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         row.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                // SỬA LỖI: Kiểm tra vùng bấm chính xác để không ăn vào sự kiện của nút Toggle
                 if (e.getX() >= pnlToggle.getX()) return;
 
                 selectedAccountId = accountId;
                 selectedOldRole = role;
                 lblSelectedUser.setText(name);
                 lblSelectedEmail.setText(email);
-                lblSelectedDept.setText(dept);
 
                 pnlCurrRole.removeAll();
                 pnlCurrRole.add(createBadge(role));
@@ -353,7 +332,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
         lblSelectedUser = createLabel("-", textDark, true);
         lblSelectedEmail = createLabel("-", textDark, false);
-        lblSelectedDept = createLabel("-", textDark, false);
         pnlCurrRole = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         pnlCurrRole.setBackground(cardWhite);
 
@@ -376,12 +354,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedEmail, gbcInfo);
 
-        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
-        infoGrid.add(createLabel("Phòng ban", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
-        infoGrid.add(lblSelectedDept, gbcInfo);
-
-        gbcInfo.gridy = 3; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
         gbcInfo.insets = new Insets(0, 0, 0, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
         infoGrid.add(pnlCurrRole, gbcInfo);
@@ -478,7 +451,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 selectedAccountId = "";
                 lblSelectedUser.setText("-");
                 lblSelectedEmail.setText("-");
-                lblSelectedDept.setText("-");
                 pnlCurrRole.removeAll();
                 pnlCurrRole.repaint();
                 roleGroup.clearSelection();
@@ -613,7 +585,6 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
         
         String selectedRoleFilter = (cbRole != null && cbRole.getSelectedItem() != null) ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
-        String selectedDeptFilter = (cbDept != null && cbDept.getSelectedItem() != null) ? cbDept.getSelectedItem().toString() : "Tất cả phòng ban";
         String searchText = (txtSearch != null) ? txtSearch.getText().toLowerCase().trim() : "";
 
         for (String[] acc : listAcc) {
@@ -625,16 +596,14 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
             String displayName = (acc[2] == null || acc[2].isEmpty()) ? acc[1] : acc[2];
             String displayEmail = (acc[3] == null || acc[3].isEmpty()) ? "Chưa có email" : acc[3];
-            String dept = "Chưa phân bổ";
 
             boolean isActive = "0".equals(acc[5]); 
 
             boolean matchRole = "Tất cả vai trò".equals(selectedRoleFilter) || displayRole.equals(selectedRoleFilter);
-            boolean matchDept = "Tất cả phòng ban".equals(selectedDeptFilter) || dept.equals(selectedDeptFilter);
             boolean matchSearch = searchText.isEmpty() || displayName.toLowerCase().contains(searchText) || displayEmail.toLowerCase().contains(searchText);
 
-            if (matchRole && matchDept && matchSearch) {
-                listItems.add(createAccountRow(acc[0], displayName, displayEmail, dept, displayRole, isActive));
+            if (matchRole && matchSearch) {
+                listItems.add(createAccountRow(acc[0], displayName, displayEmail, displayRole, isActive));
             }
         }
         
