@@ -1,0 +1,2049 @@
+﻿3.2. Đặc tả Use-case và sơ đồ hoạt động (Activity Diagram)
+Mục này trình bày đặc tả nghiệp vụ cho 57 use-case của hệ thống Smart Supermarket - Store Portal. Mỗi use-case gồm bảng đặc tả tóm tắt và khung trống để bổ sung Activity Diagram trong giai đoạn hoàn thiện tài liệu.
+3.2.1. Đăng nhập tài khoản
+- Đặc tả
+Bảng 3.3. Đặc tả Use-case Đăng nhập hệ thống
+Tên Use-case
+Đăng nhập hệ thống
+Mô tả Use-case
+Cho phép người dùng nội bộ đăng nhập vào hệ thống bằng username và mật khẩu.
+Actors
+Admin; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân; Nhân viên kho
+Tiền điều kiện
+- Người dùng có tài khoản nội bộ hợp lệ.
+- Tài khoản không bị khóa và hệ thống có kết nối CSDL.
+Hậu điều kiện
+- Phiên đăng nhập được tạo thành công.
+- Hệ thống ghi nhận lịch sử truy cập của người dùng.
+Luồng sự kiện chính
+1. Người dùng mở màn hình đăng nhập của Store Portal.
+2. Người dùng nhập tên đăng nhập và mật khẩu.
+3. Hệ thống kiểm tra thông tin xác thực và trạng thái tài khoản.
+4. Hệ thống xác định vai trò, quyền hạn và màn hình làm việc phù hợp.
+5. Hệ thống tạo phiên đăng nhập, ghi lịch sử truy cập và chuyển người dùng vào màn hình chính.
+Luồng sự kiện phụ
+2a. Người dùng chọn ghi nhớ tài khoản để hệ thống hỗ trợ lần đăng nhập sau.
+4a. Nếu tài khoản có nhiều vai trò, hệ thống áp dụng vai trò theo phân quyền hiện hành.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.1. Activity Diagram Use-case Đăng nhập hệ thống
+
+3.2.2. Đăng xuất tài khoản
+- Đặc tả
+Bảng 3.4. Đặc tả Use-case Đăng xuất hệ thống
+Tên Use-case
+Đăng xuất hệ thống
+Mô tả Use-case
+Cho phép người dùng kết thúc phiên làm việc và thoát khỏi hệ thống.
+Actors
+Admin; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân; Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập thành công.
+- Phiên làm việc hiện tại còn hiệu lực.
+Hậu điều kiện
+- Phiên làm việc được kết thúc an toàn.
+- Người dùng được đưa về màn hình đăng nhập.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng đăng xuất trên giao diện.
+2. Hệ thống yêu cầu xác nhận kết thúc phiên làm việc nếu cần.
+3. Người dùng xác nhận đăng xuất.
+4. Hệ thống hủy thông tin phiên hiện tại và ghi nhận thời điểm đăng xuất.
+5. Hệ thống quay về màn hình đăng nhập.
+Luồng sự kiện phụ
+2a. Nếu có dữ liệu đang nhập chưa lưu, hệ thống cảnh báo để người dùng lưu trước khi đăng xuất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.2. Activity Diagram Use-case Đăng xuất hệ thống
+
+3.2.3. Kích hoạt tài khoản nhân viên
+- Đặc tả
+Bảng 3.5. Đặc tả Use-case Kích hoạt tài khoản nhân viên
+Tên Use-case
+Kích hoạt tài khoản nhân viên
+Mô tả Use-case
+Cho phép nhân viên dùng mã kích hoạt để thiết lập tài khoản đăng nhập lần đầu.
+Actors
+Admin
+Tiền điều kiện
+- Nhân viên có hồ sơ hợp lệ trong hệ thống.
+- Nhân viên nhận được mã kích hoạt còn hiệu lực.
+Hậu điều kiện
+- Tài khoản nhân viên được kích hoạt và có thể đăng nhập.
+- Mã kích hoạt được đánh dấu đã sử dụng hoặc hết hiệu lực.
+Luồng sự kiện chính
+1. Nhân viên mở màn hình kích hoạt tài khoản.
+2. Nhân viên nhập thông tin định danh và mã kích hoạt được cấp.
+3. Hệ thống kiểm tra mã kích hoạt, hồ sơ nhân viên và thời hạn sử dụng.
+4. Nhân viên thiết lập mật khẩu đăng nhập ban đầu.
+5. Hệ thống lưu mật khẩu đã mã hóa, kích hoạt tài khoản và thông báo thành công.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.3. Activity Diagram Use-case Kích hoạt tài khoản nhân viên
+
+3.2.4. Khôi phục mật khẩu
+- Đặc tả
+Bảng 3.6. Đặc tả Use-case Khôi phục mật khẩu
+Tên Use-case
+Khôi phục mật khẩu
+Mô tả Use-case
+Cho phép người dùng nhận OTP qua email và đặt lại mật khẩu khi quên thông tin đăng nhập.
+Actors
+Admin; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân; Nhân viên kho
+Tiền điều kiện
+- Tài khoản đã tồn tại và còn được phép sử dụng.
+- Email của người dùng đã được cấu hình trong hệ thống.
+Hậu điều kiện
+- Mật khẩu mới được cập nhật sau khi xác thực OTP hợp lệ.
+- Người dùng có thể đăng nhập bằng mật khẩu mới.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng quên mật khẩu.
+2. Người dùng nhập email hoặc tên tài khoản cần khôi phục.
+3. Hệ thống kiểm tra tài khoản và gửi OTP qua email đã đăng ký.
+4. Người dùng nhập OTP và mật khẩu mới.
+5. Hệ thống xác thực OTP, kiểm tra độ mạnh mật khẩu và cập nhật mật khẩu mới.
+6. Hệ thống thông báo khôi phục mật khẩu thành công.
+Luồng sự kiện phụ
+3a. Người dùng yêu cầu gửi lại OTP nếu mã cũ hết thời gian sử dụng.
+4a. Người dùng quay lại màn hình đăng nhập nếu nhớ lại mật khẩu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.4. Activity Diagram Use-case Khôi phục mật khẩu
+
+3.2.5. Quản lý tài khoản và phân quyền
+- Đặc tả
+Bảng 3.7. Đặc tả Use-case Quản lý tài khoản và phân quyền
+Tên Use-case
+Quản lý tài khoản và phân quyền
+Mô tả Use-case
+Bao quát các chức năng quản lý tài khoản, vai trò và quyền truy cập trong hệ thống.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý tài khoản và phân quyền được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý tài khoản và phân quyền.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.5. Activity Diagram Use-case Quản lý tài khoản và phân quyền
+
+3.2.6. Thêm tài khoản nhân viên
+- Đặc tả
+Bảng 3.8. Đặc tả Use-case Thêm tài khoản nhân viên
+Tên Use-case
+Thêm tài khoản nhân viên
+Mô tả Use-case
+Cho phép Admin tạo tài khoản mới cho nhân viên nội bộ hoặc cấp tài khoản từ hồ sơ nhân viên.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu tài khoản nhân viên được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm tài khoản nhân viên.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin tài khoản nhân viên.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.6. Activity Diagram Use-case Thêm tài khoản nhân viên
+
+3.2.7. Cập nhật tài khoản nhân viên
+- Đặc tả
+Bảng 3.9. Đặc tả Use-case Cập nhật tài khoản nhân viên
+Tên Use-case
+Cập nhật tài khoản nhân viên
+Mô tả Use-case
+Cho phép Admin chỉnh sửa thông tin tài khoản, trạng thái hoặc thông tin liên kết.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin tài khoản nhân viên được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu tài khoản nhân viên cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.7. Activity Diagram Use-case Cập nhật tài khoản nhân viên
+
+3.2.8. Khóa/Mở khóa tài khoản
+- Đặc tả
+Bảng 3.10. Đặc tả Use-case Khóa/Mở khóa tài khoản
+Tên Use-case
+Khóa/Mở khóa tài khoản
+Mô tả Use-case
+Cho phép Admin khóa hoặc mở lại tài khoản của nhân viên.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác khóa/mở khóa tài khoản được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Admin mở màn hình quản lý tài khoản.
+2. Admin tra cứu tài khoản nhân viên cần khóa hoặc mở khóa.
+3. Hệ thống hiển thị trạng thái hiện tại của tài khoản.
+4. Admin chọn thao tác khóa hoặc mở khóa và xác nhận.
+5. Hệ thống kiểm tra quyền thao tác, cập nhật trạng thái tài khoản và ghi nhật ký.
+6. Hệ thống thông báo kết quả xử lý.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.8. Activity Diagram Use-case Khóa/Mở khóa tài khoản
+
+3.2.9. Gán vai trò và quyền hạn
+- Đặc tả
+Bảng 3.11. Đặc tả Use-case Gán vai trò và quyền hạn
+Tên Use-case
+Gán vai trò và quyền hạn
+Mô tả Use-case
+Cho phép Admin gán vai trò như Admin, Quản lý cửa hàng, Nhân viên bán hàng/Thu ngân, Nhân viên kho và các nhóm quyền tương ứng.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác gán vai trò và quyền hạn được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Admin mở màn hình gán vai trò và quyền hạn.
+2. Admin chọn tài khoản nhân viên cần phân quyền.
+3. Hệ thống hiển thị các vai trò, nhóm quyền và quyền chức năng hiện có.
+4. Admin chọn vai trò hoặc nhóm quyền phù hợp với nhiệm vụ nhân viên.
+5. Hệ thống kiểm tra ràng buộc phân quyền và lưu cấu hình.
+6. Hệ thống cập nhật hiệu lực quyền truy cập và thông báo thành công.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.9. Activity Diagram Use-case Gán vai trò và quyền hạn
+
+3.2.10. Tra cứu tài khoản
+- Đặc tả
+Bảng 3.12. Đặc tả Use-case Tra cứu tài khoản
+Tên Use-case
+Tra cứu tài khoản
+Mô tả Use-case
+Cho phép Admin tìm kiếm và xem thông tin tài khoản theo tên, email, vai trò hoặc trạng thái.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu tài khoản.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.10. Activity Diagram Use-case Tra cứu tài khoản
+
+3.2.11. Theo dõi lịch sử truy cập và nhật ký hệ thống
+- Đặc tả
+Bảng 3.13. Đặc tả Use-case Theo dõi lịch sử truy cập và nhật ký hệ thống
+Tên Use-case
+Theo dõi lịch sử truy cập và nhật ký hệ thống
+Mô tả Use-case
+Cho phép Admin xem lịch sử đăng nhập/đăng xuất và các thao tác quan trọng trong hệ thống.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác theo dõi lịch sử truy cập và nhật ký hệ thống được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng theo dõi lịch sử truy cập và nhật ký hệ thống.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.11. Activity Diagram Use-case Theo dõi lịch sử truy cập và nhật ký hệ thống
+
+3.2.12. Quản lý chi nhánh
+- Đặc tả
+Bảng 3.14. Đặc tả Use-case Quản lý chi nhánh
+Tên Use-case
+Quản lý chi nhánh
+Mô tả Use-case
+Bao quát các chức năng quản lý thông tin cửa hàng/chi nhánh.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý chi nhánh được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý chi nhánh.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.12. Activity Diagram Use-case Quản lý chi nhánh
+
+3.2.13. Thêm chi nhánh
+- Đặc tả
+Bảng 3.15. Đặc tả Use-case Thêm chi nhánh
+Tên Use-case
+Thêm chi nhánh
+Mô tả Use-case
+Cho phép Admin thêm mới thông tin chi nhánh.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu chi nhánh được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm chi nhánh.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin chi nhánh.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.13. Activity Diagram Use-case Thêm chi nhánh
+
+3.2.14. Cập nhật chi nhánh
+- Đặc tả
+Bảng 3.16. Đặc tả Use-case Cập nhật chi nhánh
+Tên Use-case
+Cập nhật chi nhánh
+Mô tả Use-case
+Cho phép Admin chỉnh sửa thông tin chi nhánh như địa chỉ, email, số điện thoại và trạng thái.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin chi nhánh được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu chi nhánh cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.14. Activity Diagram Use-case Cập nhật chi nhánh
+
+3.2.15. Xóa mềm chi nhánh
+- Đặc tả
+Bảng 3.17. Đặc tả Use-case Xóa mềm chi nhánh
+Tên Use-case
+Xóa mềm chi nhánh
+Mô tả Use-case
+Cho phép Admin ngừng hoạt động chi nhánh nhưng vẫn giữ lại dữ liệu trong hệ thống.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Bản ghi chi nhánh được chuyển sang trạng thái ngừng hoạt động.
+- Dữ liệu nghiệp vụ liên quan không bị xóa vật lý khỏi CSDL.
+Luồng sự kiện chính
+1. Người dùng tra cứu và chọn bản ghi chi nhánh cần ngừng hoạt động.
+2. Hệ thống hiển thị thông tin bản ghi và cảnh báo ảnh hưởng nghiệp vụ.
+3. Người dùng xác nhận xóa mềm.
+4. Hệ thống kiểm tra quyền thao tác và dữ liệu liên quan.
+5. Hệ thống cập nhật trạng thái ngừng hoạt động thay vì xóa vật lý.
+6. Hệ thống làm mới danh sách và thông báo kết quả.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy xác nhận nếu chưa muốn ngừng hoạt động bản ghi.
+4a. Nếu bản ghi còn giao dịch liên quan, hệ thống chỉ cho phép cập nhật trạng thái phù hợp.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.15. Activity Diagram Use-case Xóa mềm chi nhánh
+
+3.2.16. Tra cứu chi nhánh
+- Đặc tả
+Bảng 3.18. Đặc tả Use-case Tra cứu chi nhánh
+Tên Use-case
+Tra cứu chi nhánh
+Mô tả Use-case
+Cho phép Admin tìm kiếm và xem thông tin các chi nhánh.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu chi nhánh.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.16. Activity Diagram Use-case Tra cứu chi nhánh
+
+3.2.17. Quản lý cửa hàng trưởng
+- Đặc tả
+Bảng 3.19. Đặc tả Use-case Quản lý cửa hàng trưởng
+Tên Use-case
+Quản lý cửa hàng trưởng
+Mô tả Use-case
+Cho phép Admin quản lý thông tin cửa hàng trưởng hoặc quản lý cửa hàng.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý cửa hàng trưởng được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý cửa hàng trưởng.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.17. Activity Diagram Use-case Quản lý cửa hàng trưởng
+
+3.2.18. Phân công cửa hàng trưởng
+- Đặc tả
+Bảng 3.20. Đặc tả Use-case Phân công cửa hàng trưởng
+Tên Use-case
+Phân công cửa hàng trưởng
+Mô tả Use-case
+Cho phép Admin liên kết cửa hàng trưởng với chi nhánh phụ trách.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác phân công cửa hàng trưởng được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Admin mở chức năng phân công cửa hàng trưởng.
+2. Admin chọn chi nhánh và người phụ trách phù hợp.
+3. Hệ thống kiểm tra trạng thái chi nhánh, trạng thái nhân viên và phân công hiện tại.
+4. Admin xác nhận phân công.
+5. Hệ thống lưu quan hệ phụ trách chi nhánh và cập nhật danh sách quản lý.
+6. Hệ thống thông báo phân công thành công.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.18. Activity Diagram Use-case Phân công cửa hàng trưởng
+
+3.2.19. Quản lý nhân viên
+- Đặc tả
+Bảng 3.21. Đặc tả Use-case Quản lý nhân viên
+Tên Use-case
+Quản lý nhân viên
+Mô tả Use-case
+Bao quát các chức năng quản lý hồ sơ nhân viên trong cửa hàng.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý nhân viên được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý nhân viên.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.19. Activity Diagram Use-case Quản lý nhân viên
+
+3.2.20. Thêm nhân viên
+- Đặc tả
+Bảng 3.22. Đặc tả Use-case Thêm nhân viên
+Tên Use-case
+Thêm nhân viên
+Mô tả Use-case
+Cho phép Quản lý cửa hàng thêm mới thông tin nhân viên vào hệ thống.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu nhân viên được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm nhân viên.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin nhân viên.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.20. Activity Diagram Use-case Thêm nhân viên
+
+3.2.21. Cập nhật nhân viên
+- Đặc tả
+Bảng 3.23. Đặc tả Use-case Cập nhật nhân viên
+Tên Use-case
+Cập nhật nhân viên
+Mô tả Use-case
+Cho phép Quản lý cửa hàng chỉnh sửa thông tin nhân viên hiện có.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin nhân viên được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu nhân viên cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.21. Activity Diagram Use-case Cập nhật nhân viên
+
+3.2.22. Xóa mềm nhân viên
+- Đặc tả
+Bảng 3.24. Đặc tả Use-case Xóa mềm nhân viên
+Tên Use-case
+Xóa mềm nhân viên
+Mô tả Use-case
+Cho phép Quản lý cửa hàng ngừng hoạt động hồ sơ nhân viên nhưng vẫn giữ dữ liệu lịch sử.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Bản ghi nhân viên được chuyển sang trạng thái ngừng hoạt động.
+- Dữ liệu nghiệp vụ liên quan không bị xóa vật lý khỏi CSDL.
+Luồng sự kiện chính
+1. Người dùng tra cứu và chọn bản ghi nhân viên cần ngừng hoạt động.
+2. Hệ thống hiển thị thông tin bản ghi và cảnh báo ảnh hưởng nghiệp vụ.
+3. Người dùng xác nhận xóa mềm.
+4. Hệ thống kiểm tra quyền thao tác và dữ liệu liên quan.
+5. Hệ thống cập nhật trạng thái ngừng hoạt động thay vì xóa vật lý.
+6. Hệ thống làm mới danh sách và thông báo kết quả.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy xác nhận nếu chưa muốn ngừng hoạt động bản ghi.
+4a. Nếu bản ghi còn giao dịch liên quan, hệ thống chỉ cho phép cập nhật trạng thái phù hợp.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.22. Activity Diagram Use-case Xóa mềm nhân viên
+
+3.2.23. Tra cứu nhân viên
+- Đặc tả
+Bảng 3.25. Đặc tả Use-case Tra cứu nhân viên
+Tên Use-case
+Tra cứu nhân viên
+Mô tả Use-case
+Cho phép Quản lý cửa hàng tìm kiếm và xem thông tin nhân viên theo tên, mã, loại nhân viên hoặc trạng thái.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu nhân viên.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.23. Activity Diagram Use-case Tra cứu nhân viên
+
+3.2.24. Phân ca nhân viên
+- Đặc tả
+Bảng 3.26. Đặc tả Use-case Phân ca nhân viên
+Tên Use-case
+Phân ca nhân viên
+Mô tả Use-case
+Bao quát các chức năng lập, cập nhật và theo dõi ca làm việc của nhân viên.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác phân ca nhân viên được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng phân ca nhân viên.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.24. Activity Diagram Use-case Phân ca nhân viên
+
+3.2.25. Lập ca làm việc
+- Đặc tả
+Bảng 3.27. Đặc tả Use-case Lập ca làm việc
+Tên Use-case
+Lập ca làm việc
+Mô tả Use-case
+Cho phép Quản lý cửa hàng phân công ca làm cho nhân viên bán hàng, thu ngân hoặc nhân viên kho.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu ca làm việc được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng lập ca làm việc.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin ca làm việc.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.25. Activity Diagram Use-case Lập ca làm việc
+
+3.2.26. Cập nhật ca làm việc
+- Đặc tả
+Bảng 3.28. Đặc tả Use-case Cập nhật ca làm việc
+Tên Use-case
+Cập nhật ca làm việc
+Mô tả Use-case
+Cho phép Quản lý cửa hàng thay đổi thông tin ca đã phân công.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin ca làm việc được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu ca làm việc cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.26. Activity Diagram Use-case Cập nhật ca làm việc
+
+3.2.27. Hủy ca làm việc
+- Đặc tả
+Bảng 3.29. Đặc tả Use-case Hủy ca làm việc
+Tên Use-case
+Hủy ca làm việc
+Mô tả Use-case
+Cho phép Quản lý cửa hàng hủy ca làm việc khi không còn áp dụng.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác hủy ca làm việc được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng tra cứu ca làm việc cần hủy.
+2. Hệ thống hiển thị thông tin chi tiết và trạng thái hiện tại.
+3. Người dùng nhập lý do hủy nếu hệ thống yêu cầu.
+4. Người dùng xác nhận thao tác hủy.
+5. Hệ thống kiểm tra quyền, trạng thái và dữ liệu phát sinh liên quan.
+6. Hệ thống cập nhật trạng thái hủy, ghi nhật ký và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.27. Activity Diagram Use-case Hủy ca làm việc
+
+3.2.28. Tra cứu ca làm việc
+- Đặc tả
+Bảng 3.30. Đặc tả Use-case Tra cứu ca làm việc
+Tên Use-case
+Tra cứu ca làm việc
+Mô tả Use-case
+Cho phép Quản lý cửa hàng lọc và xem lịch làm việc theo nhân viên, ngày, ca hoặc trạng thái.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu ca làm việc.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.28. Activity Diagram Use-case Tra cứu ca làm việc
+
+3.2.29. Quản lý KPI nhân viên
+- Đặc tả
+Bảng 3.31. Đặc tả Use-case Quản lý KPI nhân viên
+Tên Use-case
+Quản lý KPI nhân viên
+Mô tả Use-case
+Cho phép Quản lý cửa hàng nhập, xem, phân tích và xuất dữ liệu KPI của nhân viên.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý kpi nhân viên được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý kpi nhân viên.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.29. Activity Diagram Use-case Quản lý KPI nhân viên
+
+3.2.30. Quản lý sản phẩm
+- Đặc tả
+Bảng 3.32. Đặc tả Use-case Quản lý sản phẩm
+Tên Use-case
+Quản lý sản phẩm
+Mô tả Use-case
+Bao quát các chức năng quản lý danh sách sản phẩm trong hệ thống.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý sản phẩm được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý sản phẩm.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.30. Activity Diagram Use-case Quản lý sản phẩm
+
+3.2.31. Thêm sản phẩm
+- Đặc tả
+Bảng 3.33. Đặc tả Use-case Thêm sản phẩm
+Tên Use-case
+Thêm sản phẩm
+Mô tả Use-case
+Cho phép người dùng có quyền thêm mới sản phẩm vào hệ thống.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu sản phẩm được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm sản phẩm.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin sản phẩm.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.31. Activity Diagram Use-case Thêm sản phẩm
+
+3.2.32. Cập nhật sản phẩm
+- Đặc tả
+Bảng 3.34. Đặc tả Use-case Cập nhật sản phẩm
+Tên Use-case
+Cập nhật sản phẩm
+Mô tả Use-case
+Cho phép người dùng có quyền chỉnh sửa thông tin sản phẩm.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin sản phẩm được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu sản phẩm cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.32. Activity Diagram Use-case Cập nhật sản phẩm
+
+3.2.33. Xóa mềm sản phẩm
+- Đặc tả
+Bảng 3.35. Đặc tả Use-case Xóa mềm sản phẩm
+Tên Use-case
+Xóa mềm sản phẩm
+Mô tả Use-case
+Cho phép người dùng có quyền ngừng kinh doanh hoặc ẩn sản phẩm khỏi danh sách.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Bản ghi sản phẩm được chuyển sang trạng thái ngừng hoạt động.
+- Dữ liệu nghiệp vụ liên quan không bị xóa vật lý khỏi CSDL.
+Luồng sự kiện chính
+1. Người dùng tra cứu và chọn bản ghi sản phẩm cần ngừng hoạt động.
+2. Hệ thống hiển thị thông tin bản ghi và cảnh báo ảnh hưởng nghiệp vụ.
+3. Người dùng xác nhận xóa mềm.
+4. Hệ thống kiểm tra quyền thao tác và dữ liệu liên quan.
+5. Hệ thống cập nhật trạng thái ngừng hoạt động thay vì xóa vật lý.
+6. Hệ thống làm mới danh sách và thông báo kết quả.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy xác nhận nếu chưa muốn ngừng hoạt động bản ghi.
+4a. Nếu bản ghi còn giao dịch liên quan, hệ thống chỉ cho phép cập nhật trạng thái phù hợp.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.33. Activity Diagram Use-case Xóa mềm sản phẩm
+
+3.2.34. Tra cứu sản phẩm
+- Đặc tả
+Bảng 3.36. Đặc tả Use-case Tra cứu sản phẩm
+Tên Use-case
+Tra cứu sản phẩm
+Mô tả Use-case
+Cho phép người dùng tìm kiếm và xem thông tin sản phẩm.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu sản phẩm.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.34. Activity Diagram Use-case Tra cứu sản phẩm
+
+3.2.35. Cấu hình đơn vị tính sản phẩm
+- Đặc tả
+Bảng 3.37. Đặc tả Use-case Cấu hình đơn vị tính sản phẩm
+Tên Use-case
+Cấu hình đơn vị tính sản phẩm
+Mô tả Use-case
+Cho phép cấu hình đơn vị gốc, đơn vị quy đổi và tỷ lệ quy đổi cho sản phẩm.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác cấu hình đơn vị tính sản phẩm được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng cấu hình đơn vị tính sản phẩm.
+2. Hệ thống hiển thị các nhóm thiết lập được phép xem hoặc chỉnh sửa.
+3. Người dùng cập nhật giá trị cấu hình phù hợp nhu cầu sử dụng.
+4. Người dùng xác nhận lưu thiết lập.
+5. Hệ thống kiểm tra định dạng và phạm vi giá trị cấu hình.
+6. Hệ thống lưu thay đổi và áp dụng cho phiên làm việc hoặc toàn hệ thống theo quyền hạn.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.35. Activity Diagram Use-case Cấu hình đơn vị tính sản phẩm
+
+3.2.36. Quản lý danh mục và thuế VAT
+- Đặc tả
+Bảng 3.38. Đặc tả Use-case Quản lý danh mục và thuế VAT
+Tên Use-case
+Quản lý danh mục và thuế VAT
+Mô tả Use-case
+Cho phép quản lý danh mục sản phẩm và mức thuế VAT áp dụng; chức năng đã có một phần trong code.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý danh mục và thuế vat được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý danh mục và thuế vat.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.36. Activity Diagram Use-case Quản lý danh mục và thuế VAT
+
+3.2.37. Quản lý nhà cung cấp
+- Đặc tả
+Bảng 3.39. Đặc tả Use-case Quản lý nhà cung cấp
+Tên Use-case
+Quản lý nhà cung cấp
+Mô tả Use-case
+Bao quát các chức năng quản lý thông tin nhà cung cấp.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý nhà cung cấp được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý nhà cung cấp.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.37. Activity Diagram Use-case Quản lý nhà cung cấp
+
+3.2.38. Thêm nhà cung cấp
+- Đặc tả
+Bảng 3.40. Đặc tả Use-case Thêm nhà cung cấp
+Tên Use-case
+Thêm nhà cung cấp
+Mô tả Use-case
+Cho phép Quản lý cửa hàng hoặc Nhân viên kho thêm mới thông tin nhà cung cấp.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu nhà cung cấp được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm nhà cung cấp.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin nhà cung cấp.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.38. Activity Diagram Use-case Thêm nhà cung cấp
+
+3.2.39. Cập nhật nhà cung cấp
+- Đặc tả
+Bảng 3.41. Đặc tả Use-case Cập nhật nhà cung cấp
+Tên Use-case
+Cập nhật nhà cung cấp
+Mô tả Use-case
+Cho phép chỉnh sửa thông tin nhà cung cấp hiện có.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin nhà cung cấp được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu nhà cung cấp cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.39. Activity Diagram Use-case Cập nhật nhà cung cấp
+
+3.2.40. Xóa mềm nhà cung cấp
+- Đặc tả
+Bảng 3.42. Đặc tả Use-case Xóa mềm nhà cung cấp
+Tên Use-case
+Xóa mềm nhà cung cấp
+Mô tả Use-case
+Cho phép ngừng sử dụng nhà cung cấp nhưng vẫn giữ dữ liệu liên quan.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Bản ghi nhà cung cấp được chuyển sang trạng thái ngừng hoạt động.
+- Dữ liệu nghiệp vụ liên quan không bị xóa vật lý khỏi CSDL.
+Luồng sự kiện chính
+1. Người dùng tra cứu và chọn bản ghi nhà cung cấp cần ngừng hoạt động.
+2. Hệ thống hiển thị thông tin bản ghi và cảnh báo ảnh hưởng nghiệp vụ.
+3. Người dùng xác nhận xóa mềm.
+4. Hệ thống kiểm tra quyền thao tác và dữ liệu liên quan.
+5. Hệ thống cập nhật trạng thái ngừng hoạt động thay vì xóa vật lý.
+6. Hệ thống làm mới danh sách và thông báo kết quả.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy xác nhận nếu chưa muốn ngừng hoạt động bản ghi.
+4a. Nếu bản ghi còn giao dịch liên quan, hệ thống chỉ cho phép cập nhật trạng thái phù hợp.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.40. Activity Diagram Use-case Xóa mềm nhà cung cấp
+
+3.2.41. Tra cứu nhà cung cấp
+- Đặc tả
+Bảng 3.43. Đặc tả Use-case Tra cứu nhà cung cấp
+Tên Use-case
+Tra cứu nhà cung cấp
+Mô tả Use-case
+Cho phép tìm kiếm và xem thông tin nhà cung cấp.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu nhà cung cấp.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.41. Activity Diagram Use-case Tra cứu nhà cung cấp
+
+3.2.42. Quản lý tồn kho
+- Đặc tả
+Bảng 3.44. Đặc tả Use-case Quản lý tồn kho
+Tên Use-case
+Quản lý tồn kho
+Mô tả Use-case
+Cho phép Nhân viên kho xem, tìm kiếm, lọc và theo dõi số lượng hàng tồn kho.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý tồn kho được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý tồn kho.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.42. Activity Diagram Use-case Quản lý tồn kho
+
+3.2.43. Nhập hàng và lập phiếu nhập
+- Đặc tả
+Bảng 3.45. Đặc tả Use-case Nhập hàng và lập phiếu nhập
+Tên Use-case
+Nhập hàng và lập phiếu nhập
+Mô tả Use-case
+Cho phép Nhân viên kho nhập hàng thủ công hoặc từ CSV, tạo phiếu nhập và cập nhật tồn kho.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác nhập hàng và lập phiếu nhập được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng nhập hàng và lập phiếu nhập.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.43. Activity Diagram Use-case Nhập hàng và lập phiếu nhập
+
+3.2.44. Xem lịch sử biến động kho
+- Đặc tả
+Bảng 3.46. Đặc tả Use-case Xem lịch sử biến động kho
+Tên Use-case
+Xem lịch sử biến động kho
+Mô tả Use-case
+Cho phép Nhân viên kho xem các giao dịch nhập, xuất, hoàn kho hoặc điều chỉnh tồn kho.
+Actors
+Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng xem lịch sử biến động kho.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.44. Activity Diagram Use-case Xem lịch sử biến động kho
+
+3.2.45. Gửi và xử lý cảnh báo tồn kho
+- Đặc tả
+Bảng 3.47. Đặc tả Use-case Gửi và xử lý cảnh báo tồn kho
+Tên Use-case
+Gửi và xử lý cảnh báo tồn kho
+Mô tả Use-case
+Cho phép Nhân viên bán hàng/Quản lý tạo cảnh báo hàng thấp và Nhân viên kho tiếp nhận, xử lý cảnh báo.
+Actors
+Nhân viên kho; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên kho; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác gửi và xử lý cảnh báo tồn kho được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng phát hiện hoặc hệ thống ghi nhận sản phẩm có tồn kho thấp.
+2. Người dùng tạo cảnh báo tồn kho hoặc mở danh sách cảnh báo hiện có.
+3. Nhân viên kho tiếp nhận cảnh báo và xem thông tin sản phẩm liên quan.
+4. Nhân viên kho kiểm tra tồn kho thực tế và chọn hướng xử lý.
+5. Hệ thống cập nhật trạng thái cảnh báo và ghi nhận người xử lý.
+6. Hệ thống thông báo kết quả cho các vai trò liên quan.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.45. Activity Diagram Use-case Gửi và xử lý cảnh báo tồn kho
+
+3.2.46. Quản lý khách hàng/hội viên
+- Đặc tả
+Bảng 3.48. Đặc tả Use-case Quản lý khách hàng/hội viên
+Tên Use-case
+Quản lý khách hàng/hội viên
+Mô tả Use-case
+Bao quát các chức năng quản lý thông tin khách hàng và hội viên phục vụ POS.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý khách hàng/hội viên được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý khách hàng/hội viên.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.46. Activity Diagram Use-case Quản lý khách hàng/hội viên
+
+3.2.47. Thêm khách hàng/hội viên
+- Đặc tả
+Bảng 3.49. Đặc tả Use-case Thêm khách hàng/hội viên
+Tên Use-case
+Thêm khách hàng/hội viên
+Mô tả Use-case
+Cho phép nhân viên thêm mới thông tin khách hàng phục vụ bán hàng POS.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Dữ liệu khách hàng/hội viên được tạo mới trong hệ thống.
+- Hệ thống ghi nhận người thực hiện và thời điểm thao tác.
+Luồng sự kiện chính
+1. Người dùng chọn chức năng thêm khách hàng/hội viên.
+2. Hệ thống hiển thị biểu mẫu nhập thông tin khách hàng/hội viên.
+3. Người dùng nhập các trường bắt buộc và thông tin nghiệp vụ liên quan.
+4. Người dùng chọn lưu hoặc xác nhận tạo mới.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và ràng buộc trùng lặp.
+6. Hệ thống lưu dữ liệu vào CSDL, cập nhật danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.47. Activity Diagram Use-case Thêm khách hàng/hội viên
+
+3.2.48. Cập nhật khách hàng/hội viên
+- Đặc tả
+Bảng 3.50. Đặc tả Use-case Cập nhật khách hàng/hội viên
+Tên Use-case
+Cập nhật khách hàng/hội viên
+Mô tả Use-case
+Cho phép nhân viên chỉnh sửa thông tin khách hàng hiện có.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thông tin khách hàng/hội viên được cập nhật theo dữ liệu hợp lệ.
+- Dữ liệu lịch sử liên quan được giữ nguyên để phục vụ tra cứu.
+Luồng sự kiện chính
+1. Người dùng mở màn hình quản lý và tra cứu khách hàng/hội viên cần cập nhật.
+2. Hệ thống hiển thị thông tin chi tiết của bản ghi được chọn.
+3. Người dùng chỉnh sửa các thông tin được phép thay đổi.
+4. Người dùng xác nhận cập nhật.
+5. Hệ thống kiểm tra dữ liệu, quyền thao tác và các ràng buộc nghiệp vụ.
+6. Hệ thống lưu thay đổi, làm mới danh sách và hiển thị thông báo thành công.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy thao tác để quay lại danh sách mà không lưu dữ liệu.
+5a. Nếu dữ liệu có thể tự động chuẩn hóa, hệ thống cập nhật định dạng trước khi lưu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.48. Activity Diagram Use-case Cập nhật khách hàng/hội viên
+
+3.2.49. Xóa mềm khách hàng/hội viên
+- Đặc tả
+Bảng 3.51. Đặc tả Use-case Xóa mềm khách hàng/hội viên
+Tên Use-case
+Xóa mềm khách hàng/hội viên
+Mô tả Use-case
+Cho phép ngừng hoạt động hồ sơ khách hàng nhưng vẫn giữ lịch sử mua hàng.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Bản ghi khách hàng/hội viên được chuyển sang trạng thái ngừng hoạt động.
+- Dữ liệu nghiệp vụ liên quan không bị xóa vật lý khỏi CSDL.
+Luồng sự kiện chính
+1. Người dùng tra cứu và chọn bản ghi khách hàng/hội viên cần ngừng hoạt động.
+2. Hệ thống hiển thị thông tin bản ghi và cảnh báo ảnh hưởng nghiệp vụ.
+3. Người dùng xác nhận xóa mềm.
+4. Hệ thống kiểm tra quyền thao tác và dữ liệu liên quan.
+5. Hệ thống cập nhật trạng thái ngừng hoạt động thay vì xóa vật lý.
+6. Hệ thống làm mới danh sách và thông báo kết quả.
+Luồng sự kiện phụ
+3a. Người dùng có thể hủy xác nhận nếu chưa muốn ngừng hoạt động bản ghi.
+4a. Nếu bản ghi còn giao dịch liên quan, hệ thống chỉ cho phép cập nhật trạng thái phù hợp.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.49. Activity Diagram Use-case Xóa mềm khách hàng/hội viên
+
+3.2.50. Tra cứu khách hàng/hội viên
+- Đặc tả
+Bảng 3.52. Đặc tả Use-case Tra cứu khách hàng/hội viên
+Tên Use-case
+Tra cứu khách hàng/hội viên
+Mô tả Use-case
+Cho phép tìm kiếm khách hàng theo tên, số điện thoại, email hoặc hạng thành viên.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở chức năng tra cứu khách hàng/hội viên.
+2. Người dùng nhập từ khóa hoặc chọn điều kiện lọc.
+3. Hệ thống kiểm tra điều kiện tìm kiếm và truy vấn dữ liệu phù hợp quyền truy cập.
+4. Hệ thống hiển thị danh sách kết quả.
+5. Người dùng chọn một dòng để xem thông tin chi tiết nếu cần.
+6. Hệ thống hiển thị chi tiết bản ghi được chọn.
+Luồng sự kiện phụ
+2a. Người dùng bỏ trống điều kiện để xem toàn bộ dữ liệu trong phạm vi được phân quyền.
+5a. Người dùng xuất danh sách kết quả nếu màn hình hỗ trợ xuất dữ liệu.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.50. Activity Diagram Use-case Tra cứu khách hàng/hội viên
+
+3.2.51. Bán hàng POS
+- Đặc tả
+Bảng 3.53. Đặc tả Use-case Bán hàng POS
+Tên Use-case
+Bán hàng POS
+Mô tả Use-case
+Cho phép Thu ngân tìm sản phẩm, thêm vào giỏ hàng, chọn khách hàng, chọn phương thức thanh toán và hoàn tất giao dịch.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác bán hàng pos được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Thu ngân mở màn hình bán hàng POS.
+2. Thu ngân tìm hoặc quét sản phẩm và thêm vào giỏ hàng.
+3. Hệ thống hiển thị giá bán, số lượng tồn và tổng tiền tạm tính.
+4. Thu ngân chọn khách hàng/hội viên nếu có và áp dụng chính sách khuyến mãi phù hợp.
+5. Thu ngân chọn phương thức thanh toán và xác nhận giao dịch.
+6. Hệ thống chuyển sang bước thanh toán hóa đơn.
+Luồng sự kiện phụ
+2a. Thu ngân có thể điều chỉnh số lượng hoặc xóa sản phẩm khỏi giỏ hàng.
+4a. Nếu khách hàng chưa có hồ sơ, thu ngân có thể tạo nhanh khách hàng/hội viên.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.51. Activity Diagram Use-case Bán hàng POS
+
+3.2.52. Thanh toán hóa đơn
+- Đặc tả
+Bảng 3.54. Đặc tả Use-case Thanh toán hóa đơn
+Tên Use-case
+Thanh toán hóa đơn
+Mô tả Use-case
+Cho phép Thu ngân xác nhận thanh toán; hệ thống kiểm tra tồn kho, tạo hóa đơn, tạo chi tiết hóa đơn, trừ kho và cập nhật thông tin khách hàng.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hóa đơn được ghi nhận thanh toán thành công.
+- Tồn kho, chi tiết hóa đơn và thông tin khách hàng được cập nhật.
+Luồng sự kiện chính
+1. Thu ngân kiểm tra giỏ hàng và thông tin khách hàng trên màn hình POS.
+2. Thu ngân chọn phương thức thanh toán tiền mặt hoặc chuyển khoản.
+3. Hệ thống kiểm tra tồn kho, khuyến mãi, tổng tiền và dữ liệu hóa đơn.
+4. Thu ngân xác nhận thanh toán.
+5. Hệ thống tạo hóa đơn, chi tiết hóa đơn, cập nhật tồn kho và điểm/hạng khách hàng nếu có.
+6. Hệ thống hiển thị hoặc xuất hóa đơn cho giao dịch.
+Luồng sự kiện phụ
+2a. Thu ngân có thể đổi phương thức thanh toán trước khi xác nhận.
+5a. Nếu khách hàng không đăng ký hội viên, hệ thống vẫn ghi nhận hóa đơn bán lẻ.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.52. Activity Diagram Use-case Thanh toán hóa đơn
+
+3.2.53. Quản lý hóa đơn
+- Đặc tả
+Bảng 3.55. Đặc tả Use-case Quản lý hóa đơn
+Tên Use-case
+Quản lý hóa đơn
+Mô tả Use-case
+Cho phép người dùng có quyền xem danh sách hóa đơn, lọc theo ngày, xem chi tiết, cập nhật trạng thái và xuất hóa đơn.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý hóa đơn được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý hóa đơn.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.53. Activity Diagram Use-case Quản lý hóa đơn
+
+3.2.54. Hủy hóa đơn và hoàn kho
+- Đặc tả
+Bảng 3.56. Đặc tả Use-case Hủy hóa đơn và hoàn kho
+Tên Use-case
+Hủy hóa đơn và hoàn kho
+Mô tả Use-case
+Cho phép hủy hóa đơn, ghi lý do hủy, hoàn lại tồn kho và ghi nhận thao tác hủy vào nhật ký hệ thống.
+Actors
+Nhân viên bán hàng / Thu ngân
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Nhân viên bán hàng / Thu ngân và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác hủy hóa đơn và hoàn kho được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng tra cứu hóa đơn và hoàn kho cần hủy.
+2. Hệ thống hiển thị thông tin chi tiết và trạng thái hiện tại.
+3. Người dùng nhập lý do hủy nếu hệ thống yêu cầu.
+4. Người dùng xác nhận thao tác hủy.
+5. Hệ thống kiểm tra quyền, trạng thái và dữ liệu phát sinh liên quan.
+6. Hệ thống cập nhật trạng thái hủy, ghi nhật ký và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.54. Activity Diagram Use-case Hủy hóa đơn và hoàn kho
+
+3.2.55. Báo cáo và thống kê
+- Đặc tả
+Bảng 3.57. Đặc tả Use-case Báo cáo và thống kê
+Tên Use-case
+Báo cáo và thống kê
+Mô tả Use-case
+Cho phép Quản lý cửa hàng/Admin xem doanh thu, đơn hàng, sản phẩm bán chạy, tồn kho thấp và hiệu suất nhân viên.
+Actors
+Quản lý cửa hàng
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Quản lý cửa hàng và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Hệ thống hiển thị danh sách hoặc báo cáo theo điều kiện đã chọn.
+- Không làm thay đổi dữ liệu nghiệp vụ.
+Luồng sự kiện chính
+1. Người dùng mở màn hình báo cáo và thống kê.
+2. Người dùng chọn loại báo cáo, chi nhánh và khoảng thời gian cần xem.
+3. Hệ thống truy vấn dữ liệu doanh thu, đơn hàng, tồn kho hoặc hiệu suất nhân viên.
+4. Hệ thống tổng hợp dữ liệu và hiển thị biểu đồ, bảng thống kê tương ứng.
+5. Người dùng lọc, xem chi tiết hoặc xuất báo cáo nếu cần.
+6. Hệ thống tạo file báo cáo và thông báo kết quả.
+Luồng sự kiện phụ
+5a. Người dùng thay đổi bộ lọc để xem báo cáo theo góc nhìn khác.
+5b. Người dùng xuất báo cáo ra Excel hoặc PDF nếu chức năng hỗ trợ.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.55. Activity Diagram Use-case Báo cáo và thống kê
+
+3.2.56. Quản lý khuyến mãi
+- Đặc tả
+Bảng 3.58. Đặc tả Use-case Quản lý khuyến mãi
+Tên Use-case
+Quản lý khuyến mãi
+Mô tả Use-case
+Cho phép Admin thêm, sửa, ngừng áp dụng và tra cứu các chương trình khuyến mãi; chức năng đã có một phần trong code.
+Actors
+Admin
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác quản lý khuyến mãi được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng quản lý khuyến mãi.
+2. Hệ thống hiển thị danh sách dữ liệu và các thao tác được phép.
+3. Người dùng chọn thao tác cần thực hiện.
+4. Hệ thống kiểm tra quyền truy cập và dữ liệu đầu vào.
+5. Hệ thống xử lý nghiệp vụ, cập nhật CSDL khi cần.
+6. Hệ thống làm mới giao diện và thông báo kết quả.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.56. Activity Diagram Use-case Quản lý khuyến mãi
+
+3.2.57. Cấu hình cá nhân/hệ thống
+- Đặc tả
+Bảng 3.59. Đặc tả Use-case Cấu hình cá nhân/hệ thống
+Tên Use-case
+Cấu hình cá nhân/hệ thống
+Mô tả Use-case
+Cho phép người dùng xem hoặc cập nhật một số thiết lập cá nhân và cấu hình chung của hệ thống.
+Actors
+Admin; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân; Nhân viên kho
+Tiền điều kiện
+- Người dùng đã đăng nhập hệ thống.
+- Tài khoản thuộc nhóm actor Admin; Quản lý cửa hàng; Nhân viên bán hàng / Thu ngân; Nhân viên kho và có quyền thực hiện chức năng.
+Hậu điều kiện
+- Thao tác cấu hình cá nhân/hệ thống được xử lý thành công.
+- Hệ thống cập nhật dữ liệu và hiển thị thông báo kết quả.
+Luồng sự kiện chính
+1. Người dùng mở chức năng cấu hình cá nhân/hệ thống.
+2. Hệ thống hiển thị các nhóm thiết lập được phép xem hoặc chỉnh sửa.
+3. Người dùng cập nhật giá trị cấu hình phù hợp nhu cầu sử dụng.
+4. Người dùng xác nhận lưu thiết lập.
+5. Hệ thống kiểm tra định dạng và phạm vi giá trị cấu hình.
+6. Hệ thống lưu thay đổi và áp dụng cho phiên làm việc hoặc toàn hệ thống theo quyền hạn.
+Luồng sự kiện phụ
+1a. Người dùng có thể quay lại màn hình trước mà không phát sinh thay đổi.
+3a. Người dùng có thể làm mới dữ liệu để xem trạng thái mới nhất.
+Luồng sự kiện lỗi hoặc ngoại lệ
+- Thiếu dữ liệu bắt buộc hoặc dữ liệu nhập không hợp lệ.
+- Không tìm thấy dữ liệu phù hợp với điều kiện tra cứu.
+- Người dùng không đủ quyền thực hiện chức năng.
+- Bản ghi đã bị khóa, ngừng hoạt động hoặc không còn ở trạng thái cho phép xử lý.
+- Thao tác thất bại do lỗi kết nối CSDL hoặc lỗi xử lý nghiệp vụ.
+
+- Activity Diagram
+[Chèn Activity Diagram cho Use-case này tại đây]
+Hình 3.57. Activity Diagram Use-case Cấu hình cá nhân/hệ thống
