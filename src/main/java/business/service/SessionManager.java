@@ -8,6 +8,9 @@ public class SessionManager {
     private static Account currentUser;
     private static String currentToken;
     private static String currentSessionId;
+    private static String currentEmployeeId;
+    private static String currentStoreId;
+    private static String currentStoreName;
 
     private SessionManager() {
     }
@@ -42,5 +45,44 @@ public class SessionManager {
     public static void clear() {
         currentUser = null;
         token = null;
+        currentToken = null;
+        currentSessionId = null;
+        currentEmployeeId = null;
+        currentStoreId = null;
+        currentStoreName = null;
+    }
+
+    public static void setCurrentEmployeeScope(String employeeId, String storeId, String storeName) {
+        currentEmployeeId = employeeId;
+        currentStoreId = storeId;
+        currentStoreName = storeName;
+    }
+
+    public static String getCurrentEmployeeId() {
+        return currentEmployeeId;
+    }
+
+    public static String getCurrentStoreId() {
+        return currentStoreId;
+    }
+
+    public static String getCurrentStoreName() {
+        return currentStoreName;
+    }
+
+    public static boolean isAdmin() {
+        return currentUser != null
+                && currentUser.getRole() != null
+                && currentUser.getRole().equalsIgnoreCase("R_ADMIN_ALL");
+    }
+
+    public static boolean isStoreManager() {
+        return currentUser != null
+                && currentUser.getRole() != null
+                && currentUser.getRole().equalsIgnoreCase("R_STORE_MNG");
+    }
+
+    public static boolean hasStoreScope() {
+        return currentStoreId != null && !currentStoreId.isBlank();
     }
 }
