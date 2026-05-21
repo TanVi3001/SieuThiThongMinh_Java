@@ -31,8 +31,8 @@ public class StoreManagementPanel extends JPanel {
     private DefaultTableModel tableModel;
     private JTextField txtSearch, txtMaSieuThi, txtTenSieuThi, txtDiaChi, txtSoDienThoai;
     private JComboBox<String> cbTrangThai;
-    private JButton btnSave, btnClear, btnSoftDelete;
-    private JLabel lblTotal, lblActive, lblInactive, lblHint;
+    private JButton btnAddNew, btnSave, btnClear, btnSoftDelete;
+    private JLabel lblTotal, lblActive, lblInactive, lblHint, lblFormTitle;
     private boolean isEditMode = false, hasNameColumn = false, hasStatusColumn = false;
 
     public StoreManagementPanel() {
@@ -55,18 +55,28 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private JPanel createHeaderPanel() {
-        JPanel p = new JPanel();
+        JPanel p = new JPanel(new BorderLayout());
         p.setOpaque(false);
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("Quản Lý Chuỗi Siêu Thị");
         title.setFont(new Font("Segoe UI", Font.BOLD, 28));
         title.setForeground(text);
-        JLabel sub = new JLabel("Theo dõi, cập nhật và kiểm soát trạng thái toàn bộ chi nhánh trong hệ thống");
+        JLabel sub = new JLabel("Theo dõi, thêm mới, cập nhật và kiểm soát trạng thái toàn bộ chi nhánh trong hệ thống");
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         sub.setForeground(muted);
-        p.add(title);
-        p.add(Box.createVerticalStrut(5));
-        p.add(sub);
+        titleBox.add(title);
+        titleBox.add(Box.createVerticalStrut(5));
+        titleBox.add(sub);
+
+        JButton quickAdd = button("+ Thêm Siêu Thị", green, Color.WHITE);
+        quickAdd.setPreferredSize(new Dimension(155, 42));
+        quickAdd.addActionListener(e -> prepareAddNewStore());
+
+        p.add(titleBox, BorderLayout.WEST);
+        p.add(quickAdd, BorderLayout.EAST);
         return p;
     }
 
@@ -96,6 +106,7 @@ public class StoreManagementPanel extends JPanel {
         card.setLayout(new BorderLayout(12, 0));
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border), new EmptyBorder(14, 16, 14, 16)));
         JPanel icon = new JPanel(new GridBagLayout()) {
+            @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -137,17 +148,21 @@ public class StoreManagementPanel extends JPanel {
         title.setForeground(text);
         JPanel search = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         search.setOpaque(false);
+        btnAddNew = button("+ Thêm", green, Color.WHITE);
+        btnAddNew.setPreferredSize(new Dimension(92, 40));
         txtSearch = field("Tìm kiếm chi nhánh...");
         txtSearch.setPreferredSize(new Dimension(285, 40));
         JButton btnSearch = button("Tìm", blue, Color.WHITE);
         btnSearch.setPreferredSize(new Dimension(86, 40));
         btnSearch.addActionListener(e -> loadStoreData(txtSearch.getText().trim()));
+        search.add(btnAddNew);
         search.add(txtSearch);
         search.add(btnSearch);
         bar.add(title, BorderLayout.WEST);
         bar.add(search, BorderLayout.EAST);
 
         tableModel = new DefaultTableModel(new Object[]{"Mã Cửa Hàng", "Tên Siêu Thị", "Trạng Thái"}, 0) {
+            @Override
             public boolean isCellEditable(int r, int c) { return false; }
         };
         tblStores = new JTable(tableModel);
@@ -155,7 +170,7 @@ public class StoreManagementPanel extends JPanel {
         JScrollPane sp = new JScrollPane(tblStores);
         sp.setBorder(BorderFactory.createLineBorder(border));
         sp.getViewport().setBackground(Color.WHITE);
-        JLabel hint = new JLabel("Gợi ý: Click vào một chi nhánh để chỉnh sửa thông tin hoặc tạm ngưng hoạt động.");
+        JLabel hint = new JLabel("Gợi ý: Bấm + Thêm để tạo siêu thị mới hoặc click một chi nhánh để chỉnh sửa.");
         hint.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         hint.setForeground(muted);
         area.add(bar, BorderLayout.NORTH);
@@ -172,13 +187,13 @@ public class StoreManagementPanel extends JPanel {
         JPanel header = new JPanel();
         header.setOpaque(false);
         header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
-        JLabel title = new JLabel("Thông Tin Siêu Thị");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 21));
-        title.setForeground(text);
-        lblHint = new JLabel("Chọn một dòng để cập nhật hoặc nhập mới");
+        lblFormTitle = new JLabel("Thông Tin Siêu Thị");
+        lblFormTitle.setFont(new Font("Segoe UI", Font.BOLD, 21));
+        lblFormTitle.setForeground(text);
+        lblHint = new JLabel("Bấm + Thêm để nhập chi nhánh mới");
         lblHint.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblHint.setForeground(muted);
-        header.add(title);
+        header.add(lblFormTitle);
         header.add(Box.createVerticalStrut(6));
         header.add(lblHint);
 
@@ -199,12 +214,17 @@ public class StoreManagementPanel extends JPanel {
         cbTrangThai.setPreferredSize(new Dimension(0, 42));
         g.gridy = y; g.insets = new Insets(0, 0, 12, 0); form.add(cbTrangThai, g);
 
-        JPanel actions = new JPanel(new GridLayout(3, 1, 0, 10));
+        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 10));
         actions.setOpaque(false);
+        JButton btnAddFromForm = button("+ Thêm Siêu Thị", green, Color.WHITE);
         btnSave = button("Lưu Thông Tin", blue, Color.WHITE);
         btnClear = button("Làm Mới", new Color(235, 238, 244), text);
         btnSoftDelete = button("Xóa mềm", red, Color.WHITE);
-        actions.add(btnSave); actions.add(btnClear); actions.add(btnSoftDelete);
+        btnAddFromForm.addActionListener(e -> prepareAddNewStore());
+        actions.add(btnAddFromForm);
+        actions.add(btnSave);
+        actions.add(btnClear);
+        actions.add(btnSoftDelete);
         card.add(header, BorderLayout.NORTH);
         card.add(form, BorderLayout.CENTER);
         card.add(actions, BorderLayout.SOUTH);
@@ -232,6 +252,7 @@ public class StoreManagementPanel extends JPanel {
         DefaultTableCellRenderer header = new DefaultTableCellRenderer();
         header.setBackground(navy); header.setForeground(Color.WHITE); header.setFont(new Font("Segoe UI", Font.BOLD, 13)); header.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         DefaultTableCellRenderer body = new DefaultTableCellRenderer() {
+            @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int col) {
                 JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, col);
                 l.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
@@ -241,6 +262,7 @@ public class StoreManagementPanel extends JPanel {
             }
         };
         DefaultTableCellRenderer status = new DefaultTableCellRenderer() {
+            @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int col) {
                 JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, col);
                 String s = value == null ? "" : value.toString();
@@ -259,6 +281,7 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void initEvents() {
+        btnAddNew.addActionListener(e -> prepareAddNewStore());
         btnClear.addActionListener(e -> clearForm());
         btnSave.addActionListener(e -> saveStore());
         btnSoftDelete.addActionListener(e -> softDeleteStore());
@@ -268,6 +291,7 @@ public class StoreManagementPanel extends JPanel {
             public void changedUpdate(DocumentEvent e) { loadStoreData(txtSearch.getText().trim()); }
         });
         tblStores.addMouseListener(new MouseAdapter() {
+            @Override
             public void mouseClicked(MouseEvent e) {
                 int row = tblStores.getSelectedRow();
                 if (row >= 0) {
@@ -276,6 +300,7 @@ public class StoreManagementPanel extends JPanel {
                     String id = String.valueOf(tableModel.getValueAt(modelRow, 0));
                     txtMaSieuThi.setText(id);
                     txtMaSieuThi.setEnabled(false);
+                    lblFormTitle.setText("Thông Tin Siêu Thị");
                     lblHint.setText("Đang cập nhật chi nhánh " + id);
                     loadStoreDetailsToForm(id);
                 }
@@ -283,8 +308,27 @@ public class StoreManagementPanel extends JPanel {
         });
     }
 
+    private void prepareAddNewStore() {
+        clearForm();
+        isEditMode = false;
+        txtMaSieuThi.setText(generateNextStoreId());
+        txtMaSieuThi.setEnabled(true);
+        lblFormTitle.setText("Thêm Thông Tin Siêu Thị");
+        lblHint.setText("Đang nhập chi nhánh mới - bấm Lưu Thông Tin để tạo");
+        txtTenSieuThi.requestFocusInWindow();
+    }
+
     private void clearForm() {
-        isEditMode = false; txtMaSieuThi.setEnabled(true); txtMaSieuThi.setText(""); txtTenSieuThi.setText(""); txtDiaChi.setText(""); txtSoDienThoai.setText(""); cbTrangThai.setSelectedItem(ACTIVE); tblStores.clearSelection(); lblHint.setText("Chọn một dòng để cập nhật hoặc nhập mới");
+        isEditMode = false;
+        txtMaSieuThi.setEnabled(true);
+        txtMaSieuThi.setText("");
+        txtTenSieuThi.setText("");
+        txtDiaChi.setText("");
+        txtSoDienThoai.setText("");
+        cbTrangThai.setSelectedItem(ACTIVE);
+        tblStores.clearSelection();
+        lblFormTitle.setText("Thông Tin Siêu Thị");
+        lblHint.setText("Bấm + Thêm để nhập chi nhánh mới");
     }
 
     private void loadStoreData(String keyword) {
@@ -331,7 +375,7 @@ public class StoreManagementPanel extends JPanel {
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
             if (isEditMode) updateStore(con, id, name, address, phone, status); else insertStore(con, id, name, address, phone, status);
             business.service.AuditLogService.logAction(isEditMode ? "CẬP NHẬT" : "THÊM MỚI", "STORES", id, "", "Trạng thái: " + status, "Admin cập nhật thông tin chi nhánh");
-            JOptionPane.showMessageDialog(this, "Đã lưu thông tin chi nhánh!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, isEditMode ? "Đã cập nhật thông tin chi nhánh!" : "Đã thêm siêu thị mới!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             clearForm(); loadStoreData(txtSearch.getText().trim()); EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
         } catch (Exception e) { JOptionPane.showMessageDialog(this, "Lỗi khi lưu dữ liệu: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE); }
     }
@@ -368,6 +412,18 @@ public class StoreManagementPanel extends JPanel {
         } catch (Exception e) { JOptionPane.showMessageDialog(this, "Lỗi khi xóa mềm: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE); }
     }
 
+    private String generateNextStoreId() {
+        int max = 0;
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT store_id FROM STORES"); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String id = safe(rs.getString(1));
+                String digits = id.replaceAll("\\D+", "");
+                if (!digits.isEmpty()) max = Math.max(max, Integer.parseInt(digits));
+            }
+        } catch (Exception ignored) {}
+        return String.format("ST%03d", max + 1);
+    }
+
     private void refreshStoreSchemaFlags() { hasNameColumn = hasColumn("STORES", "STORE_NAME"); hasStatusColumn = hasColumn("STORES", "STATUS"); }
     private boolean hasColumn(String table, String column) { try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME=? AND COLUMN_NAME=?")) { ps.setString(1, table); ps.setString(2, column); try (ResultSet rs = ps.executeQuery()) { return rs.next() && rs.getInt(1) > 0; } } catch (Exception e) { return false; } }
     private String nameExpr() { return hasNameColumn ? "NVL(store_name,NVL(address,store_id))" : "NVL(address,store_id)"; }
@@ -378,11 +434,11 @@ public class StoreManagementPanel extends JPanel {
     private String safe(String value) { return value == null ? "" : value.trim(); }
     private JLabel label(String text) { JLabel l = new JLabel(text); l.setFont(new Font("Segoe UI", Font.BOLD, 12)); l.setForeground(muted); return l; }
     private JTextField field(String placeholder) { JTextField f = new JTextField(); f.setFont(new Font("Segoe UI", Font.PLAIN, 14)); f.putClientProperty("JTextField.placeholderText", placeholder); f.setPreferredSize(new Dimension(0, 42)); f.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border), new EmptyBorder(6, 12, 6, 12))); return f; }
-    private JButton button(String text, Color bg, Color fg) { JButton b = new JButton(text); b.setFont(new Font("Segoe UI", Font.BOLD, 13)); b.setBackground(bg); b.setForeground(fg); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.setFocusPainted(false); b.setBorderPainted(false); b.setContentAreaFilled(false); b.setPreferredSize(new Dimension(130, 40)); b.setUI(new javax.swing.plaf.basic.BasicButtonUI() { public void paint(Graphics g, JComponent c) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(c.getBackground()); g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10); super.paint(g2, c); g2.dispose(); } }); return b; }
+    private JButton button(String text, Color bg, Color fg) { JButton b = new JButton(text); b.setFont(new Font("Segoe UI", Font.BOLD, 13)); b.setBackground(bg); b.setForeground(fg); b.setCursor(new Cursor(Cursor.HAND_CURSOR)); b.setFocusPainted(false); b.setBorderPainted(false); b.setContentAreaFilled(false); b.setPreferredSize(new Dimension(130, 40)); b.setUI(new javax.swing.plaf.basic.BasicButtonUI() { @Override public void paint(Graphics g, JComponent c) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(c.getBackground()); g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10); super.paint(g2, c); g2.dispose(); } }); return b; }
 
     class RoundedPanel extends JPanel {
         private final int r; private final Color bgColor;
         RoundedPanel(int r, Color bgColor) { this.r = r; this.bgColor = bgColor; setOpaque(false); }
-        protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r); g2.dispose(); super.paintComponent(g); }
+        @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r); g2.dispose(); super.paintComponent(g); }
     }
 }
