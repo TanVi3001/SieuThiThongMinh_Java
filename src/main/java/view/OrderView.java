@@ -104,12 +104,13 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByCurrentScope() {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
 
         if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
-            return OrdersSql.getInstance().selectAll(userRole, empId, storeId);
+            return OrdersSql.getInstance().selectAllByStoreAndEmployee(storeId, empId);
         }
 
         if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
@@ -121,6 +122,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByStatusCurrentScope(String status) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
@@ -129,7 +131,11 @@ public class OrderView extends javax.swing.JPanel {
             return loadOrdersByCurrentScope();
         }
 
-        if (isStoreScopedUser()) {
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().selectByConditionStoreAndEmployee(status, storeId, empId);
+        }
+
+        if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
             return OrdersSql.getInstance().selectByConditionAndStore(status, storeId);
         }
 
@@ -138,11 +144,16 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByDateCurrentScope(java.sql.Date fromDate, java.sql.Date toDate) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
 
-        if (isStoreScopedUser()) {
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().findByDateRangeStoreAndEmployee(fromDate, toDate, storeId, empId);
+        }
+
+        if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
             return OrdersSql.getInstance().findByDateRangeAndStore(fromDate, toDate, storeId);
         }
 
@@ -151,12 +162,19 @@ public class OrderView extends javax.swing.JPanel {
 
     private Order selectOrderByIdCurrentScope(String orderId) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser()) {
             if (storeId == null) {
                 return null;
             }
+
+            if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+                return OrdersSql.getInstance().selectByIdInStoreAndEmployee(orderId, storeId, empId);
+            }
+
             return OrdersSql.getInstance().selectByIdInStore(orderId, storeId);
         }
+
         return OrdersSql.getInstance().selectById(orderId);
     }
 
@@ -267,12 +285,18 @@ public class OrderView extends javax.swing.JPanel {
                 c.setForeground(Color.WHITE);
 
                 switch (column) {
-                    case 0 -> c.setBackground(new Color(59, 130, 246));
-                    case 1 -> c.setBackground(new Color(16, 185, 129));
-                    case 2 -> c.setBackground(new Color(245, 158, 11));
-                    case 3 -> c.setBackground(new Color(139, 92, 246));
-                    case 4 -> c.setBackground(new Color(239, 68, 68));
-                    default -> c.setBackground(new Color(59, 130, 246));
+                    case 0 ->
+                        c.setBackground(new Color(59, 130, 246));
+                    case 1 ->
+                        c.setBackground(new Color(16, 185, 129));
+                    case 2 ->
+                        c.setBackground(new Color(245, 158, 11));
+                    case 3 ->
+                        c.setBackground(new Color(139, 92, 246));
+                    case 4 ->
+                        c.setBackground(new Color(239, 68, 68));
+                    default ->
+                        c.setBackground(new Color(59, 130, 246));
                 }
 
                 ((javax.swing.JLabel) c).setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -676,8 +700,7 @@ public class OrderView extends javax.swing.JPanel {
             }
 
             String hashFromDb = null;
-            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection();
-                 java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
+            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
                 ps.setString(1, user.getUsername());
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -820,6 +843,15 @@ public class OrderView extends javax.swing.JPanel {
     private void openSalesInvoiceReport(String orderId) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("ORDER_ID", orderId);
+
+        String storeId = getCurrentStoreIdOrWarn();
+
+        if (isStoreScopedUser()) {
+            params.put("STORE_ID", storeId);
+        } else {
+            params.put("STORE_ID", null);
+        }
+
         ReportViewer.showReport(SALES_INVOICE_REPORT, params);
     }
 

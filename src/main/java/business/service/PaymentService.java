@@ -112,9 +112,22 @@ public class PaymentService {
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            Order order = OrdersSql.getInstance().selectById(orderId);
+            Order order;
+
+            if (SessionManager.isAdmin()) {
+                order = OrdersSql.getInstance().selectById(orderId);
+            } else {
+                String currentStoreId = SessionManager.getCurrentStoreId();
+
+                if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+                    throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
+                }
+
+                order = OrdersSql.getInstance().selectByIdInStore(orderId, currentStoreId.trim());
+            }
+
             if (order == null) {
-                throw new SQLException("Không tìm thấy hóa đơn.");
+                throw new SQLException("Không tìm thấy hóa đơn hoặc bạn không có quyền thao tác hóa đơn này.");
             }
 
             String storeId = requireStoreId(order);
@@ -220,9 +233,7 @@ public class PaymentService {
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
-            try (PreparedStatement psDetail = con.prepareStatement(insertDetailSql);
-                 PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql);
-                 PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
+            try (PreparedStatement psDetail = con.prepareStatement(insertDetailSql); PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql); PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
 
                 String storeId = requireStoreId(order);
                 assertWritableStore(storeId);
