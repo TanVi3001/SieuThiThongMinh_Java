@@ -22,6 +22,7 @@ public class PaymentService {
 
         try {
             String storeId = requireStoreId(hoaDon);
+            assertWritableStore(storeId);
 
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
@@ -47,10 +48,8 @@ public class PaymentService {
 
                         int stock = rs.getInt("stock_quantity");
                         if (stock < ct.getQuantity()) {
-                            throw new SQLException(
-                                    "Sản phẩm [" + rs.getString("product_name")
-                                    + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock
-                            );
+                            throw new SQLException("Sản phẩm [" + rs.getString("product_name")
+                                    + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock);
                         }
                     }
                 }
@@ -82,10 +81,8 @@ public class PaymentService {
 
                     int updated = psStock.executeUpdate();
                     if (updated <= 0) {
-                        throw new SQLException(
-                                "Sản phẩm " + ct.getProductId()
-                                + " không đủ tồn kho tại chi nhánh hoặc đã được máy khác bán trước."
-                        );
+                        throw new SQLException("Sản phẩm " + ct.getProductId()
+                                + " không đủ tồn kho tại chi nhánh hoặc đã được máy khác bán trước.");
                     }
                 }
             }
@@ -121,6 +118,7 @@ public class PaymentService {
             }
 
             String storeId = requireStoreId(order);
+            assertWritableStore(storeId);
 
             if ("Đã hủy".equalsIgnoreCase(order.getStatus())
                     || "Đã huỷ".equalsIgnoreCase(order.getStatus())
@@ -227,6 +225,7 @@ public class PaymentService {
                  PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
 
                 String storeId = requireStoreId(order);
+                assertWritableStore(storeId);
                 order.setStoreId(storeId);
                 if (order.getStatus() == null || order.getStatus().isBlank()) {
                     order.setStatus("Hoàn thành");
@@ -295,6 +294,19 @@ public class PaymentService {
             throw new SQLException("Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.");
         }
         return storeId.trim();
+    }
+
+    private static void assertWritableStore(String storeId) throws SQLException {
+        if (SessionManager.isAdmin()) {
+            return;
+        }
+        String currentStoreId = SessionManager.getCurrentStoreId();
+        if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+            throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
+        }
+        if (storeId == null || !currentStoreId.trim().equalsIgnoreCase(storeId.trim())) {
+            throw new SQLException("Bạn không có quyền thao tác hóa đơn/tồn kho của chi nhánh khác.");
+        }
     }
 
     private static void publishPaymentChanges() {
