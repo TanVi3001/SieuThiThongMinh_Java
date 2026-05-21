@@ -55,6 +55,12 @@ SELECT
     NVL(p.product_name, od.product_id) AS product_name,
     NVL(od.quantity, 0) AS quantity,
     NVL(od.unit_price, 0) AS unit_price,
+    NVL((
+        SELECT SUM(NVL(pr_line.discount_amount, 0))
+        FROM PROMOTIONS pr_line
+        WHERE pr_line.order_detail_id = od.order_detail_id
+          AND NVL(pr_line.is_deleted, 0) = 0
+    ), 0) AS line_discount_amount,
     NVL(od.quantity, 0) * NVL(od.unit_price, 0) AS line_total
 FROM ORDERS o
 LEFT JOIN CUSTOMERS c
@@ -88,6 +94,7 @@ ORDER BY od.order_detail_id
     <field name="product_name" class="java.lang.String"/>
     <field name="quantity" class="java.math.BigDecimal"/>
     <field name="unit_price" class="java.math.BigDecimal"/>
+    <field name="line_discount_amount" class="java.math.BigDecimal"/>
     <field name="line_total" class="java.math.BigDecimal"/>
 
     <variable name="ItemCount" class="java.lang.Integer" calculation="Count">
@@ -211,23 +218,28 @@ ORDER BY od.order_detail_id
     <columnHeader>
         <band height="26" splitType="Stretch">
             <staticText>
-                <reportElement style="TableHeader" x="0" y="0" width="220" height="24" uuid="1c885221-607e-4c26-bd62-0494c347ca3c"/>
+                <reportElement style="TableHeader" x="0" y="0" width="190" height="24" uuid="1c885221-607e-4c26-bd62-0494c347ca3c"/>
                 <box leftPadding="8"/>
                 <textElement verticalAlignment="Middle"/>
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
             <staticText>
-                <reportElement style="TableHeader" x="220" y="0" width="70" height="24" uuid="3f0197bf-8e66-4bf8-9e01-dc552642432b"/>
+                <reportElement style="TableHeader" x="190" y="0" width="45" height="24" uuid="3f0197bf-8e66-4bf8-9e01-dc552642432b"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle"/>
                 <text><![CDATA[SL]]></text>
             </staticText>
             <staticText>
-                <reportElement style="TableHeader" x="290" y="0" width="115" height="24" uuid="55e35ee0-0d9b-424d-a65a-97c265398823"/>
+                <reportElement style="TableHeader" x="235" y="0" width="95" height="24" uuid="55e35ee0-0d9b-424d-a65a-97c265398823"/>
                 <textElement textAlignment="Right" verticalAlignment="Middle"/>
                 <text><![CDATA[Đơn giá]]></text>
             </staticText>
             <staticText>
-                <reportElement style="TableHeader" x="405" y="0" width="130" height="24" uuid="76b258bf-2391-474e-a308-abf1717053d3"/>
+                <reportElement style="TableHeader" x="330" y="0" width="95" height="24" uuid="41c096cb-571a-4099-afc5-a6419513d470"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle"/>
+                <text><![CDATA[Giảm giá]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="425" y="0" width="110" height="24" uuid="76b258bf-2391-474e-a308-abf1717053d3"/>
                 <box rightPadding="8"/>
                 <textElement textAlignment="Right" verticalAlignment="Middle"/>
                 <text><![CDATA[Thành tiền]]></text>
@@ -244,21 +256,25 @@ ORDER BY od.order_detail_id
                 </graphicElement>
             </rectangle>
             <textField isBlankWhenNull="true">
-                <reportElement style="TableCell" x="0" y="4" width="220" height="15" uuid="3c714d4a-2469-4c6b-9e16-ef4fd9e2e186"/>
+                <reportElement style="TableCell" x="0" y="4" width="190" height="15" uuid="3c714d4a-2469-4c6b-9e16-ef4fd9e2e186"/>
                 <box leftPadding="8"/>
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
-                <reportElement style="TableCell" x="220" y="4" width="70" height="15" uuid="ba662723-0101-4850-9e5d-9a361a76dcb8"/>
+                <reportElement style="TableCell" x="190" y="4" width="45" height="15" uuid="ba662723-0101-4850-9e5d-9a361a76dcb8"/>
                 <textElement textAlignment="Center"/>
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0.##">
-                <reportElement style="Money" x="290" y="4" width="115" height="15" uuid="19812911-635b-48d6-8489-d2d4f1cc6a33"/>
+                <reportElement style="Money" x="235" y="4" width="95" height="15" uuid="19812911-635b-48d6-8489-d2d4f1cc6a33"/>
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
-            <textField pattern="#,##0.##">
-                <reportElement style="Money" x="405" y="4" width="130" height="15" uuid="f07742a5-c8c6-4691-bcc2-b6c74029b5bf"/>
+            <textField pattern="#,##0.##" isBlankWhenNull="true">
+                <reportElement style="Money" x="330" y="4" width="95" height="15" forecolor="#DC2626" uuid="f56b29e4-8c30-423d-b5b6-4f8082f54ad5"/>
+                <textFieldExpression><![CDATA[$F{line_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0 ? $F{line_discount_amount} : null]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##" isBlankWhenNull="true">
+                <reportElement style="Money" x="425" y="4" width="110" height="15" uuid="f07742a5-c8c6-4691-bcc2-b6c74029b5bf"/>
                 <box rightPadding="8"/>
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
             </textField>
