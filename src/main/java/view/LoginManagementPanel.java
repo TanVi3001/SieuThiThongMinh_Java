@@ -205,39 +205,52 @@ public class LoginManagementPanel extends JPanel {
         loadLoginData(keyword, status, fromDateStr, toDateStr);
     }
 
-    // 🌟 KẾT NỐI TRỰC TIẾP VỚI BẢNG LOGIN_HISTORY TRONG DATABASE
+    // KẾT NỐI TRỰC TIẾP VỚI BẢNG LOGIN_HISTORY TRONG DATABASE
     private void loadLoginData(String keyword, String statusFilter, String fromDate, String toDate) {
         tableModel.setRowCount(0);
-        int total = 0, failed = 0, active = 0;
 
-        // Truy vấn ghép bảng LOGIN_HISTORY và ACCOUNTS để lấy username
+        int total = 0;
+        int failed = 0;
+        int active = 0;
+
+        /*
+     * Fix conflict:
+     * - Không dùng LOWER(l.log_id) vì log_id có thể không phải VARCHAR thuần.
+     * - Dùng TO_CHAR(l.log_id) để search an toàn.
+     * - Dùng NVL(a.username, '') để tránh lỗi khi account null.
+     * - Status hỗ trợ cả kiểu tiếng Việt "Thành công" và kiểu DB "SUCCESS".
+         */
         StringBuilder sql = new StringBuilder(
                 "SELECT l.log_id, a.username, l.ip_address, l.device_info, "
-                + "TO_CHAR(l.login_time, 'DD/MM/YYYY HH24:MI:SS') as TGIN, "
+                + "TO_CHAR(l.login_time, 'DD/MM/YYYY HH24:MI:SS') AS TGIN, "
                 + "l.status, l.action_type "
                 + "FROM LOGIN_HISTORY l "
                 + "LEFT JOIN ACCOUNTS a ON l.account_id = a.account_id "
-                + "WHERE (LOWER(l.log_id) LIKE LOWER(?) OR LOWER(a.username) LIKE LOWER(?) OR l.ip_address LIKE ?) "
+                + "WHERE (TO_CHAR(l.log_id) LIKE ? "
+                + "OR LOWER(NVL(a.username, '')) LIKE LOWER(?) "
+                + "OR NVL(l.ip_address, '') LIKE ?) "
         );
 
-        if (statusFilter.equals("Thành công")) {
-            sql.append(" AND LOWER(l.status) = 'thành công' ");
-        } else if (statusFilter.equals("Thất bại")) {
-            sql.append(" AND LOWER(l.status) != 'thành công' ");
+        if ("Thành công".equals(statusFilter)) {
+            sql.append(" AND (UPPER(l.status) = 'SUCCESS' OR LOWER(l.status) = 'thành công') ");
+        } else if ("Thất bại".equals(statusFilter)) {
+            sql.append(" AND NOT (UPPER(l.status) = 'SUCCESS' OR LOWER(l.status) = 'thành công') ");
         }
 
         if (!fromDate.isEmpty()) {
             sql.append(" AND l.login_time >= TO_DATE(?, 'DD/MM/YYYY') ");
         }
+
         if (!toDate.isEmpty()) {
             sql.append(" AND l.login_time <= TO_DATE(? || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS') ");
         }
 
         sql.append(" ORDER BY l.login_time DESC");
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
-
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             int p = 1;
+
             ps.setString(p++, "%" + keyword + "%");
             ps.setString(p++, "%" + keyword + "%");
             ps.setString(p++, "%" + keyword + "%");
@@ -245,6 +258,7 @@ public class LoginManagementPanel extends JPanel {
             if (!fromDate.isEmpty()) {
                 ps.setString(p++, fromDate);
             }
+
             if (!toDate.isEmpty()) {
                 ps.setString(p++, toDate);
             }
@@ -252,11 +266,11 @@ public class LoginManagementPanel extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String username = rs.getString("username");
-                    if (username == null) {
+                    if (username == null || username.trim().isEmpty()) {
                         username = "N/A";
                     }
 
-                    String st = rs.getString("status");
+                    String status = rs.getString("status");
                     String action = rs.getString("action_type");
 
                     tableModel.addRow(new Object[]{
@@ -265,19 +279,23 @@ public class LoginManagementPanel extends JPanel {
                         rs.getString("ip_address"),
                         rs.getString("device_info"),
                         rs.getString("TGIN"),
-                        st
+                        status
                     });
 
                     total++;
-                    if (st != null && !st.equalsIgnoreCase("Thành công")) {
+
+                    if (!isSuccessLoginStatus(status)) {
                         failed++;
                     }
-                    // Giả lập Đang online dựa vào các log Đăng nhập thành công (Vì chưa có logic logout hoàn chỉnh ghi vào DB)
-                    if (st != null && st.equalsIgnoreCase("Thành công") && action != null && action.equalsIgnoreCase("LOGIN")) {
+
+                    if (isSuccessLoginStatus(status)
+                            && action != null
+                            && action.equalsIgnoreCase("LOGIN")) {
                         active++;
                     }
                 }
             }
+
         } catch (Exception e) {
             System.err.println("Lỗi load Login History: " + e.getMessage());
             e.printStackTrace();
@@ -285,8 +303,21 @@ public class LoginManagementPanel extends JPanel {
 
         lblTotalLogins.setText(String.valueOf(total));
         lblFailedLogins.setText(String.valueOf(failed));
-        // Cho số Đang Online hiển thị hợp lý (Tránh trường hợp vọt lên hàng ngàn)
+
+        // Tạm giới hạn số online để tránh hiển thị quá lớn khi chưa có session logout chuẩn
         lblActiveSessions.setText(String.valueOf(active > 50 ? (active % 50 + 1) : active));
+    }
+
+    private boolean isSuccessLoginStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+
+        String normalized = status.trim();
+
+        return normalized.equalsIgnoreCase("SUCCESS")
+                || normalized.equalsIgnoreCase("Thành công")
+                || normalized.equalsIgnoreCase("SUCCESSFUL");
     }
 
     // --- CÁC LỚP TIỆN ÍCH UI ---
