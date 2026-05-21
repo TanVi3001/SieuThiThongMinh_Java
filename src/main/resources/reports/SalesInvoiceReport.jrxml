@@ -34,8 +34,21 @@ SELECT
     o.customer_id,
     o.status,
     o.note,
-    CAST(0 AS NUMBER(15, 2)) AS discount_amount,
-    NVL(o.total_amount, 0) AS subtotal_amount,
+    NVL((
+        SELECT SUM(NVL(pr.discount_amount, 0))
+        FROM PROMOTIONS pr
+        JOIN ORDER_DETAILS od_discount
+            ON pr.order_detail_id = od_discount.order_detail_id
+        WHERE od_discount.order_id = o.order_id
+          AND NVL(pr.is_deleted, 0) = 0
+          AND NVL(od_discount.is_deleted, 0) = 0
+    ), 0) AS discount_amount,
+    NVL((
+        SELECT SUM(NVL(od_sub.quantity, 0) * NVL(od_sub.unit_price, 0))
+        FROM ORDER_DETAILS od_sub
+        WHERE od_sub.order_id = o.order_id
+          AND NVL(od_sub.is_deleted, 0) = 0
+    ), NVL(o.total_amount, 0)) AS subtotal_amount,
     NVL(o.total_amount, 0) AS total_amount,
     od.order_detail_id,
     od.product_id,
