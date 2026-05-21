@@ -253,7 +253,7 @@ ORDER BY d.created_at, d.receipt_detail_id
     </pageFooter>
 
     <summary>
-        <band height="184" splitType="Stretch">
+        <band height="184" splitType="Prevent">
             <staticText>
                 <reportElement style="Label" x="10" y="12" width="70" height="14"/>
                 <text><![CDATA[Bằng chữ:]]></text>
