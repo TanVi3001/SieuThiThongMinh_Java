@@ -47,6 +47,7 @@ public class OrderView extends javax.swing.JPanel {
     private javax.swing.JButton btnResetFilter;
     private String userRole;
     private String empId;
+    private volatile boolean loadingOrders = false;
 
     public OrderView() {
         if (SessionManager.getCurrentUser() != null) {
@@ -426,8 +427,6 @@ public class OrderView extends javax.swing.JPanel {
         cbStatus.setSelectedItem(STATUS_ALL);
     }
 
-    private volatile boolean loadingOrders = false;
-
     private void loadDataToTable() {
         if (loadingOrders) {
             return;
@@ -459,9 +458,9 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private void fillTableSafely(List<Order> list) {
-        if (list == null) {
-            list = java.util.Collections.emptyList();
-        }
+        final List<Order> safeList = list == null
+                ? java.util.Collections.emptyList()
+                : new java.util.ArrayList<>(list);
 
         javax.swing.SwingUtilities.invokeLater(() -> {
             RowSorter<? extends javax.swing.table.TableModel> oldSorter = jTable1.getRowSorter();
@@ -469,14 +468,14 @@ public class OrderView extends javax.swing.JPanel {
             try {
                 jTable1.clearSelection();
 
-                // Tắt sorter tạm thời trước khi xóa/add row để tránh warning:
-                // row index is bigger than sorter's row count.
+                // Tắt sorter tạm thời trước khi xóa/add row.
+                // Tránh warning: row index is bigger than sorter's row count.
                 jTable1.setRowSorter(null);
 
                 DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
                 model.setRowCount(0);
 
-                for (Order o : list) {
+                for (Order o : safeList) {
                     if (o == null) {
                         continue;
                     }
@@ -493,15 +492,14 @@ public class OrderView extends javax.swing.JPanel {
                 }
 
             } finally {
-                // Bật sorter lại sau khi model đã ổn định.
-                jTable1.setAutoCreateRowSorter(true);
-
                 if (oldSorter != null) {
                     try {
                         jTable1.setRowSorter(oldSorter);
                     } catch (Exception ignored) {
                         jTable1.setAutoCreateRowSorter(true);
                     }
+                } else {
+                    jTable1.setAutoCreateRowSorter(true);
                 }
 
                 jTable1.revalidate();

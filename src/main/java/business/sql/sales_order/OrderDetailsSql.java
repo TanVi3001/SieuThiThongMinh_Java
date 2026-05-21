@@ -47,9 +47,14 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
             // Tự động tạo một cái mã ID ngẫu nhiên (ví dụ: DET-12345...)
-            String randomId = "DET-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+            String detailId = ct.getOrderDetailId();
 
-            pst.setString(1, randomId); // Điền vào cột order_detail_id
+            if (detailId == null || detailId.trim().isEmpty()) {
+                detailId = "DET-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+                ct.setOrderDetailId(detailId);
+            }
+
+            pst.setString(1, detailId);
             pst.setString(2, ct.getOrderId());
             pst.setString(3, ct.getProductId());
             pst.setInt(4, ct.getQuantity());
@@ -109,6 +114,10 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
                             getNullableString(rs, "unit_id"),
                             getNullableInt(rs, "quantity_base")
                     );
+
+                    ct.setOrderDetailId(getNullableString(rs, "order_detail_id"));
+                    ct.setIsDeleted(rs.getInt("is_deleted") == 1);
+
                     ds.add(ct);
                 }
             }

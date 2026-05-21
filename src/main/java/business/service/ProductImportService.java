@@ -17,7 +17,6 @@ import java.util.function.Consumer;
 
 public class ProductImportService {
 
-    private static final String DEFAULT_STORE_ID = "ST01";
     private static final String DEFAULT_SUPPLIER_ID = "SUP_01";
     private static final String DEFAULT_UNIT_ID = "UN_01";
     private static final String DEFAULT_UNIT_NAME = "Cái";
@@ -42,9 +41,11 @@ public class ProductImportService {
     }
 
     /**
-     * Flow mới: 1. Tạo PURCHASE_RECEIPTS 2. Đọc CSV 3. Tạo/cập nhật PRODUCTS 4.
-     * Cộng INVENTORY 5. Ghi PURCHASE_RECEIPT_DETAILS 6. Ghi
-     * INVENTORY_TRANSACTIONS
+     * Flow: 1. Lấy store_id từ session hiện tại. 2. Tạo PURCHASE_RECEIPTS theo
+     * store_id đó. 3. Đọc CSV. 4. Tạo/cập nhật PRODUCTS master. 5. Cộng
+     * INVENTORY theo product_id + store_id. 6. Active STORE_PRODUCTS theo
+     * product_id + store_id. 7. Ghi PURCHASE_RECEIPT_DETAILS. 8. Ghi
+     * INVENTORY_TRANSACTIONS.
      */
     public ImportResult importProductCSVWithReceipt(String filePath, Consumer<Integer> progressCallback) {
         File file = new File(filePath);
@@ -53,6 +54,8 @@ public class ProductImportService {
             throw new RuntimeException("Không tìm thấy file CSV: " + file.getAbsolutePath());
         }
 
+        String currentStoreId = getCurrentStoreIdOrThrow();
+
         ImportResult result = new ImportResult();
         result.receiptId = "PNCSV" + System.currentTimeMillis();
 
@@ -60,6 +63,7 @@ public class ProductImportService {
             INSERT INTO PURCHASE_RECEIPTS (
                 receipt_id,
                 supplier_id,
+                store_id,
                 created_by,
                 note,
                 total_before_tax,
@@ -69,7 +73,7 @@ public class ProductImportService {
                 updated_at,
                 is_deleted
             )
-            VALUES (?, ?, ?, ?, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+            VALUES (?, ?, ?, ?, ?, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
         """;
 
         String sqlUpdateReceiptTotal = """
@@ -120,11 +124,12 @@ public class ProductImportService {
 
         String sqlUpdateInventory = """
             UPDATE INVENTORY
-            SET quantity = quantity + ?,
-                last_updated = SYSDATE
+            SET quantity = NVL(quantity, 0) + ?,
+                unit = ?,
+                last_updated = SYSDATE,
+                is_deleted = 0
             WHERE product_id = ?
               AND store_id = ?
-              AND NVL(is_deleted, 0) = 0
         """;
 
         String sqlInsertInventory = """
@@ -137,6 +142,47 @@ public class ProductImportService {
                 is_deleted
             )
             VALUES (?, ?, ?, ?, SYSDATE, 0)
+        """;
+
+        String sqlUpsertStoreProduct = """
+            MERGE INTO STORE_PRODUCTS sp
+            USING (
+                SELECT ? AS store_id,
+                       ? AS product_id,
+                       ? AS selling_price
+                FROM dual
+            ) src
+            ON (
+                sp.store_id = src.store_id
+                AND sp.product_id = src.product_id
+            )
+            WHEN MATCHED THEN
+                UPDATE SET
+                    sp.selling_price = src.selling_price,
+                    sp.is_active = 1,
+                    sp.is_deleted = 0,
+                    sp.updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (
+                    store_id,
+                    product_id,
+                    selling_price,
+                    is_active,
+                    min_stock,
+                    is_deleted,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    src.store_id,
+                    src.product_id,
+                    src.selling_price,
+                    1,
+                    0,
+                    0,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
         """;
 
         String sqlInsertDetail = """
@@ -204,11 +250,12 @@ public class ProductImportService {
             conn.setAutoCommit(false);
 
             try (
-                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct, new String[]{"PRODUCT_ID"}); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psCheckInventory = conn.prepareStatement(sqlCheckInventory); PreparedStatement psUpdateInventory = conn.prepareStatement(sqlUpdateInventory); PreparedStatement psInsertInventory = conn.prepareStatement(sqlInsertInventory); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
+                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct, new String[]{"PRODUCT_ID"}); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psCheckInventory = conn.prepareStatement(sqlCheckInventory); PreparedStatement psUpdateInventory = conn.prepareStatement(sqlUpdateInventory); PreparedStatement psInsertInventory = conn.prepareStatement(sqlInsertInventory); PreparedStatement psUpsertStoreProduct = conn.prepareStatement(sqlUpsertStoreProduct); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
                 psInsertReceipt.setString(1, result.receiptId);
                 psInsertReceipt.setString(2, DEFAULT_SUPPLIER_ID);
-                psInsertReceipt.setString(3, getCurrentAccountId());
-                psInsertReceipt.setString(4, "Phiếu nhập tự động từ CSV: " + file.getName());
+                psInsertReceipt.setString(3, currentStoreId);
+                psInsertReceipt.setString(4, getCurrentAccountId());
+                psInsertReceipt.setString(5, "Phiếu nhập tự động từ CSV: " + file.getName());
                 psInsertReceipt.executeUpdate();
 
                 String line;
@@ -284,9 +331,17 @@ public class ProductImportService {
                         increaseInventory(
                                 productId,
                                 row.quantity,
+                                currentStoreId,
                                 psCheckInventory,
                                 psUpdateInventory,
                                 psInsertInventory
+                        );
+
+                        upsertStoreProduct(
+                                psUpsertStoreProduct,
+                                currentStoreId,
+                                productId,
+                                row.salePrice
                         );
 
                         BigDecimal lineBeforeTax = InventoryPricePolicyService.calculateLineBeforeTax(
@@ -319,6 +374,7 @@ public class ProductImportService {
                                 result.receiptId,
                                 productId,
                                 row,
+                                currentStoreId,
                                 lineTax,
                                 lineAfterTax,
                                 file.getName()
@@ -354,6 +410,7 @@ public class ProductImportService {
                 }
 
                 System.out.println("Import CSV hoàn tất.");
+                System.out.println("Chi nhánh nhập: " + currentStoreId);
                 System.out.println("Mã phiếu nhập: " + result.receiptId);
                 System.out.println("Tổng dòng: " + result.totalRows);
                 System.out.println("Thành công: " + result.successRows);
@@ -445,6 +502,7 @@ public class ProductImportService {
     private void increaseInventory(
             String productId,
             int quantity,
+            String storeId,
             PreparedStatement psCheckInventory,
             PreparedStatement psUpdateInventory,
             PreparedStatement psInsertInventory
@@ -452,7 +510,7 @@ public class ProductImportService {
         boolean exists;
 
         psCheckInventory.setString(1, productId);
-        psCheckInventory.setString(2, DEFAULT_STORE_ID);
+        psCheckInventory.setString(2, storeId);
 
         try (ResultSet rs = psCheckInventory.executeQuery()) {
             exists = rs.next();
@@ -460,16 +518,29 @@ public class ProductImportService {
 
         if (exists) {
             psUpdateInventory.setInt(1, quantity);
-            psUpdateInventory.setString(2, productId);
-            psUpdateInventory.setString(3, DEFAULT_STORE_ID);
+            psUpdateInventory.setString(2, DEFAULT_UNIT_NAME);
+            psUpdateInventory.setString(3, productId);
+            psUpdateInventory.setString(4, storeId);
             psUpdateInventory.executeUpdate();
         } else {
             psInsertInventory.setString(1, productId);
-            psInsertInventory.setString(2, DEFAULT_STORE_ID);
+            psInsertInventory.setString(2, storeId);
             psInsertInventory.setInt(3, quantity);
             psInsertInventory.setString(4, DEFAULT_UNIT_NAME);
             psInsertInventory.executeUpdate();
         }
+    }
+
+    private void upsertStoreProduct(
+            PreparedStatement ps,
+            String storeId,
+            String productId,
+            BigDecimal sellingPrice
+    ) throws SQLException {
+        ps.setString(1, storeId);
+        ps.setString(2, productId);
+        ps.setBigDecimal(3, sellingPrice);
+        ps.executeUpdate();
     }
 
     private void insertReceiptDetail(
@@ -500,6 +571,7 @@ public class ProductImportService {
             String receiptId,
             String productId,
             CsvProductRow row,
+            String storeId,
             BigDecimal lineTax,
             BigDecimal lineAfterTax,
             String fileName
@@ -509,7 +581,7 @@ public class ProductImportService {
         ps.setString(3, productId);
         ps.setInt(4, row.quantity);
         ps.setString(5, DEFAULT_UNIT_NAME);
-        ps.setString(6, DEFAULT_STORE_ID);
+        ps.setString(6, storeId);
         ps.setBigDecimal(7, row.importPriceBeforeVat);
         ps.setBigDecimal(8, row.salePrice);
         ps.setBigDecimal(9, row.vatRate);
@@ -605,6 +677,23 @@ public class ProductImportService {
         }
 
         return Math.max(count, 1);
+    }
+
+    private String getCurrentStoreIdOrThrow() {
+        String storeId = null;
+
+        try {
+            storeId = SessionManager.getCurrentStoreId();
+        } catch (Exception ignored) {
+        }
+
+        if (storeId == null || storeId.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại bằng tài khoản đã được phân chi nhánh."
+            );
+        }
+
+        return storeId.trim();
     }
 
     private String getCurrentAccountId() {

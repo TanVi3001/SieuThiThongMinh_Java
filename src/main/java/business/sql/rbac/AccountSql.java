@@ -98,19 +98,27 @@ public class AccountSql implements SqlInterface<Account> {
 
     public Account selectByUsername(String username) {
         Account acc = null;
-        String sql = "SELECT a.account_id, a.username, a.password, a.is_deleted, "
+
+        String sql
+                = "SELECT a.account_id, a.user_id, a.username, a.password, a.status, a.is_deleted, "
                 + "       COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value "
                 + "FROM ACCOUNTS a "
                 + "LEFT JOIN ACCOUNT_ASSIGN_ROLE aar "
-                + "       ON a.account_id = aar.account_id AND NVL(aar.is_deleted, 0) = 0 "
+                + "       ON a.account_id = aar.account_id "
+                + "      AND NVL(aar.is_deleted, 0) = 0 "
                 + "LEFT JOIN ACCOUNT_ASSIGN_ROLE_GROUP aarg "
-                + "       ON a.account_id = aarg.account_id AND NVL(aarg.is_deleted, 0) = 0 "
+                + "       ON a.account_id = aarg.account_id "
+                + "      AND NVL(aarg.is_deleted, 0) = 0 "
                 + "LEFT JOIN ROLE_GROUPS rg "
-                + "       ON aarg.role_group_id = rg.role_group_id AND NVL(rg.is_deleted, 0) = 0 "
-                + "WHERE a.username = ? AND a.is_deleted = 0";
+                + "       ON aarg.role_group_id = rg.role_group_id "
+                + "      AND NVL(rg.is_deleted, 0) = 0 "
+                + "WHERE a.username = ? "
+                + "  AND NVL(a.is_deleted, 0) = 0";
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, username);
+
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
                     acc = new Account(
@@ -120,11 +128,16 @@ public class AccountSql implements SqlInterface<Account> {
                             rs.getString("role_value"),
                             rs.getInt("is_deleted")
                     );
+
+                    acc.setUserId(rs.getString("user_id"));
+                    acc.setStatus(rs.getString("status"));
                 }
             }
+
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot query account data during login.", e);
         }
+
         return acc;
     }
 

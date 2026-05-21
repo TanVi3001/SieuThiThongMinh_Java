@@ -1576,9 +1576,22 @@ public class ProductView extends JPanel {
             }
 
             String storeId = existingProduct.getStoreId();
+
             if (storeId == null || storeId.trim().isEmpty()) {
-                storeId = "ST001";
+                storeId = business.service.SessionManager.getCurrentStoreId();
             }
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại.",
+                        "Thiếu chi nhánh",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            storeId = storeId.trim();
 
             boolean success = dao.addQuantity(
                     existingProduct.getProductId(),
@@ -1621,7 +1634,19 @@ public class ProductView extends JPanel {
         }
 
         if (p.getStoreId() == null || p.getStoreId().trim().isEmpty()) {
-            p.setStoreId("ST001");
+            String currentStoreId = business.service.SessionManager.getCurrentStoreId();
+
+            if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại.",
+                        "Thiếu chi nhánh",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            p.setStoreId(currentStoreId.trim());
         }
 
         if (p.getUnit() == null || p.getUnit().trim().isEmpty()) {
@@ -2548,5 +2573,5 @@ public class ProductView extends JPanel {
             return values;
         }
     }
-   
+
 }
