@@ -258,7 +258,7 @@ ORDER BY d.created_at, d.receipt_detail_id
                 <reportElement style="Label" x="10" y="12" width="70" height="14"/>
                 <text><![CDATA[Bằng chữ:]]></text>
             </staticText>
-            <textField isStretchWithOverflow="true" isBlankWhenNull="true">
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
                 <reportElement style="Base" x="82" y="12" width="410" height="24"/>
                 <textElement>
                     <font isItalic="true"/>

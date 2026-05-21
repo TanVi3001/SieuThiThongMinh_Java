@@ -29,7 +29,7 @@ public class ReportViewer extends JFrame {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setModalExclusionType(Dialog.ModalExclusionType.APPLICATION_EXCLUDE);
         setLayout(new BorderLayout());
-        setSize(1000, 700);
+        setSize(1100, 750);
         setLocationRelativeTo(null);
 
         loadReport(reportPath, parameters == null ? new HashMap<>() : parameters);
@@ -49,22 +49,27 @@ public class ReportViewer extends JFrame {
     }
 
     private void loadReport(String reportPath, Map<String, Object> parameters) {
-        try (Connection connection = DatabaseConnection.getConnection();
-             InputStream reportStream = openReportStream(reportPath)) {
+        try (Connection connection = DatabaseConnection.getConnection(); InputStream reportStream = openReportStream(reportPath)) {
 
             if (connection == null) {
-                showError("Không thể kết nối database. Kiểm tra cấu hình Oracle trong DatabaseConnection.");
+                showError("Không thể kết nối database. Kiểm tra DatabaseConnection.");
                 return;
             }
 
             if (reportStream == null) {
-                showError("Không tìm thấy file report: " + reportPath
-                        + "\nĐặt file .jrxml trong src/main/resources/reports và gọi bằng /reports/TenFile.jrxml");
+                showError(
+                        "Không tìm thấy file report:\n" + reportPath
+                        + "\n\nĐúng format nên là:"
+                        + "\n/reports/SalesInvoiceReport.jrxml"
+                        + "\n/reports/RevenueReport.jrxml"
+                        + "\n/reports/PurchaseReceiptReport.jrxml"
+                );
                 return;
             }
 
             JasperReport report = JasperCompileManager.compileReport(reportStream);
             JasperPrint jasperPrint = JasperFillManager.fillReport(report, parameters, connection);
+
             getContentPane().removeAll();
             add(new JRViewer(jasperPrint), BorderLayout.CENTER);
             revalidate();
@@ -72,7 +77,14 @@ public class ReportViewer extends JFrame {
 
         } catch (Exception ex) {
             ex.printStackTrace();
-            showError("Lỗi khi mở report: " + ex.getMessage());
+
+            String rootMessage = getRootCauseMessage(ex);
+
+            showError(
+                    "Lỗi khi mở report:\n"
+                    + rootMessage
+                    + "\n\nXem console để biết dòng lỗi chi tiết."
+            );
         }
     }
 
@@ -81,27 +93,26 @@ public class ReportViewer extends JFrame {
             return null;
         }
 
-        String normalizedPath = reportPath.trim().replace('\\', '/');
+        String path = reportPath.trim().replace('\\', '/');
 
-        InputStream stream = openClasspathResource(normalizedPath);
+        InputStream stream = openClasspathResource(path);
         if (stream != null) {
             return stream;
         }
 
-        // Fallback cho code cũ đang truyền dạng src/main/resources/reports/File.jrxml
         String resourcesPrefix = "src/main/resources";
-        int idx = normalizedPath.indexOf(resourcesPrefix);
+        int idx = path.indexOf(resourcesPrefix);
         if (idx >= 0) {
-            String resourcePath = normalizedPath.substring(idx + resourcesPrefix.length());
+            String resourcePath = path.substring(idx + resourcesPrefix.length());
             stream = openClasspathResource(resourcePath);
             if (stream != null) {
                 return stream;
             }
         }
 
-        File reportFile = new File(reportPath);
-        if (reportFile.isFile()) {
-            return new FileInputStream(reportFile);
+        File file = new File(reportPath);
+        if (file.isFile()) {
+            return new FileInputStream(file);
         }
 
         return null;
@@ -109,11 +120,33 @@ public class ReportViewer extends JFrame {
 
     private InputStream openClasspathResource(String path) {
         String resourcePath = path.startsWith("/") ? path : "/" + path;
+
         InputStream stream = ReportViewer.class.getResourceAsStream(resourcePath);
+
         if (stream == null) {
-            stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath.substring(1));
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            if (cl != null) {
+                stream = cl.getResourceAsStream(resourcePath.substring(1));
+            }
         }
+
         return stream;
+    }
+
+    private String getRootCauseMessage(Throwable ex) {
+        Throwable root = ex;
+
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+
+        String message = root.getMessage();
+
+        if (message == null || message.trim().isEmpty()) {
+            message = root.getClass().getName();
+        }
+
+        return message;
     }
 
     private void showError(String message) {

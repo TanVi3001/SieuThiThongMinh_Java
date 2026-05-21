@@ -278,7 +278,7 @@ ORDER BY od.order_detail_id
                 <reportElement style="SmallMuted" x="0" y="10" width="300" height="14" uuid="6a9f1ad2-223d-4748-8eb0-3a6067c5cc10"/>
                 <text><![CDATA[Cảm ơn quý khách đã mua hàng!]]></text>
             </staticText>
-            <textField isStretchWithOverflow="true" isBlankWhenNull="true">
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
                 <reportElement style="SmallMuted" x="0" y="28" width="300" height="32" uuid="3318c09e-569f-48d7-973e-eb9a32b54cf3"/>
                 <textFieldExpression><![CDATA[$F{note} == null ? "" : "Ghi chú: " + $F{note}]]></textFieldExpression>
             </textField>
