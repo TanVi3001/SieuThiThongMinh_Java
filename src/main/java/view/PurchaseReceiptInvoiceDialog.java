@@ -2,8 +2,8 @@ package view;
 
 import business.service.InventoryPricePolicyService;
 import business.sql.prod_inventory.InventoryTransactionSql;
+import common.report.PurchaseReceiptReportService;
 import java.awt.*;
-import java.awt.print.PrinterException;
 import java.math.BigDecimal;
 import java.util.List;
 import javax.swing.*;
@@ -202,12 +202,16 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttons.setOpaque(false);
 
+        JButton btnPreview = createButton("Xuất phiếu nhập hàng", GREEN);
         JButton btnPrint = createButton("In phiếu", BLUE);
         JButton btnClose = createButton("Đóng", new Color(142, 153, 176));
 
-        btnPrint.addActionListener(e -> printInvoice());
+        btnPreview.setPreferredSize(new Dimension(170, 40));
+        btnPreview.addActionListener(e -> PurchaseReceiptReportService.showPurchaseReceipt(receiptId));
+        btnPrint.addActionListener(e -> PurchaseReceiptReportService.printPurchaseReceipt(receiptId));
         btnClose.addActionListener(e -> dispose());
 
+        buttons.add(btnPreview);
         buttons.add(btnPrint);
         buttons.add(btnClose);
 
@@ -373,28 +377,6 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         label.setForeground(NAVY);
         label.setHorizontalAlignment(SwingConstants.RIGHT);
         return label;
-    }
-
-    private void printInvoice() {
-        try {
-            boolean printed = table.print();
-
-            if (printed) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Đã gửi phiếu nhập đến máy in.",
-                        "In phiếu",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
-            }
-        } catch (PrinterException e) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Không thể in phiếu:\n" + e.getMessage(),
-                    "Lỗi in phiếu",
-                    JOptionPane.ERROR_MESSAGE
-            );
-        }
     }
 
     private BigDecimal nullToZero(BigDecimal value) {

@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="PurchaseReceiptReport"
+              pageWidth="842"
+              pageHeight="595"
+              orientation="Landscape"
+              columnWidth="802"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="16"
+              bottomMargin="16">
+
+    <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle"/>
+
+    <style name="Base" fontName="SansSerif" fontSize="9" forecolor="#111827"/>
+    <style name="Muted" style="Base" fontSize="8" forecolor="#64748B"/>
+    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#0F766E"/>
+    <style name="CardLabel" style="Base" fontSize="8" forecolor="#64748B"/>
+    <style name="TableHeader" style="Base" fontSize="8" isBold="true" forecolor="#FFFFFF" backcolor="#0F766E" mode="Opaque"/>
+    <style name="TableCell" style="Base" fontSize="8"/>
+    <style name="Money" style="TableCell" hTextAlign="Right"/>
+
+    <parameter name="RECEIPT_ID" class="java.lang.String"/>
+    <parameter name="AMOUNT_IN_WORDS" class="java.lang.String"/>
+
+    <queryString language="SQL">
+        <![CDATA[
+SELECT
+    ROW_NUMBER() OVER (ORDER BY d.created_at, d.receipt_detail_id) AS no,
+    r.receipt_id,
+    r.created_at AS receipt_date,
+    NVL(s.supplier_name, r.supplier_id) AS supplier_name,
+    NVL(s.supplier_name, 'Nhà cung cấp') AS delivery_person,
+    NVL(s.phone_number, '') AS supplier_phone,
+    NVL(s.address, '') AS supplier_address,
+    NVL('Kho ' || tx.store_id, 'Kho Tổng') AS warehouse_name,
+    NVL(e.employee_name, NVL(u.full_name, r.created_by)) AS employee_name,
+    'Chưa ghi nhận' AS payment_method,
+    NVL(st.address, NVL(s.address, '')) AS warehouse_address,
+    NVL(r.note, '') AS note,
+    NVL(r.total_before_tax, 0) AS subtotal,
+    NVL(r.total_tax, 0) AS vat_total,
+    NVL(r.total_after_tax, 0) AS grand_total,
+    d.product_id AS product_code,
+    NVL(p.product_name, d.product_id) AS product_name,
+    NVL(d.quantity, 0) AS quantity,
+    NVL(d.unit, 'Cái') AS unit,
+    NVL(d.unit_import_price, 0) AS import_price,
+    NVL(d.vat_rate, 0) AS vat_percent,
+    ROUND(NVL(d.unit_import_price, 0) * (1 + NVL(d.vat_rate, 0) / 100), 2) AS import_price_with_vat,
+    NVL(d.sale_price, 0) AS selling_price,
+    NVL(d.line_after_tax, 0) AS line_total
+FROM PURCHASE_RECEIPTS r
+JOIN PURCHASE_RECEIPT_DETAILS d
+    ON d.receipt_id = r.receipt_id
+    AND NVL(d.is_deleted, 0) = 0
+LEFT JOIN SUPPLIERS s
+    ON s.supplier_id = r.supplier_id
+LEFT JOIN PRODUCTS p
+    ON p.product_id = d.product_id
+LEFT JOIN ACCOUNTS a
+    ON a.account_id = r.created_by
+LEFT JOIN USERS u
+    ON u.user_id = a.user_id
+LEFT JOIN EMPLOYEES e
+    ON e.employee_id = a.user_id
+LEFT JOIN (
+    SELECT receipt_id, MIN(store_id) AS store_id
+    FROM INVENTORY_TRANSACTIONS
+    WHERE NVL(is_deleted, 0) = 0
+    GROUP BY receipt_id
+) tx
+    ON tx.receipt_id = r.receipt_id
+LEFT JOIN STORES st
+    ON st.store_id = tx.store_id
+WHERE r.receipt_id = $P{RECEIPT_ID}
+  AND NVL(r.is_deleted, 0) = 0
+ORDER BY d.created_at, d.receipt_detail_id
+        ]]>
+    </queryString>
+
+    <field name="no" class="java.math.BigDecimal"/>
+    <field name="receipt_id" class="java.lang.String"/>
+    <field name="receipt_date" class="java.util.Date"/>
+    <field name="supplier_name" class="java.lang.String"/>
+    <field name="delivery_person" class="java.lang.String"/>
+    <field name="supplier_phone" class="java.lang.String"/>
+    <field name="supplier_address" class="java.lang.String"/>
+    <field name="warehouse_name" class="java.lang.String"/>
+    <field name="employee_name" class="java.lang.String"/>
+    <field name="payment_method" class="java.lang.String"/>
+    <field name="warehouse_address" class="java.lang.String"/>
+    <field name="note" class="java.lang.String"/>
+    <field name="subtotal" class="java.math.BigDecimal"/>
+    <field name="vat_total" class="java.math.BigDecimal"/>
+    <field name="grand_total" class="java.math.BigDecimal"/>
+    <field name="product_code" class="java.lang.String"/>
+    <field name="product_name" class="java.lang.String"/>
+    <field name="quantity" class="java.math.BigDecimal"/>
+    <field name="unit" class="java.lang.String"/>
+    <field name="import_price" class="java.math.BigDecimal"/>
+    <field name="vat_percent" class="java.math.BigDecimal"/>
+    <field name="import_price_with_vat" class="java.math.BigDecimal"/>
+    <field name="selling_price" class="java.math.BigDecimal"/>
+    <field name="line_total" class="java.math.BigDecimal"/>
+
+    <title>
+        <band height="224" splitType="Stretch">
+            <rectangle radius="8">
+                <reportElement x="0" y="0" width="802" height="76" backcolor="#0F766E"/>
+                <graphicElement>
+                    <pen lineWidth="0"/>
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="6">
+                <reportElement x="28" y="13" width="56" height="50" backcolor="#FFFFFF"/>
+                <graphicElement>
+                    <pen lineWidth="0"/>
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="28" y="28" width="56" height="16" forecolor="#0F766E"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[LOGO]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="106" y="17" width="300" height="24" forecolor="#FFFFFF"/>
+                <textElement>
+                    <font size="19" isBold="true"/>
+                </textElement>
+                <text><![CDATA[SIEUTHIONLINE]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="106" y="43" width="300" height="14" forecolor="#CCFBF1"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Fresh goods, fast checkout, trusted service]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="520" y="16" width="258" height="30" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="24" isBold="true"/>
+                </textElement>
+                <text><![CDATA[PHIẾU NHẬP HÀNG]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="590" y="48" width="188" height="18" forecolor="#CCFBF1"/>
+                <textElement textAlignment="Right">
+                    <font size="12"/>
+                </textElement>
+                <textFieldExpression><![CDATA["#" + $F{receipt_id}]]></textFieldExpression>
+            </textField>
+
+            <rectangle radius="5">
+                <reportElement x="10" y="88" width="385" height="118" backcolor="#FFFFFF"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement style="Label" x="30" y="103" width="180" height="16"/>
+                <text><![CDATA[Thông tin phiếu nhập]]></text>
+            </staticText>
+            <staticText><reportElement style="CardLabel" x="30" y="130" width="80" height="12"/><text><![CDATA[Mã phiếu:]]></text></staticText>
+            <textField><reportElement style="Base" x="125" y="130" width="250" height="12"/><textFieldExpression><![CDATA[$F{receipt_id}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="30" y="148" width="80" height="12"/><text><![CDATA[Ngày nhập:]]></text></staticText>
+            <textField pattern="dd/MM/yyyy"><reportElement style="Base" x="125" y="148" width="250" height="12"/><textFieldExpression><![CDATA[$F{receipt_date}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="30" y="166" width="80" height="12"/><text><![CDATA[Nhà cung cấp:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="125" y="166" width="250" height="12"/><textFieldExpression><![CDATA[$F{supplier_name}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="30" y="184" width="80" height="12"/><text><![CDATA[Người giao hàng:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="125" y="184" width="250" height="12"/><textFieldExpression><![CDATA[$F{delivery_person}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="235" y="148" width="80" height="12"/><text><![CDATA[Số điện thoại:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="315" y="148" width="60" height="12"/><textFieldExpression><![CDATA[$F{supplier_phone}]]></textFieldExpression></textField>
+
+            <rectangle radius="5">
+                <reportElement x="407" y="88" width="385" height="118" backcolor="#FFFFFF"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement style="Label" x="427" y="103" width="200" height="16"/>
+                <text><![CDATA[Thông tin kho / thanh toán]]></text>
+            </staticText>
+            <staticText><reportElement style="CardLabel" x="427" y="130" width="95" height="12"/><text><![CDATA[Kho nhập:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="130" width="225" height="12"/><textFieldExpression><![CDATA[$F{warehouse_name}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="427" y="148" width="95" height="12"/><text><![CDATA[Nhân viên nhập:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="148" width="225" height="12"/><textFieldExpression><![CDATA[$F{employee_name}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="427" y="166" width="105" height="12"/><text><![CDATA[Hình thức thanh toán:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="166" width="225" height="12"/><textFieldExpression><![CDATA[$F{payment_method}]]></textFieldExpression></textField>
+            <staticText><reportElement style="CardLabel" x="427" y="184" width="95" height="12"/><text><![CDATA[Địa chỉ:]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="Base" x="545" y="184" width="225" height="12"/><textFieldExpression><![CDATA[$F{warehouse_address}]]></textFieldExpression></textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="26" splitType="Stretch">
+            <staticText><reportElement style="TableHeader" x="10" y="0" width="40" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[STT]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="50" y="0" width="74" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Mã SP]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="124" y="0" width="166" height="24"/><box leftPadding="8"/><textElement verticalAlignment="Middle"/><text><![CDATA[Tên sản phẩm]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="290" y="0" width="44" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[SL]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="334" y="0" width="42" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[ĐV]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="376" y="0" width="82" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Giá nhập]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="458" y="0" width="50" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[VAT]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="508" y="0" width="84" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Nhập + VAT]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="592" y="0" width="82" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Giá bán]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="674" y="0" width="118" height="24"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[Thành tiền]]></text></staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="24" splitType="Stretch">
+            <rectangle>
+                <reportElement x="10" y="0" width="782" height="24" backcolor="#FFFFFF"/>
+                <graphicElement>
+                    <pen lineWidth="0.25" lineColor="#CBD5E1"/>
+                </graphicElement>
+            </rectangle>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="10" y="5" width="40" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{no}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement style="TableCell" x="50" y="5" width="74" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{product_code}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement style="TableCell" x="124" y="5" width="166" height="13"/><box leftPadding="8"/><textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="290" y="5" width="44" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement style="TableCell" x="334" y="5" width="42" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{unit}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="376" y="5" width="82" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{import_price}]]></textFieldExpression></textField>
+            <textField pattern="#,##0.##'%'"><reportElement style="TableCell" x="458" y="5" width="50" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{vat_percent}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="508" y="5" width="84" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{import_price_with_vat}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="592" y="5" width="82" height="13"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA[$F{selling_price}]]></textFieldExpression></textField>
+            <textField pattern="#,##0"><reportElement style="TableCell" x="674" y="5" width="118" height="13"/><textElement textAlignment="Center"><font isBold="true"/></textElement><textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression></textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="18" splitType="Stretch">
+            <line><reportElement x="0" y="2" width="802" height="1"/><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1"/></graphicElement></line>
+            <staticText>
+                <reportElement style="Muted" x="245" y="6" width="310" height="12"/>
+                <textElement textAlignment="Center">
+                    <font isItalic="true"/>
+                </textElement>
+                <text><![CDATA[Phiếu được tạo từ hệ thống quản lý siêu thị]]></text>
+            </staticText>
+            <textField>
+                <reportElement style="Muted" x="720" y="6" width="72" height="12"/>
+                <textElement textAlignment="Right"/>
+                <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+    <summary>
+        <band height="184" splitType="Stretch">
+            <staticText>
+                <reportElement style="Label" x="10" y="12" width="70" height="14"/>
+                <text><![CDATA[Bằng chữ:]]></text>
+            </staticText>
+            <textField isStretchWithOverflow="true" isBlankWhenNull="true">
+                <reportElement style="Base" x="82" y="12" width="410" height="24"/>
+                <textElement>
+                    <font isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{AMOUNT_IN_WORDS}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement style="Label" x="10" y="48" width="70" height="14"/>
+                <text><![CDATA[Ghi chú:]]></text>
+            </staticText>
+            <line><reportElement x="82" y="59" width="410" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <line><reportElement x="82" y="78" width="410" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+
+            <rectangle radius="5">
+                <reportElement x="510" y="6" width="282" height="82" backcolor="#F8FAFC"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </graphicElement>
+            </rectangle>
+            <staticText><reportElement style="Base" x="528" y="20" width="100" height="14"/><text><![CDATA[Tạm tính:]]></text></staticText>
+            <textField pattern="#,##0"><reportElement style="Money" x="650" y="20" width="120" height="14"/><textFieldExpression><![CDATA[$F{subtotal}]]></textFieldExpression></textField>
+            <staticText><reportElement style="Base" x="528" y="39" width="100" height="14"/><text><![CDATA[VAT:]]></text></staticText>
+            <textField pattern="#,##0"><reportElement style="Money" x="650" y="39" width="120" height="14"/><textFieldExpression><![CDATA[$F{vat_total}]]></textFieldExpression></textField>
+            <line><reportElement x="528" y="58" width="242" height="1"/><graphicElement><pen lineColor="#CBD5E1"/></graphicElement></line>
+            <staticText><reportElement x="528" y="65" width="110" height="16" forecolor="#0F766E"/><textElement verticalAlignment="Middle"><font size="9" isBold="true"/></textElement><text><![CDATA[Tổng thanh toán:]]></text></staticText>
+            <textField pattern="#,##0"><reportElement x="650" y="62" width="120" height="22" forecolor="#0F766E"/><textElement textAlignment="Right" verticalAlignment="Middle"><font size="16" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{grand_total}]]></textFieldExpression></textField>
+
+            <rectangle radius="5">
+                <reportElement x="10" y="100" width="782" height="70" backcolor="#FFFFFF"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1"/>
+                </graphicElement>
+            </rectangle>
+            <staticText><reportElement style="Base" x="35" y="112" width="140" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Người giao hàng]]></text></staticText>
+            <staticText><reportElement style="Muted" x="35" y="126" width="140" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
+            <line><reportElement x="55" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <staticText><reportElement style="Base" x="225" y="112" width="120" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Thủ kho]]></text></staticText>
+            <staticText><reportElement style="Muted" x="225" y="126" width="120" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
+            <line><reportElement x="235" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <staticText><reportElement style="Base" x="420" y="112" width="110" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Kế toán]]></text></staticText>
+            <staticText><reportElement style="Muted" x="420" y="126" width="110" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
+            <line><reportElement x="425" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+            <staticText><reportElement style="Base" x="610" y="112" width="140" height="12"/><textElement textAlignment="Center"><font isBold="true"/></textElement><text><![CDATA[Người lập phiếu]]></text></staticText>
+            <staticText><reportElement style="Muted" x="610" y="126" width="140" height="12"/><textElement textAlignment="Center"><font isItalic="true"/></textElement><text><![CDATA[(Ký, ghi rõ họ tên)]]></text></staticText>
+            <line><reportElement x="630" y="162" width="100" height="1"/><graphicElement><pen lineStyle="Dotted" lineColor="#94A3B8"/></graphicElement></line>
+        </band>
+    </summary>
+</jasperReport>
