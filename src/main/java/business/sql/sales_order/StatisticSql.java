@@ -2,13 +2,27 @@ package business.sql.sales_order;
 
 import common.db.DatabaseConnection;
 import java.sql.*;
-import java.text.DecimalFormat;
 import java.util.*;
 
 public class StatisticSql {
 
     private static StatisticSql instance;
-    private final DecimalFormat currencyFormat = new DecimalFormat("#,###");
+
+    private static final String COMPLETED_CONDITION = """
+        (
+            UPPER(NVL(status, '')) = 'COMPLETED'
+            OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
+            OR UPPER(NVL(status, '')) LIKE '%HOAN THANH%'
+        )
+    """;
+
+    private static final String CANCELLED_CONDITION = """
+        (
+            UPPER(NVL(status, '')) = 'CANCELLED'
+            OR UPPER(NVL(status, '')) LIKE '%HỦY%'
+            OR UPPER(NVL(status, '')) LIKE '%HUY%'
+        )
+    """;
 
     public StatisticSql() {
     }
@@ -38,8 +52,15 @@ public class StatisticSql {
 
     public double getMonthlyRevenue() {
         String sql = "SELECT NVL(SUM(total_amount), 0) FROM ORDERS "
-                + "WHERE NVL(is_deleted, 0) = 0 AND isCompletedStatus(status) = 1 "
-                + "AND order_date >= TRUNC(SYSDATE, 'MM') AND order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)";
+                + "WHERE NVL(is_deleted, 0) = 0 AND " + COMPLETED_CONDITION
+                + " AND order_date >= TRUNC(SYSDATE, 'MM') AND order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)";
+        return queryDouble(sql);
+    }
+
+    public double getTodayRevenue() {
+        String sql = "SELECT NVL(SUM(total_amount), 0) FROM ORDERS "
+                + "WHERE NVL(is_deleted, 0) = 0 AND " + COMPLETED_CONDITION
+                + " AND TRUNC(order_date) = TRUNC(SYSDATE)";
         return queryDouble(sql);
     }
 
@@ -56,7 +77,8 @@ public class StatisticSql {
                 LEFT JOIN PRODUCTS p ON od.product_id = p.product_id
                 WHERE NVL(od.is_deleted, 0) = 0
                   AND NVL(o.is_deleted, 0) = 0
-                  AND isCompletedStatus(o.status) = 1
+                  AND 
+        """ + COMPLETED_CONDITION.replace("status", "o.status") + """
                 GROUP BY od.product_id, p.product_name
                 ORDER BY total_sold DESC, total_revenue DESC
             ) WHERE ROWNUM <= ?
@@ -113,13 +135,6 @@ public class StatisticSql {
         return rows;
     }
 
-    public double getTodayRevenue() {
-        String sql = "SELECT NVL(SUM(total_amount), 0) FROM ORDERS "
-                + "WHERE NVL(is_deleted, 0) = 0 AND isCompletedStatus(status) = 1 "
-                + "AND TRUNC(order_date) = TRUNC(SYSDATE)";
-        return queryDouble(sql);
-    }
-
     public List<Map<String, Object>> getLowStockProducts(int limit) {
         List<Map<String, Object>> rows = new ArrayList<>();
         String sql = """
@@ -157,7 +172,8 @@ public class StatisticSql {
                        SUM(total_amount) as revenue
                 FROM ORDERS
                 WHERE NVL(is_deleted, 0) = 0
-                  AND isCompletedStatus(status) = 1
+                  AND 
+        """ + COMPLETED_CONDITION + """
                 GROUP BY TO_CHAR(order_date, 'MM/YYYY')
                 ORDER BY max_date DESC
             ) WHERE ROWNUM <= 5
@@ -220,9 +236,6 @@ public class StatisticSql {
         return result;
     }
 
-    // =========================================================
-    // STATISTICVIEW - GLOBAL
-    // =========================================================
     public List<Object[]> getRevenueReport(java.util.Date fromDate, java.util.Date toDate) {
         return getRevenueReportInternal(fromDate, toDate, null);
     }
@@ -239,7 +252,8 @@ public class StatisticSql {
                    NVL(SUM(total_amount), 0) AS doanh_thu
             FROM ORDERS
             WHERE NVL(is_deleted, 0) = 0
-              AND isCompletedStatus(status) = 1
+              AND 
+        """ + COMPLETED_CONDITION + """
               AND order_date >= ?
               AND order_date < (? + 1)
         """);
@@ -276,20 +290,8 @@ public class StatisticSql {
 
     private List<Object[]> getProductReportInternal(java.util.Date fromDate, java.util.Date toDate, String storeId) {
         List<Object[]> rows = new ArrayList<>();
-        StringBuilder soldWhere = new StringBuilder("""
-              AND o.order_date >= ?
-              AND o.order_date < (? + 1)
-        """);
-        if (storeId != null && !storeId.isBlank()) {
-            soldWhere.append(" AND o.store_id = ? ");
-        }
-
-        StringBuilder mainWhere = new StringBuilder(" WHERE NVL(p.is_deleted, 0) = 0 ");
-        if (storeId != null && !storeId.isBlank()) {
-            mainWhere.append(" AND i.store_id = ? ");
-        }
-
-        String sql = """
+        String completed = COMPLETED_CONDITION.replace("status", "o.status");
+        StringBuilder sql = new StringBuilder("""
             SELECT p.product_id,
                    p.product_name,
                    NVL(sold.total_qty, 0) AS qty_sold,
@@ -307,20 +309,30 @@ public class StatisticSql {
                 INNER JOIN ORDERS o ON d.order_id = o.order_id
                 WHERE NVL(d.is_deleted, 0) = 0
                   AND NVL(o.is_deleted, 0) = 0
-                  AND isCompletedStatus(o.status) = 1
-            """ + soldWhere + """
+                  AND 
+        """ + completed + """
+                  AND o.order_date >= ?
+                  AND o.order_date < (? + 1)
+        """);
+        if (storeId != null && !storeId.isBlank()) {
+            sql.append(" AND o.store_id = ? ");
+        }
+        sql.append("""
                 GROUP BY d.product_id
             ) sold ON p.product_id = sold.product_id
-        """ + mainWhere + " ORDER BY qty_sold DESC, revenue DESC";
+            WHERE NVL(p.is_deleted, 0) = 0
+        """);
+        if (storeId != null && !storeId.isBlank()) {
+            sql.append(" AND i.store_id = ? ");
+        }
+        sql.append(" ORDER BY qty_sold DESC, revenue DESC ");
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
             int i = 1;
             pst.setDate(i++, new java.sql.Date(fromDate.getTime()));
             pst.setDate(i++, new java.sql.Date(toDate.getTime()));
             if (storeId != null && !storeId.isBlank()) {
                 pst.setString(i++, storeId.trim());
-            }
-            if (storeId != null && !storeId.isBlank()) {
                 pst.setString(i++, storeId.trim());
             }
             try (ResultSet rs = pst.executeQuery()) {
@@ -345,6 +357,8 @@ public class StatisticSql {
 
     private List<Object[]> getEmployeeReportInternal(java.util.Date fromDate, java.util.Date toDate, String storeId) {
         List<Object[]> rows = new ArrayList<>();
+        String completed = COMPLETED_CONDITION.replace("status", "o.status");
+        String cancelled = CANCELLED_CONDITION.replace("status", "o.status");
         StringBuilder sql = new StringBuilder("""
             SELECT e.employee_id,
                    e.employee_name,
@@ -355,9 +369,12 @@ public class StatisticSql {
             INNER JOIN ACCOUNTS a ON e.employee_id = a.user_id
             LEFT JOIN (
                 SELECT NVL(a_ref.user_id, o.employee_id) AS final_emp_id,
-                       COUNT(CASE WHEN isCompletedStatus(o.status) = 1 THEN 1 END) AS don_thanh_cong,
-                       COUNT(CASE WHEN isCancelledStatus(o.status) = 1 THEN 1 END) AS don_huy,
-                       SUM(CASE WHEN isCompletedStatus(o.status) = 1 THEN o.total_amount ELSE 0 END) AS doanh_thu
+                       COUNT(CASE WHEN 
+        """ + completed + """ THEN 1 END) AS don_thanh_cong,
+                       COUNT(CASE WHEN 
+        """ + cancelled + """ THEN 1 END) AS don_huy,
+                       SUM(CASE WHEN 
+        """ + completed + """ THEN o.total_amount ELSE 0 END) AS doanh_thu
                 FROM ORDERS o
                 LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id
                 WHERE NVL(o.is_deleted, 0) = 0
