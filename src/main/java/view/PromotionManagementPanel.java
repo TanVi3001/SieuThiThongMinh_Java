@@ -23,6 +23,7 @@ import business.sql.prod_inventory.CategoriesSql;
 import business.sql.prod_inventory.StoresSql;
 import model.product.Category;
 import model.product.Store;
+import view.JDateChooser;
 
 public class PromotionManagementPanel extends JPanel {
 
@@ -58,11 +59,10 @@ public class PromotionManagementPanel extends JPanel {
     private JTextField txtMaKM;
     private JTextField txtTenKM;
     private JSpinner spinGiamGia;
-    private JTextField txtTuNgay;
-    private JTextField txtDenNgay;
+    private JDateChooser dtpTuNgay;
+    private JDateChooser dtpDenNgay;
     private JComboBox<String> cbChiNhanh;
-    private JComboBox<String> cbSanPham;
-    // [CHANGED] Renamed from cbHangThanhVien to cbLoaiSanPham
+    // [REMOVED] cbSanPham has been completely removed to prevent duplicated filtering logic
     private JComboBox<String> cbLoaiSanPham;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnDeactivate, btnPreview;
@@ -235,41 +235,6 @@ public class PromotionManagementPanel extends JPanel {
         return area;
     }
 
-    // [NEW] Load danh sách chi nhánh từ DB, luôn có "Tất cả chi nhánh" ở đầu
-    private String[] loadBranchOptions() {
-        List<String> options = new ArrayList<>();
-        options.add(BRANCH_ALL);
-
-        String sql = "SELECT store_name FROM STORES WHERE NVL(is_deleted, 0) = 0 ORDER BY store_name";
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String name = rs.getString("store_name");
-                if (name != null && !name.isBlank()) {
-                    options.add(name);
-                }
-            }
-        } catch (Exception e) {
-            // Thử fallback với tên bảng BRANCHES nếu STORES không tồn tại
-            String sqlFallback = "SELECT branch_name FROM BRANCHES WHERE NVL(is_deleted, 0) = 0 ORDER BY branch_name";
-            try (Connection con = common.db.DatabaseConnection.getConnection();
-                 PreparedStatement ps = con.prepareStatement(sqlFallback);
-                 ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String name = rs.getString("branch_name");
-                    if (name != null && !name.isBlank()) {
-                        options.add(name);
-                    }
-                }
-            } catch (Exception ex) {
-                System.err.println("Lỗi tải danh sách chi nhánh: " + ex.getMessage());
-            }
-        }
-
-        return options.toArray(new String[0]);
-    }
-
     private JPanel createRightPanel() {
         RoundedPanel card = new RoundedPanel(20, white);
         card.setPreferredSize(new Dimension(430, 0));
@@ -321,13 +286,22 @@ public class PromotionManagementPanel extends JPanel {
         addSection(form, g, y++, "2. Thời gian áp dụng");
         JPanel timeRow = new JPanel(new GridLayout(1, 2, 10, 0));
         timeRow.setOpaque(false);
-        timeRow.add(fieldPanel("Từ ngày", txtTuNgay = createTextField("2026-01-01")));
-        timeRow.add(fieldPanel("Đến ngày", txtDenNgay = createTextField("2026-12-31")));
+        
+        dtpTuNgay = new JDateChooser();
+        dtpTuNgay.setDateFormatString("yyyy-MM-dd");
+        dtpTuNgay.setPreferredSize(new Dimension(0, 40));
+        
+        dtpDenNgay = new JDateChooser();
+        dtpDenNgay.setDateFormatString("yyyy-MM-dd");
+        dtpDenNgay.setPreferredSize(new Dimension(0, 40));
+        
+        timeRow.add(fieldPanel("Từ ngày", dtpTuNgay));
+        timeRow.add(fieldPanel("Đến ngày", dtpDenNgay));
         addComponent(form, g, y++, timeRow, 14);
 
         addSection(form, g, y++, "3. Phạm vi áp dụng");
 
-        // Lấy danh sách chi nhánh tự động từ DB thông qua StoresSql
+        // Lấy danh sách tất cả các chi nhánh động hiện có thông qua StoresSql
         cbChiNhanh = new JComboBox<>();
         cbChiNhanh.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         cbChiNhanh.setPreferredSize(new Dimension(0, 40));
@@ -338,11 +312,7 @@ public class PromotionManagementPanel extends JPanel {
         addField(form, g, y, "Áp dụng tại chi nhánh", cbChiNhanh);
         y += 2;
 
-        cbSanPham = combo(new String[]{"Tất cả mặt hàng", "Chỉ Hàng tiêu dùng", "Chỉ Thực phẩm tươi sống"});
-        addField(form, g, y, "Áp dụng cho sản phẩm", cbSanPham);
-        y += 2;
-
-        // Lấy danh sách Loại sản phẩm tự động từ DB thông qua CategoriesSql
+        // Lấy danh sách Loại sản phẩm động hiện có thông qua CategoriesSql
         cbLoaiSanPham = new JComboBox<>();
         cbLoaiSanPham.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         cbLoaiSanPham.setPreferredSize(new Dimension(0, 40));
@@ -360,10 +330,7 @@ public class PromotionManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
         btnClear = createButton("Làm mới", new Color(235, 238, 244), text, IconHelper.refresh(18));
-        
-        // Đưa icon xem trước về null để tránh lỗi không tìm thấy icon
         btnPreview = createButton("Xem trước", softBlue, blue, null); 
-        
         btnDeactivate = createButton("Tạm ngưng", red, Color.WHITE, IconHelper.delete(18));
         btnSave = createButton("Lưu", blue, Color.WHITE, IconHelper.edit(18));
         actions.add(btnClear);
@@ -453,11 +420,10 @@ public class PromotionManagementPanel extends JPanel {
         txtMaKM.setEnabled(true);
         txtTenKM.setText("");
         spinGiamGia.setValue(5);
-        txtTuNgay.setText("");
-        txtDenNgay.setText("");
+        dtpTuNgay.setDate(null);
+        dtpDenNgay.setDate(null);
         cbChiNhanh.setSelectedIndex(0);
-        cbSanPham.setSelectedIndex(0);
-        cbLoaiSanPham.setSelectedIndex(0); // [CHANGED]
+        cbLoaiSanPham.setSelectedIndex(0);
         cbTrangThai.setSelectedIndex(0);
         tblPromos.clearSelection();
         lblFormTitle.setText("Cấu Hình Khuyến Mãi");
@@ -535,9 +501,33 @@ public class PromotionManagementPanel extends JPanel {
                 if (rs.next()) {
                     txtTenKM.setText(rs.getString("promotion_name"));
                     spinGiamGia.setValue(rs.getInt("discount_amount"));
-                    txtTuNgay.setText(rs.getString("start_date"));
-                    txtDenNgay.setText(rs.getString("end_date"));
                     cbTrangThai.setSelectedItem(rs.getString("status"));
+
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+
+                    try {
+                        String startDateStr = rs.getString("start_date");
+                        if (startDateStr != null && !startDateStr.trim().isEmpty()) {
+                            dtpTuNgay.setDate(sdf.parse(startDateStr));
+                        } else {
+                            dtpTuNgay.setDate(null);
+                        }
+                    } catch (Exception ex) {
+                        dtpTuNgay.setDate(null);
+                        System.err.println("Lỗi phân tích Từ ngày: " + ex.getMessage());
+                    }
+
+                    try {
+                        String endDateStr = rs.getString("end_date");
+                        if (endDateStr != null && !endDateStr.trim().isEmpty()) {
+                            dtpDenNgay.setDate(sdf.parse(endDateStr));
+                        } else {
+                            dtpDenNgay.setDate(null);
+                        }
+                    } catch (Exception ex) {
+                        dtpDenNgay.setDate(null);
+                        System.err.println("Lỗi phân tích Đến ngày: " + ex.getMessage());
+                    }
                 }
             }
         } catch (Exception e) {
@@ -549,9 +539,18 @@ public class PromotionManagementPanel extends JPanel {
         String ma = txtMaKM.getText().trim();
         String ten = txtTenKM.getText().trim();
         int giam = (int) spinGiamGia.getValue();
-        String tuNgay = txtTuNgay.getText().trim();
-        String denNgay = txtDenNgay.getText().trim();
         String trangThai = cbTrangThai.getSelectedItem().toString();
+
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        String tuNgay = "";
+        String denNgay = "";
+        
+        if (dtpTuNgay.getDate() != null) {
+            tuNgay = sdf.format(dtpTuNgay.getDate());
+        }
+        if (dtpDenNgay.getDate() != null) {
+            denNgay = sdf.format(dtpDenNgay.getDate());
+        }
 
         if (ma.isEmpty() || ten.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Vui lòng nhập mã và tên Khuyến mãi!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
@@ -649,13 +648,18 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     private void previewPromo() {
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+        String strTuNgay = (dtpTuNgay.getDate() != null) ? sdf.format(dtpTuNgay.getDate()) : "-";
+        String strDenNgay = (dtpDenNgay.getDate() != null) ? sdf.format(dtpDenNgay.getDate()) : "-";
+
         String message = "Mã khuyến mãi: " + valueOrDash(txtMaKM.getText()) + "\n"
                 + "Tên chương trình: " + valueOrDash(txtTenKM.getText()) + "\n"
                 + "Mức giảm: " + spinGiamGia.getValue() + "%\n"
-                + "Thời gian: " + valueOrDash(txtTuNgay.getText()) + " đến " + valueOrDash(txtDenNgay.getText()) + "\n"
+                + "Thời gian: " + strTuNgay + " đến " + strDenNgay + "\n"
                 + "Chi nhánh: " + cbChiNhanh.getSelectedItem() + "\n"
-                + "Loại sản phẩm: " + cbLoaiSanPham.getSelectedItem() + "\n" // [CHANGED]
+                + "Loại sản phẩm: " + cbLoaiSanPham.getSelectedItem() + "\n"
                 + "Trạng thái: " + cbTrangThai.getSelectedItem();
+                
         JOptionPane.showMessageDialog(this, message, "Xem trước khuyến mãi", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -805,8 +809,8 @@ public class PromotionManagementPanel extends JPanel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(c.getBackground());
                 g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 10, 10);
-                super.paint(g2, c);
                 g2.dispose();
+                super.paint(g, c);
             }
         });
         return button;
