@@ -20,8 +20,14 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.UIManager;
 
 public class AdminSidebar extends JPanel {
+
+    static {
+        UIManager.put("ButtonUI", "view.components.ModernAdminButtonUI");
+        UIManager.put("TabbedPaneUI", "view.components.ModernAdminTabbedPaneUI");
+    }
 
     private static final int SIDEBAR_WIDTH = 280;
     private static final Color SIDEBAR_BG = ModernSidebarMenuItem.WHITE;
