@@ -17,7 +17,6 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridBagLayout;
 import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
@@ -29,7 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -50,9 +48,8 @@ import model.product.Product;
 /**
  * Hộp thư thông báo góc phải.
  *
- * Bản này cố định 2 lỗi chính:
- * - Badge/unread không tăng ảo khi refresh DB hoặc reload cảnh báo tồn kho.
- * - Thông báo kho được cô lập theo store_id hiện tại.
+ * Lưu ý: không dùng emoji/text-icon vì dễ render thành ô vuông trên Windows.
+ * Toàn bộ icon trong UI lấy qua IconHelper.
  */
 public class NotificationBell extends JPanel {
 
@@ -86,8 +83,16 @@ public class NotificationBell extends JPanel {
         setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
         setOpaque(false);
 
-        lblBell = new JLabel("🔔");
-        lblBell.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 22));
+        lblBell = new JLabel();
+        ImageIcon bellIcon = IconHelper.stock(22);
+        if (bellIcon != null) {
+            lblBell.setIcon(bellIcon);
+        } else {
+            lblBell.setText("!");
+            lblBell.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            lblBell.setForeground(COLOR_INFO);
+        }
+        lblBell.setHorizontalAlignment(SwingConstants.CENTER);
         lblBell.setCursor(new Cursor(Cursor.HAND_CURSOR));
         lblBell.setToolTipText("Thông báo hệ thống");
 
@@ -226,7 +231,7 @@ public class NotificationBell extends JPanel {
                 }
 
                 String key = "MANAGER_STOCK_ALERT_STORE_" + storeKey + "_" + productId;
-                String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+                String title = "Nhắc nhập hàng: " + productName;
                 String body = message == null ? "" : message;
 
                 if (remindCount >= 2) {
@@ -279,7 +284,7 @@ public class NotificationBell extends JPanel {
                 if (qty <= 0) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "❌ HẾT HÀNG: " + name,
+                            "Hết hàng: " + name,
                             "Sản phẩm [" + productId + "] đã hết hoàn toàn. Cần nhập khẩn!",
                             Audience.ALL,
                             false
@@ -287,7 +292,7 @@ public class NotificationBell extends JPanel {
                 } else if (qty <= THRESHOLD_DANGER) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "⚠️ SẮP HẾT: " + name,
+                            "Sắp hết: " + name,
                             "Sản phẩm [" + productId + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
                             Audience.ALL,
                             false
@@ -295,7 +300,7 @@ public class NotificationBell extends JPanel {
                 } else if (qty <= THRESHOLD_WARNING) {
                     addNotification(
                             NotifItem.Type.WARNING,
-                            "📦 Tồn kho thấp: " + name,
+                            "Tồn kho thấp: " + name,
                             "Sản phẩm [" + productId + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
                             Audience.WAREHOUSE,
                             false
@@ -338,7 +343,7 @@ public class NotificationBell extends JPanel {
         }
 
         String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
-        String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+        String title = "Nhắc nhập hàng: " + productName;
         String body = "Có cảnh báo nhập hàng. Sản phẩm [" + productId
                 + "] hiện còn " + quantity + " sản phẩm. Cần kiểm tra và nhập hàng.";
 
@@ -472,9 +477,16 @@ public class NotificationBell extends JPanel {
         header.setBackground(COLOR_INFO);
         header.setBorder(new EmptyBorder(11, 16, 11, 12));
 
+        JPanel titleGroup = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        titleGroup.setOpaque(false);
+        ImageIcon headerIcon = IconHelper.stock(18);
+        if (headerIcon != null) {
+            titleGroup.add(new JLabel(headerIcon));
+        }
         JLabel lblTitle = new JLabel("Hộp thư thông báo");
         lblTitle.setForeground(Color.WHITE);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        titleGroup.add(lblTitle);
 
         JLabel lblCount = new JLabel("  " + notifications.size() + " thông báo  ");
         lblCount.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -482,6 +494,11 @@ public class NotificationBell extends JPanel {
         lblCount.setBorder(new EmptyBorder(4, 10, 4, 10));
 
         JButton btnClear = new JButton("Xóa tất cả");
+        ImageIcon deleteIcon = IconHelper.delete(13);
+        if (deleteIcon != null) {
+            btnClear.setIcon(deleteIcon);
+            btnClear.setIconTextGap(6);
+        }
         btnClear.setFont(new Font("Segoe UI", Font.BOLD, 12));
         btnClear.setForeground(Color.WHITE);
         btnClear.setBackground(COLOR_DANGER);
@@ -499,7 +516,7 @@ public class NotificationBell extends JPanel {
         right.add(lblCount);
         right.add(btnClear);
 
-        header.add(lblTitle, BorderLayout.WEST);
+        header.add(titleGroup, BorderLayout.WEST);
         header.add(right, BorderLayout.EAST);
 
         rebuildPopupList();
@@ -550,6 +567,10 @@ public class NotificationBell extends JPanel {
             empty.setBackground(new Color(248, 249, 252));
             empty.setBorder(new EmptyBorder(30, 20, 30, 20));
 
+            ImageIcon emptyIcon = IconHelper.refresh(34);
+            JLabel lblIcon = emptyIcon != null ? new JLabel(emptyIcon) : new JLabel();
+            lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+
             JLabel lblText = new JLabel("Không có thông báo mới");
             lblText.setFont(new Font("Segoe UI", Font.BOLD, 13));
             lblText.setForeground(new Color(163, 174, 208));
@@ -560,7 +581,9 @@ public class NotificationBell extends JPanel {
             lblSub.setForeground(new Color(200, 210, 225));
             lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            empty.add(Box.createRigidArea(new Dimension(0, 20)));
+            empty.add(Box.createRigidArea(new Dimension(0, 10)));
+            empty.add(lblIcon);
+            empty.add(Box.createRigidArea(new Dimension(0, 10)));
             empty.add(lblText);
             empty.add(Box.createRigidArea(new Dimension(0, 5)));
             empty.add(lblSub);
@@ -613,10 +636,11 @@ public class NotificationBell extends JPanel {
         content.setBackground(bg);
         content.setBorder(new EmptyBorder(16, 18, 16, 22));
 
-        JLabel icon = new JLabel(n.type == NotifItem.Type.DANGER ? "🚨" : n.type == NotifItem.Type.WARNING ? "⚠️" : "ℹ️");
-        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 24));
-        icon.setPreferredSize(new Dimension(46, 46));
-        content.add(icon, BorderLayout.WEST);
+        ImageIcon icon = iconForType(n.type, 22);
+        JLabel lblIcon = icon != null ? new JLabel(icon) : new JLabel();
+        lblIcon.setHorizontalAlignment(SwingConstants.CENTER);
+        lblIcon.setPreferredSize(new Dimension(46, 46));
+        content.add(lblIcon, BorderLayout.WEST);
 
         JPanel text = new JPanel();
         text.setOpaque(false);
@@ -631,15 +655,22 @@ public class NotificationBell extends JPanel {
         lblBody.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblBody.setForeground(new Color(68, 68, 68));
 
-        JLabel lblTime = new JLabel("◷ " + safe(n.time));
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        timeRow.setOpaque(false);
+        ImageIcon timeIcon = IconHelper.history(12);
+        if (timeIcon != null) {
+            timeRow.add(new JLabel(timeIcon));
+        }
+        JLabel lblTime = new JLabel(safe(n.time));
         lblTime.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         lblTime.setForeground(new Color(163, 174, 208));
+        timeRow.add(lblTime);
 
         text.add(lblTitle);
         text.add(Box.createVerticalStrut(6));
         text.add(lblBody);
         text.add(Box.createVerticalStrut(6));
-        text.add(lblTime);
+        text.add(timeRow);
 
         content.add(text, BorderLayout.CENTER);
         card.add(content, BorderLayout.CENTER);
@@ -653,6 +684,14 @@ public class NotificationBell extends JPanel {
         attachClickListenerRecursive(card, adapter);
 
         return card;
+    }
+
+    private ImageIcon iconForType(NotifItem.Type type, int size) {
+        return switch (type) {
+            case DANGER -> IconHelper.delivery(size);
+            case WARNING -> IconHelper.stock(size);
+            default -> IconHelper.barChart(size);
+        };
     }
 
     private String cleanTitle(String title) {
