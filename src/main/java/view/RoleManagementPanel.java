@@ -24,11 +24,11 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
     private List<String> actionList = Arrays.asList("Xem", "Thêm", "Sửa", "Xóa", "Xuất file");
     private String searchRoleQuery = "";
-    
+
     private List<RoleMatrixItem> roleDataList = new ArrayList<>();
 
     private JPanel matrixContainer;
-    
+
     public RoleManagementPanel() {
         initComponents();
         setupModernLayout();
@@ -38,12 +38,12 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 400, Short.MAX_VALUE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGap(0, 400, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 300, Short.MAX_VALUE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGap(0, 300, Short.MAX_VALUE)
         );
     }
 
@@ -78,9 +78,18 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         ));
 
         txtSearchRole.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { updateSearch(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { updateSearch(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { updateSearch(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                updateSearch();
+            }
+
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                updateSearch();
+            }
+
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                updateSearch();
+            }
+
             private void updateSearch() {
                 searchRoleQuery = txtSearchRole.getText().toLowerCase().trim();
                 refreshMatrixUI();
@@ -100,18 +109,27 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         matrixContainer = new JPanel(new BorderLayout());
         matrixContainer.setBackground(bgLight);
 
-        loadDataFromDB(); 
+        loadDataFromDB();
         this.add(matrixContainer, BorderLayout.CENTER);
     }
 
     private void loadDataFromDB() {
         roleDataList.clear();
-        String sql = "SELECT role_id, role_name, can_view, can_add, can_edit, can_delete, can_export " +
-                     "FROM ROLES WHERE is_deleted = 0 ORDER BY role_name";
-                     
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        String sql = """
+    SELECT role_id, role_name, can_view, can_add, can_edit, can_delete, can_export
+    FROM ROLES
+    WHERE is_deleted = 0
+      AND role_id IN ('R_ADMIN_ALL', 'R_STORE_MNG', 'R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
+    ORDER BY CASE role_id
+        WHEN 'R_ADMIN_ALL' THEN 1
+        WHEN 'R_STORE_MNG' THEN 2
+        WHEN 'R_STAFF_SALE' THEN 3
+        WHEN 'R_STAFF_VIEW_PROD' THEN 4
+        ELSE 99
+    END
+""";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
                 RoleMatrixItem item = new RoleMatrixItem(
@@ -133,14 +151,15 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
     private void saveMatrixToDB() {
         String sql = "UPDATE ROLES SET can_view = ?, can_add = ?, can_edit = ?, can_delete = ?, can_export = ? WHERE role_id = ?";
-        
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-             
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
             boolean hasChanges = false;
 
             for (RoleMatrixItem item : roleDataList) {
-                if ("R_ADMIN_ALL".equals(item.roleId)) continue; 
+                if ("R_ADMIN_ALL".equals(item.roleId)) {
+                    continue;
+                }
 
                 if (item.isChanged()) {
                     ps.setInt(1, item.canView ? 1 : 0);
@@ -151,33 +170,34 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                     ps.setString(6, item.roleId);
                     ps.addBatch();
                     hasChanges = true;
-                    
+
                     business.service.AuditLogService.logAction(
-                        "CẬP NHẬT", 
-                        "ROLES", 
-                        item.roleId, 
-                        item.getOldPermissions(), 
-                        item.getActionDiff(),
-                        "Admin tinh chỉnh quyền hạn trên Ma trận"
+                            "CẬP NHẬT",
+                            "ROLES",
+                            item.roleId,
+                            item.getOldPermissions(),
+                            item.getActionDiff(),
+                            "Admin tinh chỉnh quyền hạn trên Ma trận"
                     );
-                    
+
                     item.updateOriginals();
                 }
             }
-            
+
             if (hasChanges) {
                 ps.executeBatch();
-                
+
                 try {
                     common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                     EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
 
                 JOptionPane.showMessageDialog(this, "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "Không có sự thay đổi nào để lưu.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             }
-            
+
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi cập nhật phân quyền: " + e.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
         }
@@ -200,9 +220,12 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.BOTH;
 
-        gbc.gridy = 0; gbc.weighty = 0.0; gbc.insets = new Insets(0, 0, 15, 0);
-        gbc.gridx = 0; gbc.weightx = 0.3; 
-        
+        gbc.gridy = 0;
+        gbc.weighty = 0.0;
+        gbc.insets = new Insets(0, 0, 15, 0);
+        gbc.gridx = 0;
+        gbc.weightx = 0.3;
+
         JLabel lblHeaderRole = new JLabel("Vai trò / Chức vụ");
         lblHeaderRole.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblHeaderRole.setForeground(textGray);
@@ -221,8 +244,8 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
         int rowIndex = 1;
         for (RoleMatrixItem item : roleDataList) {
-            
-            String displayRoleName = item.roleName; 
+
+            String displayRoleName = item.roleName;
             if ("R_ADMIN_ALL".equals(item.roleId)) {
                 displayRoleName = "Quản trị viên";
             } else if ("R_STORE_MNG".equals(item.roleId)) {
@@ -232,7 +255,7 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             } else if ("R_STAFF_VIEW_PROD".equals(item.roleId) || "R_STAFF_STOCK".equals(item.roleId)) {
                 displayRoleName = "Nhân viên kho";
             }
-            
+
             if (searchRoleQuery.isEmpty() || displayRoleName.toLowerCase().contains(searchRoleQuery)) {
                 gbc.gridy = rowIndex++;
                 gbc.weighty = 0.0;
@@ -246,7 +269,9 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 JLabel lblRole = new JLabel(displayRoleName);
                 lblRole.setFont(new Font("Segoe UI", Font.BOLD, 14));
                 lblRole.setForeground(textDark);
-                if ("R_ADMIN_ALL".equals(item.roleId)) lblRole.setForeground(new Color(220, 53, 69)); 
+                if ("R_ADMIN_ALL".equals(item.roleId)) {
+                    lblRole.setForeground(new Color(220, 53, 69));
+                }
                 lblRole.setBorder(new EmptyBorder(12, 10, 12, 0));
                 cellRole.add(lblRole, BorderLayout.CENTER);
 
@@ -288,24 +313,44 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                     JCheckBox cb = new JCheckBox();
                     cb.setBackground(cardWhite);
                     cb.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                    
+
                     if (isAdmin) {
                         cb.setSelected(true);
-                        cb.setEnabled(false); 
+                        cb.setEnabled(false);
                     } else {
-                        if (j == 0) cb.setSelected(item.canView);
-                        if (j == 1) cb.setSelected(item.canAdd);
-                        if (j == 2) cb.setSelected(item.canEdit);
-                        if (j == 3) cb.setSelected(item.canDelete);
-                        if (j == 4) cb.setSelected(item.canExport);
+                        if (j == 0) {
+                            cb.setSelected(item.canView);
+                        }
+                        if (j == 1) {
+                            cb.setSelected(item.canAdd);
+                        }
+                        if (j == 2) {
+                            cb.setSelected(item.canEdit);
+                        }
+                        if (j == 3) {
+                            cb.setSelected(item.canDelete);
+                        }
+                        if (j == 4) {
+                            cb.setSelected(item.canExport);
+                        }
 
                         final int actionIndex = j;
                         cb.addActionListener(e -> {
-                            if (actionIndex == 0) item.canView = cb.isSelected();
-                            if (actionIndex == 1) item.canAdd = cb.isSelected();
-                            if (actionIndex == 2) item.canEdit = cb.isSelected();
-                            if (actionIndex == 3) item.canDelete = cb.isSelected();
-                            if (actionIndex == 4) item.canExport = cb.isSelected();
+                            if (actionIndex == 0) {
+                                item.canView = cb.isSelected();
+                            }
+                            if (actionIndex == 1) {
+                                item.canAdd = cb.isSelected();
+                            }
+                            if (actionIndex == 2) {
+                                item.canEdit = cb.isSelected();
+                            }
+                            if (actionIndex == 3) {
+                                item.canDelete = cb.isSelected();
+                            }
+                            if (actionIndex == 4) {
+                                item.canExport = cb.isSelected();
+                            }
                         });
                     }
 
@@ -317,8 +362,10 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
         gbc.gridy = rowIndex;
         gbc.weighty = 1.0;
-        gbc.gridx = 0; gbc.gridwidth = actionList.size() + 1;
-        JPanel filler = new JPanel(); filler.setBackground(cardWhite);
+        gbc.gridx = 0;
+        gbc.gridwidth = actionList.size() + 1;
+        JPanel filler = new JPanel();
+        filler.setBackground(cardWhite);
         tablePanel.add(filler, gbc);
 
         JScrollPane scroll = new JScrollPane(tablePanel);
@@ -329,10 +376,10 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         JPanel bottomBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         bottomBtns.setBackground(cardWhite);
         bottomBtns.setBorder(new EmptyBorder(15, 0, 0, 0));
-        
+
         JButton btnSave = createCustomButton("Lưu toàn bộ thay đổi", primaryBlue, Color.WHITE);
-        btnSave.addActionListener(e -> saveMatrixToDB()); 
-        
+        btnSave.addActionListener(e -> saveMatrixToDB());
+
         bottomBtns.add(btnSave);
         container.add(bottomBtns, BorderLayout.SOUTH);
 
@@ -345,11 +392,11 @@ public class RoleManagementPanel extends javax.swing.JPanel {
     private void handleDeleteRole(String roleId, String roleName) {
         JPasswordField pf = new JPasswordField();
         int okCxl = JOptionPane.showConfirmDialog(
-            this, 
-            new Object[]{"Vui lòng nhập mật khẩu Quản trị viên để xác nhận xóa vai trò [" + roleName + "]:", pf}, 
-            "Xác thực bảo mật", 
-            JOptionPane.OK_CANCEL_OPTION, 
-            JOptionPane.WARNING_MESSAGE
+                this,
+                new Object[]{"Vui lòng nhập mật khẩu Quản trị viên để xác nhận xóa vai trò [" + roleName + "]:", pf},
+                "Xác thực bảo mật",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE
         );
 
         if (okCxl == JOptionPane.OK_OPTION) {
@@ -358,31 +405,31 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             // 🔥 BẠN CẦN CHỈNH SỬA HÀM NÀY ĐỂ KHỚP VỚI CÁCH MÃ HÓA PASSWORD CỦA BẠN (VD: BCrypt)
             if (verifyAdminPassword(password)) {
                 String sql = "UPDATE ROLES SET is_deleted = 1 WHERE role_id = ?";
-                
-                try (Connection con = common.db.DatabaseConnection.getConnection();
-                     PreparedStatement ps = con.prepareStatement(sql)) {
-                    
+
+                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
                     ps.setString(1, roleId);
                     ps.executeUpdate();
 
                     // Ghi vào Audit Log
                     business.service.AuditLogService.logAction(
-                        "XÓA", 
-                        "ROLES", 
-                        roleId, 
-                        roleName, 
-                        "Đã đưa vào thùng rác (Xóa mềm)", 
-                        "Admin xác thực mật khẩu và xóa vai trò"
+                            "XÓA",
+                            "ROLES",
+                            roleId,
+                            roleName,
+                            "Đã đưa vào thùng rác (Xóa mềm)",
+                            "Admin xác thực mật khẩu và xóa vai trò"
                     );
 
                     JOptionPane.showMessageDialog(this, "Đã xóa vai trò [" + roleName + "] thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
-                    
+
                     // Kéo dữ liệu mới và báo tin cho các panel khác
                     loadDataFromDB();
                     try {
                         common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                         EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_DELETED"));
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
 
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(this, "Lỗi khi xóa vai trò: " + ex.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
@@ -396,18 +443,19 @@ public class RoleManagementPanel extends javax.swing.JPanel {
     private boolean verifyAdminPassword(String inputPassword) {
         // Lấy thông tin user hiện tại
         model.account.Account currentUser = business.service.LoginService.getCurrentUser();
-        
+
         if (currentUser != null && currentUser.getPassword() != null) {
             // Tạm thời mình dùng phép so sánh String bình thường.
             // Nếu Database của bạn lưu mã hóa (như BCrypt hay MD5), bạn hãy thay đổi dòng return dưới đây nhé!
             // VD BCrypt: return org.mindrot.jbcrypt.BCrypt.checkpw(inputPassword, currentUser.getPassword());
-            return currentUser.getPassword().equals(inputPassword); 
+            return currentUser.getPassword().equals(inputPassword);
         }
         return false;
     }
     // =========================================================================
 
     class RoleMatrixItem {
+
         String roleId;
         String roleName;
         boolean canView, canAdd, canEdit, canDelete, canExport;
@@ -421,7 +469,7 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             this.canEdit = edit;
             this.canDelete = del;
             this.canExport = exp;
-            
+
             this.oldView = view;
             this.oldAdd = add;
             this.oldEdit = edit;
@@ -430,56 +478,93 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         }
 
         public boolean isChanged() {
-            return canView != oldView || canAdd != oldAdd || canEdit != oldEdit || 
-                   canDelete != oldDelete || canExport != oldExport;
+            return canView != oldView || canAdd != oldAdd || canEdit != oldEdit
+                    || canDelete != oldDelete || canExport != oldExport;
         }
 
         public String getPermissionsString(boolean v, boolean a, boolean e, boolean d, boolean x) {
             java.util.List<String> list = new java.util.ArrayList<>();
-            if (v) list.add("Xem");
-            if (a) list.add("Thêm");
-            if (e) list.add("Sửa");
-            if (d) list.add("Xóa");
-            if (x) list.add("Xuất file");
+            if (v) {
+                list.add("Xem");
+            }
+            if (a) {
+                list.add("Thêm");
+            }
+            if (e) {
+                list.add("Sửa");
+            }
+            if (d) {
+                list.add("Xóa");
+            }
+            if (x) {
+                list.add("Xuất file");
+            }
             return list.isEmpty() ? "Không có quyền" : String.join(", ", list);
         }
-        
+
         public String getOldPermissions() {
             return getPermissionsString(oldView, oldAdd, oldEdit, oldDelete, oldExport);
         }
-        
+
         public String getNewPermissions() {
             return getPermissionsString(canView, canAdd, canEdit, canDelete, canExport);
         }
 
         public void updateOriginals() {
-            oldView = canView; oldAdd = canAdd; oldEdit = canEdit; 
-            oldDelete = canDelete; oldExport = canExport;
+            oldView = canView;
+            oldAdd = canAdd;
+            oldEdit = canEdit;
+            oldDelete = canDelete;
+            oldExport = canExport;
         }
-        
+
         public String getActionDiff() {
             java.util.List<String> bat = new java.util.ArrayList<>();
             java.util.List<String> tat = new java.util.ArrayList<>();
-            
-            if (!oldView && canView) bat.add("Xem");
-            if (oldView && !canView) tat.add("Xem");
-            
-            if (!oldAdd && canAdd) bat.add("Thêm");
-            if (oldAdd && !canAdd) tat.add("Thêm");
-            
-            if (!oldEdit && canEdit) bat.add("Sửa");
-            if (oldEdit && !canEdit) tat.add("Sửa");
-            
-            if (!oldDelete && canDelete) bat.add("Xóa");
-            if (oldDelete && !canDelete) tat.add("Xóa");
-            
-            if (!oldExport && canExport) bat.add("Xuất file");
-            if (oldExport && !canExport) tat.add("Xuất file");
-            
+
+            if (!oldView && canView) {
+                bat.add("Xem");
+            }
+            if (oldView && !canView) {
+                tat.add("Xem");
+            }
+
+            if (!oldAdd && canAdd) {
+                bat.add("Thêm");
+            }
+            if (oldAdd && !canAdd) {
+                tat.add("Thêm");
+            }
+
+            if (!oldEdit && canEdit) {
+                bat.add("Sửa");
+            }
+            if (oldEdit && !canEdit) {
+                tat.add("Sửa");
+            }
+
+            if (!oldDelete && canDelete) {
+                bat.add("Xóa");
+            }
+            if (oldDelete && !canDelete) {
+                tat.add("Xóa");
+            }
+
+            if (!oldExport && canExport) {
+                bat.add("Xuất file");
+            }
+            if (oldExport && !canExport) {
+                tat.add("Xuất file");
+            }
+
             java.util.List<String> result = new java.util.ArrayList<>();
-            if (!bat.isEmpty()) result.add("Bật: " + String.join(", ", bat));
-            if (!tat.isEmpty()) result.add("Tắt: " + String.join(", ", tat));
-            
+            if (!bat.isEmpty()) {
+                result.add("Bật: " + String.join(", ", bat));
+            }
+            if (!tat.isEmpty()) {
+                result.add("Tắt: " + String.join(", ", tat));
+            }
+
             return String.join(" | ", result);
         }
     }
@@ -506,28 +591,55 @@ public class RoleManagementPanel extends javax.swing.JPanel {
     }
 
     class RoundedPanel extends JPanel {
-        private int radius; private Color bgColor;
-        public RoundedPanel(int radius, Color bgColor) { this.radius = radius; this.bgColor = bgColor; setOpaque(false); }
-        @Override protected void paintComponent(Graphics g) {
+
+        private int radius;
+        private Color bgColor;
+
+        public RoundedPanel(int radius, Color bgColor) {
+            this.radius = radius;
+            this.bgColor = bgColor;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), radius, radius);
+            g2.setColor(bgColor);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), radius, radius);
             g2.dispose();
             super.paintComponent(g);
         }
     }
 
     class RoundBorder implements javax.swing.border.Border {
-        private Color color; private int radius;
-        public RoundBorder(Color color, int radius) { this.color = color; this.radius = radius; }
-        @Override public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+
+        private Color color;
+        private int radius;
+
+        public RoundBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color); g2.setStroke(new BasicStroke(1.2f));
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(1.2f));
             g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
             g2.dispose();
         }
-        @Override public Insets getBorderInsets(Component c) { return new Insets(1, 1, 1, 1); }
-        @Override public boolean isBorderOpaque() { return false; }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(1, 1, 1, 1);
+        }
+
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 }

@@ -18,7 +18,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
         // Sidebar mặc định đang active mục đầu tiên là "Quản lý chi nhánh",
         // nên nội dung mặc định cũng phải là màn hình Quản lý chi nhánh.
-        showPanel(new view.StoreManagementPanel());
+        showPanel(new view.AdminSystemPanel());
 
         // Đảm bảo JFrame được phóng to sau khi toàn bộ component đã add xong.
         SwingUtilities.invokeLater(() -> setExtendedState(JFrame.MAXIMIZED_BOTH));
@@ -54,7 +54,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
         adminSidebar.setMenuClickListener(title -> {
             switch (title) {
                 case "Quản lý chi nhánh":
-                    showPanel(new view.StoreManagementPanel());
+                    showPanel(new view.AdminSystemPanel());
                     break;
                 case "Quản lý khuyến mãi":
                     showPanel(new view.PromotionManagementPanel());
