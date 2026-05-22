@@ -26,6 +26,18 @@ public class AccountSql implements SqlInterface<Account> {
         return instance;
     }
 
+    private static String clean(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private static String buildAccountId() {
+        return "ACC" + System.currentTimeMillis();
+    }
+
+    private static String normalizePhoneSql(String columnName) {
+        return "REGEXP_REPLACE(NVL(" + columnName + ", ''), '[^0-9]', '')";
+    }
+
     // =========================================================
     // SESSION MANAGEMENT
     // =========================================================
@@ -615,7 +627,10 @@ public class AccountSql implements SqlInterface<Account> {
                 + "WHERE NVL(is_deleted, 0) = 0 "
                 + "  AND ( "
                 + "        (? IS NOT NULL AND LOWER(TRIM(email)) = LOWER(TRIM(?))) "
-                + "     OR (? IS NOT NULL AND " + normalizePhoneSql("phone") + " = " + normalizePhoneSql("?") + ") "
+                + "     OR (? IS NOT NULL AND "
+                + "        REGEXP_REPLACE(NVL(phone, ''), '[^0-9]', '') = "
+                + "        REGEXP_REPLACE(NVL(?, ''), '[^0-9]', '') "
+                + "     ) "
                 + "  ) "
                 + "ORDER BY "
                 + "    CASE WHEN LOWER(TRIM(email)) = LOWER(TRIM(?)) THEN 1 ELSE 2 END "
