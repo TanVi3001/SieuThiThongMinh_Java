@@ -140,7 +140,6 @@ public final class RealtimeClient {
 
         if (type != null) {
             publishRealtimeEvent(type, message);
-            publishCompanionEvents(type, message);
             refreshAdminSystemPanels(type, message);
         }
     }
@@ -150,27 +149,6 @@ public final class RealtimeClient {
             EventBus.publish(new AppDataChangedEvent(type, message));
         } catch (Exception ex) {
             System.err.println("[RT] EVENT BUS ERROR: " + ex.getMessage());
-        }
-    }
-
-    /**
-     * Các màn tổng hợp như AdminSystemPanel đọc dữ liệu từ nhiều bảng.
-     * Vì vậy khi có ORDERS / INVENTORY / STORE / PRODUCT / EMPLOYEE thay đổi,
-     * bắn kèm DASHBOARD và STATISTICS để những màn đang subscribe 2 event này tự reload.
-     */
-    private static void publishCompanionEvents(AppEventType type, String message) {
-        if (!affectsDashboard(type)) {
-            return;
-        }
-
-        String msg = message == null ? "" : message;
-
-        if (type != AppEventType.DASHBOARD) {
-            publishRealtimeEvent(AppEventType.DASHBOARD, "DASHBOARD_CHANGED:AUTO:" + msg);
-        }
-
-        if (type != AppEventType.STATISTICS) {
-            publishRealtimeEvent(AppEventType.STATISTICS, "STATISTICS_CHANGED:AUTO:" + msg);
         }
     }
 
@@ -189,9 +167,9 @@ public final class RealtimeClient {
     }
 
     /**
-     * Fallback thực dụng cho AdminSystemPanel hiện tại: panel này chưa subscribe EventBus,
-     * nên khi nhận realtime event thì tự quét các Window đang mở và gọi reloadAll() bằng reflection.
-     * Cách này không đổi UI và không phụ thuộc vào constructor của AdminSystemPanel.
+     * Fallback thực dụng cho AdminSystemPanel hiện tại: tự quét các Window đang mở
+     * và gọi reloadAll() bằng reflection. Không bắn thêm DASHBOARD companion event
+     * nữa để tránh AdminDashboardView tự chuyển nhầm sang StoreManagementPanel cũ.
      */
     private static void refreshAdminSystemPanels(AppEventType type, String message) {
         if (!affectsDashboard(type)) {
