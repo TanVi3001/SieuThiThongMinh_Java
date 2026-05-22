@@ -127,6 +127,16 @@ public class WarehouseDashboardView extends JFrame {
                 showPanel(new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
             }
 
+            case WarehouseSidebar.MENU_CATEGORY_TAX -> {
+                if (!AuthorizationService.canAccessSupplierAndCategory()) {
+                    showAccessDenied();
+                    return;
+                }
+
+                warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_CATEGORY_TAX);
+                showPanel(new CategoryTaxView());
+            }
+
             case WarehouseSidebar.MENU_SETTINGS -> {
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SETTINGS);
                 showPanel(new UnifiedSettingsPanel());
@@ -222,6 +232,7 @@ public class WarehouseDashboardView extends JFrame {
                 = (panel instanceof InventoryView)
                 || (panel instanceof ProductView)
                 || (panel instanceof SupplierManagementView)
+                || (panel instanceof CategoryTaxView)
                 || (panel instanceof UnifiedSettingsPanel)
                 || (panel instanceof TongQuanPanel);
 

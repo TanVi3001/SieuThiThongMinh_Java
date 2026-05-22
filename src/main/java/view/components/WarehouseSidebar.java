@@ -82,7 +82,7 @@ public class WarehouseSidebar extends JPanel {
         addMenuItem(MENU_INVENTORY, getIconByTitle(MENU_INVENTORY));
         addMenuItem(MENU_PRODUCTS, getIconByTitle(MENU_PRODUCTS));
         addMenuItem(MENU_SUPPLIERS, getIconByTitle(MENU_SUPPLIERS));
-        // Nhân viên sản phẩm/kho không dùng chức năng Danh mục & Thuế VAT.
+        addMenuItem(MENU_CATEGORY_TAX, getIconByTitle(MENU_CATEGORY_TAX));
         addMenuItem(MENU_SETTINGS, getIconByTitle(MENU_SETTINGS));
     }
 
