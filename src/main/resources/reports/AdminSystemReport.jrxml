@@ -33,7 +33,7 @@
                    col5
             FROM (
                 SELECT 1 AS section_no,
-                       CAST('DOANH THU THANG THEO CHI NHANH' AS VARCHAR2(100)) AS section_name,
+                       CAST('DOANH_THU_THANG_THEO_CHI_NHANH' AS VARCHAR2(100)) AS section_name,
                        CAST(s.store_id AS VARCHAR2(80)) AS col1,
                        CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
                        CAST(TO_CHAR(COUNT(o.order_id)) AS VARCHAR2(80)) AS col3,
@@ -55,7 +55,7 @@
                 UNION ALL
 
                 SELECT 2 AS section_no,
-                       CAST('TON KHO THEO CHI NHANH' AS VARCHAR2(100)) AS section_name,
+                       CAST('TON_KHO_THEO_CHI_NHANH' AS VARCHAR2(100)) AS section_name,
                        CAST(s.store_id AS VARCHAR2(80)) AS col1,
                        CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
                        CAST(TO_CHAR(COUNT(DISTINCT i.product_id)) AS VARCHAR2(80)) AS col3,
@@ -71,7 +71,7 @@
                 UNION ALL
 
                 SELECT 3 AS section_no,
-                       CAST('NHAN VIEN CO DOANH THU CAO NHAT' AS VARCHAR2(100)) AS section_name,
+                       CAST('NHAN_VIEN_CO_DOANH_THU_CAO_NHAT' AS VARCHAR2(100)) AS section_name,
                        CAST(store_name AS VARCHAR2(180)) AS col1,
                        CAST(employee_id AS VARCHAR2(80)) AS col2,
                        CAST(employee_name AS VARCHAR2(180)) AS col3,
@@ -130,7 +130,7 @@
                 <textField>
                     <reportElement x="22" y="17" width="500" height="14" forecolor="#0F172A"/>
                     <textElement><font fontName="DejaVu Sans" size="10" isBold="true"/></textElement>
-                    <textFieldExpression><![CDATA[$F{SECTION_NAME}]]></textFieldExpression>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "DOANH THU THÁNG THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : "NHÂN VIÊN CÓ DOANH THU CAO NHẤT")]]></textFieldExpression>
                 </textField>
 
                 <rectangle radius="8">
@@ -209,18 +209,14 @@
                 <reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/>
                 <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
             </rectangle>
-            <rectangle radius="10">
-                <reportElement x="14" y="116" width="28" height="28" backcolor="#EAF1FF"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
             <staticText>
-                <reportElement x="52" y="113" width="62" height="13" forecolor="#64748B"/>
-                <textElement><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
+                <reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
                 <text><![CDATA[Tổng chi nhánh]]></text>
             </staticText>
             <textField>
-                <reportElement x="52" y="130" width="62" height="20" forecolor="#2563EB"/>
-                <textElement><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
+                <reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression>
             </textField>
 
@@ -228,18 +224,14 @@
                 <reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/>
                 <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
             </rectangle>
-            <rectangle radius="10">
-                <reportElement x="152" y="116" width="28" height="28" backcolor="#E7FFF4"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
             <staticText>
-                <reportElement x="190" y="113" width="62" height="13" forecolor="#64748B"/>
-                <textElement><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
+                <reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
                 <text><![CDATA[Hoạt động]]></text>
             </staticText>
             <textField>
-                <reportElement x="190" y="130" width="62" height="20" forecolor="#10B981"/>
-                <textElement><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
+                <reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression>
             </textField>
 
@@ -247,18 +239,14 @@
                 <reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/>
                 <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
             </rectangle>
-            <rectangle radius="10">
-                <reportElement x="290" y="116" width="28" height="28" backcolor="#FFF6DE"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
             <staticText>
-                <reportElement x="328" y="113" width="60" height="13" forecolor="#64748B"/>
-                <textElement><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
+                <reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
                 <text><![CDATA[Hôm nay]]></text>
             </staticText>
             <textField>
-                <reportElement x="328" y="130" width="62" height="20" forecolor="#F59E0B"/>
-                <textElement><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
+                <reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression>
             </textField>
 
@@ -266,18 +254,14 @@
                 <reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/>
                 <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
             </rectangle>
-            <rectangle radius="10">
-                <reportElement x="428" y="116" width="28" height="28" backcolor="#FFF6DE"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
             <staticText>
-                <reportElement x="466" y="113" width="60" height="13" forecolor="#64748B"/>
-                <textElement><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
+                <reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
                 <text><![CDATA[Tháng này]]></text>
             </staticText>
             <textField>
-                <reportElement x="466" y="130" width="62" height="20" forecolor="#F59E0B"/>
-                <textElement><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
+                <reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression>
             </textField>
         </band>
@@ -291,12 +275,12 @@
             </rectangle>
             <textField isBlankWhenNull="true">
                 <reportElement x="0" y="6" width="95" height="12"/>
-                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
                 <textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="95" y="6" width="140" height="12"/>
-                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
                 <textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
@@ -306,12 +290,12 @@
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="355" y="6" width="90" height="12"/>
-                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
                 <textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="445" y="6" width="90" height="12"/>
-                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
                 <textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression>
             </textField>
         </band>
