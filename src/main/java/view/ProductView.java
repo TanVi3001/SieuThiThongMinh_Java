@@ -242,7 +242,7 @@ public class ProductView extends JPanel {
         productToolPanel.add(searchFieldWrapper);
         productToolPanel.add(btnSearch);
         productToolPanel.add(btnExportPDF);
-        productToolPanel.add(btnImport);
+//        productToolPanel.add(btnImport);
         productToolPanel.add(btnEmergencyAlert);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
@@ -1217,8 +1217,8 @@ public class ProductView extends JPanel {
         setProductMutationButtonsVisible(true);
 
         if (btnImport != null) {
-            btnImport.setVisible(AuthorizationService.canManageStock());
-            btnImport.setEnabled(AuthorizationService.canManageStock());
+            btnImport.setVisible(false);
+            btnImport.setEnabled(false);
         }
 
         if (btnEmergencyAlert != null) {
@@ -1496,7 +1496,7 @@ public class ProductView extends JPanel {
         btnSearch.addActionListener(e -> btnSearchActionPerformed());
         btnExportPDF.addActionListener(e -> btnExportPDFActionPerformed());
         btnUnitConfig.addActionListener(e -> showUnitConfigDialog());
-        btnImport.addActionListener(e -> handleImportCSV());
+//        btnImport.addActionListener(e -> handleImportCSV());
         btnEmergencyAlert.addActionListener(e -> sendLowStockNotification());
     }
 

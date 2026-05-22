@@ -19,6 +19,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import business.service.SessionManager;
 
 /**
  * Hộp thư thông báo ở góc trên phải.
@@ -143,6 +144,49 @@ public class NotificationBell extends JPanel {
         });
     }
 
+    private String currentStoreIdOrNull() {
+        try {
+            if (SessionManager.isAdmin()) {
+                return null;
+            }
+
+            String storeId = SessionManager.getCurrentStoreId();
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                return null;
+            }
+
+            return storeId.trim();
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String currentStoreKey() {
+        String storeId = currentStoreIdOrNull();
+        return storeId == null || storeId.trim().isEmpty() ? "ALL" : storeId.trim();
+    }
+
+    private boolean productBelongsToCurrentStore(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return false;
+        }
+
+        String storeId = currentStoreIdOrNull();
+
+        if (storeId == null) {
+            return true;
+        }
+
+        try {
+            Product p = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
+            return p != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void setProductClickListener(java.util.function.Consumer<String> productClickListener) {
         this.productClickListener = productClickListener;
     }
@@ -155,11 +199,17 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        notifications.removeIf(n -> n.urgentManagerAlert && n.key.startsWith("MANAGER_STOCK_ALERT_"));
+        String storeKey = currentStoreKey();
+        notifications.removeIf(n -> n.urgentManagerAlert
+                && n.key.startsWith("MANAGER_STOCK_ALERT_")
+                && n.key.contains("_STORE_" + storeKey + "_"));
 
         try {
-            List<?> rawList = InventoryNotificationSql.getInstance().getPendingWarehouseAlerts();
+            String storeId = currentStoreIdOrNull();
 
+            List<?> rawList = storeId == null
+                    ? InventoryNotificationSql.getInstance().getPendingWarehouseAlerts()
+                    : InventoryNotificationSql.getInstance().getPendingWarehouseAlertsByStore(storeId);
             for (Object raw : rawList) {
                 String productId = readStringField(raw, "productId");
                 String productName = readStringField(raw, "productName");
@@ -174,7 +224,7 @@ public class NotificationBell extends JPanel {
                     productName = "Sản phẩm";
                 }
 
-                String key = "MANAGER_STOCK_ALERT_" + productId;
+                String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
                 String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
 
                 String body = message == null ? "" : message;
@@ -210,7 +260,18 @@ public class NotificationBell extends JPanel {
      */
     public void checkLowStock() {
         try {
-            List<Product> products = ProductsSql.getInstance().selectAll();
+            String storeId = currentStoreIdOrNull();
+
+            List<Product> products;
+            if (storeId == null) {
+                products = ProductsSql.getInstance().selectAll();
+            } else {
+                products = ProductsSql.getInstance().selectAllByStore(storeId);
+            }
+
+            String storeKey = currentStoreKey();
+            notifications.removeIf(n -> !n.urgentManagerAlert
+                    && n.key.startsWith("AUTO_STORE_" + storeKey + "_"));
 
             for (Product p : products) {
                 if (p == null) {
@@ -282,7 +343,11 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        String key = "MANAGER_STOCK_ALERT_" + productId;
+        if (!productBelongsToCurrentStore(productId)) {
+            return;
+        }
+
+        String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
         String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
 
         String body = "Có cảnh báo nhập hàng. "
@@ -304,7 +369,7 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        String key = "AUTO_" + title + "_" + extractProductIdFromText(title + " " + body);
+        String key = "AUTO_STORE_" + currentStoreKey() + "_" + title + "_" + extractProductIdFromText(title + " " + body);
 
         boolean exists = notifications.stream().anyMatch(n -> n.key.equals(key));
 

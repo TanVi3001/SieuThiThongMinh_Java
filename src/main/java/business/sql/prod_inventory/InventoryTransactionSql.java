@@ -446,16 +446,29 @@ public class InventoryTransactionSql {
     }
 
     public List<InventoryTransactionDTO> getRecentTransactions(int limit) {
+        return getRecentTransactionsByStore(null, limit);
+    }
+
+    public List<InventoryTransactionDTO> getRecentTransactionsByStore(String storeId, int limit) {
         List<InventoryTransactionDTO> list = new ArrayList<>();
 
         if (limit <= 0) {
             limit = 50;
         }
 
-        String storeId = currentStoreIdOrNull();
-        boolean scoped = !SessionManager.isAdmin()
-                && storeId != null
-                && !storeId.isBlank();
+        String cleanStoreId = normalizeStoreId(storeId);
+
+        /*
+         * User chi nhánh luôn bị ép theo store_id trong session.
+         * Admin:
+         * - cleanStoreId == null  => xem tất cả chi nhánh.
+         * - cleanStoreId != null  => lọc đúng chi nhánh đang chọn trên UI.
+         */
+        if (!SessionManager.isAdmin()) {
+            cleanStoreId = currentStoreIdOrNull();
+        }
+
+        boolean scoped = cleanStoreId != null && !cleanStoreId.isBlank();
 
         String sql = """
             SELECT *
@@ -486,38 +499,19 @@ public class InventoryTransactionSql {
             WHERE ROWNUM <= ?
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
             int idx = 1;
 
             if (scoped) {
-                ps.setString(idx++, storeId);
+                ps.setString(idx++, cleanStoreId);
             }
 
             ps.setInt(idx, limit);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    InventoryTransactionDTO dto = new InventoryTransactionDTO();
-
-                    dto.transactionId = rs.getString("transaction_id");
-                    dto.receiptId = rs.getString("receipt_id");
-                    dto.productId = rs.getString("product_id");
-                    dto.productName = rs.getString("product_name");
-                    dto.transactionType = rs.getString("transaction_type");
-                    dto.quantity = rs.getInt("quantity");
-                    dto.unit = rs.getString("unit");
-                    dto.storeId = rs.getString("store_id");
-                    dto.unitImportPrice = rs.getBigDecimal("unit_import_price");
-                    dto.salePrice = rs.getBigDecimal("sale_price");
-                    dto.vatRate = rs.getBigDecimal("vat_rate");
-                    dto.vatAmount = rs.getBigDecimal("vat_amount");
-                    dto.totalAmount = rs.getBigDecimal("total_amount");
-                    dto.note = rs.getString("note");
-                    dto.createdBy = rs.getString("created_by");
-                    dto.createdAt = rs.getTimestamp("created_at");
-
-                    list.add(dto);
+                    list.add(mapInventoryTransaction(rs));
                 }
             }
 
@@ -526,6 +520,29 @@ public class InventoryTransactionSql {
         }
 
         return list;
+    }
+
+    private InventoryTransactionDTO mapInventoryTransaction(ResultSet rs) throws SQLException {
+        InventoryTransactionDTO dto = new InventoryTransactionDTO();
+
+        dto.transactionId = rs.getString("transaction_id");
+        dto.receiptId = rs.getString("receipt_id");
+        dto.productId = rs.getString("product_id");
+        dto.productName = rs.getString("product_name");
+        dto.transactionType = rs.getString("transaction_type");
+        dto.quantity = rs.getInt("quantity");
+        dto.unit = rs.getString("unit");
+        dto.storeId = rs.getString("store_id");
+        dto.unitImportPrice = rs.getBigDecimal("unit_import_price");
+        dto.salePrice = rs.getBigDecimal("sale_price");
+        dto.vatRate = rs.getBigDecimal("vat_rate");
+        dto.vatAmount = rs.getBigDecimal("vat_amount");
+        dto.totalAmount = rs.getBigDecimal("total_amount");
+        dto.note = rs.getString("note");
+        dto.createdBy = rs.getString("created_by");
+        dto.createdAt = rs.getTimestamp("created_at");
+
+        return dto;
     }
 
     public PurchaseReceiptDTO getReceiptDetail(String receiptId) {
@@ -755,6 +772,25 @@ public class InventoryTransactionSql {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private String normalizeStoreId(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        String text = value.trim();
+
+        if ("Tất cả chi nhánh".equalsIgnoreCase(text)
+                || "Chưa xác định".equalsIgnoreCase(text)) {
+            return null;
+        }
+
+        if (text.contains(" - ")) {
+            return text.substring(0, text.indexOf(" - ")).trim();
+        }
+
+        return text;
     }
 
     private String getCurrentAccountId() {

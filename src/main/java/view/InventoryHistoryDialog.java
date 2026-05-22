@@ -15,11 +15,18 @@ public class InventoryHistoryDialog extends JDialog {
     private JTable table;
     private DefaultTableModel model;
 
+    private final String storeId;
+
     private final Color NAVY = new Color(23, 52, 99);
     private final Color BG = new Color(246, 247, 251);
 
     public InventoryHistoryDialog(Frame owner) {
+        this(owner, null);
+    }
+
+    public InventoryHistoryDialog(Frame owner, String storeId) {
         super(owner, "Lịch sử biến động kho", true);
+        this.storeId = normalizeStoreId(storeId);
         initUI();
         loadData();
     }
@@ -38,7 +45,7 @@ public class InventoryHistoryDialog extends JDialog {
         title.setFont(new Font("Segoe UI", Font.BOLD, 24));
         title.setForeground(NAVY);
 
-        JLabel sub = new JLabel("Theo dõi nhập kho, xuất/hủy kho, phiếu nhập, giá nhập, VAT và tổng tiền.");
+        JLabel sub = new JLabel(buildSubtitle());
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         sub.setForeground(new Color(111, 124, 149));
 
@@ -113,18 +120,28 @@ public class InventoryHistoryDialog extends JDialog {
         add(root, BorderLayout.CENTER);
     }
 
+    private String buildSubtitle() {
+        String base = "Theo dõi nhập kho, xuất/hủy kho, phiếu nhập, giá nhập, VAT và tổng tiền.";
+        if (storeId == null || storeId.isBlank()) {
+            return base + " Phạm vi: Tất cả chi nhánh.";
+        }
+        return base + " Phạm vi chi nhánh: " + storeId + ".";
+    }
+
     private void loadData() {
         model.setRowCount(0);
 
         List<InventoryTransactionSql.InventoryTransactionDTO> list
-                = InventoryTransactionSql.getInstance().getRecentTransactions(100);
+                = InventoryTransactionSql.getInstance().getRecentTransactionsByStore(storeId, 100);
 
         if (list == null || list.isEmpty()) {
             model.addRow(new Object[]{
                 "",
                 "Chưa có dữ liệu",
                 "",
-                "Hãy nhập kho hoặc xuất/hủy kho để phát sinh lịch sử.",
+                storeId == null
+                ? "Hãy nhập kho hoặc xuất/hủy kho để phát sinh lịch sử."
+                : "Chưa có lịch sử biến động cho chi nhánh " + storeId + ".",
                 "",
                 "",
                 "",
@@ -225,5 +242,24 @@ public class InventoryHistoryDialog extends JDialog {
         }
 
         return String.format("%,.0f", value);
+    }
+
+    private String normalizeStoreId(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        String text = value.trim();
+
+        if ("Tất cả chi nhánh".equalsIgnoreCase(text)
+                || "Chưa xác định".equalsIgnoreCase(text)) {
+            return null;
+        }
+
+        if (text.contains(" - ")) {
+            return text.substring(0, text.indexOf(" - ")).trim();
+        }
+
+        return text;
     }
 }
