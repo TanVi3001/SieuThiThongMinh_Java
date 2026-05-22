@@ -1,27 +1,28 @@
 package business.service;
 
-import java.text.Normalizer;
-import java.util.Locale;
 import model.account.Account;
 
-public final class AuthorizationService {
+public class AuthorizationService {
 
     private AuthorizationService() {
     }
 
-    // =========================================================
-    // 1. NHẬN DIỆN CHỨC VỤ (ROLE IDENTIFICATION)
-    // =========================================================
+    /*
+     * =========================================================
+     * 4 ROLE CHÍNH CỦA ĐỒ ÁN
+     * =========================================================
+     *
+     * R_ADMIN_ALL        = Admin toàn hệ thống
+     * R_STORE_MNG        = Manager / quản lý chi nhánh
+     * R_STAFF_SALE       = Nhân viên bán hàng
+     * R_STAFF_VIEW_PROD  = Staff Product / nhân viên sản phẩm-kho-nhập hàng
+     */
     public static boolean isAdmin() {
         return isAdmin(SessionManager.getCurrentUser());
     }
 
     public static boolean isAdmin(Account account) {
-        if (account == null) {
-            return false;
-        }
-        String role = normalize(account.getRole());
-        return role.equals("radminall") || role.equals("admin") || role.equals("quantrivien");
+        return hasRole(account, "R_ADMIN_ALL");
     }
 
     public static boolean isStoreManager() {
@@ -29,11 +30,7 @@ public final class AuthorizationService {
     }
 
     public static boolean isStoreManager(Account account) {
-        if (account == null) {
-            return false;
-        }
-        String role = normalize(account.getRole());
-        return role.equals("rstoremng") || role.equals("quanlycuahang") || role.equals("manager");
+        return hasRole(account, "R_STORE_MNG");
     }
 
     public static boolean isCashier() {
@@ -41,115 +38,266 @@ public final class AuthorizationService {
     }
 
     public static boolean isCashier(Account account) {
-        if (account == null) {
-            return false;
-        }
-        String role = normalize(account.getRole());
-        // Khớp với R_STAFF_SALE hoặc R_CASHIER trong Database
-        return role.equals("rcashier") || role.equals("rstaffsale") || role.equals("nhanvienbanhang") || role.equals("thungan");
+        return hasRole(account, "R_STAFF_SALE");
     }
 
+    public static boolean isSaleStaff() {
+        return isCashier();
+    }
+
+    public static boolean isSaleStaff(Account account) {
+        return isCashier(account);
+    }
+
+    /**
+     * Trong đồ án này: R_STAFF_VIEW_PROD = Staff Product = nhân viên sản
+     * phẩm/kho/nhập hàng. Không hiểu là view-only.
+     */
+    public static boolean isProductStaff() {
+        return isProductStaff(SessionManager.getCurrentUser());
+    }
+
+    public static boolean isProductStaff(Account account) {
+        return hasRole(account, "R_STAFF_VIEW_PROD");
+    }
+
+    /**
+     * Giữ tên cũ để các file đang gọi isWarehouseStaff() không bị lỗi compile.
+     * Ý nghĩa thật hiện tại: Warehouse Staff chính là Staff Product.
+     */
     public static boolean isWarehouseStaff() {
-        return isWarehouseStaff(SessionManager.getCurrentUser());
+        return isProductStaff();
     }
 
     public static boolean isWarehouseStaff(Account account) {
-        if (account == null) {
-            return false;
-        }
-
-        String role = normalize(account.getRole());
-
-        return role.equals("rstaffwarehouse")
-                || role.equals("rstaffimport")
-                || role.equals("rstaffinventory")
-                || role.equals("rstaffstock")
-                || role.equals("nhanvienkho");
+        return isProductStaff(account);
     }
 
-    public static boolean isProductViewer() {
-        return isProductViewer(SessionManager.getCurrentUser());
+    /**
+     * Các user bị giới hạn theo store_id: - Manager - Staff Sale - Staff
+     * Product
+     *
+     * Admin không bị scope.
+     */
+    public static boolean isStoreScopedUser() {
+        return isStoreScopedUser(SessionManager.getCurrentUser());
     }
 
-    public static boolean isProductViewer(Account account) {
-        if (account == null) {
-            return false;
-        }
-
-        String role = normalize(account.getRole());
-
-        return role.equals("rstaffviewprod");
+    public static boolean isStoreScopedUser(Account account) {
+        return !isAdmin(account)
+                && (isStoreManager(account) || isCashier(account) || isProductStaff(account));
     }
 
-    // =========================================================
-    // 2. PHÂN QUYỀN HIỂN THỊ SIDEBAR (MODULE ACCESS CONTROL)
-    // =========================================================
-    // Màn hình Bán hàng (POS) & Khách hàng: Thu ngân, Quản lý, Admin
-    public static boolean canAccessPOS() {
-        return isCashier() || isStoreManager() || isAdmin();
+    /*
+     * =========================================================
+     * QUYỀN THEO MODULE
+     * =========================================================
+     */
+    /**
+     * Module bán hàng/POS: Admin, Manager, Staff Sale được vào.
+     */
+    public static boolean canAccessSales() {
+        return isAdmin() || isStoreManager() || isCashier();
     }
 
-    // Màn hình Sản phẩm & Nhập kho: Nhân viên kho, Quản lý, Admin
+    /**
+     * Module sản phẩm/tồn kho: Admin, Manager, Staff Product được vào.
+     */
     public static boolean canAccessProductsAndInventory() {
-        return isCashier()
-                || isWarehouseStaff()
-                || isProductViewer()
-                || isStoreManager()
-                || isAdmin();
+        return isAdmin() || isStoreManager() || isProductStaff();
     }
 
-    // Màn hình Hóa đơn: Thu ngân (để xem/in lại), Quản lý, Admin
-    public static boolean canAccessInvoices() {
-        return isCashier() || isStoreManager() || isAdmin();
+    /**
+     * Nhập kho/import CSV/cập nhật tồn: Admin, Manager, Staff Product được thao
+     * tác.
+     */
+    public static boolean canManageStock() {
+        return isAdmin() || isStoreManager() || isProductStaff();
     }
 
-    // Màn hình Báo cáo Thống kê & Quản lý Nhân sự: Chỉ Quản lý và Admin
-    public static boolean canAccessStatisticsAndEmployees() {
-        return isStoreManager() || isAdmin();
+    /**
+     * Module khách hàng: Admin, Manager, Staff Sale được vào. Khách hàng vẫn là
+     * global để tra SĐT/voucher, nhưng dữ liệu chi tiêu/order vẫn phải tính
+     * theo store_id ở tầng SQL/service.
+     */
+    public static boolean canAccessCustomers() {
+        return isAdmin() || isStoreManager() || isCashier();
     }
 
-    // =========================================================
-    // 3. TIỆN ÍCH
-    // =========================================================
+    /**
+     * Module hóa đơn: Admin, Manager, Staff Sale được vào.
+     */
+    public static boolean canAccessOrders() {
+        return isAdmin() || isStoreManager() || isCashier();
+    }
+
+    /**
+     * Module nhân viên: Admin xem toàn hệ thống, Manager xem nhân viên cùng
+     * store.
+     */
+    public static boolean canAccessEmployees() {
+        return isAdmin() || isStoreManager();
+    }
+
+    /**
+     * Module nhà cung cấp/danh mục/thuế: Admin, Manager, Staff Product được
+     * vào.
+     */
+    public static boolean canAccessSupplierAndCategory() {
+        return isAdmin() || isStoreManager() || isProductStaff();
+    }
+
+    /**
+     * Báo cáo/thống kê: Admin toàn hệ thống, Manager theo chi nhánh.
+     */
+    public static boolean canAccessReports() {
+        return isAdmin() || isStoreManager();
+    }
+
+    /**
+     * Quản trị hệ thống: Chỉ Admin.
+     */
+    public static boolean canAccessAdminPanel() {
+        return isAdmin();
+    }
+
+    /**
+     * Quản lý phân quyền/tài khoản: Chỉ Admin.
+     */
+    public static boolean canManageAccountsAndRoles() {
+        return isAdmin();
+    }
+
+    /**
+     * Quản lý cửa hàng/chi nhánh: Chỉ Admin.
+     */
+    public static boolean canManageStores() {
+        return isAdmin();
+    }
+
+    /*
+     * =========================================================
+     * UI HELPER
+     * =========================================================
+     */
     public static String currentRoleForUi() {
         Account account = SessionManager.getCurrentUser();
 
         if (isAdmin(account)) {
-            return "Quản trị viên";
+            return "Admin";
         }
 
         if (isStoreManager(account)) {
-            return "Quản lý cửa hàng";
-        }
-
-        if (isWarehouseStaff(account)) {
-            return "Nhân viên kho";
-        }
-
-        if (isProductViewer(account)) {
-            return "Nhân viên xem sản phẩm";
+            return "Manager";
         }
 
         if (isCashier(account)) {
-            return "Thu ngân";
+            return "Staff Sale";
         }
 
-        return "Nhân viên";
+        if (isProductStaff(account)) {
+            return "Staff Product";
+        }
+
+        return "Unknown";
     }
 
+    public static String currentPortalTitle() {
+        Account account = SessionManager.getCurrentUser();
+
+        if (isAdmin(account)) {
+            return "SMART SUPERMARKET - CENTRAL ADMIN PORTAL";
+        }
+
+        if (isStoreManager(account)) {
+            return "SMART SUPERMARKET - STORE PORTAL";
+        }
+
+        if (isCashier(account)) {
+            return "SMART SUPERMARKET - SALE PORTAL";
+        }
+
+        if (isProductStaff(account)) {
+            return "SMART SUPERMARKET - WAREHOUSE PORTAL";
+        }
+
+        return "SMART SUPERMARKET";
+    }
+
+    public static String getHomePanelName() {
+        Account account = SessionManager.getCurrentUser();
+
+        if (isAdmin(account)) {
+            return "ADMIN_HOME";
+        }
+
+        if (isStoreManager(account)) {
+            return "MANAGER_HOME";
+        }
+
+        if (isCashier(account)) {
+            return "SALE_HOME";
+        }
+
+        if (isProductStaff(account)) {
+            return "WAREHOUSE_HOME";
+        }
+
+        return "UNKNOWN_HOME";
+    }
+
+    /*
+     * =========================================================
+     * INTERNAL HELPER
+     * =========================================================
+     */
+    private static boolean hasRole(Account account, String expectedRole) {
+        if (account == null || expectedRole == null) {
+            return false;
+        }
+
+        String role = normalize(readRole(account));
+        String expected = normalize(expectedRole);
+
+        return expected.equals(role);
+    }
+
+    private static String readRole(Account account) {
+        if (account == null) {
+            return null;
+        }
+
+        try {
+            String role = account.getRole();
+
+            if (role != null && !role.trim().isEmpty()) {
+                return role.trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            String roleId = account.getRoleId();
+
+            if (roleId != null && !roleId.trim().isEmpty()) {
+                return roleId.trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return null;
+    }
+
+    /**
+     * R_STAFF_VIEW_PROD -> rstaffviewprod R-STAFF-VIEW-PROD -> rstaffviewprod
+     */
     private static String normalize(String value) {
         if (value == null) {
             return "";
         }
-        String normalized = Normalizer.normalize(value.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD);
-        return normalized.replaceAll("\\p{M}", "").replaceAll("[^a-z0-9]", "");
-    }
 
-    public static boolean canAccessEmployeeManagement() {
-        return canAccessStatisticsAndEmployees();
-    }
-
-    public static boolean canAccessStatistics() {
-        return canAccessStatisticsAndEmployees();
+        return value.trim()
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]", "");
     }
 }
