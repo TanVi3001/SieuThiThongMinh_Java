@@ -18,6 +18,7 @@ import java.util.Map;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import model.order.Customer;
+import business.service.SessionManager;
 
 public class CustomerAnalyticsPanel extends JPanel {
 
@@ -35,6 +36,8 @@ public class CustomerAnalyticsPanel extends JPanel {
     private static final Color CYAN = new Color(14, 165, 233);
 
     private final List<Customer> customers = new ArrayList<>();
+    private int newCustomersThisMonth = 0;
+    private String analyticsScopeLabel = "Toàn hệ thống";
 
     public CustomerAnalyticsPanel() {
         setLayout(new BorderLayout());
@@ -51,13 +54,41 @@ public class CustomerAnalyticsPanel extends JPanel {
 
     private void loadCustomerAnalyticsData() {
         customers.clear();
+        newCustomersThisMonth = 0;
+        analyticsScopeLabel = "Toàn hệ thống";
 
         try {
-            List<Customer> list = CustomersSql.getInstance().selectAllWithRank();
+            CustomersSql dao = CustomersSql.getInstance();
 
-            if (list != null) {
-                customers.addAll(list);
+            boolean scoped = !SessionManager.isAdmin();
+            String storeId = SessionManager.getCurrentStoreId();
+
+            if (scoped && storeId != null && !storeId.trim().isEmpty()) {
+                String sid = storeId.trim();
+
+                List<Customer> list = dao.selectAllWithRankForStoreAnalytics(sid);
+
+                if (list != null) {
+                    customers.addAll(list);
+                }
+
+                newCustomersThisMonth = dao.countNewCustomersByFirstPurchaseInStoreThisMonth(sid);
+
+                String storeName = SessionManager.getCurrentStoreName();
+                analyticsScopeLabel = storeName != null && !storeName.trim().isEmpty()
+                        ? storeName.trim()
+                        : sid;
+            } else {
+                List<Customer> list = dao.selectAllWithRank();
+
+                if (list != null) {
+                    customers.addAll(list);
+                }
+
+                newCustomersThisMonth = dao.countNewCustomersThisMonthGlobal();
+                analyticsScopeLabel = "Toàn hệ thống";
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -104,7 +135,11 @@ public class CustomerAnalyticsPanel extends JPanel {
         title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(TEXT_DARK);
 
-        JLabel sub = new JLabel("Theo dõi hành vi chi tiêu, hạng thành viên và nhóm khách hàng tiềm năng");
+        JLabel sub = new JLabel(
+                "Theo dõi hành vi chi tiêu, hạng thành viên và nhóm khách hàng tiềm năng"
+                + " | Phạm vi: "
+                + analyticsScopeLabel
+        );
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         sub.setForeground(TEXT_GRAY);
 
@@ -112,7 +147,7 @@ public class CustomerAnalyticsPanel extends JPanel {
         textBox.add(Box.createRigidArea(new Dimension(0, 4)));
         textBox.add(sub);
 
-        JLabel tag = new JLabel("MANAGER ANALYTICS");
+        JLabel tag = new JLabel(SessionManager.isAdmin() ? "GLOBAL ANALYTICS" : "STORE ANALYTICS");
         tag.setFont(new Font("Segoe UI", Font.BOLD, 12));
         tag.setForeground(PRIMARY);
         tag.setBorder(BorderFactory.createCompoundBorder(
@@ -168,7 +203,7 @@ public class CustomerAnalyticsPanel extends JPanel {
 
         panel.add(createKpiCard(
                 "Khách mới tháng này",
-                "N/A",
+                String.valueOf(newCustomersThisMonth),
                 IconHelper.add(24),
                 CYAN
         ));
@@ -335,7 +370,9 @@ public class CustomerAnalyticsPanel extends JPanel {
         title.setFont(new Font("Segoe UI", Font.BOLD, 18));
         title.setForeground(TEXT_DARK);
 
-        JLabel sub = new JLabel("Các đề xuất dựa trên tổng chi tiêu và hạng thành viên hiện tại.");
+        JLabel sub = new JLabel(
+                "Các đề xuất dựa trên chi tiêu trong phạm vi: " + analyticsScopeLabel
+        );
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         sub.setForeground(TEXT_GRAY);
 

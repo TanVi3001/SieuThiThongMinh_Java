@@ -1,12 +1,21 @@
 package business.sql.prod_inventory;
 
 import business.service.AuthorizationService;
+import business.service.SessionManager;
 import common.db.DatabaseConnection;
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * SQL xử lý thông báo tồn kho.
+ *
+ * Logic mới: - Thông báo kho phải được cô lập theo store_id nếu bảng có cột
+ * STORE_ID. - User chi nhánh chỉ đọc/ghi thông báo của chi nhánh hiện tại. -
+ * Admin có thể đọc toàn bộ, nhưng khi tạo thông báo vẫn cố gắng gắn store_id
+ * theo session hoặc suy luận từ INVENTORY. - Giữ các method cũ để không vỡ code
+ * hiện tại.
+ */
 public class InventoryNotificationSql {
 
     private static InventoryNotificationSql instance;
@@ -50,11 +59,14 @@ public class InventoryNotificationSql {
         public String status;
         public int clickCount;
         public String createdBy;
+        public String storeId;
         public Timestamp createdAt;
         public Timestamp updatedAt;
     }
 
-    // DTO cũ để không vỡ code ở NotificationBell hoặc file cũ còn gọi InventoryNotifDTO
+    /**
+     * DTO cũ để không vỡ code ở NotificationBell hoặc các file cũ.
+     */
     public static class InventoryNotifDTO {
 
         public String notificationId;
@@ -62,6 +74,7 @@ public class InventoryNotificationSql {
         public String productName;
         public String message;
         public int remindCount;
+        public String storeId;
         public Timestamp createdAt;
         public Timestamp updatedAt;
     }
@@ -76,9 +89,9 @@ public class InventoryNotificationSql {
 
     private int getCooldownMinutesByCurrentRole() {
         if (isManagerOrAdmin()) {
-            return 0; // Manager/Admin nhắc được liên tục
+            return 0;
         }
-        return 10; // Staff/Sale chờ 10 phút/lần
+        return 10;
     }
 
     private boolean tableExists(Connection con, String tableName) throws SQLException {
@@ -130,7 +143,15 @@ public class InventoryNotificationSql {
         return value.trim();
     }
 
+    /**
+     * Đếm pending theo sản phẩm và tự scope theo store hiện tại nếu user không
+     * phải Admin.
+     */
     public int countPendingByProduct(String productId) {
+        return countPendingByProductAndStore(productId, currentStoreIdOrNull());
+    }
+
+    public int countPendingByProductAndStore(String productId, String storeId) {
         if (productId == null || productId.trim().isEmpty()) {
             return 0;
         }
@@ -138,6 +159,12 @@ public class InventoryNotificationSql {
         try (Connection con = DatabaseConnection.getConnection()) {
             if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
                 return 0;
+            }
+
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+            String cleanStoreId = normalizeStoreId(storeId);
+            if (!SessionManager.isAdmin()) {
+                cleanStoreId = currentStoreIdOrNull();
             }
 
             String countCol = countColumn(con);
@@ -150,10 +177,16 @@ public class InventoryNotificationSql {
                   AND target_role = 'WAREHOUSE'
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
-            """.formatted(countExpr);
+            """.formatted(countExpr)
+                    + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
-                ps.setString(1, productId.trim());
+                int idx = 1;
+                ps.setString(idx++, productId.trim());
+
+                if (hasStoreId && cleanStoreId != null) {
+                    ps.setString(idx++, cleanStoreId);
+                }
 
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -213,11 +246,17 @@ public class InventoryNotificationSql {
                 );
             }
 
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
             boolean hasProductName = columnExists(con, "INVENTORY_NOTIFICATIONS", "PRODUCT_NAME");
             boolean hasTitle = columnExists(con, "INVENTORY_NOTIFICATIONS", "TITLE");
             boolean hasNotifyType = columnExists(con, "INVENTORY_NOTIFICATIONS", "NOTIFY_TYPE");
             boolean hasCreatedBy = columnExists(con, "INVENTORY_NOTIFICATIONS", "CREATED_BY");
             String countCol = countColumn(con);
+
+            String storeId = currentStoreIdOrNull();
+            if (storeId == null) {
+                storeId = inferStoreIdByProduct(con, productId);
+            }
 
             String countExpr = countCol == null ? "1" : "NVL(" + countCol + ", 1)";
 
@@ -232,9 +271,12 @@ public class InventoryNotificationSql {
                   AND target_role = 'WAREHOUSE'
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
+            """.formatted(countExpr)
+                    + (hasStoreId && storeId != null ? " AND store_id = ? " : "")
+                    + """
                 ORDER BY updated_at DESC, created_at DESC
                 FETCH FIRST 1 ROWS ONLY
-            """.formatted(countExpr);
+            """;
 
             con.setAutoCommit(false);
 
@@ -244,7 +286,12 @@ public class InventoryNotificationSql {
                 int minutesPassed = 999999;
 
                 try (PreparedStatement ps = con.prepareStatement(checkSql)) {
-                    ps.setString(1, productId);
+                    int idx = 1;
+                    ps.setString(idx++, productId);
+
+                    if (hasStoreId && storeId != null) {
+                        ps.setString(idx++, storeId);
+                    }
 
                     try (ResultSet rs = ps.executeQuery()) {
                         if (rs.next()) {
@@ -310,6 +357,11 @@ public class InventoryNotificationSql {
                         params.add(createdBy);
                     }
 
+                    if (hasStoreId && storeId != null) {
+                        updateSql.append(", store_id = ?");
+                        params.add(storeId);
+                    }
+
                     if (countCol != null) {
                         updateSql.append(", ").append(countCol)
                                 .append(" = NVL(").append(countCol).append(", 0) + 1");
@@ -326,7 +378,6 @@ public class InventoryNotificationSql {
                     con.commit();
 
                     String sender = getSenderLabel();
-
                     String successMsg = isManager
                             ? sender + " đã nhắc kho lần " + nextCount + "."
                             : sender + " đã gửi thông báo cho kho. Số lần báo: " + nextCount + "/3.";
@@ -346,6 +397,10 @@ public class InventoryNotificationSql {
 
                 addParam(columns, placeholders, params, "notification_id", notificationId);
                 addParam(columns, placeholders, params, "product_id", productId);
+
+                if (hasStoreId && storeId != null) {
+                    addParam(columns, placeholders, params, "store_id", storeId);
+                }
 
                 if (hasProductName) {
                     addParam(columns, placeholders, params, "product_name", productName);
@@ -394,7 +449,6 @@ public class InventoryNotificationSql {
                 con.commit();
 
                 String sender = getSenderLabel();
-
                 String successMsg = isManager
                         ? sender + " đã gửi nhắc kho lần 1."
                         : sender + " đã gửi thông báo cho kho. Số lần báo: 1/3.";
@@ -484,14 +538,28 @@ public class InventoryNotificationSql {
         return sender + " đã báo kho " + count + "/3 lần. " + statusText;
     }
 
+    /**
+     * Admin: xem tất cả nếu không truyền store. User chi nhánh: tự ép theo
+     * store session.
+     */
     public List<InventoryNotificationDTO> getPendingWarehouseNotifications() {
+        return getPendingWarehouseNotificationsByStore(currentStoreIdOrNull());
+    }
+
+    public List<InventoryNotificationDTO> getPendingWarehouseNotificationsByStore(String storeId) {
         List<InventoryNotificationDTO> list = new ArrayList<>();
+
+        String cleanStoreId = normalizeStoreId(storeId);
+        if (!SessionManager.isAdmin()) {
+            cleanStoreId = currentStoreIdOrNull();
+        }
 
         try (Connection con = DatabaseConnection.getConnection()) {
             if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
                 return list;
             }
 
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
             boolean hasProductName = columnExists(con, "INVENTORY_NOTIFICATIONS", "PRODUCT_NAME");
             boolean hasTitle = columnExists(con, "INVENTORY_NOTIFICATIONS", "TITLE");
             boolean hasNotifyType = columnExists(con, "INVENTORY_NOTIFICATIONS", "NOTIFY_TYPE");
@@ -518,10 +586,39 @@ public class InventoryNotificationSql {
                     ? "n.created_by"
                     : "NULL";
 
+            String storeSelectExpr = hasStoreId ? "n.store_id" : "NULL";
+
+            String invJoin = hasStoreId
+                    ? """
+                        LEFT JOIN (
+                            SELECT
+                                product_id,
+                                store_id,
+                                SUM(NVL(quantity, 0)) AS current_quantity
+                            FROM INVENTORY
+                            WHERE NVL(is_deleted, 0) = 0
+                            GROUP BY product_id, store_id
+                        ) inv
+                            ON inv.product_id = n.product_id
+                           AND inv.store_id = n.store_id
+                    """
+                    : """
+                        LEFT JOIN (
+                            SELECT
+                                product_id,
+                                SUM(NVL(quantity, 0)) AS current_quantity
+                            FROM INVENTORY
+                            WHERE NVL(is_deleted, 0) = 0
+                            GROUP BY product_id
+                        ) inv
+                            ON inv.product_id = n.product_id
+                    """;
+
             String sql = """
                 SELECT
                     n.notification_id,
                     n.product_id,
+                    %s AS store_id,
                     %s AS product_name,
                     NVL(inv.current_quantity, 0) AS current_quantity,
                     %s AS title,
@@ -535,44 +632,46 @@ public class InventoryNotificationSql {
                 FROM INVENTORY_NOTIFICATIONS n
                 LEFT JOIN PRODUCTS p
                     ON p.product_id = n.product_id
-                LEFT JOIN (
-                    SELECT
-                        product_id,
-                        SUM(NVL(quantity, 0)) AS current_quantity
-                    FROM INVENTORY
-                    WHERE NVL(is_deleted, 0) = 0
-                    GROUP BY product_id
-                ) inv
-                    ON inv.product_id = n.product_id
+                %s
                 WHERE n.target_role = 'WAREHOUSE'
                   AND n.status = 'PENDING'
                   AND NVL(n.is_deleted, 0) = 0
-                ORDER BY n.updated_at DESC, n.created_at DESC
             """.formatted(
+                    storeSelectExpr,
                     productNameExpr,
                     titleExpr,
                     notifyTypeExpr,
                     countExpr,
-                    createdByExpr
-            );
+                    createdByExpr,
+                    invJoin
+            ) + (hasStoreId && cleanStoreId != null ? " AND n.store_id = ? " : "")
+                    + """
+                ORDER BY n.updated_at DESC, n.created_at DESC
+            """;
 
-            try (PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                if (hasStoreId && cleanStoreId != null) {
+                    ps.setString(1, cleanStoreId);
+                }
 
-                while (rs.next()) {
-                    InventoryNotificationDTO x = new InventoryNotificationDTO();
-                    x.notificationId = rs.getString("notification_id");
-                    x.productId = rs.getString("product_id");
-                    x.productName = rs.getString("product_name");
-                    x.currentQuantity = rs.getInt("current_quantity");
-                    x.title = rs.getString("title");
-                    x.message = rs.getString("message");
-                    x.notifyType = rs.getString("notify_type");
-                    x.status = rs.getString("status");
-                    x.clickCount = rs.getInt("click_count");
-                    x.createdBy = rs.getString("created_by");
-                    x.createdAt = rs.getTimestamp("created_at");
-                    x.updatedAt = rs.getTimestamp("updated_at");
-                    list.add(x);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        InventoryNotificationDTO x = new InventoryNotificationDTO();
+                        x.notificationId = rs.getString("notification_id");
+                        x.productId = rs.getString("product_id");
+                        x.storeId = rs.getString("store_id");
+                        x.productName = rs.getString("product_name");
+                        x.currentQuantity = rs.getInt("current_quantity");
+                        x.title = rs.getString("title");
+                        x.message = rs.getString("message");
+                        x.notifyType = rs.getString("notify_type");
+                        x.status = rs.getString("status");
+                        x.clickCount = rs.getInt("click_count");
+                        x.createdBy = rs.getString("created_by");
+                        x.createdAt = rs.getTimestamp("created_at");
+                        x.updatedAt = rs.getTimestamp("updated_at");
+                        list.add(x);
+                    }
                 }
             }
 
@@ -584,15 +683,20 @@ public class InventoryNotificationSql {
     }
 
     public List<InventoryNotifDTO> getPendingWarehouseAlerts() {
+        return getPendingWarehouseAlertsByStore(currentStoreIdOrNull());
+    }
+
+    public List<InventoryNotifDTO> getPendingWarehouseAlertsByStore(String storeId) {
         List<InventoryNotifDTO> oldList = new ArrayList<>();
 
-        for (InventoryNotificationDTO n : getPendingWarehouseNotifications()) {
+        for (InventoryNotificationDTO n : getPendingWarehouseNotificationsByStore(storeId)) {
             InventoryNotifDTO x = new InventoryNotifDTO();
             x.notificationId = n.notificationId;
             x.productId = n.productId;
             x.productName = n.productName;
             x.message = n.message;
             x.remindCount = n.clickCount;
+            x.storeId = n.storeId;
             x.createdAt = n.createdAt;
             x.updatedAt = n.updatedAt;
             oldList.add(x);
@@ -619,7 +723,6 @@ public class InventoryNotificationSql {
         """;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-
             ps.setString(1, notificationId.trim());
             return ps.executeUpdate() > 0;
 
@@ -630,24 +733,45 @@ public class InventoryNotificationSql {
     }
 
     public boolean resolveByProductId(String productId) {
+        return resolveByProductIdAndStore(productId, currentStoreIdOrNull());
+    }
+
+    public boolean resolveByProductIdAndStore(String productId, String storeId) {
         if (productId == null || productId.trim().isEmpty()) {
             return false;
         }
 
-        String sql = """
-            UPDATE INVENTORY_NOTIFICATIONS
-            SET status = 'RESOLVED',
-                resolved_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE product_id = ?
-              AND status = 'PENDING'
-              AND NVL(is_deleted, 0) = 0
-        """;
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
+                return false;
+            }
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+            String cleanStoreId = normalizeStoreId(storeId);
+            if (!SessionManager.isAdmin()) {
+                cleanStoreId = currentStoreIdOrNull();
+            }
 
-            ps.setString(1, productId.trim());
-            return ps.executeUpdate() > 0;
+            String sql = """
+                UPDATE INVENTORY_NOTIFICATIONS
+                SET status = 'RESOLVED',
+                    resolved_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE product_id = ?
+                  AND status = 'PENDING'
+                  AND NVL(is_deleted, 0) = 0
+            """ + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                int idx = 1;
+                ps.setString(idx++, productId.trim());
+
+                if (hasStoreId && cleanStoreId != null) {
+                    ps.setString(idx++, cleanStoreId);
+                }
+
+                return ps.executeUpdate() > 0;
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -656,8 +780,18 @@ public class InventoryNotificationSql {
     }
 
     public void resolveByProductIdWithConn(Connection con, String productId) throws SQLException {
+        resolveByProductIdWithConn(con, productId, currentStoreIdOrNull());
+    }
+
+    public void resolveByProductIdWithConn(Connection con, String productId, String storeId) throws SQLException {
         if (con == null || productId == null || productId.trim().isEmpty()) {
             return;
+        }
+
+        boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+        String cleanStoreId = normalizeStoreId(storeId);
+        if (!SessionManager.isAdmin()) {
+            cleanStoreId = currentStoreIdOrNull();
         }
 
         String sql = """
@@ -668,11 +802,84 @@ public class InventoryNotificationSql {
             WHERE product_id = ?
               AND status = 'PENDING'
               AND NVL(is_deleted, 0) = 0
+        """ + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            int idx = 1;
+            ps.setString(idx++, productId.trim());
+
+            if (hasStoreId && cleanStoreId != null) {
+                ps.setString(idx++, cleanStoreId);
+            }
+
+            ps.executeUpdate();
+        }
+    }
+
+    private String currentStoreIdOrNull() {
+        try {
+            if (SessionManager.isAdmin()) {
+                return null;
+            }
+
+            String storeId = SessionManager.getCurrentStoreId();
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                return null;
+            }
+
+            return storeId.trim();
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String normalizeStoreId(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        String text = value.trim();
+
+        if ("Tất cả chi nhánh".equalsIgnoreCase(text)
+                || "Chưa xác định".equalsIgnoreCase(text)) {
+            return null;
+        }
+
+        if (text.contains(" - ")) {
+            return text.substring(0, text.indexOf(" - ")).trim();
+        }
+
+        return text;
+    }
+
+    private String inferStoreIdByProduct(Connection con, String productId) {
+        if (con == null || productId == null || productId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+            SELECT store_id
+            FROM INVENTORY
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+            ORDER BY store_id
+            FETCH FIRST 1 ROWS ONLY
         """;
 
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, productId.trim());
-            ps.executeUpdate();
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return normalizeStoreId(rs.getString("store_id"));
+                }
+            }
+        } catch (Exception e) {
+            // Không chặn luồng tạo thông báo chỉ vì không suy luận được store.
         }
+
+        return null;
     }
 }

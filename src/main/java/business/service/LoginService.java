@@ -15,11 +15,10 @@ import javax.swing.JOptionPane;
 /**
  * LoginService (BCrypt-only)
  *
- * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ.
- * - Nếu hash bị sửa / xóa / sai format -> đăng nhập thất bại.
- * - Sau login thành công phải load currentEmployeeId/currentStoreId/currentStoreName.
- * - Admin không bị giới hạn store.
- * - Manager/Staff không có store_id bị chặn vào Store Portal.
+ * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ. - Nếu hash bị sửa /
+ * xóa / sai format -> đăng nhập thất bại. - Sau login thành công phải load
+ * currentEmployeeId/currentStoreId/currentStoreName. - Admin không bị giới hạn
+ * store. - Manager/Staff không có store_id bị chặn vào Store Portal.
  */
 public class LoginService {
 
@@ -98,8 +97,38 @@ public class LoginService {
 
         String sessionId = UUID.randomUUID().toString();
         SessionManager.startSession(acc, tokenValue, sessionId);
+        business.sql.rbac.AccountSql.getInstance()
+                .createLoginSession(acc.getAccountId(), sessionId);
         SessionScopeService.loadEmployeeStoreScope(acc);
         SessionManager.debugPrintScope(LOGIN_VERSION);
+
+        if (SessionManager.isStoreScopedUser()
+                && !AccountSql.getInstance().isAccountStoreActive(acc.getAccountId())) {
+
+            LoginHistorySql.getInstance().log(
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "STORE_INACTIVE",
+                    localIp(),
+                    deviceInfo()
+            );
+
+            TokenSql.getInstance().revokeToken(tokenValue);
+            AccountSql.getInstance().closeLoginSession(acc.getAccountId(), sessionId);
+            SessionManager.clear();
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Chi nhánh của tài khoản đang tạm ngưng hoạt động.\n"
+                    + "Vui lòng liên hệ Admin hoặc chờ chi nhánh được mở lại.",
+                    "Chi nhánh tạm ngưng",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            System.out.println("[" + LOGIN_VERSION + "] FAIL: STORE_INACTIVE");
+            return null;
+        }
 
         if (SessionManager.isStoreScopedUser() && !SessionManager.hasStoreScope()) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "STORE_USER_WITHOUT_STORE", localIp(), deviceInfo());

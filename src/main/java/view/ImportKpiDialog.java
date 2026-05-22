@@ -9,6 +9,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
 import java.util.List;
+import view.components.IconHelper;
 
 /**
  * Dialog để import dữ liệu KPI từ file CSV. Đây là JDialog phụ, không phải
@@ -54,10 +55,12 @@ public class ImportKpiDialog extends JDialog {
         txtFilePath.setPreferredSize(new Dimension(0, 30));
 
         btnBrowse = new JButton("Duyệt...");
+        btnBrowse.setIcon(IconHelper.folder(18));
         btnBrowse.setPreferredSize(new Dimension(100, 30));
         btnBrowse.addActionListener(e -> browseFile());
 
         JButton btnSample = new JButton("Tạo File Mẫu");
+        btnSample.setIcon(IconHelper.template(18));
         btnSample.setPreferredSize(new Dimension(120, 30));
         btnSample.addActionListener(e -> createSampleFile());
 
@@ -120,6 +123,7 @@ public class ImportKpiDialog extends JDialog {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
 
         btnImport = new JButton("✓ Nhập Dữ Liệu");
+        btnImport.setIcon(IconHelper.upload(20));
         btnImport.setFont(new Font("Arial", Font.BOLD, 12));
         btnImport.setBackground(new Color(39, 174, 96));
         btnImport.setForeground(Color.WHITE);
@@ -129,6 +133,7 @@ public class ImportKpiDialog extends JDialog {
         btnImport.addActionListener(e -> importData());
 
         btnCancel = new JButton("✗ Hủy");
+        btnCancel.setIcon(IconHelper.close(18));
         btnCancel.setFont(new Font("Arial", Font.BOLD, 12));
         btnCancel.setBackground(new Color(231, 76, 60));
         btnCancel.setForeground(Color.WHITE);

@@ -109,7 +109,7 @@ public class EmployeeView extends JPanel {
     private static final int COL_RAW_ID = 9;
 
     public EmployeeView() {
-        if (!business.service.AuthorizationService.canAccessEmployeeManagement()) {
+        if (!business.service.AuthorizationService.canAccessEmployees()) {
             showAccessDenied();
             return;
         }
@@ -789,6 +789,7 @@ public class EmployeeView extends JPanel {
 
                     for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
                         String item = String.valueOf(cbStoreForm.getItemAt(i));
+
                         if (item.contains(storeNameInTable)) {
                             cbStoreForm.setSelectedIndex(i);
                             break;
@@ -804,6 +805,7 @@ public class EmployeeView extends JPanel {
                 String accountStatus = normalizeAccountStatus(
                         String.valueOf(tableModel.getValueAt(modelRow, COL_ACCOUNT_STATUS))
                 );
+
                 boolean isActivated = accountStatus.trim().equalsIgnoreCase("Đã cấp");
 
                 if (isActivated) {
@@ -814,9 +816,7 @@ public class EmployeeView extends JPanel {
                     txtEmail.setToolTipText(null);
                 }
 
-                // --- ĐÃ SỬA THEO BƯỚC 3: Dùng setSelectedItem thay cho setText ---
                 cbRole.setSelectedItem(role);
-                // -----------------------------------------------------------------
 
                 String gender = String.valueOf(tableModel.getValueAt(modelRow, COL_GENDER));
                 rdoMale.setSelected("Nam".equalsIgnoreCase(gender));
@@ -870,6 +870,7 @@ public class EmployeeView extends JPanel {
                 }
 
                 String actualToken = emp.getEmployeeId();
+
                 String sqlToken = "SELECT token "
                         + "FROM (SELECT token FROM ACTIVATION_TOKENS "
                         + "      WHERE employee_id = ? "
@@ -885,7 +886,9 @@ public class EmployeeView extends JPanel {
                             actualToken = rs.getString("token");
                         }
                     }
+
                 } catch (Exception ex) {
+                    ex.printStackTrace();
                 }
 
                 final String email = emp.getEmail();
@@ -920,12 +923,17 @@ public class EmployeeView extends JPanel {
         btnUpdate.addActionListener(e -> {
             String displayedId = txtId.getText();
 
-            if (displayedId.isEmpty() || displayedId.startsWith("Mã")) {
+            if (displayedId == null || displayedId.trim().isEmpty() || displayedId.startsWith("Mã")) {
                 JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để cập nhật!");
                 return;
             }
 
             String idToUpdate = currentSelectedRawId;
+
+            if (idToUpdate == null || idToUpdate.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Không tìm thấy mã nhân viên gốc để cập nhật!");
+                return;
+            }
 
             Employee emp = getEmployeeFromForm();
 
@@ -940,13 +948,14 @@ public class EmployeeView extends JPanel {
                 List<Employee> list = employeeSql.selectAll();
 
                 for (Employee ex : list) {
-                    if (ex.getEmployeeId().equals(idToUpdate)) {
+                    if (ex.getEmployeeId() != null && ex.getEmployeeId().equals(idToUpdate)) {
                         oldEmail = ex.getEmail() != null ? ex.getEmail() : "";
                         accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : "";
                         break;
                     }
                 }
             } catch (Exception ex) {
+                ex.printStackTrace();
             }
 
             boolean isActivated = accStatus.equalsIgnoreCase("Đã cấp");
@@ -986,104 +995,152 @@ public class EmployeeView extends JPanel {
                 return;
             }
 
+            String oldRole = getEmployeeRoleById(idToUpdate);
+
             emp.setEmployeeId(idToUpdate);
+
+            if (SessionManager.isStoreManager()) {
+                emp.setStoreId(getCurrentStoreId());
+            }
+
+            String newRole = emp.getRoleId();
+
+            String oldRoleSafe = oldRole == null ? "" : oldRole.trim();
+            String newRoleSafe = newRole == null ? "" : newRole.trim();
+
+            boolean roleChanged = !oldRoleSafe.equalsIgnoreCase(newRoleSafe);
 
             int updateRows;
 
             if (SessionManager.isStoreManager()) {
-                emp.setStoreId(getCurrentStoreId());
                 updateRows = employeeSql.updateInStore(emp, getCurrentStoreId());
             } else {
                 updateRows = employeeSql.update(emp);
             }
 
-            if (updateRows > 0) {
-                RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                if (emailChanged && !isActivated) {
-                    try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(
-                            "UPDATE USERS SET email = ? WHERE user_id = ?"
-                    )) {
-
-                        ps.setString(1, emp.getEmail());
-                        ps.setString(2, emp.getEmployeeId());
-                        ps.executeUpdate();
-
-                    } catch (Exception ex) {
-                    }
-
-                    try {
-                        new ActivationTokenService().issueToken(emp.getEmployeeId());
-                    } catch (Exception ex) {
-                    }
-
-                    String actualToken = emp.getEmployeeId();
-                    String sqlToken = "SELECT token "
-                            + "FROM (SELECT token FROM ACTIVATION_TOKENS "
-                            + "      WHERE employee_id = ? "
-                            + "      ORDER BY created_at DESC) "
-                            + "WHERE ROWNUM = 1";
-
-                    try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
-
-                        ps.setString(1, emp.getEmployeeId());
-
-                        try (ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) {
-                                actualToken = rs.getString("token");
-                            }
-                        }
-                    } catch (Exception ex) {
-                    }
-
-                    final String emailToSend = emp.getEmail();
-                    final String nameToSend = emp.getEmployeeName();
-                    final String codeToSend = actualToken;
-
-                    new Thread(() -> {
-                        boolean ok = business.service.EmailService.sendActivationEmail(
-                                emailToSend,
-                                nameToSend,
-                                codeToSend
-                        );
-
-                        SwingUtilities.invokeLater(() -> {
-                            if (ok) {
-                                JOptionPane.showMessageDialog(
-                                        this,
-                                        "Đã cập nhật hồ sơ và gửi lại Mã Kích Hoạt mới tới:\n"
-                                        + emailToSend
-                                );
-                            } else {
-                                JOptionPane.showMessageDialog(
-                                        this,
-                                        "Cập nhật thành công nhưng gửi mail thất bại!",
-                                        "Lỗi",
-                                        JOptionPane.WARNING_MESSAGE
-                                );
-                            }
-                        });
-                    }).start();
-
-                } else {
-                    JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
-                }
-
-                refreshAllData();
-                clearForm();
-
-            } else {
+            if (updateRows <= 0) {
                 JOptionPane.showMessageDialog(
                         this,
                         "Cập nhật thất bại hoặc bạn không có quyền thao tác nhân viên ngoài chi nhánh!",
                         "Lỗi",
                         JOptionPane.ERROR_MESSAGE
                 );
+                return;
             }
+
+            /*
+         * Nếu nhân viên đã có tài khoản và role bị đổi:
+         * - Đồng bộ role sang ACCOUNT_ASSIGN_ROLE.
+         * - Bắn ACCOUNT_SECURITY_CHANGED để máy nhân viên đang đăng nhập bị logout.
+             */
+            if (roleChanged && isActivated) {
+                boolean roleSynced = business.sql.rbac.AccountSql.getInstance()
+                        .updateAccountRoleByEmployeeId(idToUpdate, newRoleSafe);
+
+                if (!roleSynced) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Hồ sơ nhân viên đã cập nhật nhưng đồng bộ quyền tài khoản thất bại.\n"
+                            + "Vui lòng kiểm tra lại bảng ACCOUNT_ASSIGN_ROLE.",
+                            "Lỗi đồng bộ quyền",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+
+                    refreshAllData();
+                    return;
+                }
+
+                touchAccountSecurityByEmployeeId(idToUpdate);
+                business.service.AccountService.notifyAccountSecurityChanged("EMPLOYEE_ROLE_UPDATED");
+
+            } else {
+                /*
+             * Nếu không đổi role, hoặc nhân viên chưa cấp tài khoản,
+             * chỉ cần refresh realtime danh sách nhân viên.
+                 */
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+            }
+
+            if (emailChanged && !isActivated) {
+                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(
+                        "UPDATE USERS SET email = ? WHERE user_id = ?"
+                )) {
+
+                    ps.setString(1, emp.getEmail());
+                    ps.setString(2, emp.getEmployeeId());
+                    ps.executeUpdate();
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+                try {
+                    new ActivationTokenService().issueToken(emp.getEmployeeId());
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+                String actualToken = emp.getEmployeeId();
+
+                String sqlToken = "SELECT token "
+                        + "FROM (SELECT token FROM ACTIVATION_TOKENS "
+                        + "      WHERE employee_id = ? "
+                        + "      ORDER BY created_at DESC) "
+                        + "WHERE ROWNUM = 1";
+
+                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
+
+                    ps.setString(1, emp.getEmployeeId());
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            actualToken = rs.getString("token");
+                        }
+                    }
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+                final String emailToSend = emp.getEmail();
+                final String nameToSend = emp.getEmployeeName();
+                final String codeToSend = actualToken;
+
+                new Thread(() -> {
+                    boolean ok = business.service.EmailService.sendActivationEmail(
+                            emailToSend,
+                            nameToSend,
+                            codeToSend
+                    );
+
+                    SwingUtilities.invokeLater(() -> {
+                        if (ok) {
+                            JOptionPane.showMessageDialog(
+                                    this,
+                                    "Đã cập nhật hồ sơ và gửi lại Mã Kích Hoạt mới tới:\n"
+                                    + emailToSend
+                            );
+                        } else {
+                            JOptionPane.showMessageDialog(
+                                    this,
+                                    "Cập nhật thành công nhưng gửi mail thất bại!",
+                                    "Lỗi",
+                                    JOptionPane.WARNING_MESSAGE
+                            );
+                        }
+                    });
+                }).start();
+
+            } else {
+                JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
+            }
+
+            refreshAllData();
+            clearForm();
         });
 
         btnDelete.addActionListener(e -> {
-            if (currentSelectedRawId.isEmpty()) {
+            if (currentSelectedRawId == null || currentSelectedRawId.trim().isEmpty()) {
                 return;
             }
 
@@ -1160,6 +1217,7 @@ public class EmployeeView extends JPanel {
                 String phone = emp.getPhone() != null ? emp.getPhone().toLowerCase() : "";
                 String email = emp.getEmail() != null ? emp.getEmail().toLowerCase() : "";
                 String role = emp.getRole() != null ? emp.getRole().toLowerCase() : "";
+                String roleId = emp.getRoleId() != null ? emp.getRoleId().toLowerCase() : "";
                 String storeName = emp.getStoreName() != null ? emp.getStoreName().toLowerCase() : "";
 
                 if (id.contains(kw)
@@ -1167,6 +1225,7 @@ public class EmployeeView extends JPanel {
                         || phone.contains(kw)
                         || email.contains(kw)
                         || role.contains(kw)
+                        || roleId.contains(kw)
                         || storeName.contains(kw)) {
                     filtered.add(emp);
                 }
@@ -1809,59 +1868,58 @@ public class EmployeeView extends JPanel {
         }
 
         for (Employee emp : list) {
-            String employeeId = emp.getEmployeeId();
-
-            String accountStatus = normalizeAccountStatus(emp.getAccountStatus());
-
-            String onlineStatus = emp.getOnlineStatus() != null
-                    ? emp.getOnlineStatus().trim()
-                    : "N/A";
-
-            if ("ONLINE".equalsIgnoreCase(onlineStatus) && emp.getActiveSessions() > 1) {
-                onlineStatus = "ONLINE (" + emp.getActiveSessions() + ")";
-            }
-
-            String storeName = emp.getStoreName() != null ? emp.getStoreName() : "Chưa phân";
-            if (storeName.trim().isEmpty() || "—".equals(storeName.trim())) {
+            String storeName = safeCell(emp.getStoreName());
+            if ("—".equals(storeName) || storeName.trim().isEmpty()) {
                 storeName = "Chưa phân";
             }
 
             tableModel.addRow(new Object[]{
-                maskSensitiveInfo(employeeId),
+                maskSensitiveInfo(emp.getEmployeeId()),
                 safeCell(emp.getEmployeeName()),
-                safeCell(storeName), // <-- Chèn Chi nhánh vào Cột vị trí số 2
+                storeName,
                 safeCell(emp.getPhone()),
                 safeCell(emp.getEmail()),
-                safeCell(accountStatus),
-                safeCell(onlineStatus),
-                safeCell(emp.getRole()),
+                normalizeAccountStatus(emp.getAccountStatus()),
+                formatOnlineStatus(emp),
+                safeCell(emp.getRoleId()),
                 safeCell(emp.getGender()),
-                employeeId
+                emp.getEmployeeId()
             });
         }
     }
 
-    private Map<String, String> loadOnlineStatusMap() {
-        Map<String, String> map = new HashMap<>();
-
-        String sql = "SELECT user_id, NVL(online_status, 'OFFLINE') AS online_status "
-                + "FROM ACCOUNTS "
-                + "WHERE NVL(is_deleted, 0) = 0";
-
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                map.put(
-                        rs.getString("user_id"),
-                        rs.getString("online_status")
-                );
-            }
-
-        } catch (Exception e) {
-            System.err.println("Lỗi loadOnlineStatusMap: " + e.getMessage());
+    private String formatOnlineStatus(Employee emp) {
+        if (emp == null) {
+            return "—";
         }
 
-        return map;
+        String status = emp.getOnlineStatus();
+
+        if (status == null || status.trim().isEmpty()) {
+            return "—";
+        }
+
+        status = status.trim();
+
+        if ("ONLINE".equalsIgnoreCase(status)) {
+            int count = emp.getActiveSessions();
+
+            if (count > 1) {
+                return "Online (" + count + ")";
+            }
+
+            return "Online";
+        }
+
+        if ("OFFLINE".equalsIgnoreCase(status)) {
+            return "Offline";
+        }
+
+        if ("N/A".equalsIgnoreCase(status)) {
+            return "—";
+        }
+
+        return status;
     }
 
     private String maskSensitiveInfo(String info) {
@@ -2097,6 +2155,57 @@ public class EmployeeView extends JPanel {
         return employeeSql.existsByEmailGlobal(email, excludeEmpId);
     }
 
+    private void touchAccountSecurityByEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            return;
+        }
+
+        String sql = """
+        UPDATE ACCOUNTS
+        SET UPDATED_AT = CURRENT_TIMESTAMP
+        WHERE USER_ID = ?
+          AND NVL(IS_DELETED, 0) = 0
+    """;
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, employeeId.trim());
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] touchAccountSecurityByEmployeeId error: " + e.getMessage());
+        }
+    }
+
+    private String getEmployeeRoleById(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+        SELECT role_id
+        FROM EMPLOYEES
+        WHERE employee_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, employeeId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("role_id");
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] getEmployeeRoleById error: " + e.getMessage());
+        }
+
+        return null;
+    }
+
     private boolean isValidPhone(String phone) {
         return phone != null
                 && !phone.isEmpty()
@@ -2206,14 +2315,16 @@ public class EmployeeView extends JPanel {
             }
 
             if (modelColumn == COL_ONLINE_STATUS) {
-                String status = value == null ? "N/A" : value.toString().trim();
+                String status = value == null ? "—" : value.toString().trim();
 
                 setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-                if (status.toUpperCase().startsWith("ONLINE")) {
-                    setText("● " + status.replace("ONLINE", "Online"));
+                String normalized = status.toLowerCase();
+
+                if (normalized.startsWith("online")) {
+                    setText("● " + status);
                     setForeground(onlineGreen);
-                } else if ("OFFLINE".equalsIgnoreCase(status)) {
+                } else if (normalized.startsWith("offline")) {
                     setText("● Offline");
                     setForeground(offlineRed);
                 } else {

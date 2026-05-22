@@ -76,6 +76,8 @@ public class SellPanel extends JPanel {
     private JLabel lblCusName, lblCusRank, lblCusTotalSpend;
 
     private JComboBox<String> cboPaymentMethod;
+    private JComboBox<String> cboKhuyenMai;
+    private double discountPercentage = 0.0;
     private JLabel lblSubTotal, lblDiscount, lblTotalPay;
     private RoundedButton btnPay, btnCancel, btnRemove;
 
@@ -420,6 +422,28 @@ public class SellPanel extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(6, 8, 6, 8);
 
+        // Khởi tạo ComboBox Khuyến Mãi
+        cboKhuyenMai = new JComboBox<>();
+        cboKhuyenMai.setPreferredSize(new Dimension(220, 36));
+        cboKhuyenMai.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        loadActivePromotions();
+        cboKhuyenMai.addActionListener(e -> {
+            if (cboKhuyenMai.getSelectedIndex() <= 0) {
+                discountPercentage = 0.0;
+            } else {
+                String selected = cboKhuyenMai.getSelectedItem().toString();
+                try {
+                    String[] parts = selected.split("Giảm ");
+                    if (parts.length > 1) {
+                        discountPercentage = Double.parseDouble(parts[1].replace("%)", "").trim());
+                    }
+                } catch (Exception ex) {
+                    discountPercentage = 0.0;
+                }
+            }
+            calculateTotal(); // Tính lại tiền ngay khi chọn
+        });
+
         cboPaymentMethod = new JComboBox<>();
         cboPaymentMethod.setPreferredSize(new Dimension(220, 36));
         cboPaymentMethod.setFont(new Font("Segoe UI", Font.PLAIN, 15));
@@ -455,33 +479,42 @@ public class SellPanel extends JPanel {
         pnlPayment.add(header, gbc);
 
         gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.gridwidth = 1;
+
+        // Thêm dòng Khuyến mãi
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.weightx = 0.4;
-        pnlPayment.add(new JLabel("Phương thức TT:"), gbc);
+        pnlPayment.add(new JLabel("Mã Voucher:"), gbc);
         gbc.gridx = 1;
         gbc.weightx = 0.6;
-        pnlPayment.add(cboPaymentMethod, gbc);
+        pnlPayment.add(cboKhuyenMai, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 2;
+        pnlPayment.add(new JLabel("Phương thức TT:"), gbc);
+        gbc.gridx = 1;
+        pnlPayment.add(cboPaymentMethod, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         pnlPayment.add(new JLabel("Tổng tạm tính:"), gbc);
         gbc.gridx = 1;
         pnlPayment.add(lblSubTotal, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 3;
-        pnlPayment.add(new JLabel("Giảm giá thẻ:"), gbc);
+        gbc.gridy = 4;
+        pnlPayment.add(new JLabel("Tổng giảm giá:"), gbc); // Đổi tên nhãn
         gbc.gridx = 1;
         pnlPayment.add(lblDiscount, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 2;
         pnlPayment.add(new JSeparator(), gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
         gbc.gridwidth = 1;
         JLabel lblT = new JLabel("TỔNG TIỀN:");
         lblT.setFont(new Font("Segoe UI", Font.BOLD, 18));
@@ -490,7 +523,7 @@ public class SellPanel extends JPanel {
         pnlPayment.add(lblTotalPay, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 7;
         gbc.gridwidth = 2;
         gbc.insets = new Insets(10, 8, 0, 8);
 
@@ -1102,23 +1135,47 @@ public class SellPanel extends JPanel {
     }
 
     private void calculateTotal() {
-        double sub = 0;
+        if (lblSubTotal == null || lblTotalPay == null) {
+            return;
+        }
+
+        double subTotal = 0;
+        double totalDiscount = 0;
+
+        String selectedPromo = (cboKhuyenMai.getSelectedItem() != null)
+                ? cboKhuyenMai.getSelectedItem().toString()
+                : "";
+
+        double currentPromoRate = getPromoRateFromString(selectedPromo);
+
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            sub += Double.parseDouble(modCart.getValueAt(i, 4).toString());
+
+            double lineTotal
+                    = Double.parseDouble(modCart.getValueAt(i, 4).toString());
+
+            String pId = modCart.getValueAt(i, 0).toString();
+
+            Product p = allProducts.stream()
+                    .filter(x -> x.getProductId().equals(pId))
+                    .findFirst()
+                    .orElse(null);
+
+            if (p != null && isEligibleForPromotion(p, selectedPromo)) {
+                totalDiscount += lineTotal * (currentPromoRate / 100.0);
+            }
+
+            subTotal += lineTotal;
         }
 
-        boolean hasMember = selectedCustomer != null && selectedCustomer.getMemberRank() != null && !"Thường".equalsIgnoreCase(selectedCustomer.getMemberRank().trim());
-        double rate = hasMember ? selectedCustomer.getDiscountRate() : 0;
-        double disc = sub * rate;
-        finalAmountToPay = sub - disc;
+        finalAmountToPay = subTotal - totalDiscount;
 
-        lblSubTotal.setText(moneyFormat.format(sub));
-        lblDiscount.setText("- " + moneyFormat.format(disc));
+        // UPDATE UI
+        lblSubTotal.setText(moneyFormat.format(subTotal));
+        lblDiscount.setText(moneyFormat.format(totalDiscount));
         lblTotalPay.setText(moneyFormat.format(finalAmountToPay));
-        if (lblCartEmptyHint != null) {
-            lblCartEmptyHint.setText("Tổng cộng: " + moneyFormat.format(finalAmountToPay));
-        }
-        updateKpiMiniPanel();
+        lblCartEmptyHint.setText("Tổng cộng: " + moneyFormat.format(finalAmountToPay));
+
+        btnPay.setEnabled(modCart.getRowCount() > 0);
     }
 
     private void updateKpiMiniPanel() {
@@ -1207,21 +1264,12 @@ public class SellPanel extends JPanel {
         if (productsCardLayout != null && pnlProductsBody != null) {
             productsCardLayout.show(pnlProductsBody, "loading");
         }
+
         new SwingWorker<List<Product>, Void>() {
             @Override
             protected List<Product> doInBackground() {
-                List<Product> prds = ProductsSql.getInstance().searchByName("");
-                java.util.Map<String, Integer> stockMap = new java.util.HashMap<>();
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT product_id, quantity FROM INVENTORY WHERE NVL(is_deleted, 0) = 0"); java.sql.ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        stockMap.put(rs.getString("product_id"), rs.getInt("quantity"));
-                    }
-                } catch (Exception e) {
-                }
-                for (Product p : prds) {
-                    p.setQuantity(stockMap.getOrDefault(p.getProductId(), 0));
-                }
-                return prds;
+                String storeId = requireCurrentStoreForSale();
+                return ProductsSql.getInstance().selectAllByStore(storeId);
             }
 
             @Override
@@ -1231,6 +1279,15 @@ public class SellPanel extends JPanel {
                     refreshSearchSuggestions(productSearchKeyword);
                     applyProductFilter(productSearchKeyword);
                 } catch (Exception ex) {
+                    ex.printStackTrace();
+
+                    JOptionPane.showMessageDialog(
+                            SellPanel.this,
+                            "Không thể tải sản phẩm theo chi nhánh hiện tại:\n" + ex.getMessage(),
+                            "Lỗi tải sản phẩm",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+
                     if (productsCardLayout != null && pnlProductsBody != null) {
                         productsCardLayout.show(pnlProductsBody, "table");
                     }
@@ -1239,17 +1296,36 @@ public class SellPanel extends JPanel {
         }.execute();
     }
 
-    private int getStockFromDB(String pId) {
-        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT quantity FROM INVENTORY WHERE product_id = ? AND NVL(is_deleted, 0) = 0")) {
-            ps.setString(1, pId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        } catch (Exception e) {
+    private String requireCurrentStoreForSale() {
+        String storeId = SessionManager.getCurrentStoreId();
+
+        if (storeId == null || storeId.trim().isEmpty()) {
+            throw new IllegalStateException("Tài khoản bán hàng chưa được phân chi nhánh.");
         }
-        return 0;
+
+        return storeId.trim();
+    }
+
+    private int getStockFromDB(String pId) {
+        if (pId == null || pId.trim().isEmpty()) {
+            return 0;
+        }
+
+        try {
+            String storeId = requireCurrentStoreForSale();
+
+            Product p = ProductsSql.getInstance().findByIdInStore(pId.trim(), storeId);
+
+            if (p == null) {
+                return 0;
+            }
+
+            return Math.max(0, p.getQuantity());
+
+        } catch (Exception e) {
+            System.err.println("[SellPanel] getStockFromDB error: " + e.getMessage());
+            return 0;
+        }
     }
 
     private void loadPaymentMethods() {
@@ -1272,12 +1348,86 @@ public class SellPanel extends JPanel {
         }.execute();
     }
 
+    private void loadActivePromotions() {
+        if (cboKhuyenMai == null) {
+            return;
+        }
+        cboKhuyenMai.removeAllItems();
+        cboKhuyenMai.addItem("Không áp dụng mã giảm giá");
+
+        // Đưa việc lấy dữ liệu xuống chạy ngầm (SwingWorker) để không làm treo giao diện
+        new SwingWorker<List<String>, Void>() {
+            @Override
+            protected List<String> doInBackground() {
+                List<String> promos = new ArrayList<>();
+                String sql = "SELECT p.promotion_id, p.promotion_name, NVL(p.discount_amount, 0) AS discount_amount "
+                        + "FROM PROMOTIONS p "
+                        + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
+                        + "WHERE p.status = N'Đang diễn ra' AND NVL(p.is_deleted, 0) = 0 "
+                        + "ORDER BY p.promotion_id DESC";
+
+                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql); java.sql.ResultSet rs = ps.executeQuery()) {
+
+                    while (rs.next()) {
+                        String id = rs.getString("promotion_id");
+                        String name = rs.getString("promotion_name");
+                        int amount = rs.getInt("discount_amount");
+                        promos.add(id + " - " + name + " (Giảm " + amount + "%)");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Lỗi tải danh sách khuyến mãi: " + e.getMessage());
+                }
+                return promos;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    // Khi tải xong từ DB, mới add vào ComboBox trên giao diện
+                    for (String item : get()) {
+                        cboKhuyenMai.addItem(item);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }.execute();
+    }
+
     private void processPaymentAction() {
+        if (paymentProcessing) {
+            return;
+        }
+
         if (modCart.getRowCount() <= 0) {
             return;
         }
+
+        try {
+            validateCartAgainstDatabase();
+
+            if (!btnPay.isEnabled()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Giỏ hàng có sản phẩm không hợp lệ hoặc vượt tồn kho. Vui lòng kiểm tra lại.",
+                        "Không thể thanh toán",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể kiểm tra tồn kho trước thanh toán:\n" + ex.getMessage(),
+                    "Lỗi kiểm tra tồn kho",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
         paymentProcessing = true;
         paymentJustSucceeded = false;
+
         btnPay.setEnabled(false);
         btnPay.setText("⏳ ĐANG XỬ LÝ...");
         btnPay.setBackground(Color.GRAY);
@@ -1286,11 +1436,17 @@ public class SellPanel extends JPanel {
 
         String emp = "EMP_DEFAULT";
         model.account.Account a = SessionManager.getCurrentUser();
+
         if (a != null) {
-            emp = (a.getUserId() != null && !a.getUserId().isBlank()) ? a.getUserId() : a.getAccountId();
+            emp = (a.getUserId() != null && !a.getUserId().isBlank())
+                    ? a.getUserId()
+                    : a.getAccountId();
         }
 
-        String pId = cboPaymentMethod.getSelectedItem() != null ? cboPaymentMethod.getSelectedItem().toString() : "PM_CASH";
+        String pId = cboPaymentMethod.getSelectedItem() != null
+                ? cboPaymentMethod.getSelectedItem().toString()
+                : "PM_CASH";
+
         String oId = "HD" + System.nanoTime();
 
         Order o = new Order();
@@ -1300,46 +1456,80 @@ public class SellPanel extends JPanel {
         o.setPaymentMethodId(pId);
         o.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
         o.setTotalAmount(finalAmountToPay);
+        o.setStoreId(requireCurrentStoreForSale());
 
         List<OrderDetail> dt = new ArrayList<>();
+
         for (int i = 0; i < modCart.getRowCount(); i++) {
             String id = modCart.getValueAt(i, 0).toString();
-            Product p = allProducts.stream().filter(x -> x.getProductId().equals(id)).findFirst().orElse(null);
-            dt.add(new OrderDetail(oId, id, Integer.parseInt(modCart.getValueAt(i, 2).toString()), Double.parseDouble(modCart.getValueAt(i, 3).toString()), (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI", 0));
+            int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 3).toString());
+
+            Product p = allProducts.stream()
+                    .filter(x -> x.getProductId().equals(id))
+                    .findFirst()
+                    .orElse(null);
+
+            dt.add(new OrderDetail(
+                    oId,
+                    id,
+                    qty,
+                    unitPrice,
+                    (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI",
+                    qty
+            ));
         }
 
-        Thread.ofVirtual().start(() -> {
-            try {
-                boolean success = PaymentService.thanhToan(o, dt);
+        new SwingWorker<Boolean, Void>() {
+            private Exception error;
 
-                SwingUtilities.invokeLater(() -> {
+            @Override
+            protected Boolean doInBackground() {
+                try {
+                    return PaymentService.thanhToan(o, dt);
+                } catch (Exception ex) {
+                    error = ex;
+                    return false;
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    boolean success = get();
+
                     if (success) {
                         paymentJustSucceeded = true;
                         handlePaymentSuccess(o.getOrderId());
                     } else {
-                        JOptionPane.showMessageDialog(
-                                this,
-                                "Thanh toán thất bại. Có thể tồn kho đã thay đổi, vui lòng làm mới giỏ hàng.",
-                                "Thanh toán thất bại",
-                                JOptionPane.WARNING_MESSAGE
-                        );
+                        if (error != null) {
+                            handleGeneralError(error);
+                        } else {
+                            JOptionPane.showMessageDialog(
+                                    SellPanel.this,
+                                    "Thanh toán thất bại. Có thể tồn kho đã thay đổi, vui lòng làm mới giỏ hàng.",
+                                    "Thanh toán thất bại",
+                                    JOptionPane.WARNING_MESSAGE
+                            );
+                        }
+
                         loadProducts();
                         validateCartAgainstDatabase();
                     }
-                });
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> handleGeneralError(ex));
-            } finally {
-                SwingUtilities.invokeLater(() -> {
+
+                } catch (Exception ex) {
+                    handleGeneralError(ex);
+
+                } finally {
                     paymentProcessing = false;
                     resetPaymentUI();
 
                     Timer t = new Timer(700, ev -> paymentJustSucceeded = false);
                     t.setRepeats(false);
                     t.start();
-                });
+                }
             }
-        });
+        }.execute();
     }
 
     private void handlePaymentSuccess(String orderId) {
@@ -1375,6 +1565,10 @@ public class SellPanel extends JPanel {
         selectedCustomer = null;
         if (txtCustomerPhone != null) {
             txtCustomerPhone.setText("");
+        }
+        // Reset Khuyến mãi về dòng đầu tiên ("Không áp dụng")
+        if (cboKhuyenMai != null && cboKhuyenMai.getItemCount() > 0) {
+            cboKhuyenMai.setSelectedIndex(0);
         }
         updateCustomerUI();
     }
@@ -1703,5 +1897,35 @@ public class SellPanel extends JPanel {
             }
             return cp;
         }
+    }
+
+    private double getPromoRateFromString(String promoString) {
+        if (promoString == null || promoString.isEmpty() || promoString.equals("Không áp dụng mã giảm giá")) {
+            return 0.0;
+        }
+        try {
+            // Tách chuỗi để lấy số giữa "Giảm " và "%)"
+            String[] parts = promoString.split("Giảm ");
+            if (parts.length > 1) {
+                String percentStr = parts[1].replace("%)", "").trim();
+                return Double.parseDouble(percentStr);
+            }
+        } catch (Exception e) {
+            return 0.0;
+        }
+        return 0.0;
+    }
+
+    // Hàm này kiểm tra xem sản phẩm có được áp dụng khuyến mãi không
+    private boolean isEligibleForPromotion(Product p, String selectedPromo) {
+        // Nếu không chọn khuyến mãi nào thì trả về false
+        if (selectedPromo == null || selectedPromo.isEmpty() || selectedPromo.equals("Không áp dụng mã giảm giá")) {
+            return false;
+        }
+
+        // Hiện tại: Mặc định tất cả sản phẩm đều được áp dụng nếu chọn bất kỳ mã nào
+        // Sau này nếu bạn muốn khuyến mãi theo danh mục, bạn có thể sửa logic ở đây
+        // Ví dụ: return p.getCategoryId().equals(promoCategoryId);
+        return true;
     }
 }

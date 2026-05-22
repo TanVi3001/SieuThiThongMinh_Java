@@ -18,14 +18,6 @@ public class IconHelper {
     private static final Map<String, ImageIcon> categoryIconCache = new HashMap<>();
     private static final String CATEGORY_ICON_PATH = "/view/image/categories/";
 
-    static ImageIcon notification(int i) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-
-    public static Icon view(int i) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-
     private IconHelper() {
     }
 
@@ -52,6 +44,16 @@ public class IconHelper {
 
     public static ImageIcon load(String fileName, int size) {
         return getIcon(fileName, size, size);
+    }
+
+    public static ImageIcon notification(int size) {
+        ImageIcon icon = load("notification.png", size);
+        return icon != null ? icon : stock(size);
+    }
+
+    public static Icon view(int size) {
+        ImageIcon icon = load("view.png", size);
+        return icon != null ? icon : file(size);
     }
 
     // ==================================================================
@@ -179,6 +181,38 @@ public class IconHelper {
 
     public static ImageIcon history(int size) {
         return load("history.png", size);
+    }
+    
+    public static ImageIcon close(int size) {
+        return load("close.png", size);
+    }
+    
+    public static ImageIcon save(int size) {
+        return load("save-instagram.png", size);
+    }
+    
+    public static ImageIcon warning(int size) {
+        return load("warning.png", size);
+    }
+    
+    public static ImageIcon upload(int size) {
+        return load("upload.png", size);
+    }
+
+    public static ImageIcon folder(int size) {
+        return load("folder-open.png", size);
+    }
+
+    public static ImageIcon template(int size) {
+        return load("new-file.png", size);
+    }
+
+    public static ImageIcon play(int size) {
+        return load("play.png", size);
+    }
+
+    public static ImageIcon shield(int size) {
+        return load("security.png", size);
     }
 
     public static ImageIcon accessDenied(int size) {

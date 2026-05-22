@@ -51,6 +51,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import view.components.IconHelper;
 
 public class EmployeePerformancePanel extends JPanel {
 
@@ -426,6 +427,7 @@ public class EmployeePerformancePanel extends JPanel {
                 new EmptyBorder(6, 10, 6, 10)));
 
         JButton btnLoadPowerBi = new JButton("Tải Power BI");
+        btnLoadPowerBi.setIcon(IconHelper.lineChart(20));
         btnLoadPowerBi.setFont(new Font("Segoe UI", Font.BOLD, 11));
         btnLoadPowerBi.setBackground(COLOR_BLUE);
         btnLoadPowerBi.setForeground(Color.WHITE);

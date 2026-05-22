@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import model.order.Order;
 import model.order.OrderDetail;
+import business.service.SessionManager;
+import business.sql.sales_order.CustomersSql;
 
 public class OrdersSql implements SqlInterface<Order> {
 
@@ -30,23 +32,283 @@ public class OrdersSql implements SqlInterface<Order> {
         return instance;
     }
 
-    public int insertWithConn(Connection con, Order order) throws SQLException {
+    private static String clean(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private static String completedCondition(String columnName) {
+        return "("
+                + "UPPER(NVL(" + columnName + ", '')) = 'COMPLETED' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HOÀN THÀNH%' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HOAN THANH%'"
+                + ")";
+    }
+
+    private static String cancelledCondition(String columnName) {
+        return "("
+                + "UPPER(NVL(" + columnName + ", '')) = 'CANCELLED' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HỦY%' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%HUY%'"
+                + ")";
+    }
+
+    private static String pendingCondition(String columnName) {
+        return "("
+                + "UPPER(NVL(" + columnName + ", '')) = 'PENDING' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%ĐANG XỬ LÝ%' "
+                + "OR UPPER(NVL(" + columnName + ", '')) LIKE '%DANG XU LY%'"
+                + ")";
+    }
+
+    private static String statusConditionSql(String columnName, String displayStatus) {
+        if (displayStatus == null || displayStatus.trim().isEmpty()
+                || "Tất cả".equalsIgnoreCase(displayStatus.trim())
+                || "Tat ca".equalsIgnoreCase(displayStatus.trim())) {
+            return null;
+        }
+
+        String s = displayStatus.trim().toLowerCase();
+
+        if (s.contains("hoàn") || s.contains("hoan") || s.equals("completed")) {
+            return completedCondition(columnName);
+        }
+
+        if (s.contains("hủy") || s.contains("huỷ") || s.contains("huy") || s.equals("cancelled")) {
+            return cancelledCondition(columnName);
+        }
+
+        if (s.contains("đang") || s.contains("dang") || s.equals("pending")) {
+            return pendingCondition(columnName);
+        }
+
+        return "UPPER(NVL(" + columnName + ", '')) = UPPER(?)";
+    }
+
+    private static void assertWritableStore(String storeId) throws SQLException {
+        if (SessionManager.isAdmin()) {
+            return;
+        }
+
+        String currentStoreId = SessionManager.getCurrentStoreId();
+
+        if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+            throw new SQLException("Tài khoản chưa được phân chi nhánh.");
+        }
+
+        if (storeId == null || !currentStoreId.trim().equalsIgnoreCase(storeId.trim())) {
+            throw new SQLException("Bạn không có quyền thao tác dữ liệu của chi nhánh khác.");
+        }
+    }
+
+    public ArrayList<Order> selectAllByStoreAndEmployee(String storeId, String employeeId) {
+        ArrayList<Order> list = new ArrayList<>();
+
+        String sid = clean(storeId);
+        String eid = clean(employeeId);
+
+        if (sid == null || eid == null) {
+            return list;
+        }
+
         String sql = """
-            INSERT INTO ORDERS
-            (
-                ORDER_ID,
-                CUSTOMER_ID,
-                EMPLOYEE_ID,
-                PAYMENT_METHOD_ID,
-                ORDER_DATE,
-                TOTAL_AMOUNT,
-                STATUS,
-                NOTE,
-                STORE_ID,
-                IS_DELETED
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-        """;
+        SELECT
+            o.*,
+            e.EMPLOYEE_NAME
+        FROM ORDERS o
+        LEFT JOIN EMPLOYEES e
+            ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+        WHERE NVL(o.IS_DELETED, 0) = 0
+          AND o.STORE_ID = ?
+          AND o.EMPLOYEE_ID = ?
+        ORDER BY o.ORDER_DATE DESC
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, sid);
+            pst.setString(2, eid);
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.selectAllByStoreAndEmployee(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    public List<Order> selectByConditionStoreAndEmployee(String condition, String storeId, String employeeId) {
+        if (condition == null
+                || condition.isBlank()
+                || "Tat ca".equalsIgnoreCase(condition)
+                || "Tất cả".equalsIgnoreCase(condition)) {
+            return selectAllByStoreAndEmployee(storeId, employeeId);
+        }
+
+        List<Order> list = new ArrayList<>();
+
+        String sid = clean(storeId);
+        String eid = clean(employeeId);
+
+        if (sid == null || eid == null) {
+            return list;
+        }
+
+        String statusSql = statusConditionSql("o.STATUS", condition);
+
+        StringBuilder sql = new StringBuilder("""
+        SELECT
+            o.*,
+            e.EMPLOYEE_NAME
+        FROM ORDERS o
+        LEFT JOIN EMPLOYEES e
+            ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+        WHERE NVL(o.IS_DELETED, 0) = 0
+          AND o.STORE_ID = ?
+          AND o.EMPLOYEE_ID = ?
+    """);
+
+        if (statusSql != null) {
+            sql.append(" AND ").append(statusSql).append(" ");
+        }
+
+        sql.append(" ORDER BY o.ORDER_DATE DESC ");
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
+            int i = 1;
+            pst.setString(i++, sid);
+            pst.setString(i++, eid);
+
+            if (statusSql != null && statusSql.contains("UPPER(?)")) {
+                pst.setString(i++, condition);
+            }
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.selectByConditionStoreAndEmployee(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    public List<Order> findByDateRangeStoreAndEmployee(Date fromDate, Date toDate, String storeId, String employeeId) {
+        List<Order> list = new ArrayList<>();
+
+        String sid = clean(storeId);
+        String eid = clean(employeeId);
+
+        if (sid == null || eid == null) {
+            return list;
+        }
+
+        String sql = """
+        SELECT
+            o.*,
+            e.EMPLOYEE_NAME
+        FROM ORDERS o
+        LEFT JOIN EMPLOYEES e
+            ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+        WHERE NVL(o.IS_DELETED, 0) = 0
+          AND o.STORE_ID = ?
+          AND o.EMPLOYEE_ID = ?
+          AND o.ORDER_DATE >= ?
+          AND o.ORDER_DATE < (? + 1)
+        ORDER BY o.ORDER_DATE DESC
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, sid);
+            pst.setString(2, eid);
+            pst.setDate(3, fromDate);
+            pst.setDate(4, toDate);
+
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapOrder(rs));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.findByDateRangeStoreAndEmployee(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    public Order selectByIdInStoreAndEmployee(String id, String storeId, String employeeId) {
+        String sid = clean(storeId);
+        String eid = clean(employeeId);
+
+        if (id == null || id.trim().isEmpty() || sid == null || eid == null) {
+            return null;
+        }
+
+        String sql = """
+        SELECT
+            o.*,
+            e.EMPLOYEE_NAME
+        FROM ORDERS o
+        LEFT JOIN EMPLOYEES e
+            ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+        WHERE o.ORDER_ID = ?
+          AND o.STORE_ID = ?
+          AND o.EMPLOYEE_ID = ?
+          AND NVL(o.IS_DELETED, 0) = 0
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, id);
+            pst.setString(2, sid);
+            pst.setString(3, eid);
+
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    return mapOrder(rs);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.selectByIdInStoreAndEmployee(): " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public int insertWithConn(Connection con, Order order) throws SQLException {
+        assertWritableStore(order.getStoreId());
+
+        String sql = """
+        INSERT INTO ORDERS
+        (
+            ORDER_ID,
+            CUSTOMER_ID,
+            EMPLOYEE_ID,
+            PAYMENT_METHOD_ID,
+            ORDER_DATE,
+            TOTAL_AMOUNT,
+            STATUS,
+            NOTE,
+            STORE_ID,
+            IS_DELETED
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    """;
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, order.getOrderId());
@@ -75,23 +337,29 @@ public class OrdersSql implements SqlInterface<Order> {
 
     @Override
     public int update(Order order) {
-        String sql = """
-            UPDATE ORDERS
-            SET
-                CUSTOMER_ID = ?,
-                EMPLOYEE_ID = ?,
-                PAYMENT_METHOD_ID = ?,
-                ORDER_DATE = ?,
-                TOTAL_AMOUNT = ?,
-                STATUS = ?,
-                NOTE = ?,
-                STORE_ID = ?
-            WHERE ORDER_ID = ?
-              AND NVL(IS_DELETED, 0) = 0
-        """;
+        try {
+            assertWritableStore(order.getStoreId());
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.update(): " + e.getMessage());
+            return 0;
+        }
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        String sql = """
+        UPDATE ORDERS
+        SET
+            CUSTOMER_ID = ?,
+            EMPLOYEE_ID = ?,
+            PAYMENT_METHOD_ID = ?,
+            ORDER_DATE = ?,
+            TOTAL_AMOUNT = ?,
+            STATUS = ?,
+            NOTE = ?,
+            STORE_ID = ?
+        WHERE ORDER_ID = ?
+          AND NVL(IS_DELETED, 0) = 0
+    """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 
             pst.setString(1, normalizeGuestCustomer(order.getCustomerId()));
             pst.setString(2, order.getEmployeeId());
@@ -119,8 +387,7 @@ public class OrdersSql implements SqlInterface<Order> {
               AND NVL(IS_DELETED, 0) = 0
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, status);
             pst.setString(2, orderId);
             return pst.executeUpdate();
@@ -140,8 +407,7 @@ public class OrdersSql implements SqlInterface<Order> {
               AND NVL(IS_DELETED, 0) = 0
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, status);
             pst.setString(2, orderId);
             pst.setString(3, storeId);
@@ -176,8 +442,7 @@ public class OrdersSql implements SqlInterface<Order> {
             WHERE ORDER_ID = ?
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
             return pst.executeUpdate();
         } catch (SQLException e) {
@@ -200,8 +465,7 @@ public class OrdersSql implements SqlInterface<Order> {
               AND NVL(o.IS_DELETED, 0) = 0
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
@@ -228,8 +492,7 @@ public class OrdersSql implements SqlInterface<Order> {
               AND NVL(o.IS_DELETED, 0) = 0
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
             pst.setString(2, storeId);
             try (ResultSet rs = pst.executeQuery()) {
@@ -258,9 +521,7 @@ public class OrdersSql implements SqlInterface<Order> {
             ORDER BY o.ORDER_DATE DESC
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql);
-             ResultSet rs = pst.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
                 list.add(mapOrder(rs));
             }
@@ -285,8 +546,7 @@ public class OrdersSql implements SqlInterface<Order> {
             ORDER BY o.ORDER_DATE DESC
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, storeId);
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
@@ -320,6 +580,7 @@ public class OrdersSql implements SqlInterface<Order> {
         boolean isStoreManager = "R_STORE_MNG".equalsIgnoreCase(currentUserRole);
 
         if (isStaffSale) {
+            sql.append(" AND o.STORE_ID = ? ");
             sql.append(" AND o.EMPLOYEE_ID = ? ");
         } else if (isStoreManager) {
             sql.append(" AND o.STORE_ID = ? ");
@@ -327,10 +588,10 @@ public class OrdersSql implements SqlInterface<Order> {
 
         sql.append(" ORDER BY o.ORDER_DATE DESC ");
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql.toString())) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
             int p = 1;
             if (isStaffSale) {
+                pst.setString(p++, currentStoreId);
                 pst.setString(p++, currentEmployeeId);
             } else if (isStoreManager) {
                 pst.setString(p++, currentStoreId);
@@ -370,8 +631,7 @@ public class OrdersSql implements SqlInterface<Order> {
             ORDER BY o.ORDER_DATE DESC
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, condition);
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
@@ -394,32 +654,51 @@ public class OrdersSql implements SqlInterface<Order> {
         }
 
         List<Order> list = new ArrayList<>();
-        String sql = """
-            SELECT
-                o.*,
-                e.EMPLOYEE_NAME
-            FROM ORDERS o
-            LEFT JOIN EMPLOYEES e
-                ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
-            WHERE NVL(o.IS_DELETED, 0) = 0
-              AND o.STORE_ID = ?
-              AND UPPER(o.STATUS) = UPPER(?)
-            ORDER BY o.ORDER_DATE DESC
-        """;
+        String sid = clean(storeId);
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, storeId);
-            pst.setString(2, condition);
+        if (sid == null) {
+            return list;
+        }
+
+        String statusSql = statusConditionSql("o.STATUS", condition);
+
+        StringBuilder sql = new StringBuilder("""
+        SELECT
+            o.*,
+            e.EMPLOYEE_NAME
+        FROM ORDERS o
+        LEFT JOIN EMPLOYEES e
+            ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
+        WHERE NVL(o.IS_DELETED, 0) = 0
+          AND o.STORE_ID = ?
+    """);
+
+        if (statusSql != null) {
+            sql.append(" AND ").append(statusSql).append(" ");
+        }
+
+        sql.append(" ORDER BY o.ORDER_DATE DESC ");
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
+            int i = 1;
+            pst.setString(i++, sid);
+
+            if (statusSql != null && statusSql.contains("UPPER(?)")) {
+                pst.setString(i++, condition);
+            }
+
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapOrder(rs));
                 }
             }
+
         } catch (SQLException e) {
             System.err.println("❌ OrdersSql.selectByConditionAndStore(): " + e.getMessage());
             e.printStackTrace();
         }
+
         return list;
     }
 
@@ -433,12 +712,12 @@ public class OrdersSql implements SqlInterface<Order> {
             LEFT JOIN EMPLOYEES e
                 ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
             WHERE NVL(o.IS_DELETED, 0) = 0
-              AND o.ORDER_DATE BETWEEN ? AND ?
+              AND o.ORDER_DATE >= ?
+              AND o.ORDER_DATE < (? + 1)
             ORDER BY o.ORDER_DATE DESC
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setDate(1, fromDate);
             pst.setDate(2, toDate);
             try (ResultSet rs = pst.executeQuery()) {
@@ -464,12 +743,12 @@ public class OrdersSql implements SqlInterface<Order> {
                 ON o.EMPLOYEE_ID = e.EMPLOYEE_ID
             WHERE NVL(o.IS_DELETED, 0) = 0
               AND o.STORE_ID = ?
-              AND o.ORDER_DATE BETWEEN ? AND ?
+              AND o.ORDER_DATE >= ?
+              AND o.ORDER_DATE < (? + 1)
             ORDER BY o.ORDER_DATE DESC
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, storeId);
             pst.setDate(2, fromDate);
             pst.setDate(3, toDate);
@@ -541,8 +820,7 @@ public class OrdersSql implements SqlInterface<Order> {
             WHERE od.ORDER_ID = ?
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, orderId);
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
@@ -570,8 +848,7 @@ public class OrdersSql implements SqlInterface<Order> {
             WHERE ORDER_ID LIKE ?
         """;
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, prefix + "%");
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
@@ -640,13 +917,11 @@ public class OrdersSql implements SqlInterface<Order> {
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
-            try (PreparedStatement psOrder = con.prepareStatement(insertOrderSql);
-                 PreparedStatement psDetail = con.prepareStatement(insertDetailSql);
-                 PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql);
-                 PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
+            try (PreparedStatement psOrder = con.prepareStatement(insertOrderSql); PreparedStatement psDetail = con.prepareStatement(insertDetailSql); PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql); PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
 
                 String storeId = requireStoreId(order);
-
+                assertWritableStore(storeId);
+                order.setStoreId(storeId);
                 psOrder.setString(1, order.getOrderId());
                 psOrder.setString(2, order.getEmployeeId());
                 psOrder.setString(3, normalizeGuestCustomer(order.getCustomerId()));
@@ -688,6 +963,9 @@ public class OrdersSql implements SqlInterface<Order> {
                 }
 
                 psDetail.executeBatch();
+                if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
+                    CustomersSql.getInstance().updateCustomerAfterPayment(con, order);
+                }
                 con.commit();
                 return true;
 

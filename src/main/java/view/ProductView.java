@@ -144,7 +144,7 @@ public class ProductView extends JPanel {
         productNameList.clear();
 
         try {
-            List<Product> list = ProductsSql.getInstance().selectAll();
+            List<Product> list = loadProductsByCurrentScope();
 
             for (Product p : list) {
                 if (p.getProductName() != null && !p.getProductName().isBlank()) {
@@ -242,6 +242,7 @@ public class ProductView extends JPanel {
         productToolPanel.add(searchFieldWrapper);
         productToolPanel.add(btnSearch);
         productToolPanel.add(btnExportPDF);
+//        productToolPanel.add(btnImport);
         productToolPanel.add(btnEmergencyAlert);
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
@@ -1166,35 +1167,45 @@ public class ProductView extends JPanel {
 
     private void applyProductRolePermission() {
         /*
-     * Store Manager:
-     * - Chỉ xem danh sách sản phẩm
-     * - Tìm kiếm
-     * - Xuất Excel
-     * Không được thêm/sửa/xóa/nhập CSV/cấu hình đơn vị.
+         * Quyền nghiệp vụ hiện tại:
+         *
+         * Admin:
+         * - Full quyền sản phẩm.
+         *
+         * Manager:
+         * - Được vào Quản lý sản phẩm để xem/tổng quan/theo dõi.
+         * - Không bán hàng.
+         * - Không quản lý tồn kho.
+         * - Không thêm/sửa/xóa/nhập CSV/cấu hình đơn vị ở ProductView.
+         *
+         * Staff_Sale:
+         * - Được xem/tìm kiếm sản phẩm.
+         * - Được gửi cảnh báo hết/sắp hết hàng cho Staff_Product.
+         * - Không thêm/sửa/xóa/nhập CSV/cấu hình đơn vị.
+         *
+         * Staff_Product / R_STAFF_VIEW_PROD:
+         * - Được quản lý sản phẩm/tồn kho/nhập CSV.
          */
-        if (AuthorizationService.isStoreManager()) {
-            if (formCard != null) {
-                formCard.setVisible(false);
+        boolean canManageProductData = AuthorizationService.canManageProducts();
+        boolean canSendAlert = AuthorizationService.canSendInventoryAlert();
+
+        if (!canManageProductData) {
+            setProductFormVisible(false);
+            setProductMutationButtonsVisible(false);
+
+            if (btnImport != null) {
+                btnImport.setVisible(false);
+                btnImport.setEnabled(false);
             }
 
-            btnImport.setVisible(false);
-            btnEmergencyAlert.setVisible(true);
-            btnAdd.setVisible(false);
-            btnUpdate.setVisible(false);
-            btnDelete.setVisible(false);
-            btnClear.setVisible(false);
-            btnUnitConfig.setVisible(false);
-
-            if (btnChooseImage != null) {
-                btnChooseImage.setVisible(false);
+            if (btnEmergencyAlert != null) {
+                btnEmergencyAlert.setVisible(canSendAlert);
+                btnEmergencyAlert.setEnabled(canSendAlert);
             }
 
-            if (lblImagePreview != null) {
-                lblImagePreview.setVisible(false);
-            }
-
-            if (lblImageSectionTitle != null) {
-                lblImageSectionTitle.setVisible(false);
+            if (btnExportPDF != null) {
+                btnExportPDF.setVisible(true);
+                btnExportPDF.setEnabled(true);
             }
 
             revalidate();
@@ -1202,47 +1213,24 @@ public class ProductView extends JPanel {
             return;
         }
 
-        /*
-     * Cashier:
-     * - Chỉ xem/tìm kiếm sản phẩm
-     * - Không thao tác kho
-         */
-        if (AuthorizationService.isCashier()) {
-            if (formCard != null) {
-                formCard.setVisible(false);
-            }
+        setProductFormVisible(true);
+        setProductMutationButtonsVisible(true);
 
+        if (btnImport != null) {
             btnImport.setVisible(false);
-            btnEmergencyAlert.setVisible(true);
-            btnAdd.setVisible(false);
-            btnUpdate.setVisible(false);
-            btnDelete.setVisible(false);
-            btnClear.setVisible(false);
-            btnUnitConfig.setVisible(false);
+            btnImport.setEnabled(false);
+        }
 
-            if (btnChooseImage != null) {
-                btnChooseImage.setVisible(false);
-            }
-
-            if (lblImagePreview != null) {
-                lblImagePreview.setVisible(false);
-            }
-
-            if (lblImageSectionTitle != null) {
-                lblImageSectionTitle.setVisible(false);
-            }
-
-            revalidate();
-            repaint();
-            return;
+        if (btnEmergencyAlert != null) {
+            btnEmergencyAlert.setVisible(false);
+            btnEmergencyAlert.setEnabled(false);
         }
 
         /*
-     * Warehouse Staff:
-     * - Được thêm/sửa/xóa/cập nhật tồn kho/nhập CSV/cấu hình đơn vị
-     * - Ẩn phần hình ảnh nếu nghiệp vụ kho không cần quản lý ảnh
+         * Staff_Product quản lý kho/sản phẩm, không cần quản lý ảnh trong form này.
+         * Admin vẫn có thể giữ ảnh nếu cần.
          */
-        if (AuthorizationService.isWarehouseStaff()) {
+        if (!AuthorizationService.isAdmin()) {
             if (lblImagePreview != null) {
                 lblImagePreview.setVisible(false);
             }
@@ -1254,10 +1242,87 @@ public class ProductView extends JPanel {
             if (lblImageSectionTitle != null) {
                 lblImageSectionTitle.setVisible(false);
             }
-
-            revalidate();
-            repaint();
         }
+
+        revalidate();
+        repaint();
+    }
+
+    private void setProductFormVisible(boolean visible) {
+        if (formCard != null) {
+            formCard.setVisible(visible);
+        }
+
+        if (btnChooseImage != null) {
+            btnChooseImage.setVisible(visible);
+        }
+
+        if (lblImagePreview != null) {
+            lblImagePreview.setVisible(visible);
+        }
+
+        if (lblImageSectionTitle != null) {
+            lblImageSectionTitle.setVisible(visible);
+        }
+    }
+
+    private void setProductMutationButtonsVisible(boolean visible) {
+        if (btnAdd != null) {
+            btnAdd.setVisible(visible);
+            btnAdd.setEnabled(visible);
+        }
+
+        if (btnUpdate != null) {
+            btnUpdate.setVisible(visible);
+            btnUpdate.setEnabled(visible);
+        }
+
+        if (btnDelete != null) {
+            btnDelete.setVisible(visible);
+            btnDelete.setEnabled(visible);
+        }
+
+        if (btnClear != null) {
+            btnClear.setVisible(visible);
+            btnClear.setEnabled(visible);
+        }
+
+        if (btnUnitConfig != null) {
+            btnUnitConfig.setVisible(visible);
+            btnUnitConfig.setEnabled(visible);
+        }
+    }
+
+    private boolean canMutateProductData() {
+        return AuthorizationService.canManageProducts();
+    }
+
+    private boolean requireProductMutationPermission() {
+        if (canMutateProductData()) {
+            return true;
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn chỉ được xem sản phẩm và gửi cảnh báo tồn kho, không được thêm/sửa/xóa sản phẩm.",
+                "Không có quyền",
+                JOptionPane.WARNING_MESSAGE
+        );
+        return false;
+    }
+
+    private boolean requireStockImportPermission() {
+        if (AuthorizationService.canManageStock()) {
+            return true;
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn không có quyền nhập CSV/nhập kho. Chức năng này dành cho Staff Product hoặc Admin.",
+                "Không có quyền",
+                JOptionPane.WARNING_MESSAGE
+        );
+        return false;
     }
 
     private void styleComboBox(JComboBox<String> cb, String placeholder) {
@@ -1431,11 +1496,79 @@ public class ProductView extends JPanel {
         btnSearch.addActionListener(e -> btnSearchActionPerformed());
         btnExportPDF.addActionListener(e -> btnExportPDFActionPerformed());
         btnUnitConfig.addActionListener(e -> showUnitConfigDialog());
-        btnImport.addActionListener(e -> handleImportCSV());
+//        btnImport.addActionListener(e -> handleImportCSV());
         btnEmergencyAlert.addActionListener(e -> sendLowStockNotification());
     }
 
+    private void btnSearchActionPerformed() {
+        JTextField editor = (JTextField) cbSearch.getEditor().getEditorComponent();
+        String keyword = editor.getText();
+
+        if (keyword == null) {
+            keyword = "";
+        }
+
+        keyword = keyword.trim().toLowerCase();
+
+        try {
+            if (cachedProducts.isEmpty()) {
+                cachedProducts.clear();
+                cachedProducts.addAll(loadProductsByCurrentScope());
+            }
+
+            List<Product> result = new ArrayList<>();
+
+            for (Product p : cachedProducts) {
+                if (p == null) {
+                    continue;
+                }
+
+                boolean matchCategory = true;
+
+                if (selectedCategoryId != null && !selectedCategoryId.trim().isEmpty()) {
+                    matchCategory = p.getCategoryId() != null
+                            && p.getCategoryId().trim().equalsIgnoreCase(selectedCategoryId.trim());
+                }
+
+                String productId = p.getProductId() == null ? "" : p.getProductId().toLowerCase();
+                String productName = p.getProductName() == null ? "" : p.getProductName().toLowerCase();
+                String categoryId = p.getCategoryId() == null ? "" : p.getCategoryId().toLowerCase();
+
+                boolean matchKeyword = keyword.isEmpty()
+                        || productId.contains(keyword)
+                        || productName.contains(keyword)
+                        || categoryId.contains(keyword);
+
+                if (matchCategory && matchKeyword) {
+                    result.add(p);
+                }
+            }
+
+            fillTable(result);
+            updateCurrentCategoryLabel();
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi tìm kiếm sản phẩm: " + ex.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
     private void sendLowStockNotification() {
+        if (!AuthorizationService.canSendInventoryAlert()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền gửi cảnh báo tồn kho.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         int row = tblProducts.getSelectedRow();
 
         if (row < 0) {
@@ -1539,6 +1672,10 @@ public class ProductView extends JPanel {
     }
 
     private void btnAddActionPerformed() {
+        if (!requireProductMutationPermission()) {
+            return;
+        }
+
         if (!validateInput()) {
             return;
         }
@@ -1576,9 +1713,22 @@ public class ProductView extends JPanel {
             }
 
             String storeId = existingProduct.getStoreId();
+
             if (storeId == null || storeId.trim().isEmpty()) {
-                storeId = "ST001";
+                storeId = business.service.SessionManager.getCurrentStoreId();
             }
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại.",
+                        "Thiếu chi nhánh",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            storeId = storeId.trim();
 
             boolean success = dao.addQuantity(
                     existingProduct.getProductId(),
@@ -1621,7 +1771,19 @@ public class ProductView extends JPanel {
         }
 
         if (p.getStoreId() == null || p.getStoreId().trim().isEmpty()) {
-            p.setStoreId("ST001");
+            String currentStoreId = business.service.SessionManager.getCurrentStoreId();
+
+            if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại.",
+                        "Thiếu chi nhánh",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            p.setStoreId(currentStoreId.trim());
         }
 
         if (p.getUnit() == null || p.getUnit().trim().isEmpty()) {
@@ -1661,6 +1823,10 @@ public class ProductView extends JPanel {
     }
 
     private void btnUpdateActionPerformed() {
+        if (!requireProductMutationPermission()) {
+            return;
+        }
+
         int row = tblProducts.getSelectedRow();
         if (row < 0) {
             JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một sản phẩm trong bảng để cập nhật!", "Chưa chọn dòng", JOptionPane.WARNING_MESSAGE);
@@ -1669,19 +1835,35 @@ public class ProductView extends JPanel {
 
         int modelRow = tblProducts.convertRowIndexToModel(row);
         String idOld = tblProducts.getModel().getValueAt(modelRow, 0).toString().trim();
+
         Product p = getProductFromForm();
         if (p == null) {
             return;
         }
 
+        // BẮT BUỘC giữ lại mã sản phẩm đang chọn.
+        // Trước đó bị thiếu dòng này nên updateInStore/update có thể không biết update sản phẩm nào.
         p.setProductId(idOld);
 
-        if (ProductsSql.getInstance().update(p)) {
+        boolean updated;
 
+        if (!SessionManager.isAdmin()) {
+            String storeId = getCurrentStoreIdOrWarn();
+
+            if (storeId == null) {
+                return;
+            }
+
+            p.setStoreId(storeId);
+            updated = ProductsSql.getInstance().updateInStore(p, storeId);
+        } else {
+            updated = ProductsSql.getInstance().update(p);
+        }
+
+        if (updated) {
             SyncVersionDao.bumpVersion("PRODUCTS");
             SyncVersionDao.bumpVersion("INVENTORY");
 
-            // REALTIME
             RealtimeClient.send("PRODUCTS_CHANGED");
             RealtimeClient.send("INVENTORY_CHANGED");
 
@@ -1694,9 +1876,19 @@ public class ProductView extends JPanel {
     }
 
     private void btnDeleteActionPerformed() {
+        if (!requireProductMutationPermission()) {
+            return;
+        }
+
         int row = tblProducts.getSelectedRow();
+
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một sản phẩm trong bảng để xóa!", "Chưa chọn dòng", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "⚠️ Vui lòng chọn một sản phẩm trong bảng để xóa!",
+                    "Chưa chọn dòng",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
@@ -1704,40 +1896,65 @@ public class ProductView extends JPanel {
         String id = tblProducts.getModel().getValueAt(modelRow, 0).toString().trim();
         String name = tblProducts.getModel().getValueAt(modelRow, 1).toString().trim();
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Bạn có chắc chắn muốn ngừng kinh doanh và xóa sản phẩm: " + name + " (" + id + ")?",
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Bạn có chắc chắn muốn ngừng kinh doanh sản phẩm: " + name + " (" + id + ")?",
                 "Xác nhận xóa",
                 JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
+                JOptionPane.QUESTION_MESSAGE
+        );
 
-        if (confirm == JOptionPane.YES_OPTION) {
-            boolean usedInOrders = ProductsSql.getInstance().isUsedInOrders(id);
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
 
-            if (ProductsSql.getInstance().delete(id)) {
+        boolean usedInOrders = ProductsSql.getInstance().isUsedInOrders(id);
+        boolean deleted;
 
-                SyncVersionDao.bumpVersion("PRODUCTS");
-                SyncVersionDao.bumpVersion("INVENTORY");
+        if (!SessionManager.isAdmin()) {
+            String storeId = getCurrentStoreIdOrWarn();
 
-                // REALTIME
-                RealtimeClient.send("PRODUCTS_CHANGED");
-                RealtimeClient.send("INVENTORY_CHANGED");
-
-                if (usedInOrders) {
-                    JOptionPane.showMessageDialog(this,
-                            "Sản phẩm [" + name + "] đã từng được bán/nhập kho.\nHệ thống đã chuyển sang trạng thái ẨN (Ngừng kinh doanh) thay vì xóa mất dữ liệu.",
-                            "Đã ẩn sản phẩm an toàn",
-                            JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(this, "✅ Xóa sản phẩm [" + name + "] thành công!");
-                }
-                loadDataToTable();
-                btnClearActionPerformed();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "❌ Không thể xóa sản phẩm.\nVui lòng kiểm tra cửa sổ Output Console để xem lỗi chi tiết!",
-                        "Lỗi hệ thống",
-                        JOptionPane.ERROR_MESSAGE);
+            if (storeId == null) {
+                return;
             }
+
+            deleted = ProductsSql.getInstance().deleteFromStore(id, storeId);
+        } else {
+            deleted = ProductsSql.getInstance().delete(id);
+        }
+
+        if (deleted) {
+            SyncVersionDao.bumpVersion("PRODUCTS");
+            SyncVersionDao.bumpVersion("INVENTORY");
+
+            RealtimeClient.send("PRODUCTS_CHANGED");
+            RealtimeClient.send("INVENTORY_CHANGED");
+
+            if (usedInOrders) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Sản phẩm [" + name + "] đã từng được bán/nhập kho.\n"
+                        + "Hệ thống đã chuyển sang trạng thái ẨN an toàn.",
+                        "Đã ẩn sản phẩm",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            } else {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "✅ Xóa sản phẩm [" + name + "] thành công!"
+                );
+            }
+
+            loadDataToTable();
+            btnClearActionPerformed();
+
+        } else {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "❌ Không thể xóa sản phẩm.\nVui lòng kiểm tra Database hoặc quyền chi nhánh.",
+                    "Lỗi hệ thống",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -1746,8 +1963,15 @@ public class ProductView extends JPanel {
         txtPrice.setText("");
         txtQuantity.setText("");
 
-        ((JTextField) cbCategory.getEditor().getEditorComponent()).setText("");
-        ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
+        if (cbCategory != null && cbCategory.getEditor() != null) {
+            ((JTextField) cbCategory.getEditor().getEditorComponent()).setText("");
+            cbCategory.setSelectedItem("");
+        }
+
+        if (cbSearch != null && cbSearch.getEditor() != null) {
+            ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
+            cbSearch.setSelectedItem("");
+        }
 
         selectedImagePath = null;
 
@@ -1756,48 +1980,15 @@ public class ProductView extends JPanel {
             lblImagePreview.setText("Chưa chọn ảnh");
         }
 
-        tblProducts.clearSelection();
+        if (tblProducts != null) {
+            tblProducts.clearSelection();
+        }
 
         if (selectedCategoryId == null || selectedCategoryId.trim().isEmpty()) {
             fillTable(cachedProducts);
         } else {
             filterProductsByCategory(selectedCategoryId);
         }
-    }
-
-    private void btnSearchActionPerformed() {
-        JTextField editor = (JTextField) cbSearch.getEditor().getEditorComponent();
-        String keyword = editor.getText().trim().toLowerCase();
-
-        if (cachedProducts.isEmpty()) {
-            try {
-                cachedProducts.clear();
-                cachedProducts.addAll(ProductsSql.getInstance().selectAll());
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        List<Product> result = new ArrayList<>();
-
-        for (Product p : cachedProducts) {
-            boolean matchCategory = true;
-
-            if (selectedCategoryId != null && !selectedCategoryId.trim().isEmpty()) {
-                matchCategory = p.getCategoryId() != null
-                        && p.getCategoryId().trim().equals(selectedCategoryId);
-            }
-
-            boolean matchKeyword = keyword.isEmpty()
-                    || (p.getProductName() != null && p.getProductName().toLowerCase().contains(keyword))
-                    || (p.getProductId() != null && p.getProductId().toLowerCase().contains(keyword));
-
-            if (matchCategory && matchKeyword) {
-                result.add(p);
-            }
-        }
-
-        fillTable(result);
     }
 
     private void btnExportPDFActionPerformed() {
@@ -1987,7 +2178,7 @@ public class ProductView extends JPanel {
 
     public void loadDataToTable() {
         try {
-            List<Product> list = ProductsSql.getInstance().selectAll();
+            List<Product> list = loadProductsByCurrentScope();
 
             cachedProducts.clear();
             cachedProducts.addAll(list);
@@ -2033,6 +2224,36 @@ public class ProductView extends JPanel {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private List<Product> loadProductsByCurrentScope() {
+        String storeId = SessionManager.getScopedStoreIdOrNull();
+
+        if (storeId != null && !storeId.trim().isEmpty()) {
+            return ProductsSql.getInstance().selectAllByStore(storeId.trim());
+        }
+
+        return ProductsSql.getInstance().selectAll();
+    }
+
+    private String getCurrentStoreIdOrWarn() {
+        if (SessionManager.isAdmin()) {
+            return null;
+        }
+
+        String storeId = SessionManager.getCurrentStoreId();
+
+        if (storeId == null || storeId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Tài khoản chưa được phân chi nhánh. Vui lòng đăng nhập lại hoặc liên hệ Admin.",
+                    "Thiếu chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return null;
+        }
+
+        return storeId.trim();
     }
 
     public void refreshTable() {
@@ -2135,6 +2356,10 @@ public class ProductView extends JPanel {
     }
 
     private void showUnitConfigDialog() {
+        if (!requireProductMutationPermission()) {
+            return;
+        }
+
         String productId = getSelectedProductId();
         if (productId == null || productId.isEmpty()) {
             JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một sản phẩm trong bảng để cấu hình đơn vị!", "Chưa chọn sản phẩm", JOptionPane.WARNING_MESSAGE);
@@ -2307,7 +2532,12 @@ public class ProductView extends JPanel {
         }
     }
 
-    private void handleImportCSV() {        // Lấy frame cha chứa View này
+    private void handleImportCSV() {
+        if (!requireStockImportPermission()) {
+            return;
+        }
+
+        // Lấy frame cha chứa View này
         JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
 
         // Gọi Dialog Import chuyên dụng mà chúng ta đã sửa (có ProgressBar chạy ngầm)
@@ -2548,5 +2778,5 @@ public class ProductView extends JPanel {
             return values;
         }
     }
-   
+
 }

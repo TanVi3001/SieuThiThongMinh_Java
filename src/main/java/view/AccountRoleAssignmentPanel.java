@@ -51,12 +51,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGap(0, 400, Short.MAX_VALUE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGap(0, 400, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGap(0, 300, Short.MAX_VALUE)
+                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGap(0, 300, Short.MAX_VALUE)
         );
     }
 
@@ -151,7 +151,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             JLabel l = new JLabel(h);
             l.setFont(new Font("Segoe UI", Font.BOLD, 12));
             l.setForeground(textGray);
-            if (h.equals("Khóa / Mở")) l.setHorizontalAlignment(SwingConstants.CENTER);
+            if (h.equals("Khóa / Mở")) {
+                l.setHorizontalAlignment(SwingConstants.CENTER);
+            }
             tableHeader.add(l);
         }
         topSection.add(tableHeader, BorderLayout.SOUTH);
@@ -166,9 +168,17 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         cbRole.addActionListener(e -> initTableData());
 
         txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { initTableData(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                initTableData();
+            }
+
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                initTableData();
+            }
+
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                initTableData();
+            }
         });
 
         JScrollPane scroll = new JScrollPane(listItems);
@@ -215,46 +225,47 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
         pnlToggle.setBackground(cardWhite);
         ToggleSwitch toggleBtn = new ToggleSwitch(isActive);
-        
+
         if ("Quản trị viên".equals(role)) {
             toggleBtn.setEnabled(false);
             toggleBtn.setToolTipText("Không thể khóa tài khoản Quản trị viên.");
         }
-        
+
         toggleBtn.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (!toggleBtn.isEnabled()) return;
+                if (!toggleBtn.isEnabled()) {
+                    return;
+                }
 
-                boolean nextState = !toggleBtn.isOn(); 
+                boolean nextState = !toggleBtn.isOn();
                 String actionName = nextState ? "Mở khóa" : "Khóa";
-                String confirmMsg = nextState ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + name + "]?" 
-                                              : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị đăng xuất khỏi hệ thống ngay lập tức.";
-                
+                String confirmMsg = nextState ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + name + "]?"
+                        : "KHÓA tài khoản [" + name + "]?\nNgười dùng sẽ bị đăng xuất khỏi hệ thống ngay lập tức.";
+
                 int confirm = JOptionPane.showConfirmDialog(null, confirmMsg, "Xác nhận " + actionName, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-                
+
                 if (confirm == JOptionPane.YES_OPTION) {
-                    try (Connection con = common.db.DatabaseConnection.getConnection();
-                         PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET is_deleted = ? WHERE account_id = ?")) {
-                        
+                    try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("UPDATE ACCOUNTS SET is_deleted = ? WHERE account_id = ?")) {
+
                         ps.setInt(1, nextState ? 0 : 1);
                         ps.setString(2, accountId);
                         int updated = ps.executeUpdate();
-                        
+
                         if (updated > 0) {
                             toggleBtn.setOn(nextState);
-                            
+
                             business.service.AuditLogService.logAction(
-                                "CẬP NHẬT", "ACCOUNTS", accountId, 
-                                nextState ? "Bị khóa" : "Hoạt động", 
-                                nextState ? "Hoạt động" : "Bị khóa", 
-                                "Admin " + actionName.toLowerCase() + " tài khoản"
+                                    "CẬP NHẬT", "ACCOUNTS", accountId,
+                                    nextState ? "Bị khóa" : "Hoạt động",
+                                    nextState ? "Hoạt động" : "Bị khóa",
+                                    "Admin " + actionName.toLowerCase() + " tài khoản"
                             );
-                            
+
                             common.sync.SyncVersionDao.bumpVersion("EMPLOYEES");
                             RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
                             EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "TOGGLE_LOCK"));
-                            
+
                             SwingUtilities.invokeLater(() -> initTableData());
                         }
                     } catch (Exception ex) {
@@ -263,7 +274,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 }
             }
         });
-        
+
         pnlToggle.add(toggleBtn);
         row.add(pnlToggle);
 
@@ -271,7 +282,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         row.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getX() >= pnlToggle.getX()) return;
+                if (e.getX() >= pnlToggle.getX()) {
+                    return;
+                }
 
                 selectedAccountId = accountId;
                 selectedOldRole = role;
@@ -283,12 +296,12 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 pnlCurrRole.revalidate();
                 pnlCurrRole.repaint();
 
-                roleCardsContainer.removeAll(); 
+                roleCardsContainer.removeAll();
 
                 if ("Quản trị viên".equals(role)) {
                     roleCardsContainer.add(roleCardMap.get("Quản trị viên"));
                     radioMap.get("Quản trị viên").setEnabled(false);
-                    btnSaveRole.setEnabled(false); 
+                    btnSaveRole.setEnabled(false);
                 } else {
                     roleCardsContainer.add(roleCardMap.get("Quản lý cửa hàng"));
                     roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
@@ -299,7 +312,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                     radioMap.get("Quản lý cửa hàng").setEnabled(true);
                     radioMap.get("Nhân viên bán hàng").setEnabled(true);
                     radioMap.get("Nhân viên kho").setEnabled(true);
-                    btnSaveRole.setEnabled(true); 
+                    btnSaveRole.setEnabled(true);
                 }
 
                 roleCardsContainer.revalidate();
@@ -344,19 +357,34 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         gbcInfo.fill = GridBagConstraints.HORIZONTAL;
         gbcInfo.anchor = GridBagConstraints.WEST;
 
-        gbcInfo.gridy = 0; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 0;
+        gbcInfo.insets = new Insets(0, 0, 15, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Người dùng đã chọn", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedUser, gbcInfo);
 
-        gbcInfo.gridy = 1; gbcInfo.insets = new Insets(0, 0, 15, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 1;
+        gbcInfo.insets = new Insets(0, 0, 15, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Email", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 15, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 15, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(lblSelectedEmail, gbcInfo);
 
-        gbcInfo.gridy = 2; gbcInfo.insets = new Insets(0, 0, 0, 20); gbcInfo.gridx = 0; gbcInfo.weightx = 0.0;
+        gbcInfo.gridy = 2;
+        gbcInfo.insets = new Insets(0, 0, 0, 20);
+        gbcInfo.gridx = 0;
+        gbcInfo.weightx = 0.0;
         infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
-        gbcInfo.insets = new Insets(0, 0, 0, 0); gbcInfo.gridx = 1; gbcInfo.weightx = 1.0;
+        gbcInfo.insets = new Insets(0, 0, 0, 0);
+        gbcInfo.gridx = 1;
+        gbcInfo.weightx = 1.0;
         infoGrid.add(pnlCurrRole, gbcInfo);
 
         centerPanel.add(infoGrid);
@@ -379,8 +407,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
         for (String[] roleInfo : activeRoles) {
             JRadioButton rb = new JRadioButton();
-            rb.setActionCommand(roleInfo[0]); 
-            radioMap.put(roleInfo[1], rb); 
+            rb.setActionCommand(roleInfo[0]);
+            radioMap.put(roleInfo[1], rb);
 
             JPanel card = createRoleCard(roleInfo[1], roleInfo[2], roleGroup, rb);
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -430,11 +458,29 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
             }
 
             String newRoleId = selectedModel.getActionCommand();
+            String oldRoleId = displayRoleToRoleId(selectedOldRole);
+
+            if (newRoleId.equalsIgnoreCase(oldRoleId)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Vai trò không thay đổi nên không cần cập nhật.",
+                        "Thông báo",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+                return;
+            }
+
             boolean success = business.sql.rbac.AccountSql.getInstance().updateAccountRole(selectedAccountId, newRoleId);
 
             if (success) {
                 business.service.AuditLogService.logAction(
                         "CẬP NHẬT", "ACCOUNTS", selectedAccountId, selectedOldRole, newRoleId, "Admin thay đổi quyền nhân viên"
+                );
+                business.service.AccountService.logChangeRole(
+                        selectedAccountId,
+                        oldRoleId,
+                        newRoleId,
+                        "Admin thay đổi phân quyền tài khoản"
                 );
 
                 JOptionPane.showMessageDialog(this, "Cập nhật phân quyền thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
@@ -454,8 +500,8 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 pnlCurrRole.removeAll();
                 pnlCurrRole.repaint();
                 roleGroup.clearSelection();
-                
-                initTableData(); 
+
+                initTableData();
             } else {
                 JOptionPane.showMessageDialog(this, "Cập nhật thất bại. Vui lòng kiểm tra lại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
@@ -579,25 +625,31 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     private void initTableData() {
-        if (listItems == null) return;
+        if (listItems == null) {
+            return;
+        }
         listItems.removeAll();
 
         java.util.List<String[]> listAcc = business.sql.rbac.AccountSql.getInstance().getAccountWithUserDetails();
-        
+
         String selectedRoleFilter = (cbRole != null && cbRole.getSelectedItem() != null) ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
         String searchText = (txtSearch != null) ? txtSearch.getText().toLowerCase().trim() : "";
 
         for (String[] acc : listAcc) {
             String roleId = acc[4];
             String displayRole = "Nhân viên bán hàng";
-            if ("R_ADMIN_ALL".equals(roleId)) displayRole = "Quản trị viên";
-            else if ("R_STORE_MNG".equals(roleId)) displayRole = "Quản lý cửa hàng";
-            else if ("R_STAFF_STOCK".equals(roleId) || "R_STAFF_VIEW_PROD".equals(roleId)) displayRole = "Nhân viên kho";
+            if ("R_ADMIN_ALL".equals(roleId)) {
+                displayRole = "Quản trị viên";
+            } else if ("R_STORE_MNG".equals(roleId)) {
+                displayRole = "Quản lý cửa hàng";
+            } else if ("R_STAFF_STOCK".equals(roleId) || "R_STAFF_VIEW_PROD".equals(roleId)) {
+                displayRole = "Nhân viên kho";
+            }
 
             String displayName = (acc[2] == null || acc[2].isEmpty()) ? acc[1] : acc[2];
             String displayEmail = (acc[3] == null || acc[3].isEmpty()) ? "Chưa có email" : acc[3];
 
-            boolean isActive = "0".equals(acc[5]); 
+            boolean isActive = "0".equals(acc[5]);
 
             boolean matchRole = "Tất cả vai trò".equals(selectedRoleFilter) || displayRole.equals(selectedRoleFilter);
             boolean matchSearch = searchText.isEmpty() || displayName.toLowerCase().contains(searchText) || displayEmail.toLowerCase().contains(searchText);
@@ -606,12 +658,29 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 listItems.add(createAccountRow(acc[0], displayName, displayEmail, displayRole, isActive));
             }
         }
-        
+
         listItems.revalidate();
         listItems.repaint();
     }
 
+    private String displayRoleToRoleId(String displayRole) {
+        if ("Quản trị viên".equals(displayRole)) {
+            return "R_ADMIN_ALL";
+        }
+
+        if ("Quản lý cửa hàng".equals(displayRole)) {
+            return "R_STORE_MNG";
+        }
+
+        if ("Nhân viên kho".equals(displayRole)) {
+            return "R_STAFF_VIEW_PROD";
+        }
+
+        return "R_STAFF_SALE";
+    }
+
     class RoundedPanel extends JPanel {
+
         private int radius;
         private Color bgColor;
 
@@ -633,6 +702,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     class RoundBorder implements javax.swing.border.Border {
+
         private Color color;
         private int radius;
         private boolean fillBg = false;
@@ -663,13 +733,18 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         }
 
         @Override
-        public Insets getBorderInsets(Component c) { return new Insets(1, 1, 1, 1); }
+        public Insets getBorderInsets(Component c) {
+            return new Insets(1, 1, 1, 1);
+        }
 
         @Override
-        public boolean isBorderOpaque() { return false; }
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 
     class DashedBorder implements javax.swing.border.Border {
+
         private Color color;
         private int thickness;
         private int dashLength;
@@ -692,41 +767,48 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         }
 
         @Override
-        public Insets getBorderInsets(Component c) { return new Insets(thickness, thickness, thickness, thickness); }
+        public Insets getBorderInsets(Component c) {
+            return new Insets(thickness, thickness, thickness, thickness);
+        }
 
         @Override
-        public boolean isBorderOpaque() { return false; }
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 
     private void setupRealtimeSync() {
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {                        
+            if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {
                 // Không popup, cập nhật ngầm
             }
         });
     }
 
     class ToggleSwitch extends JComponent {
+
         private boolean on;
-        
+
         public ToggleSwitch(boolean on) {
             this.on = on;
             setPreferredSize(new Dimension(46, 24));
             setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
-        
-        public boolean isOn() { return on; }
-        
-        public void setOn(boolean on) { 
-            this.on = on; 
-            repaint(); 
+
+        public boolean isOn() {
+            return on;
+        }
+
+        public void setOn(boolean on) {
+            this.on = on;
+            repaint();
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            
+
             if (on) {
                 g2.setColor(new Color(16, 185, 129)); // Màu Xanh lá (Hoạt động)
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
@@ -734,7 +816,9 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                 g2.fillOval(24, 2, 20, 20);
             } else {
                 g2.setColor(new Color(203, 213, 225)); // Màu Xám (Bị Khóa)
-                if (!isEnabled()) g2.setColor(new Color(241, 245, 249)); 
+                if (!isEnabled()) {
+                    g2.setColor(new Color(241, 245, 249));
+                }
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
                 g2.setColor(Color.WHITE);
                 g2.fillOval(2, 2, 20, 20);

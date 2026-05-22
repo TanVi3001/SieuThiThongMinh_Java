@@ -11,6 +11,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.*;
 import javax.swing.table.*;
 import view.components.IconHelper;
+import java.util.ArrayList;
+import java.util.List;
 
 public class StoreManagementPanel extends JPanel {
 
@@ -416,8 +418,16 @@ public class StoreManagementPanel extends JPanel {
 
     private void prepareAddNewStore() {
         clearForm();
+
+        String nextStoreId = generateNextStoreId();
+
+        if (nextStoreId == null || nextStoreId.trim().isEmpty()) {
+            lblHint.setText("Không thể tự sinh mã chi nhánh. Vui lòng kiểm tra database.");
+            return;
+        }
+
         isEditMode = false;
-        txtMaChiNhanh.setText(generateNextStoreId());
+        txtMaChiNhanh.setText(nextStoreId);
         txtMaChiNhanh.setEditable(false);
         lblFormTitle.setText("Thêm Thông Tin Chi Nhánh");
         lblHint.setText("Mã chi nhánh được tự sinh, không cho chỉnh thủ công");
@@ -490,29 +500,88 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void saveStore() {
-        String id = txtMaChiNhanh.getText().trim(), name = txtTenChiNhanh.getText().trim(), address = txtDiaChi.getText().trim(), phone = txtSoDienThoai.getText().trim(), status = String.valueOf(cbTrangThai.getSelectedItem());
+        String id = txtMaChiNhanh.getText().trim();
+        String name = txtTenChiNhanh.getText().trim();
+        String address = txtDiaChi.getText().trim();
+        String phone = txtSoDienThoai.getText().trim();
+        String status = String.valueOf(cbTrangThai.getSelectedItem()).trim();
+
         if (id.isEmpty()) {
             id = generateNextStoreId();
             txtMaChiNhanh.setText(id);
         }
-        if (name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+
+        if (id.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể lưu chi nhánh vì chưa sinh được mã chi nhánh.",
+                    "Thiếu mã chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
+
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng nhập tên chi nhánh!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         refreshStoreSchemaFlags();
+
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
-            if (isEditMode) {
+            boolean editing = isEditMode;
+
+            if (editing) {
                 updateStore(con, id, name, address, phone, status);
             } else {
                 insertStore(con, id, name, address, phone, status);
             }
-            business.service.AuditLogService.logAction(isEditMode ? "CẬP NHẬT" : "THÊM MỚI", "STORES", id, "", "Trạng thái: " + status, "Admin cập nhật thông tin chi nhánh");
-            JOptionPane.showMessageDialog(this, isEditMode ? "Đã cập nhật thông tin chi nhánh!" : "Đã thêm chi nhánh mới!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+
+            business.service.AuditLogService.logAction(
+                    editing ? "CẬP NHẬT" : "THÊM MỚI",
+                    "STORES",
+                    id,
+                    "",
+                    "Trạng thái: " + status,
+                    editing ? "Admin cập nhật thông tin chi nhánh" : "Admin thêm chi nhánh mới"
+            );
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    editing ? "Đã cập nhật thông tin chi nhánh!" : "Đã thêm chi nhánh mới!",
+                    "Thành công",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
             clearForm();
             loadStoreData(txtSearch.getText().trim());
-            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+
+            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED:" + id + ":" + status));
+
+            try {
+                common.realtime.RealtimeClient.send("STORE_INFO_CHANGED:" + id + ":" + status);
+
+                // Chỉ khi cập nhật chi nhánh mới cần ép các session kiểm tra lại.
+                // Nếu chi nhánh bị Tạm ngưng thì DashboardView/LoginService sẽ chặn/kick user theo store.
+                if (editing) {
+                    common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED:" + id + ":" + status);
+                }
+            } catch (Exception ex) {
+                System.err.println("[StoreManagementPanel] realtime error: " + ex.getMessage());
+            }
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi lưu dữ liệu: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi khi lưu dữ liệu: " + e.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -573,6 +642,19 @@ public class StoreManagementPanel extends JPanel {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một chi nhánh để xóa.", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        String blockReason = getStoreDeleteBlockReason(id);
+
+        if (!blockReason.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể xóa chi nhánh " + id + " vì còn dữ liệu đang liên kết:\n\n"
+                    + blockReason
+                    + "\nBạn chỉ nên chuyển trạng thái chi nhánh sang Tạm ngưng.",
+                    "Không thể xóa chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa chi nhánh " + id + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) {
             return;
@@ -596,16 +678,93 @@ public class StoreManagementPanel extends JPanel {
         }
     }
 
+    private String getStoreDeleteBlockReason(String storeId) {
+        List<String> reasons = new ArrayList<>();
+
+        if (hasColumn("EMPLOYEES", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM EMPLOYEES WHERE NVL(is_deleted, 0) = 0 AND store_id = ?",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " nhân viên thuộc chi nhánh.");
+            }
+        }
+
+        if (hasColumn("INVENTORY", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM INVENTORY WHERE NVL(is_deleted, 0) = 0 AND store_id = ? AND NVL(quantity, 0) > 0",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " mặt hàng đang có tồn kho.");
+            }
+        }
+
+        if (hasColumn("ORDERS", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM ORDERS WHERE NVL(is_deleted, 0) = 0 AND store_id = ?",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " hóa đơn/đơn hàng thuộc chi nhánh.");
+            }
+        }
+
+        return String.join("\n", reasons);
+    }
+
+    private int countRows(String sql, String storeId) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, storeId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+
+        } catch (Exception e) {
+            System.err.println("[StoreManagementPanel] countRows error: " + e.getMessage());
+            return 0;
+        }
+    }
+
     private String generateNextStoreId() {
-        String sql = "SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(store_id, '[0-9]+'))), 0) + 1 AS next_no FROM STORES WHERE REGEXP_LIKE(store_id, '^ST[0-9]+$')";
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        String sql = """
+        SELECT NVL(MAX(TO_NUMBER(REGEXP_SUBSTR(store_id, '[0-9]+'))), 0) + 1 AS next_no
+        FROM STORES
+        WHERE REGEXP_LIKE(store_id, '^ST[0-9]+$')
+    """;
+
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
                 int next = rs.getInt("next_no");
+
+                if (next <= 0) {
+                    next = 1;
+                }
+
                 return String.format("ST%03d", next);
             }
-        } catch (Exception ignored) {
+
+        } catch (Exception e) {
+            e.printStackTrace();
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể tự sinh mã chi nhánh từ database.\n"
+                    + "Vui lòng kiểm tra kết nối hoặc bảng STORES.\n\n"
+                    + "Chi tiết: " + e.getMessage(),
+                    "Lỗi sinh mã chi nhánh",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
-        return "ST001";
+
+        return "";
     }
 
     private void refreshStoreSchemaFlags() {

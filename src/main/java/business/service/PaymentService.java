@@ -21,71 +21,21 @@ public class PaymentService {
         Connection con = null;
 
         try {
+            validateCheckoutInput(hoaDon, dsChiTiet);
+
             String storeId = requireStoreId(hoaDon);
             assertWritableStore(storeId);
+
+            normalizeOrderBeforeCheckout(hoaDon, storeId);
 
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            String sqlCheckStock = """
-                SELECT i.quantity AS stock_quantity, p.product_name
-                FROM INVENTORY i
-                JOIN PRODUCTS p ON i.product_id = p.product_id
-                WHERE i.product_id = ?
-                  AND i.store_id = ?
-                  AND NVL(i.is_deleted, 0) = 0
-            """;
+            checkStockBeforeCheckout(con, storeId, dsChiTiet);
 
-            for (OrderDetail ct : dsChiTiet) {
-                try (PreparedStatement ps = con.prepareStatement(sqlCheckStock)) {
-                    ps.setString(1, ct.getProductId());
-                    ps.setString(2, storeId);
-
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            throw new SQLException("Không tìm thấy sản phẩm tại chi nhánh hiện tại: " + ct.getProductId());
-                        }
-
-                        int stock = rs.getInt("stock_quantity");
-                        if (stock < ct.getQuantity()) {
-                            throw new SQLException("Sản phẩm [" + rs.getString("product_name")
-                                    + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock);
-                        }
-                    }
-                }
-            }
-
-            hoaDon.setStoreId(storeId);
-            if (hoaDon.getStatus() == null || hoaDon.getStatus().isBlank()) {
-                hoaDon.setStatus("Hoàn thành");
-            }
             OrdersSql.getInstance().insertWithConn(con, hoaDon);
 
-            String sqlUpdateStock = """
-                UPDATE INVENTORY
-                SET quantity = quantity - ?, last_updated = SYSDATE
-                WHERE product_id = ?
-                  AND store_id = ?
-                  AND NVL(is_deleted, 0) = 0
-                  AND quantity >= ?
-            """;
-
-            try (PreparedStatement psStock = con.prepareStatement(sqlUpdateStock)) {
-                for (OrderDetail ct : dsChiTiet) {
-                    OrderDetailsSql.getInstance().insertWithConn(con, ct);
-
-                    psStock.setInt(1, ct.getQuantity());
-                    psStock.setString(2, ct.getProductId());
-                    psStock.setString(3, storeId);
-                    psStock.setInt(4, ct.getQuantity());
-
-                    int updated = psStock.executeUpdate();
-                    if (updated <= 0) {
-                        throw new SQLException("Sản phẩm " + ct.getProductId()
-                                + " không đủ tồn kho tại chi nhánh hoặc đã được máy khác bán trước.");
-                    }
-                }
-            }
+            insertOrderDetailsAndSubtractStock(con, hoaDon, dsChiTiet, storeId);
 
             if (hoaDon.getCustomerId() != null && !hoaDon.getCustomerId().trim().isEmpty()) {
                 CustomersSql.getInstance().recalculateCustomerRank(con, hoaDon.getCustomerId());
@@ -112,17 +62,28 @@ public class PaymentService {
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            Order order = OrdersSql.getInstance().selectById(orderId);
+            Order order;
+
+            if (SessionManager.isAdmin()) {
+                order = OrdersSql.getInstance().selectById(orderId);
+            } else {
+                String currentStoreId = SessionManager.getCurrentStoreId();
+
+                if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+                    throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
+                }
+
+                order = OrdersSql.getInstance().selectByIdInStore(orderId, currentStoreId.trim());
+            }
+
             if (order == null) {
-                throw new SQLException("Không tìm thấy hóa đơn.");
+                throw new SQLException("Không tìm thấy hóa đơn hoặc bạn không có quyền thao tác hóa đơn này.");
             }
 
             String storeId = requireStoreId(order);
             assertWritableStore(storeId);
 
-            if ("Đã hủy".equalsIgnoreCase(order.getStatus())
-                    || "Đã huỷ".equalsIgnoreCase(order.getStatus())
-                    || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            if (isCancelledStatus(order.getStatus())) {
                 throw new SQLException("Hóa đơn đã bị hủy trước đó.");
             }
 
@@ -154,11 +115,15 @@ public class PaymentService {
             }
 
             String oldNote = order.getNote() == null ? "" : order.getNote();
-            String newNote = oldNote + " | Lý do hủy: " + reason;
+            String cancelReason = reason == null || reason.trim().isEmpty()
+                    ? "Không có lý do"
+                    : reason.trim();
+            String newNote = oldNote + " | Lý do hủy: " + cancelReason;
 
             String sqlUpdateStatus = """
                 UPDATE ORDERS
-                SET status = N'Đã hủy', note = ?
+                SET status = N'Đã hủy',
+                    note = ?
                 WHERE order_id = ?
                   AND store_id = ?
                   AND NVL(is_deleted, 0) = 0
@@ -168,13 +133,15 @@ public class PaymentService {
                 ps.setString(1, newNote);
                 ps.setString(2, orderId);
                 ps.setString(3, storeId);
+
                 int row = ps.executeUpdate();
+
                 if (row <= 0) {
                     throw new SQLException("Không thể cập nhật trạng thái đơn trong chi nhánh hiện tại.");
                 }
             }
 
-            logStatusChange(con, orderId, order.getStatus(), "Đã hủy", employeeId, reason);
+            logStatusChange(con, orderId, order.getStatus(), "Đã hủy", employeeId, cancelReason);
 
             if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
                 CustomersSql.getInstance().recalculateCustomerRank(con, order.getCustomerId());
@@ -195,46 +162,60 @@ public class PaymentService {
     }
 
     public static boolean processCheckoutSecure(Order order, List<OrderDetail> details) throws ConcurrentCheckoutException {
-        String insertDetailSql = """
-            INSERT INTO ORDER_DETAILS (order_detail_id, order_id, product_id, quantity, unit_price, is_deleted)
-            VALUES (?, ?, ?, ?, ?, 0)
-        """;
+        Connection con = null;
 
-        String updateStockSql = """
-            UPDATE INVENTORY
-            SET quantity = quantity - ?, last_updated = SYSDATE
-            WHERE product_id = ?
-              AND store_id = ?
-              AND quantity >= ?
-              AND NVL(is_deleted, 0) = 0
-        """;
+        try {
+            validateCheckoutInput(order, details);
 
-        String checkStockSql = """
-            SELECT quantity
-            FROM INVENTORY
-            WHERE product_id = ?
-              AND store_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
+            String storeId = requireStoreId(order);
+            assertWritableStore(storeId);
+            normalizeOrderBeforeCheckout(order, storeId);
 
-        try (Connection con = DatabaseConnection.getConnection()) {
+            con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            try (PreparedStatement psDetail = con.prepareStatement(insertDetailSql);
-                 PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql);
-                 PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
+            OrdersSql.getInstance().insertWithConn(con, order);
 
-                String storeId = requireStoreId(order);
-                assertWritableStore(storeId);
-                order.setStoreId(storeId);
-                if (order.getStatus() == null || order.getStatus().isBlank()) {
-                    order.setStatus("Hoàn thành");
-                }
-                OrdersSql.getInstance().insertWithConn(con, order);
+            Map<String, Integer> failedItems = new HashMap<>();
 
-                Map<String, Integer> failedItems = new HashMap<>();
+            String checkStockSql = """
+                SELECT quantity
+                FROM INVENTORY
+                WHERE product_id = ?
+                  AND store_id = ?
+                  AND NVL(is_deleted, 0) = 0
+            """;
 
+            String updateStockSql = """
+                UPDATE INVENTORY
+                SET quantity = quantity - ?,
+                    last_updated = SYSDATE
+                WHERE product_id = ?
+                  AND store_id = ?
+                  AND quantity >= ?
+                  AND NVL(is_deleted, 0) = 0
+            """;
+
+            String insertDetailSql = """
+                INSERT INTO ORDER_DETAILS (
+                    order_detail_id,
+                    order_id,
+                    product_id,
+                    quantity,
+                    unit_price,
+                    is_deleted
+                )
+                VALUES (?, ?, ?, ?, ?, 0)
+            """;
+
+            try (
+                    PreparedStatement psCheckStock = con.prepareStatement(checkStockSql);
+                    PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql);
+                    PreparedStatement psDetail = con.prepareStatement(insertDetailSql)
+            ) {
                 for (OrderDetail d : details) {
+                    normalizeOrderDetailBeforeInsert(d, order.getOrderId());
+
                     psUpdateStock.setInt(1, d.getQuantity());
                     psUpdateStock.setString(2, d.getProductId());
                     psUpdateStock.setString(3, storeId);
@@ -245,11 +226,12 @@ public class PaymentService {
                     if (updatedRows == 0) {
                         psCheckStock.setString(1, d.getProductId());
                         psCheckStock.setString(2, storeId);
+
                         try (ResultSet rs = psCheckStock.executeQuery()) {
                             failedItems.put(d.getProductId(), rs.next() ? rs.getInt("quantity") : 0);
                         }
                     } else {
-                        psDetail.setString(1, "OD" + System.nanoTime());
+                        psDetail.setString(1, buildOrderDetailId());
                         psDetail.setString(2, order.getOrderId());
                         psDetail.setString(3, d.getProductId());
                         psDetail.setInt(4, d.getQuantity());
@@ -264,35 +246,207 @@ public class PaymentService {
                 }
 
                 psDetail.executeBatch();
-
-                if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
-                    CustomersSql.getInstance().updateCustomerAfterPayment(con, order);
-                }
-
-                con.commit();
-                publishPaymentChanges();
-                return true;
-
-            } catch (SQLException e) {
-                con.rollback();
-                e.printStackTrace();
-            } finally {
-                con.setAutoCommit(true);
             }
-        } catch (SQLException e) {
+
+            if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
+                CustomersSql.getInstance().updateCustomerAfterPayment(con, order);
+            }
+
+            con.commit();
+            publishPaymentChanges();
+            return true;
+
+        } catch (ConcurrentCheckoutException e) {
+            rollbackQuietly(con);
+            throw e;
+        } catch (Exception e) {
+            rollbackQuietly(con);
+            System.err.println("❌ Lỗi processCheckoutSecure: " + e.getMessage());
             e.printStackTrace();
+            return false;
+        } finally {
+            closeConn(con);
         }
-        return false;
+    }
+
+    private static void validateCheckoutInput(Order order, List<OrderDetail> details) throws SQLException {
+        if (order == null) {
+            throw new SQLException("Hóa đơn không hợp lệ.");
+        }
+
+        if (order.getOrderId() == null || order.getOrderId().trim().isEmpty()) {
+            throw new SQLException("Hóa đơn chưa có mã đơn.");
+        }
+
+        if (details == null || details.isEmpty()) {
+            throw new SQLException("Giỏ hàng đang rỗng, không thể tạo hóa đơn.");
+        }
+
+        for (OrderDetail d : details) {
+            if (d == null) {
+                throw new SQLException("Chi tiết hóa đơn không hợp lệ.");
+            }
+
+            if (d.getProductId() == null || d.getProductId().trim().isEmpty()) {
+                throw new SQLException("Có sản phẩm trong giỏ chưa có mã sản phẩm.");
+            }
+
+            if (d.getQuantity() <= 0) {
+                throw new SQLException("Số lượng sản phẩm phải lớn hơn 0: " + d.getProductId());
+            }
+
+            if (d.getUnitPrice() < 0) {
+                throw new SQLException("Đơn giá sản phẩm không hợp lệ: " + d.getProductId());
+            }
+        }
+    }
+
+    private static void normalizeOrderBeforeCheckout(Order order, String storeId) throws SQLException {
+        order.setStoreId(storeId);
+
+        String currentEmployeeId = getCurrentEmployeeIdOrNull();
+
+        if ((order.getEmployeeId() == null || order.getEmployeeId().trim().isEmpty())
+                && currentEmployeeId != null) {
+            order.setEmployeeId(currentEmployeeId);
+        }
+
+        if (order.getEmployeeId() == null || order.getEmployeeId().trim().isEmpty()) {
+            throw new SQLException("Không xác định được nhân viên bán hàng hiện tại.");
+        }
+
+        if (order.getStatus() == null || order.getStatus().isBlank()) {
+            order.setStatus("Hoàn thành");
+        }
+    }
+
+    private static void normalizeOrderDetailBeforeInsert(OrderDetail detail, String orderId) {
+        try {
+            detail.setOrderId(orderId);
+        } catch (Exception ignored) {
+            // Nếu model không có setter thì insert manual vẫn dùng orderId truyền vào.
+        }
+
+        try {
+            if (detail.getOrderDetailId() == null || detail.getOrderDetailId().trim().isEmpty()) {
+                detail.setOrderDetailId(buildOrderDetailId());
+            }
+        } catch (Exception ignored) {
+            // Nếu model không có orderDetailId thì insert manual vẫn tự sinh.
+        }
+    }
+
+    private static void checkStockBeforeCheckout(
+            Connection con,
+            String storeId,
+            List<OrderDetail> details
+    ) throws SQLException {
+        String sqlCheckStock = """
+            SELECT i.quantity AS stock_quantity,
+                   p.product_name
+            FROM INVENTORY i
+            JOIN PRODUCTS p
+                ON i.product_id = p.product_id
+            WHERE i.product_id = ?
+              AND i.store_id = ?
+              AND NVL(i.is_deleted, 0) = 0
+        """;
+
+        try (PreparedStatement ps = con.prepareStatement(sqlCheckStock)) {
+            for (OrderDetail ct : details) {
+                ps.setString(1, ct.getProductId());
+                ps.setString(2, storeId);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new SQLException("Không tìm thấy sản phẩm tại chi nhánh hiện tại: " + ct.getProductId());
+                    }
+
+                    int stock = rs.getInt("stock_quantity");
+
+                    if (stock < ct.getQuantity()) {
+                        throw new SQLException(
+                                "Sản phẩm [" + rs.getString("product_name")
+                                + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    private static void insertOrderDetailsAndSubtractStock(
+            Connection con,
+            Order order,
+            List<OrderDetail> details,
+            String storeId
+    ) throws SQLException {
+        String insertDetailSql = """
+            INSERT INTO ORDER_DETAILS (
+                order_detail_id,
+                order_id,
+                product_id,
+                quantity,
+                unit_price,
+                is_deleted
+            )
+            VALUES (?, ?, ?, ?, ?, 0)
+        """;
+
+        String updateStockSql = """
+            UPDATE INVENTORY
+            SET quantity = quantity - ?,
+                last_updated = SYSDATE
+            WHERE product_id = ?
+              AND store_id = ?
+              AND NVL(is_deleted, 0) = 0
+              AND quantity >= ?
+        """;
+
+        try (
+                PreparedStatement psDetail = con.prepareStatement(insertDetailSql);
+                PreparedStatement psStock = con.prepareStatement(updateStockSql)
+        ) {
+            for (OrderDetail ct : details) {
+                normalizeOrderDetailBeforeInsert(ct, order.getOrderId());
+
+                psDetail.setString(1, ct.getOrderDetailId());
+                psDetail.setString(2, order.getOrderId());
+                psDetail.setString(3, ct.getProductId());
+                psDetail.setInt(4, ct.getQuantity());
+                psDetail.setDouble(5, ct.getUnitPrice());
+                psDetail.addBatch();
+
+                psStock.setInt(1, ct.getQuantity());
+                psStock.setString(2, ct.getProductId());
+                psStock.setString(3, storeId);
+                psStock.setInt(4, ct.getQuantity());
+
+                int updated = psStock.executeUpdate();
+
+                if (updated <= 0) {
+                    throw new SQLException(
+                            "Sản phẩm " + ct.getProductId()
+                            + " không đủ tồn kho tại chi nhánh hoặc đã được máy khác bán trước."
+                    );
+                }
+            }
+
+            psDetail.executeBatch();
+        }
     }
 
     private static String requireStoreId(Order order) throws SQLException {
         String storeId = order != null ? order.getStoreId() : null;
+
         if (storeId == null || storeId.trim().isEmpty()) {
             storeId = SessionManager.getCurrentStoreId();
         }
+
         if (storeId == null || storeId.trim().isEmpty()) {
             throw new SQLException("Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.");
         }
+
         return storeId.trim();
     }
 
@@ -300,24 +454,68 @@ public class PaymentService {
         if (SessionManager.isAdmin()) {
             return;
         }
+
         String currentStoreId = SessionManager.getCurrentStoreId();
+
         if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
             throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
         }
+
         if (storeId == null || !currentStoreId.trim().equalsIgnoreCase(storeId.trim())) {
             throw new SQLException("Bạn không có quyền thao tác hóa đơn/tồn kho của chi nhánh khác.");
         }
+    }
+
+    private static String getCurrentEmployeeIdOrNull() {
+        try {
+            String employeeId = SessionManager.getCurrentEmployeeId();
+
+            if (employeeId != null && !employeeId.trim().isEmpty()) {
+                return employeeId.trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            if (SessionManager.getCurrentUser() != null
+                    && SessionManager.getCurrentUser().getUserId() != null
+                    && !SessionManager.getCurrentUser().getUserId().trim().isEmpty()) {
+                return SessionManager.getCurrentUser().getUserId().trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return null;
+    }
+
+    private static String buildOrderDetailId() {
+        return "OD" + System.nanoTime();
+    }
+
+    private static boolean isCancelledStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+
+        String s = status.trim().toLowerCase();
+
+        return s.contains("hủy")
+                || s.contains("huỷ")
+                || s.contains("huy")
+                || s.equals("cancelled");
     }
 
     private static void publishPaymentChanges() {
         try {
             SyncVersionDao.bumpVersion("CUSTOMERS");
             SyncVersionDao.bumpVersion("ORDERS");
+            SyncVersionDao.bumpVersion("ORDER_DETAILS");
             SyncVersionDao.bumpVersion("INVENTORY");
             SyncVersionDao.bumpVersion("PRODUCTS");
 
             RealtimeClient.send("CUSTOMERS_CHANGED");
             RealtimeClient.send("ORDERS_CHANGED");
+            RealtimeClient.send("ORDER_DETAILS_CHANGED");
             RealtimeClient.send("INVENTORY_CHANGED");
             RealtimeClient.send("PRODUCTS_CHANGED");
 
@@ -329,8 +527,25 @@ public class PaymentService {
         }
     }
 
-    private static void logStatusChange(Connection con, String orderId, String oldStatus, String newStatus, String changedBy, String note) {
-        String sql = "INSERT INTO INVOICE_STATUS_LOGS (invoice_id, old_status, new_status, changed_by, note) VALUES (?, ?, ?, ?, ?)";
+    private static void logStatusChange(
+            Connection con,
+            String orderId,
+            String oldStatus,
+            String newStatus,
+            String changedBy,
+            String note
+    ) {
+        String sql = """
+            INSERT INTO INVOICE_STATUS_LOGS (
+                invoice_id,
+                old_status,
+                new_status,
+                changed_by,
+                note
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """;
+
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, orderId);
             ps.setString(2, oldStatus);

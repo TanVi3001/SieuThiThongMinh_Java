@@ -1,5 +1,6 @@
 package business.sql.prod_inventory;
 
+import business.service.SessionManager;
 import common.db.DatabaseConnection;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -73,17 +74,6 @@ public class InventoryTransactionSql {
         public BigDecimal afterTax;
     }
 
-    /**
-     * Tạo phiếu nhập cho 1 sản phẩm.
-     *
-     * unitImportPrice = giá nhập chưa VAT. vatRate = phần trăm VAT.
-     *
-     * Điều kiện nghiệp vụ: Giá nhập sau VAT phải nhỏ hơn giá bán hiện tại.
-     *
-     * Quan trọng: Khi nhập kho với nhà cung cấp nào, hệ thống sẽ cập nhật
-     * PRODUCTS.supplier_id để màn Quản Lý Nhà Cung Cấp thống kê được số sản
-     * phẩm theo NCC.
-     */
     public String createPurchaseReceiptAndIncreaseStock(
             String productId,
             int quantity,
@@ -104,7 +94,9 @@ public class InventoryTransactionSql {
             throw new IllegalArgumentException("Giá nhập chưa VAT phải lớn hơn 0.");
         }
 
-        Product product = ProductsSql.getInstance().findById(productId);
+        String storeId = requireCurrentStoreId();
+
+        Product product = findProductMasterById(productId);
 
         if (product == null) {
             throw new IllegalArgumentException("Không tìm thấy sản phẩm: " + productId);
@@ -157,10 +149,6 @@ public class InventoryTransactionSql {
                 ? "Cái"
                 : product.getUnit().trim();
 
-        String storeId = product.getStoreId() == null || product.getStoreId().trim().isEmpty()
-                ? "ST01"
-                : product.getStoreId().trim();
-
         String cleanSupplierId = emptyToDefault(supplierId, "SUP_01");
         String createdBy = getCurrentAccountId();
         String cleanNote = note == null ? "" : note.trim();
@@ -170,6 +158,7 @@ public class InventoryTransactionSql {
             (
                 receipt_id,
                 supplier_id,
+                store_id,
                 created_by,
                 note,
                 total_before_tax,
@@ -181,7 +170,7 @@ public class InventoryTransactionSql {
             )
             VALUES
             (
-                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
                 ?, ?, ?,
                 CURRENT_TIMESTAMP,
                 CURRENT_TIMESTAMP,
@@ -258,18 +247,60 @@ public class InventoryTransactionSql {
               AND NVL(is_deleted, 0) = 0
         """;
 
+        String sqlUpsertStoreProduct = """
+            MERGE INTO STORE_PRODUCTS sp
+            USING (
+                SELECT ? AS store_id,
+                       ? AS product_id,
+                       ? AS selling_price
+                FROM dual
+            ) src
+            ON (
+                sp.store_id = src.store_id
+                AND sp.product_id = src.product_id
+            )
+            WHEN MATCHED THEN
+                UPDATE SET
+                    sp.selling_price = src.selling_price,
+                    sp.is_active = 1,
+                    sp.is_deleted = 0,
+                    sp.updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (
+                    store_id,
+                    product_id,
+                    selling_price,
+                    is_active,
+                    min_stock,
+                    is_deleted,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    src.store_id,
+                    src.product_id,
+                    src.selling_price,
+                    1,
+                    0,
+                    0,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+        """;
+
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
             try (
-                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt); PreparedStatement psDetail = con.prepareStatement(sqlDetail); PreparedStatement psTransaction = con.prepareStatement(sqlTransaction); PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier)) {
+                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt); PreparedStatement psDetail = con.prepareStatement(sqlDetail); PreparedStatement psTransaction = con.prepareStatement(sqlTransaction); PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier); PreparedStatement psUpsertStoreProduct = con.prepareStatement(sqlUpsertStoreProduct)) {
                 psReceipt.setString(1, receiptId);
                 psReceipt.setString(2, cleanSupplierId);
-                psReceipt.setString(3, createdBy);
-                psReceipt.setString(4, cleanNote);
-                psReceipt.setBigDecimal(5, beforeTax);
-                psReceipt.setBigDecimal(6, taxAmount);
-                psReceipt.setBigDecimal(7, afterTax);
+                psReceipt.setString(3, storeId);
+                psReceipt.setString(4, createdBy);
+                psReceipt.setString(5, cleanNote);
+                psReceipt.setBigDecimal(6, beforeTax);
+                psReceipt.setBigDecimal(7, taxAmount);
+                psReceipt.setBigDecimal(8, afterTax);
                 psReceipt.executeUpdate();
 
                 psDetail.setString(1, detailId);
@@ -285,7 +316,12 @@ public class InventoryTransactionSql {
                 psDetail.setBigDecimal(11, afterTax);
                 psDetail.executeUpdate();
 
-                ProductsSql.getInstance().addStockWithConn(con, productId, quantity);
+                ProductsSql.getInstance().addStockWithConn(con, productId, quantity, unit, storeId);
+
+                psUpsertStoreProduct.setString(1, storeId);
+                psUpsertStoreProduct.setString(2, productId);
+                psUpsertStoreProduct.setBigDecimal(3, salePrice);
+                psUpsertStoreProduct.executeUpdate();
 
                 psTransaction.setString(1, transactionId);
                 psTransaction.setString(2, receiptId);
@@ -321,16 +357,14 @@ public class InventoryTransactionSql {
         }
     }
 
-    /**
-     * Xuất/hủy kho và ghi lịch sử biến động. Hiện tại nếu bạn đã bỏ nút
-     * Xuất/Hủy khỏi UI thì hàm này vẫn giữ lại để sau này dùng.
-     */
     public boolean createOutboundTransaction(String productId, int quantity, String note) {
         if (productId == null || productId.trim().isEmpty() || quantity <= 0) {
             return false;
         }
 
-        Product product = ProductsSql.getInstance().findById(productId);
+        String storeId = requireCurrentStoreId();
+
+        Product product = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
 
         if (product == null) {
             return false;
@@ -341,10 +375,6 @@ public class InventoryTransactionSql {
         String unit = product.getUnit() == null || product.getUnit().trim().isEmpty()
                 ? "Cái"
                 : product.getUnit().trim();
-
-        String storeId = product.getStoreId() == null || product.getStoreId().trim().isEmpty()
-                ? "ST01"
-                : product.getStoreId().trim();
 
         BigDecimal salePrice = product.getBasePrice() == null
                 ? BigDecimal.ZERO
@@ -386,10 +416,10 @@ public class InventoryTransactionSql {
             con.setAutoCommit(false);
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
-                ProductsSql.getInstance().subtractStockWithConn(con, productId, quantity);
+                ProductsSql.getInstance().subtractStockWithConn(con, productId.trim(), quantity, unit, storeId);
 
                 ps.setString(1, transactionId);
-                ps.setString(2, productId);
+                ps.setString(2, productId.trim());
                 ps.setInt(3, quantity);
                 ps.setString(4, unit);
                 ps.setString(5, storeId);
@@ -415,15 +445,30 @@ public class InventoryTransactionSql {
         }
     }
 
-    /**
-     * Lấy lịch sử biến động kho gần nhất.
-     */
     public List<InventoryTransactionDTO> getRecentTransactions(int limit) {
+        return getRecentTransactionsByStore(null, limit);
+    }
+
+    public List<InventoryTransactionDTO> getRecentTransactionsByStore(String storeId, int limit) {
         List<InventoryTransactionDTO> list = new ArrayList<>();
 
         if (limit <= 0) {
             limit = 50;
         }
+
+        String cleanStoreId = normalizeStoreId(storeId);
+
+        /*
+         * User chi nhánh luôn bị ép theo store_id trong session.
+         * Admin:
+         * - cleanStoreId == null  => xem tất cả chi nhánh.
+         * - cleanStoreId != null  => lọc đúng chi nhánh đang chọn trên UI.
+         */
+        if (!SessionManager.isAdmin()) {
+            cleanStoreId = currentStoreIdOrNull();
+        }
+
+        boolean scoped = cleanStoreId != null && !cleanStoreId.isBlank();
 
         String sql = """
             SELECT *
@@ -448,37 +493,25 @@ public class InventoryTransactionSql {
                 LEFT JOIN PRODUCTS p
                     ON p.product_id = t.product_id
                 WHERE NVL(t.is_deleted, 0) = 0
+        """ + (scoped ? " AND t.store_id = ? " : "") + """
                 ORDER BY t.created_at DESC
             )
             WHERE ROWNUM <= ?
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, limit);
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            int idx = 1;
+
+            if (scoped) {
+                ps.setString(idx++, cleanStoreId);
+            }
+
+            ps.setInt(idx, limit);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    InventoryTransactionDTO dto = new InventoryTransactionDTO();
-
-                    dto.transactionId = rs.getString("transaction_id");
-                    dto.receiptId = rs.getString("receipt_id");
-                    dto.productId = rs.getString("product_id");
-                    dto.productName = rs.getString("product_name");
-                    dto.transactionType = rs.getString("transaction_type");
-                    dto.quantity = rs.getInt("quantity");
-                    dto.unit = rs.getString("unit");
-                    dto.storeId = rs.getString("store_id");
-                    dto.unitImportPrice = rs.getBigDecimal("unit_import_price");
-                    dto.salePrice = rs.getBigDecimal("sale_price");
-                    dto.vatRate = rs.getBigDecimal("vat_rate");
-                    dto.vatAmount = rs.getBigDecimal("vat_amount");
-                    dto.totalAmount = rs.getBigDecimal("total_amount");
-                    dto.note = rs.getString("note");
-                    dto.createdBy = rs.getString("created_by");
-                    dto.createdAt = rs.getTimestamp("created_at");
-
-                    list.add(dto);
+                    list.add(mapInventoryTransaction(rs));
                 }
             }
 
@@ -489,13 +522,38 @@ public class InventoryTransactionSql {
         return list;
     }
 
-    /**
-     * Lấy chi tiết phiếu nhập dạng 1 dòng. Dùng cho phiếu nhập 1 sản phẩm.
-     */
+    private InventoryTransactionDTO mapInventoryTransaction(ResultSet rs) throws SQLException {
+        InventoryTransactionDTO dto = new InventoryTransactionDTO();
+
+        dto.transactionId = rs.getString("transaction_id");
+        dto.receiptId = rs.getString("receipt_id");
+        dto.productId = rs.getString("product_id");
+        dto.productName = rs.getString("product_name");
+        dto.transactionType = rs.getString("transaction_type");
+        dto.quantity = rs.getInt("quantity");
+        dto.unit = rs.getString("unit");
+        dto.storeId = rs.getString("store_id");
+        dto.unitImportPrice = rs.getBigDecimal("unit_import_price");
+        dto.salePrice = rs.getBigDecimal("sale_price");
+        dto.vatRate = rs.getBigDecimal("vat_rate");
+        dto.vatAmount = rs.getBigDecimal("vat_amount");
+        dto.totalAmount = rs.getBigDecimal("total_amount");
+        dto.note = rs.getString("note");
+        dto.createdBy = rs.getString("created_by");
+        dto.createdAt = rs.getTimestamp("created_at");
+
+        return dto;
+    }
+
     public PurchaseReceiptDTO getReceiptDetail(String receiptId) {
         if (receiptId == null || receiptId.trim().isEmpty()) {
             return null;
         }
+
+        String storeId = currentStoreIdOrNull();
+        boolean scoped = !SessionManager.isAdmin()
+                && storeId != null
+                && !storeId.isBlank();
 
         String sql = """
             SELECT r.receipt_id,
@@ -519,12 +577,18 @@ public class InventoryTransactionSql {
             WHERE r.receipt_id = ?
               AND NVL(r.is_deleted, 0) = 0
               AND NVL(d.is_deleted, 0) = 0
+        """ + (scoped ? " AND r.store_id = ? " : "") + """
             FETCH FIRST 1 ROWS ONLY
         """;
 
         try (
                 Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, receiptId.trim());
+            int idx = 1;
+            ps.setString(idx++, receiptId.trim());
+
+            if (scoped) {
+                ps.setString(idx++, storeId);
+            }
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -555,16 +619,17 @@ public class InventoryTransactionSql {
         return null;
     }
 
-    /**
-     * Lấy toàn bộ dòng sản phẩm trong 1 phiếu nhập. Hàm này dùng cho phiếu nhập
-     * CSV vì 1 phiếu có thể có nhiều sản phẩm.
-     */
     public List<PurchaseReceiptLineDTO> getReceiptLines(String receiptId) {
         List<PurchaseReceiptLineDTO> list = new ArrayList<>();
 
         if (receiptId == null || receiptId.trim().isEmpty()) {
             return list;
         }
+
+        String storeId = currentStoreIdOrNull();
+        boolean scoped = !SessionManager.isAdmin()
+                && storeId != null
+                && !storeId.isBlank();
 
         String sql = """
             SELECT d.product_id,
@@ -578,16 +643,25 @@ public class InventoryTransactionSql {
                    d.line_tax,
                    d.line_after_tax
             FROM PURCHASE_RECEIPT_DETAILS d
+            JOIN PURCHASE_RECEIPTS r
+                ON r.receipt_id = d.receipt_id
             LEFT JOIN PRODUCTS p
                 ON p.product_id = d.product_id
             WHERE d.receipt_id = ?
               AND NVL(d.is_deleted, 0) = 0
+              AND NVL(r.is_deleted, 0) = 0
+        """ + (scoped ? " AND r.store_id = ? " : "") + """
             ORDER BY d.created_at ASC
         """;
 
         try (
                 Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, receiptId.trim());
+            int idx = 1;
+            ps.setString(idx++, receiptId.trim());
+
+            if (scoped) {
+                ps.setString(idx++, storeId);
+            }
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -615,6 +689,52 @@ public class InventoryTransactionSql {
         return list;
     }
 
+    private Product findProductMasterById(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+            SELECT product_id,
+                   product_name,
+                   base_price,
+                   category_id,
+                   supplier_id,
+                   image_path
+            FROM PRODUCTS
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Product p = new Product();
+                    p.setProductId(rs.getString("product_id"));
+                    p.setProductName(rs.getString("product_name"));
+                    p.setBasePrice(rs.getBigDecimal("base_price"));
+                    p.setCategoryId(rs.getString("category_id"));
+                    p.setSupplierId(rs.getString("supplier_id"));
+
+                    try {
+                        p.setImagePath(rs.getString("image_path"));
+                    } catch (Exception ignored) {
+                    }
+
+                    return p;
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
     private BigDecimal calculateImportPriceAfterVat(BigDecimal importPriceBeforeVat, BigDecimal vatRate) {
         if (importPriceBeforeVat == null) {
             importPriceBeforeVat = BigDecimal.ZERO;
@@ -633,15 +753,56 @@ public class InventoryTransactionSql {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
+    private String requireCurrentStoreId() {
+        String storeId = currentStoreIdOrNull();
+
+        if (storeId == null || storeId.isBlank()) {
+            throw new IllegalStateException(
+                    "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại bằng tài khoản đã được phân chi nhánh."
+            );
+        }
+
+        return storeId;
+    }
+
+    private String currentStoreIdOrNull() {
+        try {
+            String storeId = SessionManager.getCurrentStoreId();
+            return storeId == null || storeId.trim().isEmpty() ? null : storeId.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String normalizeStoreId(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        String text = value.trim();
+
+        if ("Tất cả chi nhánh".equalsIgnoreCase(text)
+                || "Chưa xác định".equalsIgnoreCase(text)) {
+            return null;
+        }
+
+        if (text.contains(" - ")) {
+            return text.substring(0, text.indexOf(" - ")).trim();
+        }
+
+        return text;
+    }
+
     private String getCurrentAccountId() {
         try {
-            if (business.service.SessionManager.getCurrentUser() != null) {
-                return business.service.SessionManager.getCurrentUser().getAccountId();
+            if (SessionManager.getCurrentUser() != null
+                    && SessionManager.getCurrentUser().getAccountId() != null) {
+                return SessionManager.getCurrentUser().getAccountId();
             }
         } catch (Exception ignored) {
         }
 
-        return null;
+        return "SYSTEM";
     }
 
     private String emptyToDefault(String value, String fallback) {

@@ -38,6 +38,7 @@ import javax.swing.table.TableCellRenderer;
 
 import model.order.Customer;
 import model.order.Order;
+import javax.swing.RowSorter;
 
 public class OrderView extends javax.swing.JPanel {
 
@@ -53,6 +54,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private String userRole;
     private String empId;
+    private volatile boolean loadingOrders = false;
 
     public OrderView() {
         if (SessionManager.getCurrentUser() != null) {
@@ -119,7 +121,7 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
-            return OrdersSql.getInstance().selectAll(userRole, empId, storeId);
+            return OrdersSql.getInstance().selectAllByStoreAndEmployee(storeId, empId);
         }
 
         if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
@@ -140,7 +142,11 @@ public class OrderView extends javax.swing.JPanel {
             return loadOrdersByCurrentScope();
         }
 
-        if (isStoreScopedUser()) {
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().selectByConditionStoreAndEmployee(status, storeId, empId);
+        }
+
+        if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
             return OrdersSql.getInstance().selectByConditionAndStore(status, storeId);
         }
 
@@ -154,7 +160,11 @@ public class OrderView extends javax.swing.JPanel {
             return java.util.Collections.emptyList();
         }
 
-        if (isStoreScopedUser()) {
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().findByDateRangeStoreAndEmployee(fromDate, toDate, storeId, empId);
+        }
+
+        if (SessionManager.isStoreManager() || "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole)) {
             return OrdersSql.getInstance().findByDateRangeAndStore(fromDate, toDate, storeId);
         }
 
@@ -162,18 +172,22 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private Order selectOrderByIdCurrentScope(String orderId) {
-        String storeId = getCurrentStoreIdOrWarn();
+    String storeId = getCurrentStoreIdOrWarn();
 
-        if (isStoreScopedUser()) {
-            if (storeId == null) {
-                return null;
-            }
-
-            return OrdersSql.getInstance().selectByIdInStore(orderId, storeId);
+    if (isStoreScopedUser()) {
+        if (storeId == null) {
+            return null;
         }
 
-        return OrdersSql.getInstance().selectById(orderId);
+        if ("R_STAFF_SALE".equalsIgnoreCase(userRole)) {
+            return OrdersSql.getInstance().selectByIdInStoreAndEmployee(orderId, storeId, empId);
+        }
+
+        return OrdersSql.getInstance().selectByIdInStore(orderId, storeId);
     }
+
+    return OrdersSql.getInstance().selectById(orderId);
+}
 
     private void setupModernUI() {
         setBackground(new Color(245, 247, 250));
@@ -307,26 +321,26 @@ public class OrderView extends javax.swing.JPanel {
                 c.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 c.setForeground(Color.WHITE);
 
-                switch (column) {
-                    case 0:
-                        c.setBackground(new Color(59, 130, 246));
-                        break;
-                    case 1:
-                        c.setBackground(new Color(16, 185, 129));
-                        break;
-                    case 2:
-                        c.setBackground(new Color(245, 158, 11));
-                        break;
-                    case 3:
-                        c.setBackground(new Color(139, 92, 246));
-                        break;
-                    case 4:
-                        c.setBackground(new Color(239, 68, 68));
-                        break;
-                    default:
-                        c.setBackground(new Color(59, 130, 246));
-                        break;
-                }
+               switch (column) {
+    case 0:
+        c.setBackground(new Color(59, 130, 246));
+        break;
+    case 1:
+        c.setBackground(new Color(16, 185, 129));
+        break;
+    case 2:
+        c.setBackground(new Color(245, 158, 11));
+        break;
+    case 3:
+        c.setBackground(new Color(139, 92, 246));
+        break;
+    case 4:
+        c.setBackground(new Color(239, 68, 68));
+        break;
+    default:
+        c.setBackground(new Color(59, 130, 246));
+        break;
+}
 
                 ((javax.swing.JLabel) c).setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
                 return c;
@@ -473,48 +487,89 @@ public class OrderView extends javax.swing.JPanel {
     }
 
     private void loadDataToTable() {
-        new SwingWorker<List<Order>, Void>() {
-            @Override
-            protected List<Order> doInBackground() {
-                return loadOrdersByCurrentScope();
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    fillTable(get());
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(
-                            OrderView.this,
-                            "Lỗi tải danh sách hóa đơn: " + ex.getMessage(),
-                            "Lỗi",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                }
-            }
-        }.execute();
+    if (loadingOrders) {
+        return;
     }
 
+    loadingOrders = true;
+
+    new SwingWorker<List<Order>, Void>() {
+        @Override
+        protected List<Order> doInBackground() {
+            return loadOrdersByCurrentScope();
+        }
+
+        @Override
+        protected void done() {
+            try {
+                fillTableSafely(get());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(
+                        OrderView.this,
+                        "Lỗi tải danh sách hóa đơn: " + ex.getMessage(),
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            } finally {
+                loadingOrders = false;
+            }
+        }
+    }.execute();
+}
+  
     private void fillTable(List<Order> list) {
-        if (list == null) {
-            return;
+    fillTableSafely(list);
+}
+
+private void fillTableSafely(List<Order> list) {
+    final List<Order> safeList = list == null
+            ? java.util.Collections.emptyList()
+            : new java.util.ArrayList<>(list);
+
+    javax.swing.SwingUtilities.invokeLater(() -> {
+        RowSorter<? extends javax.swing.table.TableModel> oldSorter = jTable1.getRowSorter();
+
+        try {
+            jTable1.clearSelection();
+
+            jTable1.setRowSorter(null);
+
+            DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+            model.setRowCount(0);
+
+            for (Order o : safeList) {
+                if (o == null) {
+                    continue;
+                }
+
+                model.addRow(new Object[]{
+                    o.getOrderId(),
+                    o.getCustomerId() != null && !o.getCustomerId().trim().isEmpty()
+                    ? o.getCustomerId()
+                    : "Khách vãng lai",
+                    o.getOrderDate(),
+                    moneyFormat.format(o.getTotalAmount()) + " đ",
+                    normalizeDisplayStatus(o.getStatus())
+                });
+            }
+
+        } finally {
+            if (oldSorter != null) {
+                try {
+                    jTable1.setRowSorter(oldSorter);
+                } catch (Exception ignored) {
+                    jTable1.setAutoCreateRowSorter(true);
+                }
+            } else {
+                jTable1.setAutoCreateRowSorter(true);
+            }
+
+            jTable1.revalidate();
+            jTable1.repaint();
         }
-
-        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
-        model.setRowCount(0);
-
-        for (Order o : list) {
-            model.addRow(new Object[]{
-                o.getOrderId(),
-                o.getCustomerId() != null ? o.getCustomerId() : "Khách vãng lai",
-                o.getOrderDate(),
-                moneyFormat.format(o.getTotalAmount()) + " đ",
-                normalizeDisplayStatus(o.getStatus())
-            });
-        }
-    }
-
+    });
+}
     private String normalizeDisplayStatus(String status) {
         if (status == null) {
             return "";
@@ -535,25 +590,57 @@ public class OrderView extends javax.swing.JPanel {
         return status;
     }
 
-    private int getSelectedModelRow() {
-        int viewRow = jTable1.getSelectedRow();
+   private int getSelectedModelRow() {
+    int viewRow = jTable1.getSelectedRow();
 
-        if (viewRow < 0) {
+    if (viewRow < 0) {
+        return -1;
+    }
+
+    if (viewRow >= jTable1.getRowCount()) {
+        jTable1.clearSelection();
+        return -1;
+    }
+
+    try {
+        int modelRow = jTable1.convertRowIndexToModel(viewRow);
+
+        if (modelRow < 0 || modelRow >= jTable1.getModel().getRowCount()) {
+            jTable1.clearSelection();
             return -1;
         }
 
-        return jTable1.convertRowIndexToModel(viewRow);
+        return modelRow;
+
+    } catch (Exception ex) {
+        jTable1.clearSelection();
+        return -1;
     }
+}
 
     private String getSelectedOrderId() {
-        int modelRow = getSelectedModelRow();
+    int modelRow = getSelectedModelRow();
 
-        if (modelRow < 0) {
+    if (modelRow < 0) {
+        return null;
+    }
+
+    try {
+        Object value = jTable1.getModel().getValueAt(modelRow, 0);
+
+        if (value == null) {
             return null;
         }
 
-        return String.valueOf(jTable1.getModel().getValueAt(modelRow, 0));
+        String orderId = value.toString().trim();
+
+        return orderId.isEmpty() ? null : orderId;
+
+    } catch (Exception ex) {
+        jTable1.clearSelection();
+        return null;
     }
+}
 
     private void showOrderDetailsDialog(String orderId) {
         try {
@@ -575,7 +662,19 @@ public class OrderView extends javax.swing.JPanel {
                 customer = CustomersSql.getInstance().selectById(order.getCustomerId());
             }
 
-            List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+            List<Map<String, Object>> details;
+
+            if (isStoreScopedUser()) {
+                String storeId = getCurrentStoreIdOrWarn();
+
+                if (storeId == null) {
+                    return;
+                }
+
+                details = OrderDetailsSql.getInstance().selectDetailRowsByOrderIdAndStore(orderId, storeId);
+            } else {
+                details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+            }
 
             if (details == null || details.isEmpty()) {
                 JOptionPane.showMessageDialog(
@@ -645,7 +744,19 @@ public class OrderView extends javax.swing.JPanel {
             return;
         }
 
-        List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+        List<Map<String, Object>> details;
+
+        if (isStoreScopedUser()) {
+            String storeId = getCurrentStoreIdOrWarn();
+
+            if (storeId == null) {
+                throw new IOException("Không xác định được chi nhánh hiện tại.");
+            }
+
+            details = OrderDetailsSql.getInstance().selectDetailRowsByOrderIdAndStore(orderId, storeId);
+        } else {
+            details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
+        }
 
         try {
             com.itextpdf.kernel.pdf.PdfWriter writer
@@ -872,12 +983,14 @@ public class OrderView extends javax.swing.JPanel {
                 return false;
             }
 
-            String hashFromDb = null;
+           String hashFromDb = null;
 
-            try (
-                    java.sql.Connection con = DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(
-                    "SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0"
-            )) {
+try (
+        java.sql.Connection con = DatabaseConnection.getConnection();
+        java.sql.PreparedStatement ps = con.prepareStatement(
+                "SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0"
+        )
+) {
                 ps.setString(1, user.getUsername());
 
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
@@ -1007,7 +1120,7 @@ public class OrderView extends javax.swing.JPanel {
         String selected = selectedObj.toString();
 
         try {
-            fillTable(loadOrdersByStatusCurrentScope(selected));
+            fillTableSafely(loadOrdersByStatusCurrentScope(selected));
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi lọc hóa đơn: " + ex.getMessage());
         }
@@ -1064,6 +1177,15 @@ public class OrderView extends javax.swing.JPanel {
     private void openSalesInvoiceReport(String orderId) {
         HashMap<String, Object> params = new HashMap<>();
         params.put("ORDER_ID", orderId);
+
+        String storeId = getCurrentStoreIdOrWarn();
+
+        if (isStoreScopedUser()) {
+            params.put("STORE_ID", storeId);
+        } else {
+            params.put("STORE_ID", null);
+        }
+
         ReportViewer.showReport(SALES_INVOICE_REPORT, params);
     }
 
