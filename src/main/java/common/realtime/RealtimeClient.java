@@ -3,6 +3,10 @@ package common.realtime;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Window;
+import java.lang.reflect.Method;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
@@ -10,12 +14,14 @@ import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.swing.SwingUtilities;
 
 public final class RealtimeClient {
 
     private static volatile WebSocketClient client;
     private static volatile URI serverUri;
     private static volatile boolean reconnectScheduled = false;
+    private static volatile long lastAdminPanelRefreshAt = 0L;
 
     private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "RealtimeClient-Reconnect");
@@ -73,7 +79,9 @@ public final class RealtimeClient {
                     AppEventType type = mapMessageToType(message);
 
                     if (type != null) {
-                        EventBus.publish(new AppDataChangedEvent(type, message));
+                        publishRealtimeEvent(type, message);
+                        publishCompanionEvents(type, message);
+                        refreshAdminSystemPanels(type, message);
                     }
                 }
 
@@ -125,6 +133,96 @@ public final class RealtimeClient {
             }
         } catch (Exception e) {
             System.err.println("[RT] SEND ERROR: " + e.getMessage());
+        }
+    }
+
+    private static void publishRealtimeEvent(AppEventType type, String message) {
+        try {
+            EventBus.publish(new AppDataChangedEvent(type, message));
+        } catch (Exception ex) {
+            System.err.println("[RT] EVENT BUS ERROR: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Các màn tổng hợp như AdminSystemPanel đọc dữ liệu từ nhiều bảng.
+     * Vì vậy khi có ORDERS / INVENTORY / STORE / PRODUCT / EMPLOYEE thay đổi,
+     * bắn kèm DASHBOARD và STATISTICS để những màn đang subscribe 2 event này tự reload.
+     */
+    private static void publishCompanionEvents(AppEventType type, String message) {
+        if (!affectsDashboard(type)) {
+            return;
+        }
+
+        String msg = message == null ? "" : message;
+
+        if (type != AppEventType.DASHBOARD) {
+            publishRealtimeEvent(AppEventType.DASHBOARD, "DASHBOARD_CHANGED:AUTO:" + msg);
+        }
+
+        if (type != AppEventType.STATISTICS) {
+            publishRealtimeEvent(AppEventType.STATISTICS, "STATISTICS_CHANGED:AUTO:" + msg);
+        }
+    }
+
+    private static boolean affectsDashboard(AppEventType type) {
+        return type == AppEventType.ORDERS
+                || type == AppEventType.INVENTORY
+                || type == AppEventType.INVENTORY_ALERT
+                || type == AppEventType.PRODUCTS
+                || type == AppEventType.CUSTOMERS
+                || type == AppEventType.EMPLOYEES
+                || type == AppEventType.STORE_INFO
+                || type == AppEventType.ACCOUNT_SECURITY
+                || type == AppEventType.SYSTEM_CONFIG
+                || type == AppEventType.DASHBOARD
+                || type == AppEventType.STATISTICS;
+    }
+
+    /**
+     * Fallback thực dụng cho AdminSystemPanel hiện tại: panel này chưa subscribe EventBus,
+     * nên khi nhận realtime event thì tự quét các Window đang mở và gọi reloadAll() bằng reflection.
+     * Cách này không đổi UI và không phụ thuộc vào constructor của AdminSystemPanel.
+     */
+    private static void refreshAdminSystemPanels(AppEventType type, String message) {
+        if (!affectsDashboard(type)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastAdminPanelRefreshAt < 450) {
+            return;
+        }
+        lastAdminPanelRefreshAt = now;
+
+        SwingUtilities.invokeLater(() -> {
+            for (Window window : Window.getWindows()) {
+                refreshAdminSystemPanelIn(window);
+            }
+        });
+    }
+
+    private static void refreshAdminSystemPanelIn(Component component) {
+        if (component == null) {
+            return;
+        }
+
+        if ("view.AdminSystemPanel".equals(component.getClass().getName())) {
+            try {
+                Method reloadAll = component.getClass().getDeclaredMethod("reloadAll");
+                reloadAll.setAccessible(true);
+                reloadAll.invoke(component);
+                System.out.println("[RT] AdminSystemPanel reloaded by realtime event.");
+            } catch (Exception ex) {
+                System.err.println("[RT] AdminSystemPanel reload failed: " + ex.getMessage());
+            }
+            return;
+        }
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                refreshAdminSystemPanelIn(child);
+            }
         }
     }
 
