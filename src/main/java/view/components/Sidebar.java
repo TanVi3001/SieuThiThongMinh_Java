@@ -95,15 +95,10 @@ public class Sidebar extends JPanel {
             return;
         }
 
-        // Fallback an toàn nếu role lạ.
         addMenuItem("Cài đặt", IconHelper.settings(24));
     }
 
     private void addAdminMenu() {
-        /*
-         * Admin thường dùng AdminDashboardView riêng.
-         * Nhưng giữ menu này để nếu DashboardView nhận Admin vẫn không bị trống.
-         */
         addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
         addMenuItem("Quản lý tồn kho", IconHelper.product(24));
         addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
@@ -115,9 +110,13 @@ public class Sidebar extends JPanel {
     }
 
     private void addManagerMenu() {
-        addMenuItem("Bán hàng", IconHelper.order(24));
+        /*
+         * Manager quản lý chi nhánh ở mức điều phối.
+         * Không trực tiếp bán hàng.
+         * Không trực tiếp quản lý tồn kho.
+         * Hai chức năng đó giao cho Staff_Sale và Staff_Product.
+         */
         addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
         addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
         addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
         addMenuItem("Khách hàng", IconHelper.customer(24));
@@ -127,7 +126,13 @@ public class Sidebar extends JPanel {
     }
 
     private void addStaffSaleMenu() {
+        /*
+         * Staff Sale được xem Quản lý sản phẩm để kiểm tra hàng
+         * và gửi cảnh báo khẩn cho nhân viên sản phẩm/kho.
+         * Không được full thêm/sửa/xóa sản phẩm ở ProductView.
+         */
         addMenuItem("Bán hàng", IconHelper.order(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
         addMenuItem("Khách hàng", IconHelper.customer(24));
         addMenuItem("Hóa đơn", IconHelper.bill(24));
         addMenuItem("Cài đặt", IconHelper.settings(24));
@@ -135,10 +140,9 @@ public class Sidebar extends JPanel {
 
     private void addStaffProductMenu() {
         /*
-         * R_STAFF_VIEW_PROD trong đồ án = Staff Product / Kho / Nhập hàng.
-         * Không phải view-only.
+         * R_STAFF_VIEW_PROD = Staff Product / nhân viên kho / nhập hàng.
          */
-        addMenuItem("Quản lý tồn kho",  IconHelper.product(24));
+        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
         addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
         addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
         addMenuItem("Cài đặt", IconHelper.settings(24));
@@ -192,6 +196,7 @@ public class Sidebar extends JPanel {
         textPanel.add(Box.createRigidArea(new Dimension(0, 3)));
         textPanel.add(subtitle);
         textPanel.add(Box.createVerticalGlue());
+
         brandingPanel.add(textPanel, BorderLayout.CENTER);
 
         return brandingPanel;
@@ -224,11 +229,16 @@ public class Sidebar extends JPanel {
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(8, 24, 28, 24));
         bottomPanel.add(Box.createVerticalGlue());
 
-        ModernSidebarMenuItem logoutItem = new ModernSidebarMenuItem("Đăng xuất", IconHelper.logout(24), () -> {
-            if (listener != null) {
-                listener.onMenuClick("Đăng xuất");
-            }
-        });
+        ModernSidebarMenuItem logoutItem = new ModernSidebarMenuItem(
+                "Đăng xuất",
+                IconHelper.logout(24),
+                () -> {
+                    if (listener != null) {
+                        listener.onMenuClick("Đăng xuất");
+                    }
+                }
+        );
+
         logoutItem.setFramed(true);
         logoutItem.setAlignmentX(Component.LEFT_ALIGNMENT);
         bottomPanel.add(logoutItem);
