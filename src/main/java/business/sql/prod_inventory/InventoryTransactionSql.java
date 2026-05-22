@@ -96,7 +96,7 @@ public class InventoryTransactionSql {
 
         String storeId = requireCurrentStoreId();
 
-        Product product = ProductsSql.getInstance().findById(productId);
+        Product product = findProductMasterById(productId);
 
         if (product == null) {
             throw new IllegalArgumentException("Không tìm thấy sản phẩm: " + productId);
@@ -670,6 +670,54 @@ public class InventoryTransactionSql {
         }
 
         return list;
+    }
+
+    private Product findProductMasterById(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+            SELECT product_id,
+                   product_name,
+                   base_price,
+                   category_id,
+                   supplier_id,
+                   image_path
+            FROM PRODUCTS
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection();
+                PreparedStatement ps = con.prepareStatement(sql)
+        ) {
+            ps.setString(1, productId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Product p = new Product();
+                    p.setProductId(rs.getString("product_id"));
+                    p.setProductName(rs.getString("product_name"));
+                    p.setBasePrice(rs.getBigDecimal("base_price"));
+                    p.setCategoryId(rs.getString("category_id"));
+                    p.setSupplierId(rs.getString("supplier_id"));
+
+                    try {
+                        p.setImagePath(rs.getString("image_path"));
+                    } catch (Exception ignored) {
+                    }
+
+                    return p;
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
     }
 
     private BigDecimal calculateImportPriceAfterVat(BigDecimal importPriceBeforeVat, BigDecimal vatRate) {

@@ -1,5 +1,6 @@
 package business.service;
 
+import business.sql.prod_inventory.ProductsSql;
 import common.db.DatabaseConnection;
 
 import java.io.BufferedReader;
@@ -95,6 +96,7 @@ public class ProductImportService {
 
         String sqlInsertProduct = """
             INSERT INTO PRODUCTS (
+                product_id,
                 product_name,
                 base_price,
                 category_id,
@@ -102,7 +104,7 @@ public class ProductImportService {
                 base_unit_id,
                 is_deleted
             )
-            VALUES (?, ?, ?, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
         """;
 
         String sqlUpdateProduct = """
@@ -250,7 +252,7 @@ public class ProductImportService {
             conn.setAutoCommit(false);
 
             try (
-                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct, new String[]{"PRODUCT_ID"}); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psCheckInventory = conn.prepareStatement(sqlCheckInventory); PreparedStatement psUpdateInventory = conn.prepareStatement(sqlUpdateInventory); PreparedStatement psInsertInventory = conn.prepareStatement(sqlInsertInventory); PreparedStatement psUpsertStoreProduct = conn.prepareStatement(sqlUpsertStoreProduct); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
+                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psCheckInventory = conn.prepareStatement(sqlCheckInventory); PreparedStatement psUpdateInventory = conn.prepareStatement(sqlUpdateInventory); PreparedStatement psInsertInventory = conn.prepareStatement(sqlInsertInventory); PreparedStatement psUpsertStoreProduct = conn.prepareStatement(sqlUpsertStoreProduct); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
                 psInsertReceipt.setString(1, result.receiptId);
                 psInsertReceipt.setString(2, DEFAULT_SUPPLIER_ID);
                 psInsertReceipt.setString(3, currentStoreId);
@@ -463,7 +465,7 @@ public class ProductImportService {
             }
         }
 
-        if (productId != null) {
+        if (productId != null && !productId.isBlank()) {
             psUpdateProduct.setBigDecimal(1, row.salePrice);
             psUpdateProduct.setString(2, row.categoryId);
             psUpdateProduct.setString(3, row.supplierId);
@@ -473,28 +475,15 @@ public class ProductImportService {
             return productId;
         }
 
-        psInsertProduct.setString(1, row.productName);
-        psInsertProduct.setBigDecimal(2, row.salePrice);
-        psInsertProduct.setString(3, row.categoryId);
-        psInsertProduct.setString(4, row.supplierId);
-        psInsertProduct.setString(5, DEFAULT_UNIT_ID);
+        productId = ProductsSql.getInstance().generateNextProductId();
+
+        psInsertProduct.setString(1, productId);
+        psInsertProduct.setString(2, row.productName);
+        psInsertProduct.setBigDecimal(3, row.salePrice);
+        psInsertProduct.setString(4, row.categoryId);
+        psInsertProduct.setString(5, row.supplierId);
+        psInsertProduct.setString(6, DEFAULT_UNIT_ID);
         psInsertProduct.executeUpdate();
-
-        try (ResultSet rsKey = psInsertProduct.getGeneratedKeys()) {
-            if (rsKey.next()) {
-                productId = rsKey.getString(1);
-            }
-        }
-
-        if (productId == null || productId.isBlank()) {
-            psCheckProduct.setString(1, row.productName);
-
-            try (ResultSet rs = psCheckProduct.executeQuery()) {
-                if (rs.next()) {
-                    productId = rs.getString("product_id");
-                }
-            }
-        }
 
         return productId;
     }
@@ -603,23 +592,35 @@ public class ProductImportService {
 
         CsvProductRow row = new CsvProductRow();
 
-        row.productName = clean(data[0]);
-        row.salePrice = parseMoney(clean(data[1]));
-        row.quantity = Integer.parseInt(clean(data[2]));
-        row.categoryId = clean(data[3]).isEmpty() ? "CAT001" : clean(data[3]);
+        String productName = clean(data[0]);
+        String salePriceRaw = clean(data[1]);
+        String quantityRaw = clean(data[2]);
+        String categoryId = clean(data[3]);
 
-        if (data.length >= 5 && !clean(data[4]).isEmpty()) {
-            row.importPriceBeforeVat = parseMoney(clean(data[4]));
+        row.productName = productName;
+        row.salePrice = parseMoney(salePriceRaw);
+        row.quantity = Integer.parseInt(quantityRaw);
+        row.categoryId = categoryId.isEmpty() ? "CAT001" : categoryId;
+
+        if (data.length >= 5) {
+            String importPriceRaw = clean(data[4]);
+            if (!importPriceRaw.isEmpty()) {
+                row.importPriceBeforeVat = parseMoney(importPriceRaw);
+            }
         }
 
-        if (data.length >= 6 && !clean(data[5]).isEmpty()) {
-            row.supplierId = clean(data[5]);
+        if (data.length >= 6) {
+            String supplierId = clean(data[5]);
+            row.supplierId = supplierId.isEmpty() ? DEFAULT_SUPPLIER_ID : supplierId;
         } else {
             row.supplierId = DEFAULT_SUPPLIER_ID;
         }
 
-        if (data.length >= 7 && !clean(data[6]).isEmpty()) {
-            row.vatRate = parseMoney(clean(data[6]).replace("%", ""));
+        if (data.length >= 7) {
+            String vatRaw = clean(data[6]).replace("%", "");
+            if (!vatRaw.isEmpty()) {
+                row.vatRate = parseMoney(vatRaw);
+            }
         }
 
         return row;
