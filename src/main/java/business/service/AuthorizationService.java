@@ -97,14 +97,15 @@ public class AuthorizationService {
      * Module bán hàng/POS: Admin, Manager, Staff Sale được vào.
      */
     public static boolean canAccessSales() {
-        return isAdmin() || isStoreManager() || isCashier();
+        return isAdmin() || isCashier();
+
     }
 
     /**
      * Module sản phẩm/tồn kho: Admin, Manager, Staff Product được vào.
      */
     public static boolean canAccessProductsAndInventory() {
-        return isAdmin() || isStoreManager() || isProductStaff();
+        return isAdmin() || isStoreManager() || isCashier() || isProductStaff();
     }
 
     /**
@@ -112,7 +113,8 @@ public class AuthorizationService {
      * tác.
      */
     public static boolean canManageStock() {
-        return isAdmin() || isStoreManager() || isProductStaff();
+        return isAdmin() || isProductStaff();
+
     }
 
     /**

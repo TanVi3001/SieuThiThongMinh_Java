@@ -148,7 +148,7 @@ public class DashboardView extends JFrame {
                 break;
 
             case "Quản lý tồn kho":
-                if (!AuthorizationService.canAccessProductsAndInventory()) {
+                if (!AuthorizationService.canManageStock()) {
                     showAccessDenied();
                     return;
                 }
