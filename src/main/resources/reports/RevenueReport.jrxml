@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-              name="RevenueReport"
-              pageWidth="842"
-              pageHeight="595"
-              orientation="Landscape"
-              columnWidth="782"
-              leftMargin="30"
-              rightMargin="30"
-              topMargin="24"
-              bottomMargin="24"
-              whenNoDataType="AllSectionsNoDetail"
-              uuid="d73ac4a2-6511-4d2e-85c8-0fc2dd9efc31">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+    name="RevenueReport"
+    pageWidth="842"
+    pageHeight="595"
+    orientation="Landscape"
+    columnWidth="782"
+    leftMargin="30"
+    rightMargin="30"
+    topMargin="24"
+    bottomMargin="24"
+    whenNoDataType="AllSectionsNoDetail"
+    uuid="d73ac4a2-6511-4d2e-85c8-0fc2dd9efc31">
 
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle" />
 
@@ -24,15 +24,33 @@
     <style name="TableCell" style="Base" fontSize="9" />
     <style name="Money" style="TableCell" hTextAlign="Right" />
 
-    <parameter name="START_DATE" class="java.util.Date" />
-    <parameter name="END_DATE" class="java.util.Date" />
-    <parameter name="END_DATE_PLUS_ONE" class="java.util.Date" />
-    <parameter name="REPORT_TYPE" class="java.lang.String" />
-    <parameter name="REPORT_TYPE_LABEL" class="java.lang.String" />
-    <parameter name="PERIOD_HEADER" class="java.lang.String" />
-    <parameter name="STORE_ID" class="java.lang.String" />
-    <parameter name="STORE_NAME" class="java.lang.String" />
-    <parameter name="IS_ADMIN_REPORT" class="java.lang.Boolean" />
+    <parameter name="START_DATE" class="java.util.Date">
+        <defaultValueExpression><![CDATA[new java.util.Date()]]></defaultValueExpression>
+    </parameter>
+    <parameter name="END_DATE" class="java.util.Date">
+        <defaultValueExpression><![CDATA[new java.util.Date()]]></defaultValueExpression>
+    </parameter>
+    <parameter name="END_DATE_PLUS_ONE" class="java.util.Date">
+        <defaultValueExpression><![CDATA[new java.util.Date(System.currentTimeMillis() + 86400000L)]]></defaultValueExpression>
+    </parameter>
+    <parameter name="REPORT_TYPE" class="java.lang.String">
+        <defaultValueExpression><![CDATA["DAY"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="REPORT_TYPE_LABEL" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Theo ngày"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="PERIOD_HEADER" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Kỳ báo cáo"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="STORE_ID" class="java.lang.String">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+    <parameter name="STORE_NAME" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Toàn hệ thống"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="IS_ADMIN_REPORT" class="java.lang.Boolean">
+        <defaultValueExpression><![CDATA[java.lang.Boolean.FALSE]]></defaultValueExpression>
+    </parameter>
 
     <queryString language="SQL">
     <![CDATA[

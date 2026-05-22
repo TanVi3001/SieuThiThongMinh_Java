@@ -12,6 +12,7 @@ import java.util.Map;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
+import net.sf.jasperreports.engine.JRException;
 import net.sf.jasperreports.engine.JasperCompileManager;
 import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
@@ -49,8 +50,10 @@ public class ReportViewer extends JFrame {
     }
 
     private void loadReport(String reportPath, Map<String, Object> parameters) {
-        try (Connection connection = DatabaseConnection.getConnection(); InputStream reportStream = openReportStream(reportPath)) {
-
+        try (
+                Connection connection = DatabaseConnection.getConnection();
+                InputStream reportStream = openReportStream(reportPath)
+        ) {
             if (connection == null) {
                 showError("Không thể kết nối database. Kiểm tra DatabaseConnection.");
                 return;
@@ -59,10 +62,12 @@ public class ReportViewer extends JFrame {
             if (reportStream == null) {
                 showError(
                         "Không tìm thấy file report:\n" + reportPath
-                        + "\n\nĐúng format nên là:"
-                        + "\n/reports/SalesInvoiceReport.jrxml"
-                        + "\n/reports/RevenueReport.jrxml"
-                        + "\n/reports/PurchaseReceiptReport.jrxml"
+                        + "\n\nĐã thử load theo classpath và file system."
+                        + "\n\nVị trí đúng của bạn nên là:"
+                        + "\nsrc/main/resources/reports/SalesInvoiceReport.jrxml"
+                        + "\nsrc/main/resources/reports/RevenueReport.jrxml"
+                        + "\nsrc/main/resources/reports/PurchaseReceiptReport.jrxml"
+                        + "\nsrc/main/resources/reports/AdminSystemReport.jrxml"
                 );
                 return;
             }
@@ -75,14 +80,25 @@ public class ReportViewer extends JFrame {
             revalidate();
             repaint();
 
+        } catch (JRException ex) {
+            ex.printStackTrace();
+
+            showError(
+                    "JasperReports không load/compile/fill được report.\n\n"
+                    + "Nguyên nhân thường gặp:\n"
+                    + "- Sai tên field trong file .jrxml so với SQL\n"
+                    + "- Thiếu parameter như ORDER_ID, STORE_ID\n"
+                    + "- Query trong .jrxml lỗi Oracle\n"
+                    + "- File .jrxml dùng font hoặc resource không tồn tại\n\n"
+                    + "Chi tiết lỗi:\n" + getRootCauseMessage(ex)
+            );
+
         } catch (Exception ex) {
             ex.printStackTrace();
 
-            String rootMessage = getRootCauseMessage(ex);
-
             showError(
                     "Lỗi khi mở report:\n"
-                    + rootMessage
+                    + getRootCauseMessage(ex)
                     + "\n\nXem console để biết dòng lỗi chi tiết."
             );
         }
@@ -100,37 +116,100 @@ public class ReportViewer extends JFrame {
             return stream;
         }
 
+        String cleanPath = path.startsWith("/") ? path.substring(1) : path;
+
         String resourcesPrefix = "src/main/resources";
-        int idx = path.indexOf(resourcesPrefix);
+        int idx = cleanPath.indexOf(resourcesPrefix);
         if (idx >= 0) {
-            String resourcePath = path.substring(idx + resourcesPrefix.length());
+            String resourcePath = cleanPath.substring(idx + resourcesPrefix.length());
             stream = openClasspathResource(resourcePath);
             if (stream != null) {
                 return stream;
             }
         }
 
-        File file = new File(reportPath);
-        if (file.isFile()) {
-            return new FileInputStream(file);
+        File directFile = new File(path);
+        if (directFile.isFile()) {
+            return new FileInputStream(directFile);
         }
+
+        File cleanFile = new File(cleanPath);
+        if (cleanFile.isFile()) {
+            return new FileInputStream(cleanFile);
+        }
+
+        File mavenResourceFile = new File("src/main/resources/" + cleanPath);
+        if (mavenResourceFile.isFile()) {
+            return new FileInputStream(mavenResourceFile);
+        }
+
+        File projectResourceFile = findUpward(new File(System.getProperty("user.dir")), "src/main/resources/" + cleanPath);
+        if (projectResourceFile != null && projectResourceFile.isFile()) {
+            return new FileInputStream(projectResourceFile);
+        }
+
+        File targetClassesFile = new File("target/classes/" + cleanPath);
+        if (targetClassesFile.isFile()) {
+            return new FileInputStream(targetClassesFile);
+        }
+
+        File buildClassesFile = new File("build/classes/" + cleanPath);
+        if (buildClassesFile.isFile()) {
+            return new FileInputStream(buildClassesFile);
+        }
+
+        System.err.println("Không tìm thấy reportPath: " + reportPath);
+        System.err.println("user.dir = " + System.getProperty("user.dir"));
+        System.err.println("Đã thử:");
+        System.err.println("- classpath: " + path);
+        System.err.println("- file: " + directFile.getAbsolutePath());
+        System.err.println("- file: " + cleanFile.getAbsolutePath());
+        System.err.println("- file: " + mavenResourceFile.getAbsolutePath());
+        System.err.println("- file: " + targetClassesFile.getAbsolutePath());
+        System.err.println("- file: " + buildClassesFile.getAbsolutePath());
 
         return null;
     }
 
     private InputStream openClasspathResource(String path) {
-        String resourcePath = path.startsWith("/") ? path : "/" + path;
+        if (path == null || path.trim().isEmpty()) {
+            return null;
+        }
+
+        String resourcePath = path.trim().replace('\\', '/');
+        resourcePath = resourcePath.startsWith("/") ? resourcePath : "/" + resourcePath;
 
         InputStream stream = ReportViewer.class.getResourceAsStream(resourcePath);
 
         if (stream == null) {
             ClassLoader cl = Thread.currentThread().getContextClassLoader();
+
             if (cl != null) {
-                stream = cl.getResourceAsStream(resourcePath.substring(1));
+                String withoutSlash = resourcePath.startsWith("/")
+                        ? resourcePath.substring(1)
+                        : resourcePath;
+
+                stream = cl.getResourceAsStream(withoutSlash);
             }
         }
 
         return stream;
+    }
+
+    private File findUpward(File startDir, String relativePath) {
+        File current = startDir;
+
+        while (current != null) {
+            File candidate = new File(current, relativePath);
+
+            if (candidate.isFile()) {
+                return candidate;
+            }
+
+            current = current.getParentFile();
+        }
+
+        return null;
     }
 
     private String getRootCauseMessage(Throwable ex) {

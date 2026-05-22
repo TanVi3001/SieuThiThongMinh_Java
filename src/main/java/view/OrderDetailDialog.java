@@ -12,6 +12,7 @@ import javax.swing.table.*;
 import java.text.DecimalFormat;
 import view.components.IconHelper;
 
+
 public class OrderDetailDialog extends JDialog {
 
     private final DecimalFormat df = new DecimalFormat("#,##0 đ");

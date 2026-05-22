@@ -24,8 +24,12 @@
     <style name="TableCell" style="Base" fontSize="9" />
     <style name="Money" style="TableCell" />
 
-    <parameter name="ORDER_ID" class="java.lang.String" />
-    <parameter name="STORE_ID" class="java.lang.String" />
+    <parameter name="ORDER_ID" class="java.lang.String">
+        <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
+    </parameter>
+    <parameter name="STORE_ID" class="java.lang.String">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
 
     <queryString language="SQL">
         <![CDATA[
@@ -48,7 +52,7 @@ SELECT
     NVL(p.product_name, od.product_id) AS product_name,
     NVL(od.quantity, 0) AS quantity,
     NVL(od.unit_price, 0) AS unit_price,
-    NVL(od.quantity, 0) * NVL(od.unit_price, 0) AS line_total
+    NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total
 FROM ORDERS o
 JOIN ORDER_DETAILS od
     ON o.order_id = od.order_id

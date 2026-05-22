@@ -12,19 +12,45 @@
     topMargin="30"
     bottomMargin="30">
 
-    <parameter name="P_REPORT_TITLE" class="java.lang.String" />
-    <parameter name="P_REPORT_SUBTITLE" class="java.lang.String" />
-    <parameter name="P_TOTAL_STORES" class="java.lang.String" />
-    <parameter name="P_ACTIVE_STORES" class="java.lang.String" />
-    <parameter name="P_TODAY_REVENUE" class="java.lang.String" />
-    <parameter name="P_MONTH_REVENUE" class="java.lang.String" />
-    <parameter name="P_TOTAL_ORDERS" class="java.lang.String" />
-    <parameter name="P_LOW_STOCK" class="java.lang.String" />
-    <parameter name="P_ONLINE_SESSIONS" class="java.lang.String" />
-    <parameter name="P_REVENUE_ORDER_CHART" class="java.awt.Image" />
-    <parameter name="P_PRODUCT_BUBBLE_CHART" class="java.awt.Image" />
-    <parameter name="P_PRODUCT_PIE_3D_CHART" class="java.awt.Image" />
-    <parameter name="P_REVENUE_ORDER_DIFFERENCE_CHART" class="java.awt.Image" />
+    <parameter name="P_REPORT_TITLE" class="java.lang.String">
+        <defaultValueExpression><![CDATA["BÁO CÁO TỔNG QUAN HỆ THỐNG"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_REPORT_SUBTITLE" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Smart Supermarket"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_TOTAL_STORES" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_ACTIVE_STORES" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_TODAY_REVENUE" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0 đ"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_MONTH_REVENUE" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0 đ"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_TOTAL_ORDERS" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_LOW_STOCK" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_ONLINE_SESSIONS" class="java.lang.String">
+        <defaultValueExpression><![CDATA["0"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_REVENUE_ORDER_CHART" class="java.awt.Image">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_PRODUCT_BUBBLE_CHART" class="java.awt.Image">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_PRODUCT_PIE_3D_CHART" class="java.awt.Image">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+    <parameter name="P_REVENUE_ORDER_DIFFERENCE_CHART" class="java.awt.Image">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
 
     <queryString>
         <![CDATA[
@@ -86,25 +112,33 @@
                     SELECT NVL(TO_CHAR(s.store_name), e.store_id) AS store_name,
                            e.employee_id,
                            TO_CHAR(e.employee_name) AS employee_name,
-                           COUNT(o.order_id) AS total_orders,
-                           NVL(SUM(o.total_amount), 0) AS revenue
+                           NVL(ord.total_orders, 0) AS total_orders,
+                           NVL(ord.revenue, 0) AS revenue
                     FROM employees e
                     LEFT JOIN stores s
                         ON s.store_id = e.store_id
-                    LEFT JOIN orders o
-                        ON o.employee_id = e.employee_id
-                       AND o.store_id = e.store_id
-                       AND NVL(o.is_deleted, 0) = 0
-                       AND o.store_id IS NOT NULL
-                       AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-                       AND (
-                            UPPER(TO_CHAR(o.status)) = 'COMPLETED'
-                            OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
-                            OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
-                       )
+                    LEFT JOIN (
+                        SELECT NVL(a_ref.user_id, o.employee_id) AS employee_id,
+                               o.store_id,
+                               COUNT(o.order_id) AS total_orders,
+                               NVL(SUM(o.total_amount), 0) AS revenue
+                        FROM orders o
+                        LEFT JOIN accounts a_ref
+                            ON a_ref.account_id = o.employee_id
+                        WHERE NVL(o.is_deleted, 0) = 0
+                          AND o.store_id IS NOT NULL
+                          AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                          AND (
+                               UPPER(TO_CHAR(o.status)) = 'COMPLETED'
+                               OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
+                               OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
+                          )
+                        GROUP BY NVL(a_ref.user_id, o.employee_id), o.store_id
+                    ) ord
+                        ON ord.employee_id = e.employee_id
+                       AND ord.store_id = e.store_id
                     WHERE NVL(e.is_deleted, 0) = 0
                       AND e.role_id IN ('R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
-                    GROUP BY NVL(TO_CHAR(s.store_name), e.store_id), e.employee_id, TO_CHAR(e.employee_name)
                     ORDER BY revenue DESC, total_orders DESC
                 )
                 WHERE ROWNUM = 1
@@ -163,7 +197,7 @@
                 <textField>
                     <reportElement x="22" y="17" width="500" height="14" forecolor="#0F172A" />
                     <textElement>
-                        <font fontName="DejaVu Sans" size="10" isBold="true" />
+                        <font fontName="SansSerif" size="10" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "DOANH THU THÁNG THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : "NHÂN VIÊN CÓ DOANH THU CAO NHẤT")]]></textFieldExpression>
                 </textField>
@@ -177,35 +211,35 @@
                 <textField>
                     <reportElement x="0" y="46" width="95" height="11" />
                     <textElement textAlignment="Center">
-                        <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : "Mã CN"]]></textFieldExpression>
                 </textField>
                 <textField>
                     <reportElement x="95" y="46" width="140" height="11" />
                     <textElement textAlignment="Center">
-                        <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : "Chi nhánh"]]></textFieldExpression>
                 </textField>
                 <textField>
                     <reportElement x="235" y="46" width="120" height="11" />
                     <textElement textAlignment="Center">
-                        <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Số đơn tháng" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : "Nhân viên")]]></textFieldExpression>
                 </textField>
                 <textField>
                     <reportElement x="355" y="46" width="90" height="11" />
                     <textElement textAlignment="Center">
-                        <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Tổng tồn" : "Số đơn")]]></textFieldExpression>
                 </textField>
                 <textField>
                     <reportElement x="445" y="46" width="90" height="11" />
                     <textElement textAlignment="Center">
-                        <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
                     </textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "" : ($F{SECTION_NO}.intValue() == 2 ? "Tồn thấp" : "Doanh thu")]]></textFieldExpression>
                 </textField>
@@ -231,7 +265,7 @@
             <staticText>
                 <reportElement x="18" y="35" width="52" height="12" forecolor="#FF6F00" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" isBold="true" />
+                    <font fontName="SansSerif" size="8" isBold="true" />
                 </textElement>
                 <text><![CDATA[LOGO]]></text>
             </staticText>
@@ -239,14 +273,14 @@
             <staticText>
                 <reportElement x="86" y="18" width="250" height="23" forecolor="#FFFFFF" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="17" isBold="true" />
+                    <font fontName="SansSerif" size="17" isBold="true" />
                 </textElement>
                 <text><![CDATA[SMART SUPERMARKET]]></text>
             </staticText>
             <staticText>
                 <reportElement x="86" y="43" width="285" height="15" forecolor="#FFFFFF" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <text><![CDATA[Tổng hợp chi nhánh, doanh thu, tồn kho và nhân viên]]></text>
             </staticText>
@@ -254,14 +288,14 @@
             <staticText>
                 <reportElement x="350" y="18" width="165" height="24" forecolor="#FFFFFF" />
                 <textElement textAlignment="Right">
-                    <font fontName="DejaVu Sans" size="14" isBold="true" />
+                    <font fontName="SansSerif" size="14" isBold="true" />
                 </textElement>
                 <text><![CDATA[BÁO CÁO HỆ THỐNG]]></text>
             </staticText>
             <textField>
                 <reportElement x="350" y="45" width="165" height="14" forecolor="#FFFFFF" />
                 <textElement textAlignment="Right">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
             </textField>
@@ -275,14 +309,14 @@
             <staticText>
                 <reportElement x="12" y="113" width="98" height="13" forecolor="#64748B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
                 </textElement>
                 <text><![CDATA[Tổng chi nhánh]]></text>
             </staticText>
             <textField>
                 <reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="13" isBold="true" />
+                    <font fontName="SansSerif" size="13" isBold="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression>
             </textField>
@@ -296,14 +330,14 @@
             <staticText>
                 <reportElement x="150" y="113" width="98" height="13" forecolor="#64748B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
                 </textElement>
                 <text><![CDATA[Hoạt động]]></text>
             </staticText>
             <textField>
                 <reportElement x="150" y="130" width="98" height="20" forecolor="#10B981" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="13" isBold="true" />
+                    <font fontName="SansSerif" size="13" isBold="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression>
             </textField>
@@ -317,14 +351,14 @@
             <staticText>
                 <reportElement x="288" y="113" width="98" height="13" forecolor="#64748B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
                 </textElement>
                 <text><![CDATA[Hôm nay]]></text>
             </staticText>
             <textField>
                 <reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression>
             </textField>
@@ -338,14 +372,14 @@
             <staticText>
                 <reportElement x="426" y="113" width="97" height="13" forecolor="#64748B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="7.5" isBold="true" />
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
                 </textElement>
                 <text><![CDATA[Tháng này]]></text>
             </staticText>
             <textField>
                 <reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression>
             </textField>
@@ -364,35 +398,35 @@
             <textField isBlankWhenNull="true">
                 <reportElement x="0" y="6" width="95" height="12" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="95" y="6" width="140" height="12" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="235" y="6" width="120" height="12" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="355" y="6" width="90" height="12" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression>
             </textField>
             <textField isBlankWhenNull="true">
                 <reportElement x="445" y="6" width="90" height="12" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression>
             </textField>
@@ -422,14 +456,14 @@
             <staticText>
                 <reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[VISUALIZATION DOANH THU & HIỆU SUẤT]]></text>
             </staticText>
             <staticText>
                 <reportElement x="38" y="46" width="470" height="12" forecolor="#64748B" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <text><![CDATA[Hai biểu đồ lớn trên một trang, dữ liệu chỉ tính hóa đơn thuộc chi nhánh hợp lệ.]]></text>
             </staticText>
@@ -443,7 +477,7 @@
             <staticText>
                 <reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[Biểu đồ so sánh: Doanh thu và số đơn theo chi nhánh]]></text>
             </staticText>
@@ -461,7 +495,7 @@
             <staticText>
                 <reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[Biểu đồ bong bóng: Sản phẩm theo số lượng, doanh thu và số đơn]]></text>
             </staticText>
@@ -495,14 +529,14 @@
             <staticText>
                 <reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[VISUALIZATION MỞ RỘNG]]></text>
             </staticText>
             <staticText>
                 <reportElement x="38" y="46" width="470" height="12" forecolor="#64748B" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <text><![CDATA[Pie 3D dùng doanh thu theo sản phẩm; Difference Chart so sánh doanh thu tháng này và tháng trước.]]></text>
             </staticText>
@@ -516,7 +550,7 @@
             <staticText>
                 <reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[Biểu đồ 3D: Tỷ trọng doanh thu theo sản phẩm]]></text>
             </staticText>
@@ -534,7 +568,7 @@
             <staticText>
                 <reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="12" isBold="true" />
+                    <font fontName="SansSerif" size="12" isBold="true" />
                 </textElement>
                 <text><![CDATA[Difference Chart: Doanh thu tháng này và tháng trước]]></text>
             </staticText>
@@ -546,7 +580,7 @@
             <staticText>
                 <reportElement x="20" y="721" width="495" height="10" forecolor="#64748B" />
                 <textElement textAlignment="Center">
-                    <font fontName="DejaVu Sans" size="7.5" isItalic="true" />
+                    <font fontName="SansSerif" size="7.5" isItalic="true" />
                 </textElement>
                 <text><![CDATA[Ghi chú: Difference Chart so sánh doanh thu tháng hiện tại với tháng trước theo từng ngày trong tháng.]]></text>
             </staticText>
@@ -564,14 +598,14 @@
             <staticText>
                 <reportElement x="0" y="8" width="270" height="12" />
                 <textElement>
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <text><![CDATA[Smart Supermarket - System Report]]></text>
             </staticText>
             <textField>
                 <reportElement x="405" y="8" width="130" height="12" />
                 <textElement textAlignment="Right">
-                    <font fontName="DejaVu Sans" size="8" />
+                    <font fontName="SansSerif" size="8" />
                 </textElement>
                 <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
             </textField>
