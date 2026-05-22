@@ -445,7 +445,7 @@
                 <textElement textAlignment="Center">
                     <font fontName="DejaVu Sans" size="12" isBold="true" />
                 </textElement>
-                <text><![CDATA[Biểu đồ 2 đường: Doanh thu và số đơn theo ngày]]></text>
+                <text><![CDATA[Biểu đồ so sánh: Doanh thu và số đơn theo chi nhánh]]></text>
             </staticText>
             <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
                 <reportElement x="12" y="108" width="511" height="269" />

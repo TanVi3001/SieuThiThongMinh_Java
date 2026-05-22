@@ -116,35 +116,43 @@ public class ProductImportService {
               AND NVL(is_deleted, 0) = 0
         """;
 
-        String sqlCheckInventory = """
-            SELECT quantity
-            FROM INVENTORY
-            WHERE product_id = ?
-              AND store_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
-
-        String sqlUpdateInventory = """
-            UPDATE INVENTORY
-            SET quantity = NVL(quantity, 0) + ?,
-                unit = ?,
-                last_updated = SYSDATE,
-                is_deleted = 0
-            WHERE product_id = ?
-              AND store_id = ?
-        """;
-
-        String sqlInsertInventory = """
-            INSERT INTO INVENTORY (
-                product_id,
-                store_id,
-                quantity,
-                unit,
-                last_updated,
-                is_deleted
-            )
-            VALUES (?, ?, ?, ?, SYSDATE, 0)
-        """;
+        String sqlUpsertInventory = """
+    MERGE INTO INVENTORY inv
+    USING (
+        SELECT ? AS product_id,
+               ? AS store_id,
+               ? AS quantity,
+               ? AS unit
+        FROM dual
+    ) src
+    ON (
+        inv.product_id = src.product_id
+        AND inv.store_id = src.store_id
+    )
+    WHEN MATCHED THEN
+        UPDATE SET
+            inv.quantity = NVL(inv.quantity, 0) + src.quantity,
+            inv.unit = src.unit,
+            inv.last_updated = SYSDATE,
+            inv.is_deleted = 0
+    WHEN NOT MATCHED THEN
+        INSERT (
+            product_id,
+            store_id,
+            quantity,
+            unit,
+            last_updated,
+            is_deleted
+        )
+        VALUES (
+            src.product_id,
+            src.store_id,
+            src.quantity,
+            src.unit,
+            SYSDATE,
+            0
+        )
+""";
 
         String sqlUpsertStoreProduct = """
             MERGE INTO STORE_PRODUCTS sp
@@ -252,7 +260,7 @@ public class ProductImportService {
             conn.setAutoCommit(false);
 
             try (
-                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psCheckInventory = conn.prepareStatement(sqlCheckInventory); PreparedStatement psUpdateInventory = conn.prepareStatement(sqlUpdateInventory); PreparedStatement psInsertInventory = conn.prepareStatement(sqlInsertInventory); PreparedStatement psUpsertStoreProduct = conn.prepareStatement(sqlUpsertStoreProduct); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
+                    PreparedStatement psInsertReceipt = conn.prepareStatement(sqlInsertReceipt); PreparedStatement psUpdateReceiptTotal = conn.prepareStatement(sqlUpdateReceiptTotal); PreparedStatement psCheckProduct = conn.prepareStatement(sqlCheckProduct); PreparedStatement psInsertProduct = conn.prepareStatement(sqlInsertProduct); PreparedStatement psUpdateProduct = conn.prepareStatement(sqlUpdateProduct); PreparedStatement psUpsertInventory = conn.prepareStatement(sqlUpsertInventory); PreparedStatement psUpsertStoreProduct = conn.prepareStatement(sqlUpsertStoreProduct); PreparedStatement psInsertDetail = conn.prepareStatement(sqlInsertDetail); PreparedStatement psInsertTransaction = conn.prepareStatement(sqlInsertTransaction)) {
                 psInsertReceipt.setString(1, result.receiptId);
                 psInsertReceipt.setString(2, DEFAULT_SUPPLIER_ID);
                 psInsertReceipt.setString(3, currentStoreId);
@@ -330,13 +338,11 @@ public class ProductImportService {
                             continue;
                         }
 
-                        increaseInventory(
+                        upsertInventory(
                                 productId,
                                 row.quantity,
                                 currentStoreId,
-                                psCheckInventory,
-                                psUpdateInventory,
-                                psInsertInventory
+                                psUpsertInventory
                         );
 
                         upsertStoreProduct(
@@ -488,36 +494,17 @@ public class ProductImportService {
         return productId;
     }
 
-    private void increaseInventory(
+    private void upsertInventory(
             String productId,
             int quantity,
             String storeId,
-            PreparedStatement psCheckInventory,
-            PreparedStatement psUpdateInventory,
-            PreparedStatement psInsertInventory
+            PreparedStatement psUpsertInventory
     ) throws SQLException {
-        boolean exists;
-
-        psCheckInventory.setString(1, productId);
-        psCheckInventory.setString(2, storeId);
-
-        try (ResultSet rs = psCheckInventory.executeQuery()) {
-            exists = rs.next();
-        }
-
-        if (exists) {
-            psUpdateInventory.setInt(1, quantity);
-            psUpdateInventory.setString(2, DEFAULT_UNIT_NAME);
-            psUpdateInventory.setString(3, productId);
-            psUpdateInventory.setString(4, storeId);
-            psUpdateInventory.executeUpdate();
-        } else {
-            psInsertInventory.setString(1, productId);
-            psInsertInventory.setString(2, storeId);
-            psInsertInventory.setInt(3, quantity);
-            psInsertInventory.setString(4, DEFAULT_UNIT_NAME);
-            psInsertInventory.executeUpdate();
-        }
+        psUpsertInventory.setString(1, productId);
+        psUpsertInventory.setString(2, storeId);
+        psUpsertInventory.setInt(3, quantity);
+        psUpsertInventory.setString(4, DEFAULT_UNIT_NAME);
+        psUpsertInventory.executeUpdate();
     }
 
     private void upsertStoreProduct(

@@ -63,6 +63,8 @@ import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
+import org.jfree.chart.renderer.category.BarRenderer;
+import org.jfree.chart.renderer.category.StandardBarPainter;
 
 /**
  * AdminSystemPanel
@@ -903,36 +905,43 @@ public class AdminSystemPanel extends JPanel {
         int maxOrderCount = 0;
 
         String sql = """
-            SELECT TRUNC(o.order_date) AS report_date,
-                   NVL(SUM(o.total_amount), 0) AS revenue,
-                   COUNT(o.order_id) AS order_count
-            FROM stores s
-            JOIN orders o
-                ON o.store_id = s.store_id
-               AND NVL(o.is_deleted, 0) = 0
-               AND o.store_id IS NOT NULL
-               AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-               AND (
-                    UPPER(NVL(o.status, '')) = 'COMPLETED'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-               )
-            WHERE NVL(s.is_deleted, 0) = 0
-            GROUP BY TRUNC(o.order_date)
-            ORDER BY TRUNC(o.order_date)
-        """;
-
-        SimpleDateFormat dmy = new SimpleDateFormat("dd/MM");
+        SELECT s.store_id,
+               NVL(s.store_name, s.address) AS store_name,
+               NVL(SUM(o.total_amount), 0) AS revenue,
+               COUNT(o.order_id) AS order_count
+        FROM stores s
+        LEFT JOIN orders o
+            ON o.store_id = s.store_id
+           AND NVL(o.is_deleted, 0) = 0
+           AND o.store_id IS NOT NULL
+           AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+           AND (
+                UPPER(NVL(o.status, '')) = 'COMPLETED'
+                OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+           )
+        WHERE NVL(s.is_deleted, 0) = 0
+        GROUP BY s.store_id, NVL(s.store_name, s.address)
+        ORDER BY revenue DESC, s.store_id
+    """;
 
         try (
                 Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                String day = dmy.format(rs.getDate("report_date"));
+                String storeName = rs.getString("store_name");
+                if (storeName == null || storeName.trim().isEmpty()) {
+                    storeName = rs.getString("store_id");
+                }
+
+                if (storeName.length() > 18) {
+                    storeName = storeName.substring(0, 18) + "...";
+                }
+
                 double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
                 int orderCount = rs.getInt("order_count");
 
-                revenueDataset.addValue(revenueMillion, "Doanh thu", day);
-                orderDataset.addValue(orderCount, "Số đơn", day);
+                revenueDataset.addValue(revenueMillion, "Doanh thu", storeName);
+                orderDataset.addValue(orderCount, "Số đơn", storeName);
 
                 maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
                 maxOrderCount = Math.max(maxOrderCount, orderCount);
@@ -941,9 +950,9 @@ public class AdminSystemPanel extends JPanel {
             System.err.println("[AdminSystemPanel] createRevenueOrderLineChartImage error: " + e.getMessage());
         }
 
-        JFreeChart chart = ChartFactory.createLineChart(
+        JFreeChart chart = ChartFactory.createBarChart(
                 null,
-                "Ngày",
+                "Chi nhánh",
                 "Doanh thu (triệu VND)",
                 revenueDataset,
                 PlotOrientation.VERTICAL,
@@ -953,47 +962,62 @@ public class AdminSystemPanel extends JPanel {
         );
 
         chart.setBackgroundPaint(Color.WHITE);
+
         if (chart.getLegend() != null) {
-            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 15));
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 13));
             chart.getLegend().setBackgroundPaint(Color.WHITE);
         }
 
         CategoryPlot plot = chart.getCategoryPlot();
         plot.setBackgroundPaint(new Color(248, 250, 252));
-        plot.setRangeGridlinePaint(new Color(210, 218, 230));
-        plot.setDomainGridlinePaint(new Color(225, 231, 240));
-        plot.setDomainGridlinesVisible(true);
-        plot.setRangeGridlinesVisible(true);
+        plot.setRangeGridlinePaint(new Color(220, 226, 235));
+        plot.setDomainGridlinePaint(new Color(235, 239, 245));
+        plot.setOutlinePaint(new Color(148, 163, 184));
 
         CategoryAxis domainAxis = plot.getDomainAxis();
-        domainAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 14));
-        domainAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 15));
-        domainAxis.setLowerMargin(0.10);
-        domainAxis.setUpperMargin(0.10);
-        domainAxis.setCategoryMargin(0.20);
+        domainAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        domainAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+        domainAxis.setLowerMargin(0.12);
+        domainAxis.setUpperMargin(0.12);
+        domainAxis.setCategoryMargin(0.45);
 
         NumberAxis revenueAxis = (NumberAxis) plot.getRangeAxis();
         compactNumberAxis(revenueAxis, maxRevenueMillion);
+        revenueAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        revenueAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
 
-        LineAndShapeRenderer revenueRenderer = new LineAndShapeRenderer(true, true);
-        revenueRenderer.setSeriesPaint(0, orange);
-        revenueRenderer.setSeriesStroke(0, new BasicStroke(4.0f));
-        revenueRenderer.setSeriesShapesVisible(0, true);
+        BarRenderer revenueRenderer = new BarRenderer();
+        revenueRenderer.setSeriesPaint(0, new Color(245, 158, 11, 190));
+        revenueRenderer.setBarPainter(new StandardBarPainter());
+        revenueRenderer.setShadowVisible(false);
+
+        // Cái này là phần quan trọng: giảm độ rộng cột để không bị đè hình.
+        revenueRenderer.setMaximumBarWidth(0.045);
+        revenueRenderer.setItemMargin(0.35);
+
         plot.setRenderer(0, revenueRenderer);
 
         NumberAxis orderAxis = new NumberAxis("Số đơn");
         compactNumberAxis(orderAxis, maxOrderCount);
+        orderAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        orderAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+
         plot.setRangeAxis(1, orderAxis);
         plot.setDataset(1, orderDataset);
         plot.mapDatasetToRangeAxis(1, 1);
 
         LineAndShapeRenderer orderRenderer = new LineAndShapeRenderer(true, true);
         orderRenderer.setSeriesPaint(0, blue);
-        orderRenderer.setSeriesStroke(0, new BasicStroke(4.0f));
+        orderRenderer.setSeriesStroke(0, new BasicStroke(3.4f));
         orderRenderer.setSeriesShapesVisible(0, true);
+        orderRenderer.setSeriesShape(
+                0,
+                new java.awt.geom.Ellipse2D.Double(-5, -5, 10, 10)
+        );
+
+        // Renderer số đơn đặt ở dataset 1 nên sẽ vẽ nổi trên cột doanh thu.
         plot.setRenderer(1, orderRenderer);
 
-        // 1200x650 vừa đủ nét, chữ không bị co quá nhỏ khi đưa vào JasperReport.
         return chart.createBufferedImage(1200, 650);
     }
 
