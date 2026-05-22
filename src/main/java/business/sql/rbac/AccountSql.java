@@ -632,27 +632,22 @@ public class AccountSql implements SqlInterface<Account> {
                 + "        REGEXP_REPLACE(NVL(?, ''), '[^0-9]', '') "
                 + "     ) "
                 + "  ) "
-                + "ORDER BY "
-                + "    CASE WHEN LOWER(TRIM(email)) = LOWER(TRIM(?)) THEN 1 ELSE 2 END "
+                + "ORDER BY CASE WHEN LOWER(TRIM(email)) = LOWER(TRIM(?)) THEN 1 ELSE 2 END "
                 + "FETCH FIRST 1 ROWS ONLY";
 
         String sqlCheckUsername = ""
-                + "SELECT 1 "
-                + "FROM ACCOUNTS "
+                + "SELECT 1 FROM ACCOUNTS "
                 + "WHERE username = ? "
                 + "  AND NVL(is_deleted, 0) = 0";
 
         String sqlCheckEmployeeAccount = ""
-                + "SELECT 1 "
-                + "FROM ACCOUNTS "
+                + "SELECT 1 FROM ACCOUNTS "
                 + "WHERE user_id = ? "
                 + "  AND NVL(is_deleted, 0) = 0";
 
         String sqlUpsertUser = ""
                 + "MERGE INTO USERS u "
-                + "USING ( "
-                + "    SELECT ? AS user_id, ? AS full_name, ? AS email, ? AS phone_number FROM dual "
-                + ") src "
+                + "USING (SELECT ? AS user_id, ? AS full_name, ? AS email, ? AS phone_number FROM dual) src "
                 + "ON (u.user_id = src.user_id) "
                 + "WHEN MATCHED THEN UPDATE SET "
                 + "    u.full_name = src.full_name, "
@@ -686,16 +681,14 @@ public class AccountSql implements SqlInterface<Account> {
             try (PreparedStatement ps = con.prepareStatement(sqlFindEmployee)) {
                 ps.setString(1, cleanEmail);
                 ps.setString(2, cleanEmail);
-
                 ps.setString(3, cleanPhone);
                 ps.setString(4, cleanPhone);
-
                 ps.setString(5, cleanEmail);
 
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         con.rollback();
-                        System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_NOT_FOUND_BY_EMAIL_OR_PHONE");
+                        System.err.println("[AccountSql] EMPLOYEE_NOT_FOUND_BY_EMAIL_OR_PHONE");
                         return false;
                     }
 
@@ -708,24 +701,23 @@ public class AccountSql implements SqlInterface<Account> {
                 }
             }
 
-            if (employeeId == null || employeeId.trim().isEmpty()) {
+            if (clean(employeeId) == null) {
                 con.rollback();
                 return false;
             }
 
-            if (storeId == null || storeId.trim().isEmpty()) {
+            if (clean(storeId) == null) {
                 con.rollback();
-                System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_WITHOUT_STORE, employeeId=" + employeeId);
+                System.err.println("[AccountSql] EMPLOYEE_WITHOUT_STORE: " + employeeId);
                 return false;
             }
 
             try (PreparedStatement ps = con.prepareStatement(sqlCheckUsername)) {
                 ps.setString(1, cleanUsername);
-
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         con.rollback();
-                        System.err.println("[AccountSql] createEmployeeAccount failed: DUPLICATE_USERNAME");
+                        System.err.println("[AccountSql] DUPLICATE_USERNAME");
                         return false;
                     }
                 }
@@ -733,11 +725,10 @@ public class AccountSql implements SqlInterface<Account> {
 
             try (PreparedStatement ps = con.prepareStatement(sqlCheckEmployeeAccount)) {
                 ps.setString(1, employeeId);
-
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         con.rollback();
-                        System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_ALREADY_HAS_ACCOUNT, employeeId=" + employeeId);
+                        System.err.println("[AccountSql] EMPLOYEE_ALREADY_HAS_ACCOUNT: " + employeeId);
                         return false;
                     }
                 }
@@ -760,7 +751,7 @@ public class AccountSql implements SqlInterface<Account> {
 
             try (PreparedStatement ps = con.prepareStatement(sqlAccount)) {
                 ps.setString(1, accId);
-                ps.setString(2, employeeId); // CHỐT: ACCOUNTS.user_id = EMPLOYEES.employee_id
+                ps.setString(2, employeeId);
                 ps.setString(3, cleanUsername);
                 ps.setString(4, passwordHash);
                 ps.executeUpdate();
@@ -830,7 +821,6 @@ public class AccountSql implements SqlInterface<Account> {
                 + "      AND NVL(s.is_deleted, 0) = 0 "
                 + "WHERE e.employee_id = ? "
                 + "  AND NVL(e.is_deleted, 0) = 0";
-
         try (Connection con = DatabaseConnection.getConnection()) {
             if (con == null) {
                 return null;
@@ -894,7 +884,7 @@ public class AccountSql implements SqlInterface<Account> {
             return false;
         }
 
-        String accId = "ACC" + (System.currentTimeMillis() % 1000000);
+        String accId = buildAccountId();
 
         // đảm bảo BCrypt để qua trigger
         String passwordHash = PasswordUtils.isBCryptHash(rawPassword)
@@ -917,8 +907,17 @@ public class AccountSql implements SqlInterface<Account> {
                 = "SELECT employee_name, email, phone, role_id "
                 + "FROM EMPLOYEES WHERE employee_id = ? AND is_deleted = 0";
 
-        String sqlUser
-                = "INSERT INTO USERS (user_id, full_name, email, phone_number) VALUES (?, ?, ?, ?)";
+        String sqlUser = ""
+                + "MERGE INTO USERS u "
+                + "USING (SELECT ? AS user_id, ? AS full_name, ? AS email, ? AS phone_number FROM dual) src "
+                + "ON (u.user_id = src.user_id) "
+                + "WHEN MATCHED THEN UPDATE SET "
+                + "    u.full_name = src.full_name, "
+                + "    u.email = src.email, "
+                + "    u.phone_number = src.phone_number, "
+                + "    u.is_deleted = 0 "
+                + "WHEN NOT MATCHED THEN INSERT (user_id, full_name, email, phone_number, is_deleted) "
+                + "VALUES (src.user_id, src.full_name, src.email, src.phone_number, 0)";
 
         String sqlAccount
                 = "INSERT INTO ACCOUNTS (account_id, user_id, username, password, status) VALUES (?, ?, ?, ?, 'Hoạt động')";
