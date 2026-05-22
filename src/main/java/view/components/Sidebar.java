@@ -37,7 +37,7 @@ public class Sidebar extends JPanel {
     private MenuClickListener listener;
 
     public Sidebar(String userRole) {
-        this.userRole = userRole;
+        this.userRole = normalizeRole(userRole);
         this.menuItems = new ArrayList<>();
 
         setLayout(new BorderLayout());
@@ -54,25 +54,7 @@ public class Sidebar extends JPanel {
         menuPanel.setLayout(new BoxLayout(menuPanel, BoxLayout.Y_AXIS));
         menuPanel.setBorder(BorderFactory.createEmptyBorder(8, 24, 12, 24));
 
-        boolean isSale = "R_STAFF_SALE".equalsIgnoreCase(userRole);
-        boolean isManagerOrAdmin = "R_ADMIN_ALL".equalsIgnoreCase(userRole) || "R_STORE_MNG".equalsIgnoreCase(userRole);
-
-        addMenuItem("Tổng quan", IconHelper.dashboard(24));
-        if (isSale) {
-            addMenuItem("Bán hàng", IconHelper.order(24));
-        }
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-
-        if (isManagerOrAdmin) {
-            addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
-            addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
-        }
-        addMenuItem("Khách hàng", IconHelper.customer(24));
-        addMenuItem("Hóa đơn", IconHelper.bill(24));
-        if (isManagerOrAdmin) {
-            addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
-        }
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        buildMenuByRole();
 
         JScrollPane scrollPane = new JScrollPane(menuPanel);
         scrollPane.setOpaque(false);
@@ -88,6 +70,98 @@ public class Sidebar extends JPanel {
         if (!menuItems.isEmpty()) {
             menuItems.get(0).setActive(true);
         }
+    }
+
+    private void buildMenuByRole() {
+        addMenuItem("Tổng quan", IconHelper.dashboard(24));
+
+        if (isAdmin()) {
+            addAdminMenu();
+            return;
+        }
+
+        if (isManager()) {
+            addManagerMenu();
+            return;
+        }
+
+        if (isStaffSale()) {
+            addStaffSaleMenu();
+            return;
+        }
+
+        if (isStaffProduct()) {
+            addStaffProductMenu();
+            return;
+        }
+
+        // Fallback an toàn nếu role lạ.
+        addMenuItem("Cài đặt", IconHelper.settings(24));
+    }
+
+    private void addAdminMenu() {
+        /*
+         * Admin thường dùng AdminDashboardView riêng.
+         * Nhưng giữ menu này để nếu DashboardView nhận Admin vẫn không bị trống.
+         */
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
+        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
+        addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
+        addMenuItem("Khách hàng", IconHelper.customer(24));
+        addMenuItem("Hóa đơn", IconHelper.bill(24));
+        addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
+        addMenuItem("Cài đặt", IconHelper.settings(24));
+    }
+
+    private void addManagerMenu() {
+        addMenuItem("Bán hàng", IconHelper.order(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
+        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
+        addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
+        addMenuItem("Khách hàng", IconHelper.customer(24));
+        addMenuItem("Hóa đơn", IconHelper.bill(24));
+        addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
+        addMenuItem("Cài đặt", IconHelper.settings(24));
+    }
+
+    private void addStaffSaleMenu() {
+        addMenuItem("Bán hàng", IconHelper.order(24));
+        addMenuItem("Khách hàng", IconHelper.customer(24));
+        addMenuItem("Hóa đơn", IconHelper.bill(24));
+        addMenuItem("Cài đặt", IconHelper.settings(24));
+    }
+
+    private void addStaffProductMenu() {
+        /*
+         * R_STAFF_VIEW_PROD trong đồ án = Staff Product / Kho / Nhập hàng.
+         * Không phải view-only.
+         */
+        addMenuItem("Quản lý tồn kho",  IconHelper.product(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
+        addMenuItem("Cài đặt", IconHelper.settings(24));
+    }
+
+    private boolean isAdmin() {
+        return "R_ADMIN_ALL".equalsIgnoreCase(userRole);
+    }
+
+    private boolean isManager() {
+        return "R_STORE_MNG".equalsIgnoreCase(userRole);
+    }
+
+    private boolean isStaffSale() {
+        return "R_STAFF_SALE".equalsIgnoreCase(userRole);
+    }
+
+    private boolean isStaffProduct() {
+        return "R_STAFF_VIEW_PROD".equalsIgnoreCase(userRole);
+    }
+
+    private String normalizeRole(String role) {
+        return role == null ? "" : role.trim();
     }
 
     private JPanel createBrandingPanel() {
@@ -108,7 +182,7 @@ public class Sidebar extends JPanel {
         appName.setForeground(NAVY);
         appName.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel subtitle = new JLabel("Management System");
+        JLabel subtitle = new JLabel(getSubtitleByRole());
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subtitle.setForeground(TEXT_MUTED);
         subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -121,6 +195,26 @@ public class Sidebar extends JPanel {
         brandingPanel.add(textPanel, BorderLayout.CENTER);
 
         return brandingPanel;
+    }
+
+    private String getSubtitleByRole() {
+        if (isAdmin()) {
+            return "Central Admin Portal";
+        }
+
+        if (isManager()) {
+            return "Store Manager Portal";
+        }
+
+        if (isStaffSale()) {
+            return "Sales Portal";
+        }
+
+        if (isStaffProduct()) {
+            return "Warehouse Portal";
+        }
+
+        return "Management System";
     }
 
     private JPanel createBottomPanel() {
@@ -144,17 +238,22 @@ public class Sidebar extends JPanel {
 
     private void addMenuItem(final String title, ImageIcon icon) {
         final ModernSidebarMenuItem[] itemHolder = new ModernSidebarMenuItem[1];
+
         ModernSidebarMenuItem item = new ModernSidebarMenuItem(title, icon, () -> {
             for (ModernSidebarMenuItem menuItem : menuItems) {
                 menuItem.setActive(false);
             }
+
             itemHolder[0].setActive(true);
+
             if (listener != null) {
                 listener.onMenuClick(title);
             }
         });
+
         itemHolder[0] = item;
         item.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         menuItems.add(item);
         menuPanel.add(item);
         menuPanel.add(Box.createRigidArea(new Dimension(0, 9)));
@@ -172,6 +271,7 @@ public class Sidebar extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
+
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setColor(APP_BG);
         g2.fillRect(0, 0, getWidth(), getHeight());
@@ -180,15 +280,18 @@ public class Sidebar extends JPanel {
         int y = 6;
         int w = getWidth() - 13;
         int h = getHeight() - 12;
+
         for (int i = 6; i >= 1; i--) {
             g2.setColor(new Color(23, 52, 99, 3 + i));
             g2.fillRoundRect(x + i, y + i, w - i * 2, h - i * 2, 24, 24);
         }
+
         g2.setColor(SIDEBAR_BG);
         g2.fillRoundRect(x, y, w, h, 24, 24);
         g2.setColor(BORDER);
         g2.setStroke(new BasicStroke(1f));
         g2.drawRoundRect(x, y, w - 1, h - 1, 20, 20);
+
         g2.dispose();
         super.paintComponent(g);
     }
@@ -214,25 +317,32 @@ public class Sidebar extends JPanel {
         @Override
         public void paintIcon(Component c, Graphics g, int x, int y) {
             Graphics2D g2 = (Graphics2D) g.create();
+
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(new Color(255, 106, 0, 18));
             g2.fillRoundRect(x + 2, y + 2, size - 4, size - 4, 14, 14);
+
             g2.setColor(ORANGE);
             g2.setStroke(new BasicStroke(2.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
             int bx = x + 9;
             int by = y + 14;
+
             g2.drawLine(bx, by, bx + 5, by + 20);
             g2.drawLine(bx + 5, by + 20, bx + 26, by + 20);
             g2.drawLine(bx + 9, by + 6, bx + 30, by + 6);
             g2.drawLine(bx + 30, by + 6, bx + 25, by + 19);
             g2.drawLine(bx + 11, by + 10, bx + 24, by + 10);
             g2.drawLine(bx + 13, by + 15, bx + 22, by + 15);
+
             g2.fillOval(bx + 7, by + 25, 5, 5);
             g2.fillOval(bx + 24, by + 25, 5, 5);
+
             g2.setFont(new Font("Segoe UI", Font.BOLD, 9));
             FontMetrics fm = g2.getFontMetrics();
             String mark = "S";
             g2.drawString(mark, bx + 18 - fm.stringWidth(mark) / 2, by + 17);
+
             g2.dispose();
         }
     }
