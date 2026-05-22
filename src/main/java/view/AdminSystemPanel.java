@@ -1,5 +1,10 @@
 package view;
 
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.events.EventBus;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import common.db.DatabaseConnection;
 import common.report.ReportViewer;
 import java.awt.BasicStroke;
@@ -76,6 +81,9 @@ public class AdminSystemPanel extends JPanel {
 
     private static final int LOW_STOCK_THRESHOLD = 20;
 
+    private Timer realtimeReloadTimer;
+    private volatile boolean reloading = false;
+
     private final Color bg = new Color(245, 247, 251);
     private final Color white = Color.WHITE;
     private final Color text = new Color(15, 23, 42);
@@ -112,7 +120,64 @@ public class AdminSystemPanel extends JPanel {
         setBackground(bg);
         setBorder(new EmptyBorder(22, 30, 22, 30));
         initUI();
+        initRealtime();
         reloadAll();
+    }
+
+    private void initRealtime() {
+        realtimeReloadTimer = new Timer(350, e -> reloadAllSafely());
+        realtimeReloadTimer.setRepeats(false);
+
+        EventBus.subscribe(AppDataChangedEvent.class, event -> {
+            if (event == null || event.getType() == null) {
+                return;
+            }
+
+            AppEventType type = event.getType();
+
+            boolean shouldReload
+                    = type == AppEventType.ORDERS
+                    || type == AppEventType.INVENTORY
+                    || type == AppEventType.PRODUCTS
+                    || type == AppEventType.CUSTOMERS
+                    || type == AppEventType.EMPLOYEES
+                    || type == AppEventType.STORE_INFO
+                    || type == AppEventType.ACCOUNT_SECURITY
+                    || type == AppEventType.SYSTEM_CONFIG
+                    || type == AppEventType.DASHBOARD
+                    || type == AppEventType.STATISTICS
+                    || type == AppEventType.INVENTORY_ALERT;
+
+            if (!shouldReload) {
+                return;
+            }
+
+            System.out.println("[AdminSystemPanel] realtime reload: " + event.getMessage());
+
+            SwingUtilities.invokeLater(() -> {
+                if (realtimeReloadTimer != null) {
+                    realtimeReloadTimer.restart();
+                }
+            });
+        });
+    }
+
+    private void reloadAllSafely() {
+        if (reloading) {
+            return;
+        }
+
+        reloading = true;
+
+        SwingUtilities.invokeLater(() -> {
+            try {
+                reloadAll();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            } finally {
+                reloading = false;
+            }
+        });
     }
 
     private void initUI() {

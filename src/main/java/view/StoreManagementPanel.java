@@ -565,6 +565,8 @@ public class StoreManagementPanel extends JPanel {
 
             try {
                 common.realtime.RealtimeClient.send("STORE_INFO_CHANGED:" + id + ":" + status);
+                common.realtime.RealtimeClient.send("DASHBOARD_CHANGED:STORE_UPDATED:" + id);
+                common.realtime.RealtimeClient.send("STATISTICS_CHANGED:STORE_UPDATED:" + id);
 
                 // Chỉ khi cập nhật chi nhánh mới cần ép các session kiểm tra lại.
                 // Nếu chi nhánh bị Tạm ngưng thì DashboardView/LoginService sẽ chặn/kick user theo store.
@@ -672,7 +674,15 @@ public class StoreManagementPanel extends JPanel {
             business.service.AuditLogService.logAction("XÓA", "STORES", id, "", "is_deleted=1", "Admin xóa chi nhánh");
             clearForm();
             loadStoreData(txtSearch.getText().trim());
-            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_DELETED:" + id));
+
+            try {
+                common.realtime.RealtimeClient.send("STORE_INFO_CHANGED:" + id + ":DELETED");
+                common.realtime.RealtimeClient.send("DASHBOARD_CHANGED:STORE_DELETED:" + id);
+                common.realtime.RealtimeClient.send("STATISTICS_CHANGED:STORE_DELETED:" + id);
+            } catch (Exception ex) {
+                System.err.println("[StoreManagementPanel] realtime delete error: " + ex.getMessage());
+            }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi khi xóa: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
