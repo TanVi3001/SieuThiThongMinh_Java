@@ -155,6 +155,22 @@ public class AuthorizationService {
     }
 
     /**
+     * Alias cho code cũ trong DashboardView. Báo cáo/thống kê + nhân viên chỉ
+     * dành cho Admin và Manager.
+     */
+    public static boolean canAccessStatisticsAndEmployees() {
+        return canAccessReports() || canAccessEmployees();
+    }
+
+    /**
+     * Alias cho code cũ trong EmployeeView. Quản lý nhân viên: Admin toàn hệ
+     * thống, Manager theo chi nhánh.
+     */
+    public static boolean canAccessEmployeeManagement() {
+        return canAccessEmployees();
+    }
+
+    /**
      * Quản trị hệ thống: Chỉ Admin.
      */
     public static boolean canAccessAdminPanel() {
