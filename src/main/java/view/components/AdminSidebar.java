@@ -52,7 +52,9 @@ public class AdminSidebar extends JPanel {
         menuPanel.setLayout(new BoxLayout(menuPanel, BoxLayout.Y_AXIS));
         menuPanel.setBorder(BorderFactory.createEmptyBorder(8, 24, 12, 24));
 
-        addMenuItem("Quản lý chi nhánh", IconHelper.dashboard(24));
+        // Hiển thị tên mới cho đồng bộ với màn hình tổng quan hệ thống,
+        // nhưng vẫn gửi action cũ để không phá switch-case hiện tại trong AdminDashboardView.
+        addMenuItem("Quản lý hệ thống", IconHelper.dashboard(24), "Quản lý chi nhánh");
         addMenuItem("Quản lý khuyến mãi", IconHelper.coupon(24));
         addMenuItem("Quản lý cửa hàng trưởng", IconHelper.employee(24));
         addMenuItem("Quản lý tài khoản", IconHelper.employee(24));
@@ -130,6 +132,10 @@ public class AdminSidebar extends JPanel {
     }
 
     private void addMenuItem(final String title, ImageIcon icon) {
+        addMenuItem(title, icon, title);
+    }
+
+    private void addMenuItem(final String title, ImageIcon icon, final String actionTitle) {
         final ModernSidebarMenuItem[] itemHolder = new ModernSidebarMenuItem[1];
         ModernSidebarMenuItem item = new ModernSidebarMenuItem(title, icon, () -> {
             for (ModernSidebarMenuItem menuItem : menuItems) {
@@ -137,7 +143,7 @@ public class AdminSidebar extends JPanel {
             }
             itemHolder[0].setActive(true);
             if (listener != null) {
-                listener.onMenuClick(title);
+                listener.onMenuClick(actionTitle);
             }
         });
         itemHolder[0] = item;
