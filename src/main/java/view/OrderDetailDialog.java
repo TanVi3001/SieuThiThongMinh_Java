@@ -10,6 +10,7 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.table.*;
 import java.text.DecimalFormat;
+import view.components.IconHelper;
 
 public class OrderDetailDialog extends JDialog {
 
@@ -401,11 +402,13 @@ public class OrderDetailDialog extends JDialog {
         pnl.setBackground(new Color(245, 245, 245));
 
         JButton btnClose = new JButton("Đóng cửa sổ");
+        btnClose.setIcon(IconHelper.close(18));
         btnClose.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnClose.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnClose.addActionListener(e -> dispose());
 
         JButton btnSave = new JButton("Lưu Thay Đổi");
+        btnSave.setIcon(IconHelper.save(20));
         btnSave.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnSave.setBackground(primaryBlue);
         btnSave.setForeground(Color.WHITE);

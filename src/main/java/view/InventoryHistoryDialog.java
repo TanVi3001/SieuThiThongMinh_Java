@@ -9,6 +9,7 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import view.components.IconHelper;
 
 public class InventoryHistoryDialog extends JDialog {
 
@@ -100,14 +101,17 @@ public class InventoryHistoryDialog extends JDialog {
         bottom.setOpaque(false);
 
         JButton btnClose = new JButton("Đóng");
+        btnClose.setIcon(IconHelper.close(18));
         btnClose.setPreferredSize(new Dimension(100, 38));
         btnClose.addActionListener(e -> dispose());
 
         JButton btnViewReceipt = new JButton("Xem phiếu nhập hàng");
+        btnViewReceipt.setIcon(IconHelper.view(20));
         btnViewReceipt.setPreferredSize(new Dimension(175, 38));
         btnViewReceipt.addActionListener(e -> viewReceipt());
 
         JButton btnExportReceipt = new JButton("Xuất phiếu nhập hàng");
+        btnExportReceipt.setIcon(IconHelper.export(20));
         btnExportReceipt.setPreferredSize(new Dimension(185, 38));
         btnExportReceipt.addActionListener(e -> exportReceipt());
 

@@ -182,6 +182,38 @@ public class IconHelper {
     public static ImageIcon history(int size) {
         return load("history.png", size);
     }
+    
+    public static ImageIcon close(int size) {
+        return load("close.png", size);
+    }
+    
+    public static ImageIcon save(int size) {
+        return load("save-instagram.png", size);
+    }
+    
+    public static ImageIcon warning(int size) {
+        return load("warning.png", size);
+    }
+    
+    public static ImageIcon upload(int size) {
+        return load("upload.png", size);
+    }
+
+    public static ImageIcon folder(int size) {
+        return load("folder-open.png", size);
+    }
+
+    public static ImageIcon template(int size) {
+        return load("new-file.png", size);
+    }
+
+    public static ImageIcon play(int size) {
+        return load("play.png", size);
+    }
+
+    public static ImageIcon shield(int size) {
+        return load("security.png", size);
+    }
 
     public static ImageIcon accessDenied(int size) {
         ImageIcon originalIcon = load("access_denied_icon.png", size);

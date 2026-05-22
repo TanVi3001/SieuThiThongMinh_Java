@@ -6,6 +6,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
+import view.components.IconHelper;
 
 public class ImportProductDialog extends JDialog {
 
@@ -39,6 +40,7 @@ public class ImportProductDialog extends JDialog {
 
         // 4. Setup Nút bấm
         btnStartImport = new JButton("Bắt đầu Import");
+        btnStartImport.setIcon(IconHelper.upload(20));
         btnStartImport.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnStartImport.setAlignmentX(Component.CENTER_ALIGNMENT); // Căn giữa
 
