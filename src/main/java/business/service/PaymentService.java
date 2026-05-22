@@ -410,7 +410,7 @@ public class PaymentService {
             for (OrderDetail ct : details) {
                 normalizeOrderDetailBeforeInsert(ct, order.getOrderId());
 
-                psDetail.setString(1, buildOrderDetailId());
+                psDetail.setString(1, ct.getOrderDetailId());
                 psDetail.setString(2, order.getOrderId());
                 psDetail.setString(3, ct.getProductId());
                 psDetail.setInt(4, ct.getQuantity());

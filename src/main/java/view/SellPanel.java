@@ -1264,12 +1264,11 @@ public class SellPanel extends JPanel {
         if (productsCardLayout != null && pnlProductsBody != null) {
             productsCardLayout.show(pnlProductsBody, "loading");
         }
+
         new SwingWorker<List<Product>, Void>() {
             @Override
             protected List<Product> doInBackground() {
                 String storeId = requireCurrentStoreForSale();
-                // POS chỉ được bán sản phẩm thuộc chi nhánh hiện tại.
-                // Không query INVENTORY global theo product_id vì sẽ lẫn tồn kho chi nhánh khác.
                 return ProductsSql.getInstance().selectAllByStore(storeId);
             }
 
@@ -1280,6 +1279,15 @@ public class SellPanel extends JPanel {
                     refreshSearchSuggestions(productSearchKeyword);
                     applyProductFilter(productSearchKeyword);
                 } catch (Exception ex) {
+                    ex.printStackTrace();
+
+                    JOptionPane.showMessageDialog(
+                            SellPanel.this,
+                            "Không thể tải sản phẩm theo chi nhánh hiện tại:\n" + ex.getMessage(),
+                            "Lỗi tải sản phẩm",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+
                     if (productsCardLayout != null && pnlProductsBody != null) {
                         productsCardLayout.show(pnlProductsBody, "table");
                     }
@@ -1298,26 +1306,26 @@ public class SellPanel extends JPanel {
         return storeId.trim();
     }
 
-    private int getStockFromDB(String productId) {
-        if (productId == null || productId.trim().isEmpty()) {
+    private int getStockFromDB(String pId) {
+        if (pId == null || pId.trim().isEmpty()) {
             return 0;
         }
-
-        String storeId;
 
         try {
-            storeId = requireCurrentStoreForSale();
+            String storeId = requireCurrentStoreForSale();
+
+            Product p = ProductsSql.getInstance().findByIdInStore(pId.trim(), storeId);
+
+            if (p == null) {
+                return 0;
+            }
+
+            return Math.max(0, p.getQuantity());
+
         } catch (Exception e) {
+            System.err.println("[SellPanel] getStockFromDB error: " + e.getMessage());
             return 0;
         }
-
-        Product p = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
-
-        if (p == null) {
-            return 0;
-        }
-
-        return Math.max(0, p.getQuantity());
     }
 
     private void loadPaymentMethods() {
@@ -1387,35 +1395,58 @@ public class SellPanel extends JPanel {
     }
 
     private void processPaymentAction() {
+        if (paymentProcessing) {
+            return;
+        }
+
         if (modCart.getRowCount() <= 0) {
             return;
         }
+
+        try {
+            validateCartAgainstDatabase();
+
+            if (!btnPay.isEnabled()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Giỏ hàng có sản phẩm không hợp lệ hoặc vượt tồn kho. Vui lòng kiểm tra lại.",
+                        "Không thể thanh toán",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể kiểm tra tồn kho trước thanh toán:\n" + ex.getMessage(),
+                    "Lỗi kiểm tra tồn kho",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
         paymentProcessing = true;
         paymentJustSucceeded = false;
+
         btnPay.setEnabled(false);
         btnPay.setText("⏳ ĐANG XỬ LÝ...");
         btnPay.setBackground(Color.GRAY);
         btnCancel.setEnabled(false);
         btnRemove.setEnabled(false);
 
-        String emp;
-        String storeId;
-        try {
-            emp = SessionManager.requireCurrentEmployeeId();
-            storeId = requireCurrentStoreForSale();
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    ex.getMessage(),
-                    "Thiếu thông tin phiên đăng nhập",
-                    JOptionPane.WARNING_MESSAGE
-            );
-            resetPaymentUI();
-            paymentProcessing = false;
-            return;
+        String emp = "EMP_DEFAULT";
+        model.account.Account a = SessionManager.getCurrentUser();
+
+        if (a != null) {
+            emp = (a.getUserId() != null && !a.getUserId().isBlank())
+                    ? a.getUserId()
+                    : a.getAccountId();
         }
 
-        String pId = cboPaymentMethod.getSelectedItem() != null ? cboPaymentMethod.getSelectedItem().toString() : "PM_CASH";
+        String pId = cboPaymentMethod.getSelectedItem() != null
+                ? cboPaymentMethod.getSelectedItem().toString()
+                : "PM_CASH";
+
         String oId = "HD" + System.nanoTime();
 
         Order o = new Order();
@@ -1425,56 +1456,80 @@ public class SellPanel extends JPanel {
         o.setPaymentMethodId(pId);
         o.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
         o.setTotalAmount(finalAmountToPay);
-        o.setStoreId(storeId);
-        o.setStatus("Hoàn thành");
+        o.setStoreId(requireCurrentStoreForSale());
 
         List<OrderDetail> dt = new ArrayList<>();
+
         for (int i = 0; i < modCart.getRowCount(); i++) {
             String id = modCart.getValueAt(i, 0).toString();
-            Product p = allProducts.stream().filter(x -> x.getProductId().equals(id)).findFirst().orElse(null);
             int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 3).toString());
+
+            Product p = allProducts.stream()
+                    .filter(x -> x.getProductId().equals(id))
+                    .findFirst()
+                    .orElse(null);
+
             dt.add(new OrderDetail(
                     oId,
                     id,
                     qty,
-                    Double.parseDouble(modCart.getValueAt(i, 3).toString()),
+                    unitPrice,
                     (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI",
                     qty
             ));
         }
 
-        Thread.ofVirtual().start(() -> {
-            try {
-                boolean success = PaymentService.thanhToan(o, dt);
+        new SwingWorker<Boolean, Void>() {
+            private Exception error;
 
-                SwingUtilities.invokeLater(() -> {
+            @Override
+            protected Boolean doInBackground() {
+                try {
+                    return PaymentService.thanhToan(o, dt);
+                } catch (Exception ex) {
+                    error = ex;
+                    return false;
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    boolean success = get();
+
                     if (success) {
                         paymentJustSucceeded = true;
                         handlePaymentSuccess(o.getOrderId());
                     } else {
-                        JOptionPane.showMessageDialog(
-                                this,
-                                "Thanh toán thất bại. Có thể tồn kho đã thay đổi, vui lòng làm mới giỏ hàng.",
-                                "Thanh toán thất bại",
-                                JOptionPane.WARNING_MESSAGE
-                        );
+                        if (error != null) {
+                            handleGeneralError(error);
+                        } else {
+                            JOptionPane.showMessageDialog(
+                                    SellPanel.this,
+                                    "Thanh toán thất bại. Có thể tồn kho đã thay đổi, vui lòng làm mới giỏ hàng.",
+                                    "Thanh toán thất bại",
+                                    JOptionPane.WARNING_MESSAGE
+                            );
+                        }
+
                         loadProducts();
                         validateCartAgainstDatabase();
                     }
-                });
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> handleGeneralError(ex));
-            } finally {
-                SwingUtilities.invokeLater(() -> {
+
+                } catch (Exception ex) {
+                    handleGeneralError(ex);
+
+                } finally {
                     paymentProcessing = false;
                     resetPaymentUI();
 
                     Timer t = new Timer(700, ev -> paymentJustSucceeded = false);
                     t.setRepeats(false);
                     t.start();
-                });
+                }
             }
-        });
+        }.execute();
     }
 
     private void handlePaymentSuccess(String orderId) {

@@ -608,45 +608,52 @@ public class AccountSql implements SqlInterface<Account> {
             return false;
         }
 
+        accountId = accountId.trim();
+        newRoleId = newRoleId.trim().toUpperCase();
+
+        String sqlGetUserId = """
+        SELECT user_id
+        FROM ACCOUNTS
+        WHERE account_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
         String sqlCheck = """
-            SELECT 1
-            FROM ACCOUNT_ASSIGN_ROLE
-            WHERE account_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
+        SELECT 1
+        FROM ACCOUNT_ASSIGN_ROLE
+        WHERE account_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
 
-        String sqlUpdate = """
-            UPDATE ACCOUNT_ASSIGN_ROLE
-            SET role_id = ?,
-                updated_at = CURRENT_TIMESTAMP,
-                is_deleted = 0
-            WHERE account_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
+        String sqlUpdateRole = """
+        UPDATE ACCOUNT_ASSIGN_ROLE
+        SET role_id = ?,
+            is_deleted = 0
+        WHERE account_id = ?
+    """;
 
-        String sqlInsert = """
-            INSERT INTO ACCOUNT_ASSIGN_ROLE (account_id, role_id, created_at, is_deleted)
-            VALUES (?, ?, CURRENT_TIMESTAMP, 0)
-        """;
-
-        String sqlSyncEmployeeRole = """
-            UPDATE EMPLOYEES e
-            SET e.role_id = ?,
-                e.updated_at = CURRENT_TIMESTAMP
-            WHERE e.employee_id = (
-                    SELECT a.user_id
-                    FROM ACCOUNTS a
-                    WHERE a.account_id = ?
-                )
-              AND NVL(e.is_deleted, 0) = 0
-        """;
+        String sqlInsertRole = """
+        INSERT INTO ACCOUNT_ASSIGN_ROLE (
+            account_id,
+            role_id,
+            is_deleted
+        )
+        VALUES (?, ?, 0)
+    """;
 
         String sqlTouchAccount = """
-            UPDATE ACCOUNTS
-            SET updated_at = CURRENT_TIMESTAMP
-            WHERE account_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
+        UPDATE ACCOUNTS
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE account_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
+        String sqlUpdateEmployeeRole = """
+        UPDATE EMPLOYEES
+        SET role_id = ?
+        WHERE employee_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
 
         Connection con = null;
 
@@ -654,66 +661,112 @@ public class AccountSql implements SqlInterface<Account> {
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            boolean exists = false;
-            try (PreparedStatement pstCheck = con.prepareStatement(sqlCheck)) {
-                pstCheck.setString(1, accountId.trim());
-                try (ResultSet rs = pstCheck.executeQuery()) {
-                    exists = rs.next();
+            String userId = null;
+
+            try (PreparedStatement ps = con.prepareStatement(sqlGetUserId)) {
+                ps.setString(1, accountId);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        userId = rs.getString("user_id");
+                    }
                 }
             }
 
-            int changed;
-            if (exists) {
-                try (PreparedStatement pstUpdate = con.prepareStatement(sqlUpdate)) {
-                    pstUpdate.setString(1, newRoleId.trim());
-                    pstUpdate.setString(2, accountId.trim());
-                    changed = pstUpdate.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement pstInsert = con.prepareStatement(sqlInsert)) {
-                    pstInsert.setString(1, accountId.trim());
-                    pstInsert.setString(2, newRoleId.trim());
-                    changed = pstInsert.executeUpdate();
-                }
-            }
-
-            if (changed <= 0) {
+            if (userId == null || userId.trim().isEmpty()) {
                 con.rollback();
                 return false;
             }
 
-            try (PreparedStatement psEmp = con.prepareStatement(sqlSyncEmployeeRole)) {
-                psEmp.setString(1, newRoleId.trim());
-                psEmp.setString(2, accountId.trim());
-                psEmp.executeUpdate();
+            boolean exists = false;
+
+            try (PreparedStatement ps = con.prepareStatement(sqlCheck)) {
+                ps.setString(1, accountId);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    exists = rs.next();
+                }
             }
 
-            try (PreparedStatement psAcc = con.prepareStatement(sqlTouchAccount)) {
-                psAcc.setString(1, accountId.trim());
-                psAcc.executeUpdate();
+            if (exists) {
+                try (PreparedStatement ps = con.prepareStatement(sqlUpdateRole)) {
+                    ps.setString(1, newRoleId);
+                    ps.setString(2, accountId);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = con.prepareStatement(sqlInsertRole)) {
+                    ps.setString(1, accountId);
+                    ps.setString(2, newRoleId);
+                    ps.executeUpdate();
+                }
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sqlUpdateEmployeeRole)) {
+                ps.setString(1, newRoleId);
+                ps.setString(2, userId);
+                ps.executeUpdate();
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sqlTouchAccount)) {
+                ps.setString(1, accountId);
+                ps.executeUpdate();
             }
 
             con.commit();
             return true;
 
-        } catch (SQLException e) {
+        } catch (Exception e) {
             if (con != null) {
                 try {
                     con.rollback();
-                } catch (SQLException ignored) {
+                } catch (Exception ignored) {
                 }
             }
+
             e.printStackTrace();
             return false;
+
         } finally {
             if (con != null) {
                 try {
                     con.setAutoCommit(true);
                     con.close();
-                } catch (SQLException ignored) {
+                } catch (Exception ignored) {
                 }
             }
         }
+    }
+
+    public boolean updateAccountRoleByEmployeeId(String employeeId, String newRoleId) {
+        if (employeeId == null || employeeId.trim().isEmpty()
+                || newRoleId == null || newRoleId.trim().isEmpty()) {
+            return false;
+        }
+
+        String sql = """
+        SELECT account_id
+        FROM ACCOUNTS
+        WHERE user_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, employeeId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String accountId = rs.getString("account_id");
+                    return updateAccountRole(accountId, newRoleId);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return false;
     }
 
     public boolean createEmployeeAccount(String fullName, String email, String phone, String username, String roleId) {

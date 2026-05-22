@@ -351,33 +351,36 @@ public class DashboardView extends JFrame {
                 boolean forceLogout = false;
 
                 try {
-                    /*
-                    * Logic mới dùng ACCOUNT_SESSIONS để track nhiều phiên.
-                    * Không kiểm tra CURRENT_SESSION_ID nữa.
-                    * Nếu còn check CURRENT_SESSION_ID, Staff_Sale sẽ bị đá nhầm dù chỉ đăng nhập 1 máy.
-                    *
-                    * Việc logout tự động chỉ xảy ra khi role/quyền của tài khoản bị đổi.
-                     */
                     String[] latestData
                             = business.sql.rbac.AccountSql.getInstance()
                                     .getAccountDetails(currentUser.getAccountId());
 
-                    if (latestData != null) {
+                    if (latestData == null) {
+                        forceLogout = true;
+                    } else {
                         String dbRoleId = latestData[4];
 
-                        String currentRole = currentUser.getRoleId() != null
-                                ? currentUser.getRoleId()
-                                : currentUser.getRoleValue();
+                        String currentRole = business.service.SessionManager.getCurrentRole();
 
-                        if (dbRoleId != null
-                                && currentRole != null
-                                && !dbRoleId.equalsIgnoreCase(currentRole)) {
+                        if (currentRole == null || currentRole.trim().isEmpty()) {
+                            currentRole = currentUser.getRoleId() != null
+                                    ? currentUser.getRoleId()
+                                    : currentUser.getRoleValue();
+                        }
+
+                        if (currentRole == null || currentRole.trim().isEmpty()) {
+                            currentRole = currentUser.getRole();
+                        }
+
+                        if (dbRoleId == null
+                                || currentRole == null
+                                || !dbRoleId.trim().equalsIgnoreCase(currentRole.trim())) {
                             forceLogout = true;
                         }
                     }
 
                 } catch (Exception ex) {
-                    System.err.println("[SessionCheck] Bỏ qua lỗi kiểm tra session: " + ex.getMessage());
+                    System.err.println("[SessionCheck] Bỏ qua lỗi kiểm tra role/session: " + ex.getMessage());
                     return;
                 }
 
