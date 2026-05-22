@@ -612,6 +612,27 @@ CREATE TABLE INVENTORY_TRANSACTIONS (
     )
 );
 
+CREATE TABLE ACCOUNT_SESSIONS (
+    session_id        VARCHAR2(100) PRIMARY KEY,
+    account_id        VARCHAR2(50) NOT NULL,
+    login_at          TIMESTAMP DEFAULT SYSTIMESTAMP,
+    last_heartbeat_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    logout_at         TIMESTAMP NULL,
+    status            VARCHAR2(20) DEFAULT 'ACTIVE',
+    device_info       VARCHAR2(500),
+    ip_address        VARCHAR2(100),
+    is_deleted        NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT fk_account_sessions_account
+        FOREIGN KEY (account_id)
+        REFERENCES ACCOUNTS(account_id)
+);
+
+CREATE INDEX idx_account_sessions_acc
+ON ACCOUNT_SESSIONS(account_id, status, last_heartbeat_at);
+
+COMMIT;
+
 CREATE INDEX IDX_PRODUCTS_SUPPLIER ON PRODUCTS(supplier_id);
 CREATE INDEX IDX_PRODUCTS_CATEGORY ON PRODUCTS(category_id);
 CREATE INDEX IDX_STORE_PRODUCTS_PRODUCT ON STORE_PRODUCTS(product_id, is_active, is_deleted);
