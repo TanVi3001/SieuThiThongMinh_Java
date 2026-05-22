@@ -690,9 +690,7 @@ public class InventoryTransactionSql {
         """;
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement ps = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, productId.trim());
 
             try (ResultSet rs = ps.executeQuery()) {
@@ -754,20 +752,21 @@ public class InventoryTransactionSql {
         try {
             String storeId = SessionManager.getCurrentStoreId();
             return storeId == null || storeId.trim().isEmpty() ? null : storeId.trim();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
             return null;
         }
     }
 
     private String getCurrentAccountId() {
         try {
-            if (SessionManager.getCurrentUser() != null) {
+            if (SessionManager.getCurrentUser() != null
+                    && SessionManager.getCurrentUser().getAccountId() != null) {
                 return SessionManager.getCurrentUser().getAccountId();
             }
         } catch (Exception ignored) {
         }
 
-        return null;
+        return "SYSTEM";
     }
 
     private String emptyToDefault(String value, String fallback) {

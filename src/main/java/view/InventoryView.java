@@ -682,20 +682,27 @@ public class InventoryView extends JPanel {
     }
 
     private void applyInventoryRolePermission() {
-        boolean canImportStock = AuthorizationService.isWarehouseStaff()
-                || AuthorizationService.isAdmin();
+        boolean canManageStock = AuthorizationService.isAdmin()
+                || business.service.SessionManager.isWarehouseStaff();
 
         if (btnImportCsv != null) {
-            btnImportCsv.setVisible(canImportStock);
+            btnImportCsv.setVisible(canManageStock);
+            btnImportCsv.setEnabled(canManageStock);
         }
 
         if (btnInbound != null) {
-            btnInbound.setVisible(canImportStock);
+            btnInbound.setVisible(canManageStock);
+            btnInbound.setEnabled(canManageStock);
+        }
+
+        if (btnAuditLog != null) {
+            btnAuditLog.setVisible(true);
+            btnAuditLog.setEnabled(true);
         }
     }
 
     private void openPurchaseReceiptDialog() {
-        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
             JOptionPane.showMessageDialog(
                     this,
                     "Bạn không có quyền nhập kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
@@ -781,7 +788,7 @@ public class InventoryView extends JPanel {
     }
 
     private void handleStockAdjustment(boolean isInbound) {
-        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
             JOptionPane.showMessageDialog(
                     this,
                     "Bạn không có quyền điều chỉnh kho.",
@@ -1103,7 +1110,7 @@ public class InventoryView extends JPanel {
     }
 
     private void handleImportCSV() {
-        if (!AuthorizationService.isWarehouseStaff() && !AuthorizationService.isAdmin()) {
+        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
             JOptionPane.showMessageDialog(
                     this,
                     "Bạn không có quyền nhập CSV kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
