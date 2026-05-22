@@ -500,13 +500,18 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void saveStore() {
-        String id = txtMaChiNhanh.getText().trim(), name = txtTenChiNhanh.getText().trim(), address = txtDiaChi.getText().trim(), phone = txtSoDienThoai.getText().trim(), status = String.valueOf(cbTrangThai.getSelectedItem());
+        String id = txtMaChiNhanh.getText().trim();
+        String name = txtTenChiNhanh.getText().trim();
+        String address = txtDiaChi.getText().trim();
+        String phone = txtSoDienThoai.getText().trim();
+        String status = String.valueOf(cbTrangThai.getSelectedItem()).trim();
+
         if (id.isEmpty()) {
             id = generateNextStoreId();
             txtMaChiNhanh.setText(id);
         }
 
-        if (id == null || id.trim().isEmpty()) {
+        if (id.isEmpty()) {
             JOptionPane.showMessageDialog(
                     this,
                     "Không thể lưu chi nhánh vì chưa sinh được mã chi nhánh.",
@@ -515,41 +520,68 @@ public class StoreManagementPanel extends JPanel {
             );
             return;
         }
+
         if (name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên chi nhánh!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng nhập tên chi nhánh!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
+
         refreshStoreSchemaFlags();
+
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
-            if (isEditMode) {
+            boolean editing = isEditMode;
+
+            if (editing) {
                 updateStore(con, id, name, address, phone, status);
             } else {
                 insertStore(con, id, name, address, phone, status);
             }
-            business.service.AuditLogService.logAction(isEditMode ? "CẬP NHẬT" : "THÊM MỚI", "STORES", id, "", "Trạng thái: " + status, "Admin cập nhật thông tin chi nhánh");
-            JOptionPane.showMessageDialog(this, isEditMode ? "Đã cập nhật thông tin chi nhánh!" : "Đã thêm chi nhánh mới!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+
+            business.service.AuditLogService.logAction(
+                    editing ? "CẬP NHẬT" : "THÊM MỚI",
+                    "STORES",
+                    id,
+                    "",
+                    "Trạng thái: " + status,
+                    editing ? "Admin cập nhật thông tin chi nhánh" : "Admin thêm chi nhánh mới"
+            );
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    editing ? "Đã cập nhật thông tin chi nhánh!" : "Đã thêm chi nhánh mới!",
+                    "Thành công",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
             clearForm();
             loadStoreData(txtSearch.getText().trim());
-            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+
+            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED:" + id + ":" + status));
+
             try {
-                common.realtime.RealtimeClient.send("STORE_INFO_CHANGED");
-                common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                common.realtime.RealtimeClient.send("STORE_INFO_CHANGED:" + id + ":" + status);
+
+                // Chỉ khi cập nhật chi nhánh mới cần ép các session kiểm tra lại.
+                // Nếu chi nhánh bị Tạm ngưng thì DashboardView/LoginService sẽ chặn/kick user theo store.
+                if (editing) {
+                    common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED:" + id + ":" + status);
+                }
             } catch (Exception ex) {
                 System.err.println("[StoreManagementPanel] realtime error: " + ex.getMessage());
             }
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi lưu dữ liệu: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-        }
-
-        clearForm();
-        loadStoreData(txtSearch.getText().trim());
-        EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
-
-        try {
-            common.realtime.RealtimeClient.send("STORE_INFO_CHANGED");
-            common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-        } catch (Exception ex) {
-            System.err.println("[StoreManagementPanel] realtime error: " + ex.getMessage());
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi khi lưu dữ liệu: " + e.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
