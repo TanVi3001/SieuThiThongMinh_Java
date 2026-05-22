@@ -7,6 +7,7 @@ import business.service.LoginService;
 import business.service.SessionManager;
 import common.auth.UserSession;
 import common.security.UIPermissionGuard;
+import common.security.SecurityGuard;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -47,6 +48,7 @@ public class WarehouseDashboardView extends JFrame {
         }
 
         setupWarehouseUI();
+        SecurityGuard.attach(mainContentPanel);
     }
 
     private void setupWarehouseUI() {
@@ -123,15 +125,6 @@ public class WarehouseDashboardView extends JFrame {
                 }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SUPPLIERS);
                 showPanel(new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
-            }
-
-            case WarehouseSidebar.MENU_CATEGORY_TAX -> {
-                if (!AuthorizationService.canAccessSupplierAndCategory()) {
-                    showAccessDenied();
-                    return;
-                }
-                warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_CATEGORY_TAX);
-                showPanel(new CategoryTaxView());
             }
 
             case WarehouseSidebar.MENU_SETTINGS -> {
@@ -229,7 +222,6 @@ public class WarehouseDashboardView extends JFrame {
                 = (panel instanceof InventoryView)
                 || (panel instanceof ProductView)
                 || (panel instanceof SupplierManagementView)
-                || (panel instanceof CategoryTaxView)
                 || (panel instanceof UnifiedSettingsPanel)
                 || (panel instanceof TongQuanPanel);
 

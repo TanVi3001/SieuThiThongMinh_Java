@@ -291,22 +291,24 @@ public class OrdersSql implements SqlInterface<Order> {
     }
 
     public int insertWithConn(Connection con, Order order) throws SQLException {
+        assertWritableStore(order.getStoreId());
+
         String sql = """
-            INSERT INTO ORDERS
-            (
-                ORDER_ID,
-                CUSTOMER_ID,
-                EMPLOYEE_ID,
-                PAYMENT_METHOD_ID,
-                ORDER_DATE,
-                TOTAL_AMOUNT,
-                STATUS,
-                NOTE,
-                STORE_ID,
-                IS_DELETED
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-        """;
+        INSERT INTO ORDERS
+        (
+            ORDER_ID,
+            CUSTOMER_ID,
+            EMPLOYEE_ID,
+            PAYMENT_METHOD_ID,
+            ORDER_DATE,
+            TOTAL_AMOUNT,
+            STATUS,
+            NOTE,
+            STORE_ID,
+            IS_DELETED
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    """;
 
         try (PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, order.getOrderId());
@@ -335,20 +337,27 @@ public class OrdersSql implements SqlInterface<Order> {
 
     @Override
     public int update(Order order) {
+        try {
+            assertWritableStore(order.getStoreId());
+        } catch (SQLException e) {
+            System.err.println("❌ OrdersSql.update(): " + e.getMessage());
+            return 0;
+        }
+
         String sql = """
-            UPDATE ORDERS
-            SET
-                CUSTOMER_ID = ?,
-                EMPLOYEE_ID = ?,
-                PAYMENT_METHOD_ID = ?,
-                ORDER_DATE = ?,
-                TOTAL_AMOUNT = ?,
-                STATUS = ?,
-                NOTE = ?,
-                STORE_ID = ?
-            WHERE ORDER_ID = ?
-              AND NVL(IS_DELETED, 0) = 0
-        """;
+        UPDATE ORDERS
+        SET
+            CUSTOMER_ID = ?,
+            EMPLOYEE_ID = ?,
+            PAYMENT_METHOD_ID = ?,
+            ORDER_DATE = ?,
+            TOTAL_AMOUNT = ?,
+            STATUS = ?,
+            NOTE = ?,
+            STORE_ID = ?
+        WHERE ORDER_ID = ?
+          AND NVL(IS_DELETED, 0) = 0
+    """;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
 

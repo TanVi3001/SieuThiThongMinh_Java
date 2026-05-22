@@ -21,8 +21,6 @@ public class SessionManager {
         token = normalize(tk);
         currentToken = normalize(tk);
         currentSessionId = null;
-
-        // Tránh dính scope của tài khoản đăng nhập trước.
         clearScopeOnly();
     }
 
@@ -31,8 +29,6 @@ public class SessionManager {
         token = normalize(tk);
         currentToken = normalize(tk);
         currentSessionId = normalize(sessionId);
-
-        // Tránh dính scope của tài khoản đăng nhập trước.
         clearScopeOnly();
     }
 
@@ -76,14 +72,8 @@ public class SessionManager {
         currentStoreId = normalize(storeId);
         currentStoreName = normalize(storeName);
 
-        /*
-         * Nếu Account chưa có userId nhưng scope load được employeeId
-         * thì đồng bộ ngược lại để code cũ dùng currentUser.getUserId() vẫn chạy đúng.
-         */
         try {
-            if (currentUser != null
-                    && isBlank(currentUser.getUserId())
-                    && currentEmployeeId != null) {
+            if (currentUser != null && isBlank(currentUser.getUserId()) && currentEmployeeId != null) {
                 currentUser.setUserId(currentEmployeeId);
             }
         } catch (Exception ignored) {
@@ -95,10 +85,6 @@ public class SessionManager {
             return currentEmployeeId;
         }
 
-        /*
-         * Chuẩn mới:
-         * ACCOUNTS.user_id = EMPLOYEES.employee_id
-         */
         if (currentUser != null && !isBlank(currentUser.getUserId())) {
             return currentUser.getUserId().trim();
         }
@@ -119,25 +105,17 @@ public class SessionManager {
             return null;
         }
 
-        String role = normalize(currentUser.getRole());
-
+        String role = normalize(currentUser.getRoleId());
         if (role == null) {
-            role = normalize(currentUser.getRoleId());
+            role = normalize(currentUser.getRole());
+        }
+        if (role == null) {
+            role = normalize(currentUser.getRoleValue());
         }
 
         return role;
     }
 
-    /*
-     * =========================================================
-     * 4 ROLE CHÍNH CỦA ĐỒ ÁN
-     * =========================================================
-     *
-     * R_ADMIN_ALL        : Admin toàn hệ thống
-     * R_STORE_MNG        : Manager / quản lý chi nhánh
-     * R_STAFF_SALE       : Nhân viên bán hàng
-     * R_STAFF_VIEW_PROD  : Nhân viên sản phẩm/kho/nhập hàng
-     */
     public static boolean isAdmin() {
         return "R_ADMIN_ALL".equalsIgnoreCase(getCurrentRole());
     }
@@ -150,18 +128,10 @@ public class SessionManager {
         return "R_STAFF_SALE".equalsIgnoreCase(getCurrentRole());
     }
 
-    /**
-     * Trong đồ án này: R_STAFF_VIEW_PROD = Staff Product = nhân viên sản
-     * phẩm/kho/nhập hàng. Không hiểu là "chỉ xem".
-     */
     public static boolean isProductStaff() {
         return "R_STAFF_VIEW_PROD".equalsIgnoreCase(getCurrentRole());
     }
 
-    /**
-     * Giữ tên hàm cũ để các file khác gọi không bị lỗi compile. Ý nghĩa thật
-     * hiện tại: warehouse staff chính là Staff Product.
-     */
     public static boolean isWarehouseStaff() {
         return isProductStaff();
     }
@@ -170,11 +140,6 @@ public class SessionManager {
         return isSaleStaff() || isProductStaff();
     }
 
-    /**
-     * User bị giới hạn theo chi nhánh: - Manager - Staff Sale - Staff Product
-     *
-     * Admin không bị giới hạn store.
-     */
     public static boolean isStoreScopedUser() {
         return !isAdmin() && (isStoreManager() || isStoreStaff());
     }
@@ -183,59 +148,40 @@ public class SessionManager {
         return currentStoreId != null && !currentStoreId.isBlank();
     }
 
-    /**
-     * Dùng cho SQL/service cần filter theo chi nhánh.
-     *
-     * Admin: return null => xem toàn hệ thống. Manager/Staff: return
-     * currentStoreId.
-     */
     public static String getScopedStoreIdOrNull() {
         if (isAdmin()) {
             return null;
         }
-
         return hasStoreScope() ? currentStoreId : null;
     }
 
-    /**
-     * Dùng cho Manager/Staff bắt buộc phải có chi nhánh.
-     */
     public static String requireCurrentStoreId() {
         if (!hasStoreScope()) {
             throw new IllegalStateException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
         }
-
         return currentStoreId;
     }
 
-    /**
-     * Dùng cho các màn tạo dữ liệu vận hành như bán hàng, nhập kho, phân ca.
-     */
     public static String requireCurrentEmployeeId() {
         String employeeId = getCurrentEmployeeId();
-
         if (employeeId == null || employeeId.isBlank()) {
             throw new IllegalStateException("Không xác định được nhân viên hiện tại. Vui lòng đăng nhập lại.");
         }
-
         return employeeId;
     }
 
-    /*
-     * =========================================================
-     * HELPER PHÂN QUYỀN THEO NGHIỆP VỤ
-     * =========================================================
-     */
+    // Helpers theo nghiệp vụ hiện tại. AuthorizationService là nguồn chính,
+    // các hàm này giữ để code cũ không lỗi compile.
     public static boolean canManageStock() {
-        return isAdmin() || isStoreManager() || isProductStaff();
+        return isAdmin() || isProductStaff();
     }
 
     public static boolean canAccessSales() {
-        return isAdmin() || isStoreManager() || isSaleStaff();
+        return isAdmin() || isSaleStaff();
     }
 
     public static boolean canAccessProductsAndInventory() {
-        return isAdmin() || isStoreManager() || isProductStaff();
+        return isAdmin() || isStoreManager() || isSaleStaff() || isProductStaff();
     }
 
     public static boolean canAccessCustomers() {
@@ -258,19 +204,15 @@ public class SessionManager {
         if (isAdmin()) {
             return "Admin";
         }
-
         if (isStoreManager()) {
             return "Manager";
         }
-
         if (isSaleStaff()) {
             return "Staff Sale";
         }
-
         if (isProductStaff()) {
             return "Staff Product";
         }
-
         return "Unknown";
     }
 
@@ -278,19 +220,15 @@ public class SessionManager {
         if (isAdmin()) {
             return "SMART SUPERMARKET - CENTRAL ADMIN PORTAL";
         }
-
         if (isStoreManager()) {
             return "SMART SUPERMARKET - STORE PORTAL";
         }
-
         if (isSaleStaff()) {
             return "SMART SUPERMARKET - SALE PORTAL";
         }
-
         if (isProductStaff()) {
             return "SMART SUPERMARKET - WAREHOUSE PORTAL";
         }
-
         return "SMART SUPERMARKET";
     }
 
@@ -298,15 +236,12 @@ public class SessionManager {
         if (isAdmin()) {
             return "Toàn hệ thống";
         }
-
         if (!isBlank(currentStoreName)) {
             return currentStoreName;
         }
-
         if (!isBlank(currentStoreId)) {
             return currentStoreId;
         }
-
         return "Chưa phân chi nhánh";
     }
 

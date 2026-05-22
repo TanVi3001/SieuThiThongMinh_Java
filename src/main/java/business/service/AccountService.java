@@ -9,8 +9,13 @@ import common.realtime.RealtimeClient;
 
 public class AccountService {
 
+    private AccountService() {
+    }
+
     /**
-     * Ghi audit log cho hành động đổi role user.
+     * Ghi audit log cho hành động đổi role user. Sau khi đổi role phải bắn
+     * ACCOUNT_SECURITY_CHANGED để máy user đang online tự kiểm tra quyền và
+     * logout nếu role bị đổi.
      */
     public static void logChangeRole(String targetAccountId, String oldRole, String newRole, String reason) {
         String actorId = SessionManager.getCurrentUser() != null
@@ -22,22 +27,25 @@ public class AccountService {
                 "CHANGE_ROLE",
                 "ACCOUNT",
                 targetAccountId,
-                "role=" + (oldRole != null ? oldRole : "UNKNOWN"),
-                "role=" + (newRole != null ? newRole : "UNKNOWN"),
-                reason != null ? reason : "Admin cap nhat quyen",
+                "role=" + safe(oldRole, "UNKNOWN"),
+                "role=" + safe(newRole, "UNKNOWN"),
+                reason != null ? reason : "Cap nhat quyen tai khoan",
                 localIp(),
                 deviceInfo()
         );
 
-        notifyAccountChanged("ROLE_CHANGED");
+        notifyAccountSecurityChanged("ROLE_CHANGED");
     }
 
     /**
-     * Set trạng thái hoạt động của tài khoản. ONLINE = đang đăng nhập app.
-     * OFFLINE = đã đăng xuất / không còn phiên làm việc.
+     * Set trạng thái ONLINE/OFFLINE ở bảng ACCOUNTS. Lưu ý: trạng thái hiển thị
+     * số phiên online thật nên lấy từ ACCOUNT_SESSIONS. Hàm này chỉ giữ tương
+     * thích cho các màn cũ còn đọc ONLINE_STATUS.
      */
     public static boolean updateOnlineStatus(String accountId, String onlineStatus) {
-        if (accountId == null || accountId.isBlank()) {
+        accountId = clean(accountId);
+
+        if (accountId == null) {
             return false;
         }
 
@@ -46,7 +54,7 @@ public class AccountService {
         boolean ok = AccountSql.getInstance().updateOnlineStatus(accountId, status);
 
         if (ok) {
-            notifyAccountChanged("ONLINE_STATUS_CHANGED");
+            notifyOnlineStatusChanged("ONLINE_STATUS_CHANGED");
             System.out.println("[AccountService] Account " + accountId + " -> " + status);
         }
 
@@ -62,9 +70,195 @@ public class AccountService {
     }
 
     /**
-     * Bắn realtime để các màn khác reload danh sách nhân viên/tài khoản.
+     * Login thành công theo logic mới: - Tạo/cập nhật một dòng trong
+     * ACCOUNT_SESSIONS. - Mỗi cửa sổ app có một sessionId riêng. - Không kick
+     * phiên cũ khi Manager/Admin đăng nhập nhiều thiết bị.
      */
-    private static void notifyAccountChanged(String message) {
+    public static void onLoginSuccess(String accountId, String sessionId) {
+        accountId = clean(accountId);
+        sessionId = clean(sessionId);
+
+        if (accountId == null || sessionId == null) {
+            return;
+        }
+
+        try {
+            AccountSql accountSql = AccountSql.getInstance();
+
+            accountSql.createLoginSession(accountId, sessionId);
+            accountSql.heartbeatSession(accountId, sessionId);
+            accountSql.heartbeat(accountId);
+            accountSql.cleanupDeadSessions();
+
+            notifyOnlineStatusChanged("LOGIN_ONLINE");
+
+        } catch (Exception e) {
+            System.err.println("[AccountService] onLoginSuccess error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Giữ hàm cũ để code cũ gọi không bị lỗi. Nếu không truyền sessionId thì
+     * lấy session hiện tại từ SessionManager.
+     */
+    public static void onLoginSuccess(String accountId) {
+        String sessionId = SessionManager.getCurrentSessionId();
+        onLoginSuccess(accountId, sessionId);
+    }
+
+    /**
+     * Logout hoặc đóng app theo logic mới: - Đóng đúng session hiện tại trong
+     * ACCOUNT_SESSIONS. - Không làm sai số phiên còn lại nếu tài khoản đang mở
+     * nhiều cửa sổ.
+     */
+    public static void onLogoutOrCloseApp(String accountId, String sessionId) {
+        accountId = clean(accountId);
+        sessionId = clean(sessionId);
+
+        if (accountId == null) {
+            return;
+        }
+
+        try {
+            AccountSql accountSql = AccountSql.getInstance();
+
+            if (sessionId != null) {
+                accountSql.closeLoginSession(accountId, sessionId);
+            }
+
+            /*
+             * Giữ lại để các màn cũ còn dùng ACTIVE_SESSIONS không bị quá bẩn.
+             * Nhưng UI online chuẩn nên đọc từ ACCOUNT_SESSIONS.
+             */
+            try {
+                accountSql.decreaseActiveSession(accountId);
+            } catch (Exception ignored) {
+            }
+
+            accountSql.cleanupDeadSessions();
+            notifyOnlineStatusChanged("LOGOUT_OR_CLOSE_APP");
+
+        } catch (Exception e) {
+            System.err.println("[AccountService] onLogoutOrCloseApp error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Giữ hàm cũ để code cũ gọi không bị lỗi. Sửa bug cũ: trước đây hàm này
+     * dùng biến sessionId không tồn tại.
+     */
+    public static void onLogoutOrCloseApp(String accountId) {
+        String sessionId = SessionManager.getCurrentSessionId();
+        onLogoutOrCloseApp(accountId, sessionId);
+    }
+
+    /**
+     * Heartbeat cho session hiện tại. Dùng nếu có file cũ gọi
+     * AccountService.sendHeartbeat(accountId).
+     */
+    public static void sendHeartbeat(String accountId) {
+        accountId = clean(accountId);
+
+        if (accountId == null) {
+            return;
+        }
+
+        try {
+            String sessionId = SessionManager.getCurrentSessionId();
+            AccountSql accountSql = AccountSql.getInstance();
+
+            if (sessionId != null && !sessionId.trim().isEmpty()) {
+                boolean updated = accountSql.heartbeatSession(accountId, sessionId);
+
+                if (!updated) {
+                    accountSql.createLoginSession(accountId, sessionId);
+                    accountSql.heartbeatSession(accountId, sessionId);
+                }
+            }
+
+            accountSql.heartbeat(accountId);
+            accountSql.cleanupDeadSessions();
+
+        } catch (Exception e) {
+            System.err.println("[AccountService] sendHeartbeat error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Dọn session chết. Logic mới không dùng resetDeadSessions() nữa.
+     */
+    public static void cleanupDeadSessions() {
+        try {
+            AccountSql.getInstance().cleanupDeadSessions();
+            notifyOnlineStatusChanged("CLEANUP_DEAD_SESSIONS");
+        } catch (Exception e) {
+            System.err.println("[AccountService] cleanupDeadSessions error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Legacy alias. Trước đây dùng force single session. Bây giờ chuyển sang
+     * tạo session bình thường để không đá Manager/Admin.
+     */
+    public static void onLoginSuccessForceSingleSession(String accountId, String sessionId) {
+        onLoginSuccess(accountId, sessionId);
+    }
+
+    /**
+     * Legacy alias. Trước đây phân biệt single/multi theo role. Bây giờ mọi
+     * role đều ghi ACCOUNT_SESSIONS. Việc staff có bị kick khi đổi role/quyền
+     * sẽ do SecurityGuard xử lý.
+     */
+    public static void onLoginSuccessByRole(model.account.Account acc, String sessionId) {
+        if (acc == null || acc.getAccountId() == null) {
+            return;
+        }
+
+        onLoginSuccess(acc.getAccountId(), sessionId);
+    }
+
+    /**
+     * Legacy method cho HeartbeatService cũ. Nếu còn file nào chưa sửa vẫn gọi
+     * hàm này thì vẫn chạy được.
+     *
+     * Logic mới: - Không check CURRENT_SESSION_ID. - Không kick phiên cũ khi
+     * login thiết bị khác. - Chỉ cập nhật heartbeat cho ACCOUNT_SESSIONS.
+     */
+    public static boolean heartbeatAndCheckSession(String accountId, String sessionId) {
+        accountId = clean(accountId);
+        sessionId = clean(sessionId);
+
+        if (accountId == null || sessionId == null) {
+            return false;
+        }
+
+        try {
+            AccountSql accountSql = AccountSql.getInstance();
+
+            accountSql.cleanupDeadSessions();
+
+            boolean updated = accountSql.heartbeatSession(accountId, sessionId);
+
+            if (!updated) {
+                accountSql.createLoginSession(accountId, sessionId);
+                updated = accountSql.heartbeatSession(accountId, sessionId);
+            }
+
+            accountSql.heartbeat(accountId);
+
+            return updated;
+
+        } catch (Exception e) {
+            System.err.println("[AccountService] heartbeatAndCheckSession error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Bắn realtime khi đổi role/quyền/bảo mật tài khoản. SecurityGuard sẽ bắt
+     * ACCOUNT_SECURITY_CHANGED và tự kiểm tra role hiện tại.
+     */
+    public static void notifyAccountSecurityChanged(String message) {
         try {
             RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
             RealtimeClient.send("ACCOUNTS_CHANGED");
@@ -77,10 +271,32 @@ public class AccountService {
                     )
             );
 
-            System.out.println("[AccountService] Đã gửi realtime: " + message);
+            System.out.println("[AccountService] Đã gửi realtime security: " + message);
 
         } catch (Exception e) {
-            System.err.println("[AccountService] Không thể gửi realtime: " + e.getMessage());
+            System.err.println("[AccountService] Không thể gửi realtime security: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Bắn realtime khi trạng thái online/offline thay đổi.
+     */
+    private static void notifyOnlineStatusChanged(String message) {
+        try {
+            RealtimeClient.send("ACCOUNTS_CHANGED");
+            RealtimeClient.send("EMPLOYEES_CHANGED");
+
+            EventBus.publish(
+                    new AppDataChangedEvent(
+                            AppEventType.EMPLOYEES,
+                            message
+                    )
+            );
+
+            System.out.println("[AccountService] Đã gửi realtime online: " + message);
+
+        } catch (Exception e) {
+            System.err.println("[AccountService] Realtime online error: " + e.getMessage());
         }
     }
 
@@ -96,217 +312,12 @@ public class AccountService {
         return System.getProperty("os.name") + " | Java " + System.getProperty("java.version");
     }
 
-    public static void onLoginSuccess(String accountId) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return;
-        }
-
-        boolean ok = AccountSql.getInstance().increaseActiveSession(accountId);
-
-        if (ok) {
-            notifyAccountStatusChanged("LOGIN_ONLINE");
-        }
+    private static String clean(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
-    public static void onLogoutOrCloseApp(String accountId) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return;
-        }
-
-        boolean ok = AccountSql.getInstance().decreaseActiveSession(accountId);
-
-        if (ok) {
-            notifyAccountStatusChanged("LOGOUT_OFFLINE_CHECK");
-        }
-    }
-
-    public static void onLogoutOrCloseApp(String accountId, String sessionId) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return;
-        }
-
-        model.account.Account currentUser
-                = business.service.SessionManager.getCurrentUser();
-
-        String role = getRoleOf(currentUser);
-
-        boolean ok;
-
-        if (isMultiSessionRole(role)) {
-            ok = business.sql.rbac.AccountSql.getInstance()
-                    .logoutMultiSession(accountId);
-        } else {
-            if (sessionId == null || sessionId.trim().isEmpty()) {
-                return;
-            }
-
-            ok = business.sql.rbac.AccountSql.getInstance()
-                    .logoutBySession(accountId, sessionId);
-        }
-
-        if (ok) {
-            notifyOnlineStatusChanged("LOGOUT_BY_ROLE");
-        }
-    }
-
-    private static void notifyOnlineStatusChanged(String message) {
-        try {
-            common.realtime.RealtimeClient.send("ACCOUNTS_CHANGED");
-            common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED");
-
-            common.events.EventBus.publish(
-                    new common.events.AppDataChangedEvent(
-                            common.events.AppEventType.EMPLOYEES,
-                            message
-                    )
-            );
-
-        } catch (Exception e) {
-            System.err.println("[AccountService] Realtime status error: " + e.getMessage());
-        }
-    }
-
-    public static void sendHeartbeat(String accountId) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return;
-        }
-
-        AccountSql.getInstance().heartbeat(accountId);
-    }
-
-    public static void cleanupDeadSessions() {
-        int affected = business.sql.rbac.AccountSql.getInstance().resetDeadSessions();
-
-        if (affected > 0) {
-            notifyAccountStatusChanged("RESET_DEAD_SESSIONS");
-        }
-    }
-
-    private static void notifyAccountStatusChanged(String message) {
-        try {
-            common.realtime.RealtimeClient.send("ACCOUNTS_CHANGED");
-            common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED");
-
-            common.events.EventBus.publish(
-                    new common.events.AppDataChangedEvent(
-                            common.events.AppEventType.ACCOUNT_SECURITY,
-                            message
-                    )
-            );
-
-        } catch (Exception e) {
-            System.err.println("[AccountService] Realtime error: " + e.getMessage());
-        }
-    }
-
-    public static void onLoginSuccessForceSingleSession(String accountId, String sessionId) {
-        if (accountId == null || accountId.trim().isEmpty()
-                || sessionId == null || sessionId.trim().isEmpty()) {
-            return;
-        }
-
-        business.sql.rbac.AccountSql.getInstance()
-                .activateSingleSession(accountId, sessionId);
-
-        try {
-            // Chỉ reload trạng thái tài khoản/nhân viên
-            common.realtime.RealtimeClient.send("ACCOUNTS_CHANGED");
-            common.realtime.RealtimeClient.send("EMPLOYEES_CHANGED");
-
-            common.events.EventBus.publish(
-                    new common.events.AppDataChangedEvent(
-                            common.events.AppEventType.EMPLOYEES,
-                            "FORCE_SINGLE_SESSION_LOGIN"
-                    )
-            );
-
-        } catch (Exception ex) {
-            System.err.println("[AccountService] Realtime error: " + ex.getMessage());
-        }
-    }
-
-    public static boolean heartbeatAndCheckSession(String accountId, String sessionId) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            return false;
-        }
-
-        model.account.Account currentUser
-                = business.service.SessionManager.getCurrentUser();
-
-        String role = getRoleOf(currentUser);
-
-        if (isMultiSessionRole(role)) {
-            // Admin / Manager không kiểm tra CURRENT_SESSION_ID
-            // vì được phép mở nhiều app cùng tài khoản.
-            return business.sql.rbac.AccountSql.getInstance()
-                    .heartbeatMultiSession(accountId);
-        }
-
-        if (sessionId == null || sessionId.trim().isEmpty()) {
-            return false;
-        }
-
-        boolean updated = business.sql.rbac.AccountSql.getInstance()
-                .heartbeatBySession(accountId, sessionId);
-
-        if (!updated) {
-            return false;
-        }
-
-        return business.sql.rbac.AccountSql.getInstance()
-                .isCurrentSessionValid(accountId, sessionId);
-    }
-
-    private static boolean isMultiSessionRole(String role) {
-        if (role == null) {
-            return false;
-        }
-
-        return "R_ADMIN_ALL".equalsIgnoreCase(role)
-                || "R_STORE_MNG".equalsIgnoreCase(role);
-    }
-
-    private static String getRoleOf(model.account.Account acc) {
-        if (acc == null) {
-            return "";
-        }
-
-        if (acc.getRoleId() != null && !acc.getRoleId().trim().isEmpty()) {
-            return acc.getRoleId();
-        }
-
-        if (acc.getRoleValue() != null && !acc.getRoleValue().trim().isEmpty()) {
-            return acc.getRoleValue();
-        }
-
-        if (acc.getRole() != null && !acc.getRole().trim().isEmpty()) {
-            return acc.getRole();
-        }
-
-        return "";
-    }
-
-    public static void onLoginSuccessByRole(model.account.Account acc, String sessionId) {
-        if (acc == null || acc.getAccountId() == null) {
-            return;
-        }
-
-        String role = getRoleOf(acc);
-
-        boolean ok;
-
-        if (isMultiSessionRole(role)) {
-            // Admin / Manager được đăng nhập song song
-            ok = business.sql.rbac.AccountSql.getInstance()
-                    .activateMultiSession(acc.getAccountId());
-        } else {
-            // Staff / Warehouse dùng Force Logout
-            ok = business.sql.rbac.AccountSql.getInstance()
-                    .activateSingleSession(acc.getAccountId(), sessionId);
-        }
-
-        if (ok) {
-            notifyOnlineStatusChanged("LOGIN_BY_ROLE");
-        }
+    private static String safe(String value, String fallback) {
+        value = clean(value);
+        return value == null ? fallback : value;
     }
 }

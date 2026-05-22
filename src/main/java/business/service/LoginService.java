@@ -15,11 +15,10 @@ import javax.swing.JOptionPane;
 /**
  * LoginService (BCrypt-only)
  *
- * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ.
- * - Nếu hash bị sửa / xóa / sai format -> đăng nhập thất bại.
- * - Sau login thành công phải load currentEmployeeId/currentStoreId/currentStoreName.
- * - Admin không bị giới hạn store.
- * - Manager/Staff không có store_id bị chặn vào Store Portal.
+ * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ. - Nếu hash bị sửa /
+ * xóa / sai format -> đăng nhập thất bại. - Sau login thành công phải load
+ * currentEmployeeId/currentStoreId/currentStoreName. - Admin không bị giới hạn
+ * store. - Manager/Staff không có store_id bị chặn vào Store Portal.
  */
 public class LoginService {
 
@@ -98,6 +97,8 @@ public class LoginService {
 
         String sessionId = UUID.randomUUID().toString();
         SessionManager.startSession(acc, tokenValue, sessionId);
+        business.sql.rbac.AccountSql.getInstance()
+                .createLoginSession(acc.getAccountId(), sessionId);
         SessionScopeService.loadEmployeeStoreScope(acc);
         SessionManager.debugPrintScope(LOGIN_VERSION);
 

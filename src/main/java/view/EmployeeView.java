@@ -1809,59 +1809,58 @@ public class EmployeeView extends JPanel {
         }
 
         for (Employee emp : list) {
-            String employeeId = emp.getEmployeeId();
-
-            String accountStatus = normalizeAccountStatus(emp.getAccountStatus());
-
-            String onlineStatus = emp.getOnlineStatus() != null
-                    ? emp.getOnlineStatus().trim()
-                    : "N/A";
-
-            if ("ONLINE".equalsIgnoreCase(onlineStatus) && emp.getActiveSessions() > 1) {
-                onlineStatus = "ONLINE (" + emp.getActiveSessions() + ")";
-            }
-
-            String storeName = emp.getStoreName() != null ? emp.getStoreName() : "Chưa phân";
-            if (storeName.trim().isEmpty() || "—".equals(storeName.trim())) {
+            String storeName = safeCell(emp.getStoreName());
+            if ("—".equals(storeName) || storeName.trim().isEmpty()) {
                 storeName = "Chưa phân";
             }
 
             tableModel.addRow(new Object[]{
-                maskSensitiveInfo(employeeId),
+                maskSensitiveInfo(emp.getEmployeeId()),
                 safeCell(emp.getEmployeeName()),
-                safeCell(storeName), // <-- Chèn Chi nhánh vào Cột vị trí số 2
+                storeName,
                 safeCell(emp.getPhone()),
                 safeCell(emp.getEmail()),
-                safeCell(accountStatus),
-                safeCell(onlineStatus),
-                safeCell(emp.getRole()),
+                normalizeAccountStatus(emp.getAccountStatus()),
+                formatOnlineStatus(emp),
+                safeCell(emp.getRoleId()),
                 safeCell(emp.getGender()),
-                employeeId
+                emp.getEmployeeId()
             });
         }
     }
 
-    private Map<String, String> loadOnlineStatusMap() {
-        Map<String, String> map = new HashMap<>();
-
-        String sql = "SELECT user_id, NVL(online_status, 'OFFLINE') AS online_status "
-                + "FROM ACCOUNTS "
-                + "WHERE NVL(is_deleted, 0) = 0";
-
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                map.put(
-                        rs.getString("user_id"),
-                        rs.getString("online_status")
-                );
-            }
-
-        } catch (Exception e) {
-            System.err.println("Lỗi loadOnlineStatusMap: " + e.getMessage());
+    private String formatOnlineStatus(Employee emp) {
+        if (emp == null) {
+            return "—";
         }
 
-        return map;
+        String status = emp.getOnlineStatus();
+
+        if (status == null || status.trim().isEmpty()) {
+            return "—";
+        }
+
+        status = status.trim();
+
+        if ("ONLINE".equalsIgnoreCase(status)) {
+            int count = emp.getActiveSessions();
+
+            if (count > 1) {
+                return "Online (" + count + ")";
+            }
+
+            return "Online";
+        }
+
+        if ("OFFLINE".equalsIgnoreCase(status)) {
+            return "Offline";
+        }
+
+        if ("N/A".equalsIgnoreCase(status)) {
+            return "—";
+        }
+
+        return status;
     }
 
     private String maskSensitiveInfo(String info) {
@@ -2206,14 +2205,16 @@ public class EmployeeView extends JPanel {
             }
 
             if (modelColumn == COL_ONLINE_STATUS) {
-                String status = value == null ? "N/A" : value.toString().trim();
+                String status = value == null ? "—" : value.toString().trim();
 
                 setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-                if (status.toUpperCase().startsWith("ONLINE")) {
-                    setText("● " + status.replace("ONLINE", "Online"));
+                String normalized = status.toLowerCase();
+
+                if (normalized.startsWith("online")) {
+                    setText("● " + status);
                     setForeground(onlineGreen);
-                } else if ("OFFLINE".equalsIgnoreCase(status)) {
+                } else if (normalized.startsWith("offline")) {
                     setText("● Offline");
                     setForeground(offlineRed);
                 } else {

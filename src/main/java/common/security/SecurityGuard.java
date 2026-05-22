@@ -53,7 +53,14 @@ public class SecurityGuard {
         }
 
         String accId = currentUser.getAccountId();
-        String currentRole = currentUser.getRoleId();
+        String roleSnapshot = currentUser.getRoleId();
+        if (roleSnapshot == null || roleSnapshot.trim().isEmpty()) {
+            roleSnapshot = currentUser.getRole();
+        }
+        if (roleSnapshot == null || roleSnapshot.trim().isEmpty()) {
+            roleSnapshot = currentUser.getRoleValue();
+        }
+        final String currentRole = roleSnapshot;
 
         new Thread(() -> {
             try {
@@ -66,7 +73,7 @@ public class SecurityGuard {
                 String dbRoleId = latestData[4];
                 boolean isActive = "0".equals(latestData[5]);
 
-                if (!isActive || !dbRoleId.equals(currentRole)) {
+                if (!isActive || dbRoleId == null || currentRole == null || !dbRoleId.equalsIgnoreCase(currentRole)) {
                     // 🌟 LOCK NGAY LẬP TỨC: Thằng nào chạy đến đây trước thì set cờ true
                     // Thằng Timer hay Listener thứ 2 chạy tới sẽ bị chặn đứng
                     if (!isProcessingLogout) {
@@ -106,5 +113,37 @@ public class SecurityGuard {
         LoginView login = new LoginView();
         login.setLocationRelativeTo(null);
         login.setVisible(true);
+        isProcessingLogout = false;
+    }
+
+    private static boolean isCurrentAccountRoleChanged() {
+        try {
+            model.account.Account currentUser = business.service.SessionManager.getCurrentUser();
+
+            if (currentUser == null || currentUser.getAccountId() == null) {
+                return false;
+            }
+
+            String[] latestData = business.sql.rbac.AccountSql.getInstance()
+                    .getAccountDetails(currentUser.getAccountId());
+
+            if (latestData == null) {
+                return true;
+            }
+
+            String dbRoleId = latestData[4];
+
+            String currentRole = business.service.SessionManager.getCurrentRole();
+
+            if (dbRoleId == null || currentRole == null) {
+                return true;
+            }
+
+            return !dbRoleId.trim().equalsIgnoreCase(currentRole.trim());
+
+        } catch (Exception e) {
+            System.err.println("[SecurityGuard] Cannot check current role: " + e.getMessage());
+            return false;
+        }
     }
 }

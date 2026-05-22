@@ -710,10 +710,10 @@ public class InventoryView extends JPanel {
     }
 
     private void openPurchaseReceiptDialog() {
-        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
+        if (!AuthorizationService.canManageStock()) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Bạn không có quyền nhập kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
+                    "Bạn không có quyền nhập kho. Chức năng này dành cho Staff Product hoặc Admin.",
                     "Không có quyền",
                     JOptionPane.WARNING_MESSAGE
             );

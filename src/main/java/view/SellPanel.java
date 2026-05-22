@@ -471,45 +471,60 @@ public class SellPanel extends JPanel {
         chkPrintBill = new ToggleButton("In hóa đơn");
 
         JPanel header = createSectionHeader("Thanh toán", "Tổng tiền nổi bật", IconHelper.bill(18));
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; gbc.weightx = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1;
         gbc.insets = new Insets(0, 0, 12, 0);
         pnlPayment.add(header, gbc);
 
         gbc.insets = new Insets(8, 8, 8, 8);
         gbc.gridwidth = 1;
-        
+
         // Thêm dòng Khuyến mãi
-        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.4;
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0.4;
         pnlPayment.add(new JLabel("Mã Voucher:"), gbc);
-        gbc.gridx = 1; gbc.weightx = 0.6;
+        gbc.gridx = 1;
+        gbc.weightx = 0.6;
         pnlPayment.add(cboKhuyenMai, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         pnlPayment.add(new JLabel("Phương thức TT:"), gbc);
         gbc.gridx = 1;
         pnlPayment.add(cboPaymentMethod, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         pnlPayment.add(new JLabel("Tổng tạm tính:"), gbc);
         gbc.gridx = 1;
         pnlPayment.add(lblSubTotal, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 4;
+        gbc.gridx = 0;
+        gbc.gridy = 4;
         pnlPayment.add(new JLabel("Tổng giảm giá:"), gbc); // Đổi tên nhãn
         gbc.gridx = 1;
         pnlPayment.add(lblDiscount, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.gridwidth = 2;
         pnlPayment.add(new JSeparator(), gbc);
 
-        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.gridwidth = 1;
         JLabel lblT = new JLabel("TỔNG TIỀN:");
         lblT.setFont(new Font("Segoe UI", Font.BOLD, 18));
         pnlPayment.add(lblT, gbc);
         gbc.gridx = 1;
         pnlPayment.add(lblTotalPay, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+        gbc.gridwidth = 2;
         gbc.insets = new Insets(10, 8, 0, 8);
 
         JPanel actionRow = new JPanel(new BorderLayout(10, 0));
@@ -1120,7 +1135,9 @@ public class SellPanel extends JPanel {
     }
 
     private void calculateTotal() {
-        if (lblSubTotal == null || lblTotalPay == null) return;
+        if (lblSubTotal == null || lblTotalPay == null) {
+            return;
+        }
 
         double subTotal = 0;
         double totalDiscount = 0;
@@ -1133,8 +1150,8 @@ public class SellPanel extends JPanel {
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
 
-            double lineTotal =
-                    Double.parseDouble(modCart.getValueAt(i, 4).toString());
+            double lineTotal
+                    = Double.parseDouble(modCart.getValueAt(i, 4).toString());
 
             String pId = modCart.getValueAt(i, 0).toString();
 
@@ -1250,18 +1267,10 @@ public class SellPanel extends JPanel {
         new SwingWorker<List<Product>, Void>() {
             @Override
             protected List<Product> doInBackground() {
-                List<Product> prds = ProductsSql.getInstance().searchByName("");
-                java.util.Map<String, Integer> stockMap = new java.util.HashMap<>();
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT product_id, quantity FROM INVENTORY WHERE NVL(is_deleted, 0) = 0"); java.sql.ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        stockMap.put(rs.getString("product_id"), rs.getInt("quantity"));
-                    }
-                } catch (Exception e) {
-                }
-                for (Product p : prds) {
-                    p.setQuantity(stockMap.getOrDefault(p.getProductId(), 0));
-                }
-                return prds;
+                String storeId = requireCurrentStoreForSale();
+                // POS chỉ được bán sản phẩm thuộc chi nhánh hiện tại.
+                // Không query INVENTORY global theo product_id vì sẽ lẫn tồn kho chi nhánh khác.
+                return ProductsSql.getInstance().selectAllByStore(storeId);
             }
 
             @Override
@@ -1279,17 +1288,36 @@ public class SellPanel extends JPanel {
         }.execute();
     }
 
-    private int getStockFromDB(String pId) {
-        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement("SELECT quantity FROM INVENTORY WHERE product_id = ? AND NVL(is_deleted, 0) = 0")) {
-            ps.setString(1, pId);
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        } catch (Exception e) {
+    private String requireCurrentStoreForSale() {
+        String storeId = SessionManager.getCurrentStoreId();
+
+        if (storeId == null || storeId.trim().isEmpty()) {
+            throw new IllegalStateException("Tài khoản bán hàng chưa được phân chi nhánh.");
         }
-        return 0;
+
+        return storeId.trim();
+    }
+
+    private int getStockFromDB(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return 0;
+        }
+
+        String storeId;
+
+        try {
+            storeId = requireCurrentStoreForSale();
+        } catch (Exception e) {
+            return 0;
+        }
+
+        Product p = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
+
+        if (p == null) {
+            return 0;
+        }
+
+        return Math.max(0, p.getQuantity());
     }
 
     private void loadPaymentMethods() {
@@ -1311,9 +1339,11 @@ public class SellPanel extends JPanel {
             }
         }.execute();
     }
-    
+
     private void loadActivePromotions() {
-        if (cboKhuyenMai == null) return;
+        if (cboKhuyenMai == null) {
+            return;
+        }
         cboKhuyenMai.removeAllItems();
         cboKhuyenMai.addItem("Không áp dụng mã giảm giá");
 
@@ -1322,16 +1352,14 @@ public class SellPanel extends JPanel {
             @Override
             protected List<String> doInBackground() {
                 List<String> promos = new ArrayList<>();
-                String sql = "SELECT p.promotion_id, p.promotion_name, NVL(p.discount_amount, 0) AS discount_amount " +
-                             "FROM PROMOTIONS p " +
-                             "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id " +
-                             "WHERE p.status = N'Đang diễn ra' AND NVL(p.is_deleted, 0) = 0 " +
-                             "ORDER BY p.promotion_id DESC";
+                String sql = "SELECT p.promotion_id, p.promotion_name, NVL(p.discount_amount, 0) AS discount_amount "
+                        + "FROM PROMOTIONS p "
+                        + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
+                        + "WHERE p.status = N'Đang diễn ra' AND NVL(p.is_deleted, 0) = 0 "
+                        + "ORDER BY p.promotion_id DESC";
 
-                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection();
-                     java.sql.PreparedStatement ps = con.prepareStatement(sql);
-                     java.sql.ResultSet rs = ps.executeQuery()) {
-                    
+                try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql); java.sql.ResultSet rs = ps.executeQuery()) {
+
                     while (rs.next()) {
                         String id = rs.getString("promotion_id");
                         String name = rs.getString("promotion_name");
@@ -1370,10 +1398,21 @@ public class SellPanel extends JPanel {
         btnCancel.setEnabled(false);
         btnRemove.setEnabled(false);
 
-        String emp = "EMP_DEFAULT";
-        model.account.Account a = SessionManager.getCurrentUser();
-        if (a != null) {
-            emp = (a.getUserId() != null && !a.getUserId().isBlank()) ? a.getUserId() : a.getAccountId();
+        String emp;
+        String storeId;
+        try {
+            emp = SessionManager.requireCurrentEmployeeId();
+            storeId = requireCurrentStoreForSale();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    ex.getMessage(),
+                    "Thiếu thông tin phiên đăng nhập",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            resetPaymentUI();
+            paymentProcessing = false;
+            return;
         }
 
         String pId = cboPaymentMethod.getSelectedItem() != null ? cboPaymentMethod.getSelectedItem().toString() : "PM_CASH";
@@ -1386,12 +1425,22 @@ public class SellPanel extends JPanel {
         o.setPaymentMethodId(pId);
         o.setOrderDate(new java.sql.Date(System.currentTimeMillis()));
         o.setTotalAmount(finalAmountToPay);
+        o.setStoreId(storeId);
+        o.setStatus("Hoàn thành");
 
         List<OrderDetail> dt = new ArrayList<>();
         for (int i = 0; i < modCart.getRowCount(); i++) {
             String id = modCart.getValueAt(i, 0).toString();
             Product p = allProducts.stream().filter(x -> x.getProductId().equals(id)).findFirst().orElse(null);
-            dt.add(new OrderDetail(oId, id, Integer.parseInt(modCart.getValueAt(i, 2).toString()), Double.parseDouble(modCart.getValueAt(i, 3).toString()), (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI", 0));
+            int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            dt.add(new OrderDetail(
+                    oId,
+                    id,
+                    qty,
+                    Double.parseDouble(modCart.getValueAt(i, 3).toString()),
+                    (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI",
+                    qty
+            ));
         }
 
         Thread.ofVirtual().start(() -> {
@@ -1794,7 +1843,7 @@ public class SellPanel extends JPanel {
             return cp;
         }
     }
-    
+
     private double getPromoRateFromString(String promoString) {
         if (promoString == null || promoString.isEmpty() || promoString.equals("Không áp dụng mã giảm giá")) {
             return 0.0;
@@ -1818,10 +1867,10 @@ public class SellPanel extends JPanel {
         if (selectedPromo == null || selectedPromo.isEmpty() || selectedPromo.equals("Không áp dụng mã giảm giá")) {
             return false;
         }
-        
+
         // Hiện tại: Mặc định tất cả sản phẩm đều được áp dụng nếu chọn bất kỳ mã nào
         // Sau này nếu bạn muốn khuyến mãi theo danh mục, bạn có thể sửa logic ở đây
         // Ví dụ: return p.getCategoryId().equals(promoCategoryId);
-        return true; 
+        return true;
     }
 }

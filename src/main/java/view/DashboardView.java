@@ -351,19 +351,13 @@ public class DashboardView extends JFrame {
                 boolean forceLogout = false;
 
                 try {
-                    if (!isMultiSessionRole(currentUser)) {
-                        boolean currentSessionValid
-                                = business.sql.rbac.AccountSql.getInstance()
-                                        .isCurrentSessionValid(
-                                                currentUser.getAccountId(),
-                                                sessionId
-                                        );
-
-                        if (!currentSessionValid) {
-                            forceLogout = true;
-                        }
-                    }
-
+                    /*
+                    * Logic mới dùng ACCOUNT_SESSIONS để track nhiều phiên.
+                    * Không kiểm tra CURRENT_SESSION_ID nữa.
+                    * Nếu còn check CURRENT_SESSION_ID, Staff_Sale sẽ bị đá nhầm dù chỉ đăng nhập 1 máy.
+                    *
+                    * Việc logout tự động chỉ xảy ra khi role/quyền của tài khoản bị đổi.
+                     */
                     String[] latestData
                             = business.sql.rbac.AccountSql.getInstance()
                                     .getAccountDetails(currentUser.getAccountId());
