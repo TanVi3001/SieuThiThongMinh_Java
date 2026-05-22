@@ -682,8 +682,7 @@ public class InventoryView extends JPanel {
     }
 
     private void applyInventoryRolePermission() {
-        boolean canManageStock = AuthorizationService.isAdmin()
-                || business.service.SessionManager.isWarehouseStaff();
+        boolean canManageStock = AuthorizationService.canManageStock();
 
         if (btnImportCsv != null) {
             btnImportCsv.setVisible(canManageStock);
@@ -696,8 +695,17 @@ public class InventoryView extends JPanel {
         }
 
         if (btnAuditLog != null) {
-            btnAuditLog.setVisible(true);
-            btnAuditLog.setEnabled(true);
+            btnAuditLog.setVisible(canManageStock);
+            btnAuditLog.setEnabled(canManageStock);
+        }
+
+        if (!canManageStock) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền truy cập Quản lý tồn kho.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
         }
     }
 
@@ -788,10 +796,10 @@ public class InventoryView extends JPanel {
     }
 
     private void handleStockAdjustment(boolean isInbound) {
-        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
+        if (!AuthorizationService.canManageStock()) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Bạn không có quyền điều chỉnh kho.",
+                    "Bạn không có quyền điều chỉnh kho. Chức năng này dành cho Staff Product hoặc Admin.",
                     "Không có quyền",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -829,7 +837,7 @@ public class InventoryView extends JPanel {
 
         panel.add(lblProduct);
         panel.add(lblCurrent);
-        panel.add(new JLabel("Nhập số lượng trừ đi:"));
+        panel.add(new JLabel(isInbound ? "Nhập số lượng cần cộng thêm:" : "Nhập số lượng trừ đi:"));
         panel.add(txtQty);
         panel.add(new JLabel("Lý do / ghi chú:"));
         panel.add(txtReason);
@@ -1110,14 +1118,31 @@ public class InventoryView extends JPanel {
     }
 
     private void handleImportCSV() {
-        if (!AuthorizationService.isAdmin() && !business.service.SessionManager.isWarehouseStaff()) {
+        if (!AuthorizationService.canManageStock()) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Bạn không có quyền nhập CSV kho. Chỉ nhân viên kho hoặc quản trị viên được thao tác.",
+                    "Bạn không có quyền nhập CSV kho. Chức năng này dành cho Staff Product hoặc Admin.",
                     "Không có quyền",
                     JOptionPane.WARNING_MESSAGE
             );
             return;
+        }
+        if (AuthorizationService.isAdmin()) {
+            Object selectedStore = cbStoreFilter == null ? null : cbStoreFilter.getSelectedItem();
+            String selectedStoreText = selectedStore == null ? "" : selectedStore.toString().trim();
+
+            if (selectedStoreText.isEmpty()
+                    || "Tất cả chi nhánh".equalsIgnoreCase(selectedStoreText)
+                    || "Chưa xác định".equalsIgnoreCase(selectedStoreText)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Admin cần chọn một chi nhánh cụ thể trước khi nhập CSV.\n"
+                        + "Không thể nhập hàng vào 'Tất cả chi nhánh'.",
+                        "Thiếu chi nhánh nhập kho",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
         }
 
         JFileChooser fileChooser = new JFileChooser();
