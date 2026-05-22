@@ -2,6 +2,7 @@ package business.service;
 
 import business.sql.prod_inventory.ProductsSql;
 import common.db.DatabaseConnection;
+import common.realtime.RealtimeNotifier;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -412,6 +413,10 @@ public class ProductImportService {
                 psUpdateReceiptTotal.executeUpdate();
 
                 conn.commit();
+
+                RealtimeNotifier.inventoryChanged("PURCHASE_RECEIPT_CREATED:" + result.receiptId + ":STORE:" + currentStoreId);
+                RealtimeNotifier.productsChanged("PRODUCT_STOCK_INCREASED_BY_RECEIPT:" + result.receiptId + ":STORE:" + currentStoreId);
+                RealtimeNotifier.statisticsChanged("PURCHASE_RECEIPT_CREATED:" + result.receiptId + ":STORE:" + currentStoreId);
 
                 if (progressCallback != null) {
                     progressCallback.accept(100);
