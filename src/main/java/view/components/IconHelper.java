@@ -18,14 +18,6 @@ public class IconHelper {
     private static final Map<String, ImageIcon> categoryIconCache = new HashMap<>();
     private static final String CATEGORY_ICON_PATH = "/view/image/categories/";
 
-    static ImageIcon notification(int i) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-
-    public static Icon view(int i) {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-
     private IconHelper() {
     }
 
@@ -52,6 +44,16 @@ public class IconHelper {
 
     public static ImageIcon load(String fileName, int size) {
         return getIcon(fileName, size, size);
+    }
+
+    public static ImageIcon notification(int size) {
+        ImageIcon icon = load("notification.png", size);
+        return icon != null ? icon : stock(size);
+    }
+
+    public static Icon view(int size) {
+        ImageIcon icon = load("view.png", size);
+        return icon != null ? icon : file(size);
     }
 
     // ==================================================================
