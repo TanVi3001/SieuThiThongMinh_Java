@@ -5,22 +5,26 @@ import business.sql.sales_order.CustomersSql;
 import business.sql.sales_order.OrderDetailsSql;
 import business.sql.sales_order.OrdersSql;
 import com.toedter.calendar.JDateChooser;
+import common.db.DatabaseConnection;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
 import common.report.ReportViewer;
+
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.io.IOException;
+import java.sql.Connection;
 import java.text.DecimalFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.swing.BorderFactory;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
@@ -31,6 +35,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
+
 import model.order.Customer;
 import model.order.Order;
 
@@ -40,10 +45,12 @@ public class OrderView extends javax.swing.JPanel {
     private static final String SALES_INVOICE_REPORT = "/reports/SalesInvoiceReport.jrxml";
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0.##");
+
     private JDateChooser dcFromDate;
     private JDateChooser dcToDate;
     private javax.swing.JButton btnFilterDate;
     private javax.swing.JButton btnResetFilter;
+
     private String userRole;
     private String empId;
 
@@ -51,9 +58,11 @@ public class OrderView extends javax.swing.JPanel {
         if (SessionManager.getCurrentUser() != null) {
             this.userRole = SessionManager.getCurrentUser().getRoleId();
             this.empId = SessionManager.getCurrentEmployeeId();
+
             if (this.empId == null || this.empId.isBlank()) {
                 this.empId = SessionManager.getCurrentUser().getUserId();
             }
+
             if (this.empId == null || this.empId.isBlank()) {
                 this.empId = SessionManager.getCurrentUser().getAccountId();
             }
@@ -104,6 +113,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByCurrentScope() {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
@@ -121,6 +131,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByStatusCurrentScope(String status) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
@@ -138,6 +149,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private List<Order> loadOrdersByDateCurrentScope(java.sql.Date fromDate, java.sql.Date toDate) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser() && storeId == null) {
             return java.util.Collections.emptyList();
         }
@@ -151,12 +163,15 @@ public class OrderView extends javax.swing.JPanel {
 
     private Order selectOrderByIdCurrentScope(String orderId) {
         String storeId = getCurrentStoreIdOrWarn();
+
         if (isStoreScopedUser()) {
             if (storeId == null) {
                 return null;
             }
+
             return OrdersSql.getInstance().selectByIdInStore(orderId, storeId);
         }
+
         return OrdersSql.getInstance().selectById(orderId);
     }
 
@@ -184,7 +199,14 @@ public class OrderView extends javax.swing.JPanel {
 
         jTable1.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            public Component getTableCellRendererComponent(
+                    JTable table,
+                    Object value,
+                    boolean isSelected,
+                    boolean hasFocus,
+                    int row,
+                    int column
+            ) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
                 if (!isSelected) {
@@ -197,11 +219,14 @@ public class OrderView extends javax.swing.JPanel {
                 if (column == 4) {
                     String status = value != null ? value.toString() : "";
                     c.setFont(new Font("Segoe UI", Font.BOLD, 13));
+
                     if (status.equalsIgnoreCase("Hoàn thành") || status.equalsIgnoreCase("COMPLETED")) {
                         c.setForeground(new Color(16, 185, 129));
                     } else if (status.equalsIgnoreCase("Đang xử lý") || status.equalsIgnoreCase("PENDING")) {
                         c.setForeground(new Color(245, 158, 11));
-                    } else if (status.equalsIgnoreCase("Đã hủy") || status.equalsIgnoreCase("Đã huỷ") || status.equalsIgnoreCase("CANCELLED")) {
+                    } else if (status.equalsIgnoreCase("Đã hủy")
+                            || status.equalsIgnoreCase("Đã huỷ")
+                            || status.equalsIgnoreCase("CANCELLED")) {
                         c.setForeground(new Color(239, 68, 68));
                     }
                 }
@@ -257,22 +282,50 @@ public class OrderView extends javax.swing.JPanel {
         styleButton(btnIssueAnInvoice, new Color(239, 68, 68));
 
         JTableHeader header = jTable1.getTableHeader();
+
         header.setDefaultRenderer(new TableCellRenderer() {
             private final DefaultTableCellRenderer renderer = new DefaultTableCellRenderer();
 
             @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = renderer.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            public Component getTableCellRendererComponent(
+                    JTable table,
+                    Object value,
+                    boolean isSelected,
+                    boolean hasFocus,
+                    int row,
+                    int column
+            ) {
+                Component c = renderer.getTableCellRendererComponent(
+                        table,
+                        value,
+                        isSelected,
+                        hasFocus,
+                        row,
+                        column
+                );
+
                 c.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 c.setForeground(Color.WHITE);
 
                 switch (column) {
-                    case 0 -> c.setBackground(new Color(59, 130, 246));
-                    case 1 -> c.setBackground(new Color(16, 185, 129));
-                    case 2 -> c.setBackground(new Color(245, 158, 11));
-                    case 3 -> c.setBackground(new Color(139, 92, 246));
-                    case 4 -> c.setBackground(new Color(239, 68, 68));
-                    default -> c.setBackground(new Color(59, 130, 246));
+                    case 0:
+                        c.setBackground(new Color(59, 130, 246));
+                        break;
+                    case 1:
+                        c.setBackground(new Color(16, 185, 129));
+                        break;
+                    case 2:
+                        c.setBackground(new Color(245, 158, 11));
+                        break;
+                    case 3:
+                        c.setBackground(new Color(139, 92, 246));
+                        break;
+                    case 4:
+                        c.setBackground(new Color(239, 68, 68));
+                        break;
+                    default:
+                        c.setBackground(new Color(59, 130, 246));
+                        break;
                 }
 
                 ((javax.swing.JLabel) c).setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -287,6 +340,7 @@ public class OrderView extends javax.swing.JPanel {
 
         Calendar cal = Calendar.getInstance();
         cal.set(2020, Calendar.JANUARY, 1);
+
         dcFromDate.setDate(cal.getTime());
         dcToDate.setDate(new Date());
 
@@ -303,22 +357,28 @@ public class OrderView extends javax.swing.JPanel {
 
         dcFromDate.setPreferredSize(new Dimension(200, 38));
         dcFromDate.setMinimumSize(new Dimension(200, 38));
+
         dcToDate.setPreferredSize(new Dimension(200, 38));
         dcToDate.setMinimumSize(new Dimension(200, 38));
+
         dcFromDate.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         dcToDate.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
         btnFilterDate = new javax.swing.JButton("Lọc");
         btnResetFilter = new javax.swing.JButton("Đặt lại");
+
         styleButton(btnFilterDate, new Color(59, 130, 246));
         styleButton(btnResetFilter, new Color(107, 114, 128));
+
         btnFilterDate.setPreferredSize(new Dimension(100, 38));
         btnResetFilter.setPreferredSize(new Dimension(110, 38));
 
         btnFilterDate.addActionListener(e -> filterByDate());
+
         btnResetFilter.addActionListener(e -> {
             Calendar resetCal = Calendar.getInstance();
             resetCal.set(2020, Calendar.JANUARY, 1);
+
             dcFromDate.setDate(resetCal.getTime());
             dcToDate.setDate(new Date());
             cbStatus.setSelectedItem(STATUS_ALL);
@@ -333,14 +393,19 @@ public class OrderView extends javax.swing.JPanel {
 
         gbc.gridx = 2;
         pnTop.add(new javax.swing.JLabel("Từ ngày"), gbc);
+
         gbc.gridx = 3;
         pnTop.add(dcFromDate, gbc);
+
         gbc.gridx = 4;
         pnTop.add(new javax.swing.JLabel("Đến ngày"), gbc);
+
         gbc.gridx = 5;
         pnTop.add(dcToDate, gbc);
+
         gbc.gridx = 6;
         pnTop.add(btnFilterDate, gbc);
+
         gbc.gridx = 7;
         pnTop.add(btnResetFilter, gbc);
     }
@@ -365,16 +430,19 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         if (from.after(to)) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(
+                    this,
                     "Lỗi: 'Từ ngày' không được lớn hơn 'Đến ngày'!",
                     "Sai ngày tháng",
-                    JOptionPane.WARNING_MESSAGE);
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
         try {
             java.sql.Date sqlFrom = new java.sql.Date(from.getTime());
             java.sql.Date sqlTo = new java.sql.Date(to.getTime());
+
             fillTable(loadOrdersByDateCurrentScope(sqlFrom, sqlTo));
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Lỗi lọc theo ngày: " + ex.getMessage());
@@ -383,13 +451,15 @@ public class OrderView extends javax.swing.JPanel {
 
     private void initTableModel() {
         DefaultTableModel model = new DefaultTableModel(
-                new Object[]{"Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"}, 0
+                new Object[]{"Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"},
+                0
         ) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
+
         jTable1.setModel(model);
         jTable1.setAutoCreateRowSorter(true);
     }
@@ -398,6 +468,7 @@ public class OrderView extends javax.swing.JPanel {
         cbStatus.setModel(new javax.swing.DefaultComboBoxModel<>(
                 new String[]{STATUS_ALL, "Đang xử lý", "Hoàn thành", "Đã hủy"}
         ));
+
         cbStatus.setSelectedItem(STATUS_ALL);
     }
 
@@ -414,6 +485,12 @@ public class OrderView extends javax.swing.JPanel {
                     fillTable(get());
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                    JOptionPane.showMessageDialog(
+                            OrderView.this,
+                            "Lỗi tải danh sách hóa đơn: " + ex.getMessage(),
+                            "Lỗi",
+                            JOptionPane.ERROR_MESSAGE
+                    );
                 }
             }
         }.execute();
@@ -423,8 +500,10 @@ public class OrderView extends javax.swing.JPanel {
         if (list == null) {
             return;
         }
+
         DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
         model.setRowCount(0);
+
         for (Order o : list) {
             model.addRow(new Object[]{
                 o.getOrderId(),
@@ -440,66 +519,120 @@ public class OrderView extends javax.swing.JPanel {
         if (status == null) {
             return "";
         }
+
         if ("COMPLETED".equalsIgnoreCase(status)) {
             return "Hoàn thành";
         }
+
         if ("PENDING".equalsIgnoreCase(status)) {
             return "Đang xử lý";
         }
+
         if ("CANCELLED".equalsIgnoreCase(status)) {
             return "Đã hủy";
         }
+
         return status;
     }
 
     private int getSelectedModelRow() {
         int viewRow = jTable1.getSelectedRow();
+
         if (viewRow < 0) {
             return -1;
         }
+
         return jTable1.convertRowIndexToModel(viewRow);
     }
 
     private String getSelectedOrderId() {
         int modelRow = getSelectedModelRow();
+
         if (modelRow < 0) {
             return null;
         }
+
         return String.valueOf(jTable1.getModel().getValueAt(modelRow, 0));
     }
 
     private void showOrderDetailsDialog(String orderId) {
         try {
             Order order = selectOrderByIdCurrentScope(orderId);
+
             if (order == null) {
-                JOptionPane.showMessageDialog(this, "Không tìm thấy hóa đơn hoặc bạn không có quyền xem hóa đơn này!");
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không tìm thấy hóa đơn hoặc bạn không có quyền xem hóa đơn này!"
+                );
                 return;
             }
 
             Customer customer = null;
-            if (order.getCustomerId() != null && !order.getCustomerId().equalsIgnoreCase("Khách vãng lai")) {
+
+            if (order.getCustomerId() != null
+                    && !order.getCustomerId().trim().isEmpty()
+                    && !order.getCustomerId().equalsIgnoreCase("Khách vãng lai")) {
                 customer = CustomersSql.getInstance().selectById(order.getCustomerId());
             }
 
             List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
 
             if (details == null || details.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Không tìm thấy chi tiết sản phẩm cho hóa đơn này!", "Trống", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không tìm thấy chi tiết sản phẩm cho hóa đơn này!",
+                        "Trống",
+                        JOptionPane.WARNING_MESSAGE
+                );
                 return;
             }
 
             java.awt.Window win = javax.swing.SwingUtilities.getWindowAncestor(this);
-            OrderDetailDialog dialog = new OrderDetailDialog((java.awt.Frame) win, order, customer, details);
-            dialog.setVisible(true);
+            java.awt.Frame parentFrame = win instanceof java.awt.Frame ? (java.awt.Frame) win : null;
+
+            try (Connection dialogConn = DatabaseConnection.getConnection()) {
+                OrderDetailDialog dialog = new OrderDetailDialog(
+                        parentFrame,
+                        dialogConn,
+                        order,
+                        customer,
+                        details,
+                        () -> {
+                            loadDataToTable();
+
+                            try {
+                                common.sync.SyncVersionDao.bumpVersion("ORDERS");
+                                common.realtime.RealtimeClient.send("ORDERS_CHANGED");
+                            } catch (Exception ignored) {
+                            }
+
+                            EventBus.publish(
+                                    new AppDataChangedEvent(
+                                            AppEventType.ORDERS,
+                                            "Cập nhật chi tiết hóa đơn"
+                                    )
+                            );
+                        }
+                );
+
+                dialog.setVisible(true);
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi khi tải chi tiết hóa đơn: " + e.getMessage());
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi khi tải chi tiết hóa đơn: " + e.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
     private void exportInvoice(String orderId) throws IOException {
         Order order = selectOrderByIdCurrentScope(orderId);
+
         if (order == null) {
             throw new IOException("Khong tim thay hoa don hoac khong co quyen xem: " + orderId);
         }
@@ -507,6 +640,7 @@ public class OrderView extends javax.swing.JPanel {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Chon noi luu hoa don (PDF)");
         chooser.setSelectedFile(new java.io.File("HoaDon_" + orderId + ".pdf"));
+
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
@@ -514,24 +648,35 @@ public class OrderView extends javax.swing.JPanel {
         List<Map<String, Object>> details = OrderDetailsSql.getInstance().selectDetailRowsByOrderId(orderId);
 
         try {
-            com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(chooser.getSelectedFile().getAbsolutePath());
-            com.itextpdf.kernel.pdf.PdfDocument pdf = new com.itextpdf.kernel.pdf.PdfDocument(writer);
-            com.itextpdf.layout.Document document = new com.itextpdf.layout.Document(pdf);
+            com.itextpdf.kernel.pdf.PdfWriter writer
+                    = new com.itextpdf.kernel.pdf.PdfWriter(chooser.getSelectedFile().getAbsolutePath());
+
+            com.itextpdf.kernel.pdf.PdfDocument pdf
+                    = new com.itextpdf.kernel.pdf.PdfDocument(writer);
+
+            com.itextpdf.layout.Document document
+                    = new com.itextpdf.layout.Document(pdf);
 
             document.add(new com.itextpdf.layout.element.Paragraph("HÓA ĐƠN BÁN HÀNG")
                     .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
-                    .setBold().setFontSize(20));
+                    .setBold()
+                    .setFontSize(20));
 
             document.add(new com.itextpdf.layout.element.Paragraph("Mã đơn: " + order.getOrderId()));
             document.add(new com.itextpdf.layout.element.Paragraph("Khách hàng: " + order.getCustomerId()));
             document.add(new com.itextpdf.layout.element.Paragraph("Nhân viên: " + order.getEmployeeId()));
-            document.add(new com.itextpdf.layout.element.Paragraph("Chi nhánh: " + (order.getStoreId() != null ? order.getStoreId() : "")));
+            document.add(new com.itextpdf.layout.element.Paragraph("Chi nhánh: "
+                    + (order.getStoreId() != null ? order.getStoreId() : "")));
             document.add(new com.itextpdf.layout.element.Paragraph("Ngày: " + order.getOrderDate()));
             document.add(new com.itextpdf.layout.element.Paragraph("Trạng thái: " + normalizeDisplayStatus(order.getStatus())));
-            document.add(new com.itextpdf.layout.element.Paragraph("Tổng tiền: " + moneyFormat.format(order.getTotalAmount()) + " VNĐ").setBold());
+            document.add(new com.itextpdf.layout.element.Paragraph(
+                    "Tổng tiền: " + moneyFormat.format(order.getTotalAmount()) + " VNĐ"
+            ).setBold());
+
             document.add(new com.itextpdf.layout.element.Paragraph("\n"));
 
             com.itextpdf.layout.element.Table table = new com.itextpdf.layout.element.Table(5);
+
             table.addHeaderCell("Mã SP");
             table.addHeaderCell("Tên sản phẩm");
             table.addHeaderCell("SL");
@@ -539,18 +684,56 @@ public class OrderView extends javax.swing.JPanel {
             table.addHeaderCell("Thành tiền");
 
             for (Map<String, Object> detail : details) {
-                table.addCell(String.valueOf(detail.get("product_id")));
-                table.addCell(detail.get("product_name") != null ? detail.get("product_name").toString() : String.valueOf(detail.get("product_id")));
-                table.addCell(String.valueOf(detail.get("quantity")));
-                table.addCell(moneyFormat.format(detail.get("unit_price")));
-                table.addCell(moneyFormat.format(detail.get("line_total")));
+                Object productId = detail.get("product_id") != null
+                        ? detail.get("product_id")
+                        : detail.get("PRODUCT_ID");
+
+                Object productName = detail.get("product_name") != null
+                        ? detail.get("product_name")
+                        : detail.get("PRODUCT_NAME");
+
+                Object quantity = detail.get("quantity") != null
+                        ? detail.get("quantity")
+                        : detail.get("QUANTITY");
+
+                Object unitPrice = detail.get("unit_price") != null
+                        ? detail.get("unit_price")
+                        : detail.get("UNIT_PRICE");
+
+                Object lineTotal = detail.get("line_total") != null
+                        ? detail.get("line_total")
+                        : detail.get("LINE_TOTAL");
+
+                table.addCell(String.valueOf(productId));
+                table.addCell(productName != null ? productName.toString() : String.valueOf(productId));
+                table.addCell(String.valueOf(quantity));
+                table.addCell(formatMoneyObject(unitPrice));
+                table.addCell(formatMoneyObject(lineTotal));
             }
+
             document.add(table);
             document.close();
+
             JOptionPane.showMessageDialog(this, "Đã xuất hoá đơn PDF thành công!");
         } catch (Exception e) {
             e.printStackTrace();
             throw new IOException("Lỗi khi tạo PDF: " + e.getMessage());
+        }
+    }
+
+    private String formatMoneyObject(Object value) {
+        if (value == null) {
+            return "0";
+        }
+
+        if (value instanceof Number) {
+            return moneyFormat.format(((Number) value).doubleValue());
+        }
+
+        try {
+            return moneyFormat.format(Double.parseDouble(value.toString()));
+        } catch (Exception e) {
+            return value.toString();
         }
     }
 
@@ -576,6 +759,7 @@ public class OrderView extends javax.swing.JPanel {
 
         Status.setFont(new java.awt.Font("Segoe UI", 1, 12));
         Status.setText("Trạng thái");
+
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -583,8 +767,11 @@ public class OrderView extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(8, 184, 0, 0);
         pnTop.add(Status, gridBagConstraints);
 
-        cbStatus.setModel(new javax.swing.DefaultComboBoxModel<>(new String[]{"Tất cả", "Đang xử lý", "Hoàn thành", "Đã hủy"}));
+        cbStatus.setModel(new javax.swing.DefaultComboBoxModel<>(
+                new String[]{"Tất cả", "Đang xử lý", "Hoàn thành", "Đã hủy"}
+        ));
         cbStatus.addActionListener(this::cbStatusActionPerformed);
+
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 0;
@@ -599,6 +786,7 @@ public class OrderView extends javax.swing.JPanel {
                 new Object[][]{{null, null, null, null, null}},
                 new String[]{"Mã đơn", "Khách hàng", "Ngày", "Tổng tiền", "Trạng thái"}
         ));
+
         tbOrder.setViewportView(jTable1);
 
         add(tbOrder, java.awt.BorderLayout.CENTER);
@@ -610,6 +798,7 @@ public class OrderView extends javax.swing.JPanel {
         btnDetail.setFont(new java.awt.Font("Segoe UI", 1, 12));
         btnDetail.setText("Xem chi tiết");
         btnDetail.addActionListener(this::btnDetailActionPerformed);
+
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -620,6 +809,7 @@ public class OrderView extends javax.swing.JPanel {
         btnUpdate.setFont(new java.awt.Font("Segoe UI", 1, 12));
         btnUpdate.setText("Cập nhật trạng thái");
         btnUpdate.addActionListener(this::btnUpdateActionPerformed);
+
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 0;
@@ -631,6 +821,7 @@ public class OrderView extends javax.swing.JPanel {
         btnIssueAnInvoice.setForeground(new java.awt.Color(204, 0, 0));
         btnIssueAnInvoice.setText("Xuất hóa đơn");
         btnIssueAnInvoice.addActionListener(this::btnIssueAnInvoiceActionPerformed);
+
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 2;
         gridBagConstraints.gridy = 0;
@@ -647,6 +838,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private boolean requirePassword(String actionName) {
         javax.swing.JPasswordField pf = new javax.swing.JPasswordField();
+
         Object[] message = {
             "Thao tác [" + actionName + "] yêu cầu xác thực bảo mật.",
             "Vui lòng nhập mật khẩu tài khoản của bạn để tiếp tục:",
@@ -654,8 +846,11 @@ public class OrderView extends javax.swing.JPanel {
         };
 
         int option = JOptionPane.showConfirmDialog(
-                this, message, "Xác thực bảo mật",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE
+                this,
+                message,
+                "Xác thực bảo mật",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE
         );
 
         if (option != JOptionPane.OK_OPTION) {
@@ -663,6 +858,7 @@ public class OrderView extends javax.swing.JPanel {
         }
 
         String enteredPass = new String(pf.getPassword());
+
         if (enteredPass.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Mật khẩu không được để trống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -670,15 +866,20 @@ public class OrderView extends javax.swing.JPanel {
 
         try {
             model.account.Account user = SessionManager.getCurrentUser();
+
             if (user == null || user.getUsername() == null) {
                 JOptionPane.showMessageDialog(this, "Không xác định được tài khoản hiện tại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                 return false;
             }
 
             String hashFromDb = null;
-            try (java.sql.Connection con = common.db.DatabaseConnection.getConnection();
-                 java.sql.PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0")) {
+
+            try (
+                    java.sql.Connection con = DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(
+                    "SELECT password FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0"
+            )) {
                 ps.setString(1, user.getUsername());
+
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         hashFromDb = rs.getString("password");
@@ -700,6 +901,7 @@ public class OrderView extends javax.swing.JPanel {
 
     private void btnUpdateActionPerformed(java.awt.event.ActionEvent evt) {
         int row = getSelectedModelRow();
+
         if (row < 0) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một đơn hàng!");
             return;
@@ -709,11 +911,17 @@ public class OrderView extends javax.swing.JPanel {
         String currentStatus = jTable1.getModel().getValueAt(row, 4).toString();
 
         if (currentStatus.equals("Đã hủy")) {
-            JOptionPane.showMessageDialog(this, "Đơn hàng này đã bị hủy, không thể thay đổi trạng thái!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Đơn hàng này đã bị hủy, không thể thay đổi trạng thái!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
         String[] statuses = {"Đang xử lý", "Hoàn thành", "Đã hủy"};
+
         String newStatus = (String) JOptionPane.showInputDialog(
                 this,
                 "Chọn trạng thái mới",
@@ -733,11 +941,18 @@ public class OrderView extends javax.swing.JPanel {
                 if (!requirePassword("Hủy hóa đơn")) {
                     return;
                 }
-                String reason = JOptionPane.showInputDialog(this, "Xác thực thành công!\nNhập lý do hủy đơn (Bắt buộc):");
+
+                String reason = JOptionPane.showInputDialog(
+                        this,
+                        "Xác thực thành công!\nNhập lý do hủy đơn (Bắt buộc):"
+                );
+
                 if (reason == null || reason.trim().isEmpty()) {
                     return;
                 }
+
                 boolean success = business.service.PaymentService.cancelOrder(orderId, this.empId, reason);
+
                 if (success) {
                     JOptionPane.showMessageDialog(this, "✅ Đã hủy đơn hàng và hoàn lại tồn kho!");
                 } else {
@@ -745,11 +960,14 @@ public class OrderView extends javax.swing.JPanel {
                 }
             } else {
                 int result;
+
                 if (isStoreScopedUser()) {
                     String storeId = getCurrentStoreIdOrWarn();
+
                     if (storeId == null) {
                         return;
                     }
+
                     result = OrdersSql.getInstance().updateStatusInStore(orderId, newStatus, storeId);
                 } else {
                     result = OrdersSql.getInstance().updateStatus(orderId, newStatus);
@@ -758,7 +976,10 @@ public class OrderView extends javax.swing.JPanel {
                 if (result > 0) {
                     JOptionPane.showMessageDialog(this, "Cập nhật trạng thái thành công!");
                 } else {
-                    JOptionPane.showMessageDialog(this, "Cập nhật thất bại hoặc bạn không có quyền thao tác hóa đơn này!");
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Cập nhật thất bại hoặc bạn không có quyền thao tác hóa đơn này!"
+                    );
                 }
             }
 
@@ -778,10 +999,13 @@ public class OrderView extends javax.swing.JPanel {
 
     private void cbStatusActionPerformed(java.awt.event.ActionEvent evt) {
         Object selectedObj = cbStatus.getSelectedItem();
+
         if (selectedObj == null) {
             return;
         }
+
         String selected = selectedObj.toString();
+
         try {
             fillTable(loadOrdersByStatusCurrentScope(selected));
         } catch (Exception ex) {
@@ -791,29 +1015,49 @@ public class OrderView extends javax.swing.JPanel {
 
     private void btnDetailActionPerformed(java.awt.event.ActionEvent evt) {
         String orderId = getSelectedOrderId();
+
         if (orderId == null) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn đơn hàng muốn xem chi tiết!");
             return;
         }
+
         showOrderDetailsDialog(orderId);
     }
 
     private void btnIssueAnInvoiceActionPerformed(java.awt.event.ActionEvent evt) {
         String orderId = getSelectedOrderId();
+
         if (orderId == null || orderId.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một hóa đơn trong bảng để xuất!", "Chưa chọn hóa đơn", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "⚠️ Vui lòng chọn một hóa đơn trong bảng để xuất!",
+                    "Chưa chọn hóa đơn",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
         try {
             Order order = selectOrderByIdCurrentScope(orderId.trim());
+
             if (order == null) {
-                JOptionPane.showMessageDialog(this, "Bạn không có quyền xuất hóa đơn này!", "Không có quyền", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Bạn không có quyền xuất hóa đơn này!",
+                        "Không có quyền",
+                        JOptionPane.WARNING_MESSAGE
+                );
                 return;
             }
+
             openSalesInvoiceReport(orderId.trim());
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi xuất hóa đơn: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi khi xuất hóa đơn: " + ex.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
