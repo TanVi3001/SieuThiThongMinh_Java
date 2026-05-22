@@ -196,17 +196,51 @@ public class AccountSql implements SqlInterface<Account> {
 
     @Override
     public Account selectById(String id) {
-        String sql = "SELECT account_id, username, password, is_deleted FROM ACCOUNTS WHERE account_id = ? AND is_deleted = 0";
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, id);
+        if (id == null || id.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = ""
+                + "SELECT a.account_id, a.user_id, a.username, a.password, a.status, a.is_deleted, "
+                + "       COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value "
+                + "FROM ACCOUNTS a "
+                + "LEFT JOIN ACCOUNT_ASSIGN_ROLE aar "
+                + "       ON a.account_id = aar.account_id "
+                + "      AND NVL(aar.is_deleted, 0) = 0 "
+                + "LEFT JOIN ACCOUNT_ASSIGN_ROLE_GROUP aarg "
+                + "       ON a.account_id = aarg.account_id "
+                + "      AND NVL(aarg.is_deleted, 0) = 0 "
+                + "LEFT JOIN ROLE_GROUPS rg "
+                + "       ON aarg.role_group_id = rg.role_group_id "
+                + "      AND NVL(rg.is_deleted, 0) = 0 "
+                + "WHERE a.account_id = ? "
+                + "  AND NVL(a.is_deleted, 0) = 0";
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setString(1, id.trim());
+
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
-                    return new Account(rs.getString("account_id"), rs.getString("username"), rs.getString("password"), null, rs.getInt("is_deleted"));
+                    Account acc = new Account(
+                            rs.getString("account_id"),
+                            rs.getString("username"),
+                            rs.getString("password"),
+                            rs.getString("role_value"),
+                            rs.getInt("is_deleted")
+                    );
+
+                    acc.setUserId(rs.getString("user_id"));
+                    acc.setStatus(rs.getString("status"));
+
+                    return acc;
                 }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
+
         return null;
     }
 
@@ -238,7 +272,19 @@ public class AccountSql implements SqlInterface<Account> {
 
         String sqlCheckUser = "SELECT 1 FROM ACCOUNTS WHERE username = ? AND is_deleted = 0";
         String sqlCheckEmail = "SELECT 1 FROM USERS WHERE email = ? AND is_deleted = 0";
-        String sqlUser = "INSERT INTO USERS (user_id, full_name, email, phone_number) VALUES (?, ?, ?, ?)";
+        String sqlUser = ""
+                + "MERGE INTO USERS u "
+                + "USING ( "
+                + "    SELECT ? AS user_id, ? AS full_name, ? AS email, ? AS phone_number FROM dual "
+                + ") src "
+                + "ON (u.user_id = src.user_id) "
+                + "WHEN MATCHED THEN UPDATE SET "
+                + "    u.full_name = src.full_name, "
+                + "    u.email = src.email, "
+                + "    u.phone_number = src.phone_number, "
+                + "    u.is_deleted = 0 "
+                + "WHEN NOT MATCHED THEN INSERT (user_id, full_name, email, phone_number, is_deleted) "
+                + "VALUES (src.user_id, src.full_name, src.email, src.phone_number, 0)";
         String sqlAccount = "INSERT INTO ACCOUNTS (account_id, user_id, username, password, status) VALUES (?, ?, ?, ?, 'Hoạt động')";
 
         Connection con = null;
@@ -551,60 +597,177 @@ public class AccountSql implements SqlInterface<Account> {
     }
 
     public boolean createEmployeeAccount(String fullName, String email, String phone, String username, String roleId) {
-        String userId = "USR" + (System.currentTimeMillis() % 1000000);
-        String accId = "ACC" + (System.currentTimeMillis() % 1000000);
+        String cleanUsername = clean(username);
+        String cleanEmail = clean(email);
+        String cleanPhone = clean(phone);
+        String cleanRoleId = clean(roleId);
+
+        if (cleanUsername == null || cleanRoleId == null) {
+            return false;
+        }
+
+        String accId = buildAccountId();
         String rawPassword = "1234";
 
-        String sqlCheckUser = "SELECT 1 FROM ACCOUNTS WHERE username = ? AND is_deleted = 0";
-        String sqlCheckEmail = "SELECT 1 FROM USERS WHERE email = ? AND is_deleted = 0";
-        String sqlUser = "INSERT INTO USERS (user_id, full_name, email, phone_number) VALUES (?, ?, ?, ?)";
-        String sqlAccount = "INSERT INTO ACCOUNTS (account_id, user_id, username, password, status) VALUES (?, ?, ?, ?, 'Hoạt động')";
-        String sqlAssignRole = "INSERT INTO ACCOUNT_ASSIGN_ROLE (account_id, role_id) VALUES (?, ?)";
+        String sqlFindEmployee = ""
+                + "SELECT employee_id, employee_name, email, phone, role_id, store_id "
+                + "FROM EMPLOYEES "
+                + "WHERE NVL(is_deleted, 0) = 0 "
+                + "  AND ( "
+                + "        (? IS NOT NULL AND LOWER(TRIM(email)) = LOWER(TRIM(?))) "
+                + "     OR (? IS NOT NULL AND " + normalizePhoneSql("phone") + " = " + normalizePhoneSql("?") + ") "
+                + "  ) "
+                + "ORDER BY "
+                + "    CASE WHEN LOWER(TRIM(email)) = LOWER(TRIM(?)) THEN 1 ELSE 2 END "
+                + "FETCH FIRST 1 ROWS ONLY";
+
+        String sqlCheckUsername = ""
+                + "SELECT 1 "
+                + "FROM ACCOUNTS "
+                + "WHERE username = ? "
+                + "  AND NVL(is_deleted, 0) = 0";
+
+        String sqlCheckEmployeeAccount = ""
+                + "SELECT 1 "
+                + "FROM ACCOUNTS "
+                + "WHERE user_id = ? "
+                + "  AND NVL(is_deleted, 0) = 0";
+
+        String sqlUpsertUser = ""
+                + "MERGE INTO USERS u "
+                + "USING ( "
+                + "    SELECT ? AS user_id, ? AS full_name, ? AS email, ? AS phone_number FROM dual "
+                + ") src "
+                + "ON (u.user_id = src.user_id) "
+                + "WHEN MATCHED THEN UPDATE SET "
+                + "    u.full_name = src.full_name, "
+                + "    u.email = src.email, "
+                + "    u.phone_number = src.phone_number, "
+                + "    u.is_deleted = 0 "
+                + "WHEN NOT MATCHED THEN INSERT (user_id, full_name, email, phone_number, is_deleted) "
+                + "VALUES (src.user_id, src.full_name, src.email, src.phone_number, 0)";
+
+        String sqlAccount = ""
+                + "INSERT INTO ACCOUNTS (account_id, user_id, username, password, status, is_deleted) "
+                + "VALUES (?, ?, ?, ?, N'Hoạt động', 0)";
+
+        String sqlAssignRole = ""
+                + "INSERT INTO ACCOUNT_ASSIGN_ROLE (account_id, role_id, is_deleted) "
+                + "VALUES (?, ?, 0)";
 
         Connection con = null;
+
         try {
             con = DatabaseConnection.getConnection();
             con.setAutoCommit(false);
 
-            try (PreparedStatement pstCheckUser = con.prepareStatement(sqlCheckUser)) {
-                pstCheckUser.setString(1, username);
-                try (ResultSet rs = pstCheckUser.executeQuery()) {
+            String employeeId;
+            String employeeName;
+            String employeeEmail;
+            String employeePhone;
+            String employeeRoleId;
+            String storeId;
+
+            try (PreparedStatement ps = con.prepareStatement(sqlFindEmployee)) {
+                ps.setString(1, cleanEmail);
+                ps.setString(2, cleanEmail);
+
+                ps.setString(3, cleanPhone);
+                ps.setString(4, cleanPhone);
+
+                ps.setString(5, cleanEmail);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        con.rollback();
+                        System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_NOT_FOUND_BY_EMAIL_OR_PHONE");
+                        return false;
+                    }
+
+                    employeeId = rs.getString("employee_id");
+                    employeeName = rs.getString("employee_name");
+                    employeeEmail = rs.getString("email");
+                    employeePhone = rs.getString("phone");
+                    employeeRoleId = rs.getString("role_id");
+                    storeId = rs.getString("store_id");
+                }
+            }
+
+            if (employeeId == null || employeeId.trim().isEmpty()) {
+                con.rollback();
+                return false;
+            }
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                con.rollback();
+                System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_WITHOUT_STORE, employeeId=" + employeeId);
+                return false;
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sqlCheckUsername)) {
+                ps.setString(1, cleanUsername);
+
+                try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
+                        con.rollback();
+                        System.err.println("[AccountSql] createEmployeeAccount failed: DUPLICATE_USERNAME");
                         return false;
                     }
                 }
             }
-            try (PreparedStatement pstCheckEmail = con.prepareStatement(sqlCheckEmail)) {
-                pstCheckEmail.setString(1, email);
-                try (ResultSet rs = pstCheckEmail.executeQuery()) {
+
+            try (PreparedStatement ps = con.prepareStatement(sqlCheckEmployeeAccount)) {
+                ps.setString(1, employeeId);
+
+                try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
+                        con.rollback();
+                        System.err.println("[AccountSql] createEmployeeAccount failed: EMPLOYEE_ALREADY_HAS_ACCOUNT, employeeId=" + employeeId);
                         return false;
                     }
                 }
             }
+
+            String finalName = clean(employeeName) != null ? clean(employeeName) : clean(fullName);
+            String finalEmail = clean(employeeEmail) != null ? clean(employeeEmail) : cleanEmail;
+            String finalPhone = clean(employeePhone) != null ? clean(employeePhone) : cleanPhone;
+            String finalRoleId = clean(employeeRoleId) != null ? clean(employeeRoleId) : cleanRoleId;
 
             String passwordHash = PasswordUtils.hash(rawPassword);
 
-            try (PreparedStatement pstUser = con.prepareStatement(sqlUser); PreparedStatement pstAcc = con.prepareStatement(sqlAccount); PreparedStatement pstRole = con.prepareStatement(sqlAssignRole)) {
-
-                pstUser.setString(1, userId);
-                pstUser.setString(2, fullName);
-                pstUser.setString(3, email);
-                pstUser.setString(4, phone);
-                pstUser.executeUpdate();
-
-                pstAcc.setString(1, accId);
-                pstAcc.setString(2, userId);
-                pstAcc.setString(3, username);
-                pstAcc.setString(4, passwordHash);
-                pstAcc.executeUpdate();
-
-                pstRole.setString(1, accId);
-                pstRole.setString(2, roleId);
-                pstRole.executeUpdate();
+            try (PreparedStatement ps = con.prepareStatement(sqlUpsertUser)) {
+                ps.setString(1, employeeId);
+                ps.setString(2, finalName);
+                ps.setString(3, finalEmail);
+                ps.setString(4, finalPhone);
+                ps.executeUpdate();
             }
+
+            try (PreparedStatement ps = con.prepareStatement(sqlAccount)) {
+                ps.setString(1, accId);
+                ps.setString(2, employeeId); // CHỐT: ACCOUNTS.user_id = EMPLOYEES.employee_id
+                ps.setString(3, cleanUsername);
+                ps.setString(4, passwordHash);
+                ps.executeUpdate();
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sqlAssignRole)) {
+                ps.setString(1, accId);
+                ps.setString(2, finalRoleId);
+                ps.executeUpdate();
+            }
+
             con.commit();
+
+            System.out.println("[AccountSql] createEmployeeAccount success: "
+                    + "accountId=" + accId
+                    + ", employeeId=" + employeeId
+                    + ", username=" + cleanUsername
+                    + ", roleId=" + finalRoleId
+                    + ", storeId=" + storeId);
+
             return true;
+
         } catch (Exception e) {
             if (con != null) {
                 try {
@@ -612,8 +775,10 @@ public class AccountSql implements SqlInterface<Account> {
                 } catch (Exception ignored) {
                 }
             }
+
             e.printStackTrace();
             return false;
+
         } finally {
             if (con != null) {
                 try {
@@ -643,9 +808,13 @@ public class AccountSql implements SqlInterface<Account> {
                 = "SELECT 1 FROM ACCOUNTS WHERE user_id = ? AND NVL(is_deleted,0)=0";
 
         String sqlEmp
-                = "SELECT employee_name, email, phone, role_id "
-                + "FROM EMPLOYEES "
-                + "WHERE employee_id = ? AND NVL(is_deleted,0)=0";
+                = "SELECT e.employee_name, e.email, e.phone, e.role_id, e.store_id, s.store_name "
+                + "FROM EMPLOYEES e "
+                + "LEFT JOIN STORES s "
+                + "       ON s.store_id = e.store_id "
+                + "      AND NVL(s.is_deleted, 0) = 0 "
+                + "WHERE e.employee_id = ? "
+                + "  AND NVL(e.is_deleted, 0) = 0";
 
         try (Connection con = DatabaseConnection.getConnection()) {
             if (con == null) {
@@ -682,11 +851,13 @@ public class AccountSql implements SqlInterface<Account> {
                         return null;
                     }
 
-                    data.put("emp_id", empId); // quan trọng: trả lại empId để stage2 dùng
+                    data.put("emp_id", empId);
                     data.put("name", rs.getString("employee_name"));
                     data.put("email", rs.getString("email"));
                     data.put("phone", rs.getString("phone"));
                     data.put("role_id", rs.getString("role_id"));
+                    data.put("store_id", rs.getString("store_id"));
+                    data.put("store_name", rs.getString("store_name"));
                     return data;
                 }
             }
