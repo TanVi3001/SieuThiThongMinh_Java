@@ -942,6 +942,41 @@ public class ProductsSql {
         AuditLogSql.getInstance().insertWithConn(con, log);
     }
 
+    public boolean updateInStore(Product p, String storeId) {
+        if (p == null || p.getProductId() == null || storeId == null || storeId.trim().isEmpty()) {
+            return false;
+        }
+
+        p.setStoreId(storeId.trim());
+        return update(p);
+    }
+
+    public boolean deleteFromStore(String productId, String storeId) {
+        if (productId == null || productId.trim().isEmpty()
+                || storeId == null || storeId.trim().isEmpty()) {
+            return false;
+        }
+
+        String sql = """
+        UPDATE INVENTORY
+        SET is_deleted = 1,
+            last_updated = SYSDATE
+        WHERE product_id = ?
+          AND store_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId.trim());
+            ps.setString(2, storeId.trim());
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     private boolean requireImportedStockForStoreView() {
         // Không ép phải có phiếu nhập, vì data cũ đã tồn tại trong INVENTORY.
         // Chi nhánh được xem sản phẩm nếu sản phẩm có INVENTORY/STORE_PRODUCTS theo store_id.
