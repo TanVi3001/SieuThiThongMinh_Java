@@ -33,83 +33,75 @@
                    col5
             FROM (
                 SELECT 1 AS section_no,
-                       'DOANH THU THANG THEO CHI NHANH' AS section_name,
-                       s.store_id AS col1,
-                       NVL(s.store_name, s.address) AS col2,
-                       TO_CHAR(COUNT(o.order_id)) AS col3,
-                       TO_CHAR(NVL(SUM(o.total_amount), 0), 'FM999G999G999G999') || ' VND' AS col4,
-                       '' AS col5
+                       CAST('DOANH THU THANG THEO CHI NHANH' AS VARCHAR2(100)) AS section_name,
+                       CAST(s.store_id AS VARCHAR2(80)) AS col1,
+                       CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
+                       CAST(TO_CHAR(COUNT(o.order_id)) AS VARCHAR2(80)) AS col3,
+                       CAST(TO_CHAR(NVL(SUM(o.total_amount), 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(100)) AS col4,
+                       CAST('' AS VARCHAR2(80)) AS col5
                 FROM stores s
                 LEFT JOIN orders o
                     ON o.store_id = s.store_id
                    AND NVL(o.is_deleted, 0) = 0
                    AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
                    AND (
-                        UPPER(NVL(o.status, '')) = 'COMPLETED'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                        UPPER(TO_CHAR(o.status)) = 'COMPLETED'
+                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
+                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
                    )
                 WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY s.store_id, NVL(s.store_name, s.address)
+                GROUP BY s.store_id, NVL(TO_CHAR(s.store_name), TO_CHAR(s.address))
 
                 UNION ALL
 
                 SELECT 2 AS section_no,
-                       'TON KHO THEO CHI NHANH' AS section_name,
-                       s.store_id AS col1,
-                       NVL(s.store_name, s.address) AS col2,
-                       TO_CHAR(COUNT(DISTINCT i.product_id)) AS col3,
-                       TO_CHAR(NVL(SUM(NVL(i.quantity, 0)), 0)) AS col4,
-                       TO_CHAR(SUM(CASE WHEN NVL(i.quantity, 0) <= 20 THEN 1 ELSE 0 END)) AS col5
+                       CAST('TON KHO THEO CHI NHANH' AS VARCHAR2(100)) AS section_name,
+                       CAST(s.store_id AS VARCHAR2(80)) AS col1,
+                       CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
+                       CAST(TO_CHAR(COUNT(DISTINCT i.product_id)) AS VARCHAR2(80)) AS col3,
+                       CAST(TO_CHAR(NVL(SUM(NVL(i.quantity, 0)), 0)) AS VARCHAR2(80)) AS col4,
+                       CAST(TO_CHAR(SUM(CASE WHEN NVL(i.quantity, 0) <= 20 THEN 1 ELSE 0 END)) AS VARCHAR2(80)) AS col5
                 FROM stores s
                 LEFT JOIN inventory i
                     ON i.store_id = s.store_id
                    AND NVL(i.is_deleted, 0) = 0
                 WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY s.store_id, NVL(s.store_name, s.address)
+                GROUP BY s.store_id, NVL(TO_CHAR(s.store_name), TO_CHAR(s.address))
 
                 UNION ALL
 
                 SELECT 3 AS section_no,
-                       'TOP NHAN VIEN THEO DOANH THU' AS section_name,
-                       NVL(s.store_name, e.store_id) AS col1,
-                       e.employee_id AS col2,
-                       e.employee_name AS col3,
-                       TO_CHAR(COUNT(o.order_id)) AS col4,
-                       TO_CHAR(NVL(SUM(o.total_amount), 0), 'FM999G999G999G999') || ' VND' AS col5
-                FROM employees e
-                LEFT JOIN stores s
-                    ON s.store_id = e.store_id
-                LEFT JOIN orders o
-                    ON o.employee_id = e.employee_id
-                   AND o.store_id = e.store_id
-                   AND NVL(o.is_deleted, 0) = 0
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-                   AND (
-                        UPPER(NVL(o.status, '')) = 'COMPLETED'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                   )
-                WHERE NVL(e.is_deleted, 0) = 0
-                  AND e.role_id IN ('R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
-                GROUP BY NVL(s.store_name, e.store_id), e.employee_id, e.employee_name
-
-                UNION ALL
-
-                SELECT 4 AS section_no,
-                       'CANH BAO TON KHO THAP' AS section_name,
-                       NVL(s.store_name, i.store_id) AS col1,
-                       i.product_id AS col2,
-                       p.product_name AS col3,
-                       TO_CHAR(NVL(i.quantity, 0)) AS col4,
-                       '20' AS col5
-                FROM inventory i
-                LEFT JOIN products p
-                    ON p.product_id = i.product_id
-                LEFT JOIN stores s
-                    ON s.store_id = i.store_id
-                WHERE NVL(i.is_deleted, 0) = 0
-                  AND NVL(i.quantity, 0) <= 20
+                       CAST('NHAN VIEN CO DOANH THU CAO NHAT' AS VARCHAR2(100)) AS section_name,
+                       CAST(store_name AS VARCHAR2(180)) AS col1,
+                       CAST(employee_id AS VARCHAR2(80)) AS col2,
+                       CAST(employee_name AS VARCHAR2(180)) AS col3,
+                       CAST(TO_CHAR(total_orders) AS VARCHAR2(80)) AS col4,
+                       CAST(TO_CHAR(revenue, 'FM999G999G999G999') || ' VND' AS VARCHAR2(100)) AS col5
+                FROM (
+                    SELECT NVL(TO_CHAR(s.store_name), e.store_id) AS store_name,
+                           e.employee_id,
+                           TO_CHAR(e.employee_name) AS employee_name,
+                           COUNT(o.order_id) AS total_orders,
+                           NVL(SUM(o.total_amount), 0) AS revenue
+                    FROM employees e
+                    LEFT JOIN stores s
+                        ON s.store_id = e.store_id
+                    LEFT JOIN orders o
+                        ON o.employee_id = e.employee_id
+                       AND o.store_id = e.store_id
+                       AND NVL(o.is_deleted, 0) = 0
+                       AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                       AND (
+                            UPPER(TO_CHAR(o.status)) = 'COMPLETED'
+                            OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
+                            OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
+                       )
+                    WHERE NVL(e.is_deleted, 0) = 0
+                      AND e.role_id IN ('R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
+                    GROUP BY NVL(TO_CHAR(s.store_name), e.store_id), e.employee_id, TO_CHAR(e.employee_name)
+                    ORDER BY revenue DESC, total_orders DESC
+                )
+                WHERE ROWNUM = 1
             )
             ORDER BY section_no, col1, col2
         ]]>
@@ -126,143 +118,154 @@
     <group name="SectionGroup">
         <groupExpression><![CDATA[$F{SECTION_NAME}]]></groupExpression>
         <groupHeader>
-            <band height="34">
+            <band height="52">
                 <rectangle>
                     <reportElement x="0" y="8" width="535" height="22" backcolor="#FFF3E6"/>
-                    <graphicElement>
-                        <pen lineWidth="0"/>
-                    </graphicElement>
+                    <graphicElement><pen lineWidth="0"/></graphicElement>
                 </rectangle>
                 <textField>
                     <reportElement x="10" y="12" width="515" height="14" forecolor="#0F172A"/>
-                    <textElement>
-                        <font fontName="DejaVu Sans" size="10" isBold="true"/>
-                    </textElement>
+                    <textElement><font fontName="DejaVu Sans" size="10" isBold="true"/></textElement>
                     <textFieldExpression><![CDATA[$F{SECTION_NAME}]]></textFieldExpression>
+                </textField>
+
+                <rectangle>
+                    <reportElement x="0" y="31" width="535" height="21" backcolor="#F1F5F9"/>
+                    <graphicElement><pen lineWidth="0"/></graphicElement>
+                </rectangle>
+                <textField>
+                    <reportElement x="0" y="36" width="95" height="12"/>
+                    <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : "Mã CN"]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="95" y="36" width="140" height="12"/>
+                    <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : "Chi nhánh"]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="235" y="36" width="120" height="12"/>
+                    <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Số đơn tháng" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : "Nhân viên")]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="355" y="36" width="90" height="12"/>
+                    <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Tổng tồn" : "Số đơn")]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="445" y="36" width="90" height="12"/>
+                    <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
+                    <textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "" : ($F{SECTION_NO}.intValue() == 2 ? "Tồn thấp" : "Doanh thu")]]></textFieldExpression>
                 </textField>
             </band>
         </groupHeader>
     </group>
 
     <title>
-        <band height="155">
+        <band height="128">
             <rectangle>
                 <reportElement x="0" y="0" width="535" height="70" backcolor="#FF6F00"/>
-                <graphicElement>
-                    <pen lineWidth="0"/>
-                </graphicElement>
+                <graphicElement><pen lineWidth="0"/></graphicElement>
             </rectangle>
 
             <staticText>
-                <reportElement x="18" y="15" width="320" height="22" forecolor="#FFFFFF"/>
-                <textElement>
-                    <font fontName="DejaVu Sans" size="17" isBold="true"/>
-                </textElement>
+                <reportElement x="18" y="15" width="250" height="22" forecolor="#FFFFFF"/>
+                <textElement><font fontName="DejaVu Sans" size="17" isBold="true"/></textElement>
                 <text><![CDATA[SMART SUPERMARKET]]></text>
             </staticText>
 
-            <textField>
-                <reportElement x="18" y="38" width="320" height="16" forecolor="#FFFFFF"/>
-                <textElement>
-                    <font fontName="DejaVu Sans" size="9"/>
-                </textElement>
-                <textFieldExpression><![CDATA[$P{P_REPORT_SUBTITLE}]]></textFieldExpression>
-            </textField>
+            <staticText>
+                <reportElement x="18" y="39" width="280" height="16" forecolor="#FFFFFF"/>
+                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
+                <text><![CDATA[Tổng hợp chi nhánh, doanh thu, tồn kho và nhân viên]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="305" y="15" width="215" height="23" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
+                <text><![CDATA[BÁO CÁO HỆ THỐNG]]></text>
+            </staticText>
 
             <textField>
-                <reportElement x="330" y="16" width="190" height="24" forecolor="#FFFFFF"/>
-                <textElement textAlignment="Right">
-                    <font fontName="DejaVu Sans" size="14" isBold="true"/>
-                </textElement>
-                <textFieldExpression><![CDATA[$P{P_REPORT_TITLE}]]></textFieldExpression>
-            </textField>
-
-            <textField>
-                <reportElement x="330" y="43" width="190" height="14" forecolor="#FFFFFF"/>
-                <textElement textAlignment="Right">
-                    <font fontName="DejaVu Sans" size="8"/>
-                </textElement>
+                <reportElement x="305" y="43" width="215" height="14" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
                 <textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement x="0" y="88" width="80" height="14"/>
+                <reportElement x="0" y="87" width="95" height="14"/>
                 <textElement><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
                 <text><![CDATA[Tổng chi nhánh]]></text>
             </staticText>
             <textField>
-                <reportElement x="0" y="105" width="80" height="20" forecolor="#2563EB"/>
+                <reportElement x="0" y="104" width="95" height="20" forecolor="#2563EB"/>
                 <textElement><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement x="90" y="88" width="90" height="14"/>
+                <reportElement x="125" y="87" width="95" height="14"/>
                 <textElement><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
                 <text><![CDATA[Đang hoạt động]]></text>
             </staticText>
             <textField>
-                <reportElement x="90" y="105" width="90" height="20" forecolor="#10B981"/>
+                <reportElement x="125" y="104" width="95" height="20" forecolor="#10B981"/>
                 <textElement><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement x="190" y="88" width="105" height="14"/>
+                <reportElement x="250" y="87" width="120" height="14"/>
                 <textElement><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
                 <text><![CDATA[Doanh thu hôm nay]]></text>
             </staticText>
             <textField>
-                <reportElement x="190" y="105" width="105" height="20" forecolor="#F59E0B"/>
+                <reportElement x="250" y="104" width="120" height="20" forecolor="#F59E0B"/>
                 <textElement><font fontName="DejaVu Sans" size="12" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement x="305" y="88" width="105" height="14"/>
+                <reportElement x="395" y="87" width="135" height="14"/>
                 <textElement><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
                 <text><![CDATA[Doanh thu tháng]]></text>
             </staticText>
             <textField>
-                <reportElement x="305" y="105" width="105" height="20" forecolor="#F59E0B"/>
+                <reportElement x="395" y="104" width="135" height="20" forecolor="#F59E0B"/>
                 <textElement><font fontName="DejaVu Sans" size="12" isBold="true"/></textElement>
                 <textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="420" y="88" width="115" height="14"/>
-                <textElement><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement>
-                <text><![CDATA[Đơn / Tồn thấp / Online]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="420" y="105" width="115" height="20" forecolor="#0F172A"/>
-                <textElement><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{P_TOTAL_ORDERS} + " / " + $P{P_LOW_STOCK} + " / " + $P{P_ONLINE_SESSIONS}]]></textFieldExpression>
             </textField>
         </band>
     </title>
 
-    <columnHeader>
-        <band height="22">
-            <rectangle>
-                <reportElement x="0" y="0" width="535" height="22" backcolor="#F1F5F9"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
-            <staticText><reportElement x="0" y="5" width="95" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement><text><![CDATA[Thông tin 1]]></text></staticText>
-            <staticText><reportElement x="95" y="5" width="140" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement><text><![CDATA[Thông tin 2]]></text></staticText>
-            <staticText><reportElement x="235" y="5" width="120" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement><text><![CDATA[Thông tin 3]]></text></staticText>
-            <staticText><reportElement x="355" y="5" width="90" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement><text><![CDATA[Thông tin 4]]></text></staticText>
-            <staticText><reportElement x="445" y="5" width="90" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8" isBold="true"/></textElement><text><![CDATA[Thông tin 5]]></text></staticText>
-        </band>
-    </columnHeader>
-
     <detail>
-        <band height="21">
-            <textField><reportElement x="0" y="4" width="95" height="12"/><textElement><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression></textField>
-            <textField><reportElement x="95" y="4" width="140" height="12"/><textElement><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression></textField>
-            <textField><reportElement x="235" y="4" width="120" height="12"/><textElement><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression></textField>
-            <textField><reportElement x="355" y="4" width="90" height="12"/><textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression></textField>
-            <textField><reportElement x="445" y="4" width="90" height="12"/><textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression></textField>
+        <band height="22">
+            <textField isBlankWhenNull="true">
+                <reportElement x="0" y="5" width="95" height="12"/>
+                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="95" y="5" width="140" height="12"/>
+                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="235" y="5" width="120" height="12"/>
+                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="355" y="5" width="90" height="12"/>
+                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="445" y="5" width="90" height="12"/>
+                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression>
+            </textField>
         </band>
     </detail>
 
@@ -275,7 +278,7 @@
             <staticText>
                 <reportElement x="0" y="8" width="270" height="12"/>
                 <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
-                <text><![CDATA[Smart Supermarket - Admin System Report]]></text>
+                <text><![CDATA[Smart Supermarket - System Report]]></text>
             </staticText>
             <textField>
                 <reportElement x="405" y="8" width="130" height="12"/>
