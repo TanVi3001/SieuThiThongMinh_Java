@@ -91,7 +91,11 @@ public class SecurityGuard {
                 if (!isActive || roleChanged) {
                     if (!isProcessingLogout) {
                         isProcessingLogout = true;
-                        System.out.println("🛡️ [SecurityGuard] 🚨 ROLE CHANGED/KHOÁ TK -> KICK!");
+
+                        System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN ĐỔI QUYỀN");
+                        System.out.println("🛡️ [SecurityGuard] currentRole=" + finalCurrentRole + ", dbRoleId=" + dbRoleId);
+                        System.out.println("🛡️ [SecurityGuard] -> KICK USER");
+
                         SwingUtilities.invokeLater(() -> forceLogout(view));
                     }
                 }
@@ -102,31 +106,74 @@ public class SecurityGuard {
     }
 
     private static void forceLogout(JPanel view) {
-        // Chỉ hiện ĐÚNG 1 POPUP
-        JOptionPane.showMessageDialog(view,
-                "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\nVui lòng đăng nhập lại để cập nhật!",
-                "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
-
-        // Clear dữ liệu
-        LoginService.logout();
         try {
-            common.auth.UserSession.getInstance().clear();
-            // CHUẨN BÀI: Dọn dẹp luôn EventBus (Nếu hàm clearAll của bạn có tồn tại, nếu không thì cứ comment lại)
-            // common.events.EventBus.clearAll(); 
+            JOptionPane.showMessageDialog(
+                    view,
+                    "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\n"
+                    + "Vui lòng đăng nhập lại để cập nhật!",
+                    "Cảnh báo bảo mật",
+                    JOptionPane.WARNING_MESSAGE
+            );
         } catch (Exception ignored) {
         }
 
-        // Tắt cửa sổ hiện tại (Dashboard)
-        Window window = SwingUtilities.getWindowAncestor(view);
-        if (window != null) {
-            window.dispose();
+        try {
+            LoginService.logout();
+        } catch (Exception e) {
+            System.err.println("[SecurityGuard] LoginService.logout error: " + e.getMessage());
         }
 
-        // Mở ĐÚNG 1 FRAME LOGIN
-        LoginView login = new LoginView();
-        login.setLocationRelativeTo(null);
-        login.setVisible(true);
-        isProcessingLogout = false;
+        try {
+            business.service.SessionManager.clear();
+        } catch (Exception ignored) {
+        }
+
+        try {
+            common.auth.UserSession.getInstance().clear();
+        } catch (Exception ignored) {
+        }
+
+        /*
+     * QUAN TRỌNG:
+     * Không chỉ dispose window ancestor của panel.
+     * Phải đóng toàn bộ JFrame dashboard đang mở để tránh Warehouse Portal còn nằm phía sau.
+         */
+        try {
+            for (Window w : Window.getWindows()) {
+                if (w == null) {
+                    continue;
+                }
+
+                if (w instanceof LoginView) {
+                    continue;
+                }
+
+                w.setVisible(false);
+                w.dispose();
+            }
+        } catch (Exception e) {
+            System.err.println("[SecurityGuard] dispose windows error: " + e.getMessage());
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            /*
+         * Nếu đã có LoginView đang mở thì chỉ focus lại, không tạo thêm.
+             */
+            for (Window w : Window.getWindows()) {
+                if (w instanceof LoginView && w.isDisplayable()) {
+                    w.setVisible(true);
+                    w.toFront();
+                    w.requestFocus();
+                    return;
+                }
+            }
+
+            LoginView login = new LoginView();
+            login.setLocationRelativeTo(null);
+            login.setVisible(true);
+            login.toFront();
+            login.requestFocus();
+        });
     }
 
     private static boolean isCurrentAccountRoleChanged() {
