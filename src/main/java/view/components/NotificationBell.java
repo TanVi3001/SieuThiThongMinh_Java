@@ -69,8 +69,16 @@ public class NotificationBell extends JPanel {
         setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
         setOpaque(false);
 
-        lblBell = new JLabel("🔔");
-        lblBell.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 22));
+        lblBell = new JLabel();
+        ImageIcon bellIcon = IconHelper.notification(22);
+        if (bellIcon != null) {
+            lblBell.setIcon(bellIcon);
+        } else {
+            lblBell.setText("!");
+            lblBell.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            lblBell.setForeground(COLOR_INFO);
+        }
+        lblBell.setHorizontalAlignment(SwingConstants.CENTER);
         lblBell.setCursor(new Cursor(Cursor.HAND_CURSOR));
         lblBell.setToolTipText("Thông báo hệ thống");
 
@@ -123,7 +131,7 @@ public class NotificationBell extends JPanel {
             if (event.getType() == AppEventType.INVENTORY_ALERT) {
                 SwingUtilities.invokeLater(() -> {
                     handleInventoryAlert(event.getMessage());
-                    refreshPersistentWarehouseAlerts();
+                    refreshPersistentWarehouseAlerts(false);
                 });
                 return;
             }
@@ -133,14 +141,14 @@ public class NotificationBell extends JPanel {
                     || event.getType() == AppEventType.ORDERS) {
                 SwingUtilities.invokeLater(() -> {
                     checkLowStock();
-                    refreshPersistentWarehouseAlerts();
+                    refreshPersistentWarehouseAlerts(false);
                 });
             }
         });
 
         SwingUtilities.invokeLater(() -> {
             checkLowStock();
-            refreshPersistentWarehouseAlerts();
+            refreshPersistentWarehouseAlerts(false);
         });
     }
 
@@ -194,7 +202,7 @@ public class NotificationBell extends JPanel {
     /**
      * Load lại cảnh báo PENDING trong DB. Chỉ áp dụng cho Warehouse/ALL.
      */
-    private void refreshPersistentWarehouseAlerts() {
+    private void refreshPersistentWarehouseAlerts(boolean increaseUnread) {
         if (this.audience != Audience.WAREHOUSE && this.audience != Audience.ALL) {
             return;
         }
@@ -225,7 +233,7 @@ public class NotificationBell extends JPanel {
                 }
 
                 String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
-                String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+                String title = "Nhắc nhập hàng: " + productName;
 
                 String body = message == null ? "" : message;
 
@@ -242,7 +250,9 @@ public class NotificationBell extends JPanel {
                         title,
                         body,
                         Audience.WAREHOUSE,
-                        true
+                        true,
+                        increaseUnread,
+                        remindCount
                 );
             }
 
@@ -283,23 +293,26 @@ public class NotificationBell extends JPanel {
                 if (qty <= 0) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "❌ HẾT HÀNG: " + safe(p.getProductName()),
+                            "Hết hàng: " + safe(p.getProductName()),
                             "Sản phẩm [" + safe(p.getProductId()) + "] đã hết hoàn toàn. Cần nhập khẩn!",
-                            Audience.ALL
+                            Audience.ALL,
+                            false
                     );
                 } else if (qty <= THRESHOLD_DANGER) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "⚠️ SẮP HẾT: " + safe(p.getProductName()),
+                            "Sắp hết: " + safe(p.getProductName()),
                             "Sản phẩm [" + safe(p.getProductId()) + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
-                            Audience.ALL
+                            Audience.ALL,
+                            false
                     );
                 } else if (qty <= THRESHOLD_WARNING) {
                     addNotification(
                             NotifItem.Type.WARNING,
-                            "📦 Tồn kho thấp: " + safe(p.getProductName()),
+                            "Tồn kho thấp: " + safe(p.getProductName()),
                             "Sản phẩm [" + safe(p.getProductId()) + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
-                            Audience.WAREHOUSE
+                            Audience.WAREHOUSE,
+                            false
                     );
                 }
             }
@@ -348,7 +361,7 @@ public class NotificationBell extends JPanel {
         }
 
         String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
-        String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+        String title = "Nhắc nhập hàng: " + productName;
 
         String body = "Có cảnh báo nhập hàng. "
                 + "Sản phẩm [" + productId + "] hiện còn " + quantity
@@ -360,16 +373,23 @@ public class NotificationBell extends JPanel {
                 title,
                 body,
                 Audience.WAREHOUSE,
-                true
+                true,
+                true,
+                -1
         );
     }
 
     public void addNotification(NotifItem.Type type, String title, String body, Audience target) {
+        addNotification(type, title, body, target, true);
+    }
+
+    private void addNotification(NotifItem.Type type, String title, String body, Audience target, boolean increaseUnread) {
         if (target != Audience.ALL && target != this.audience) {
             return;
         }
 
-        String key = "AUTO_STORE_" + currentStoreKey() + "_" + title + "_" + extractProductIdFromText(title + " " + body);
+        String key = "AUTO_STORE_" + currentStoreKey() + "_" + title + "_"
+                + extractProductIdFromText(title + " " + body);
 
         boolean exists = notifications.stream().anyMatch(n -> n.key.equals(key));
 
@@ -389,7 +409,9 @@ public class NotificationBell extends JPanel {
         );
 
         notifications.add(0, item);
-        unreadCount++;
+        if (increaseUnread) {
+            unreadCount++;
+        }
 
         updateBadge();
         rebuildPopupList();
@@ -401,7 +423,9 @@ public class NotificationBell extends JPanel {
             String title,
             String body,
             Audience target,
-            boolean urgentManagerAlert
+            boolean urgentManagerAlert,
+            boolean increaseUnread,
+            int fixedRemindCount
     ) {
         if (target != Audience.ALL && target != this.audience) {
             return;
@@ -413,7 +437,12 @@ public class NotificationBell extends JPanel {
             NotifItem n = notifications.get(i);
 
             if (n.key.equals(key)) {
-                n.remindCount++;
+                if (fixedRemindCount >= 0) {
+                    n.remindCount = fixedRemindCount;
+                } else if (increaseUnread) {
+                    n.remindCount++;
+                }
+
                 n.type = type;
                 n.title = title;
                 n.time = time;
@@ -424,7 +453,9 @@ public class NotificationBell extends JPanel {
                 notifications.remove(i);
                 notifications.add(0, n);
 
-                unreadCount++;
+                if (increaseUnread) {
+                    unreadCount++;
+                }
                 updateBadge();
                 rebuildPopupList();
                 return;
@@ -439,9 +470,14 @@ public class NotificationBell extends JPanel {
                 time,
                 urgentManagerAlert
         );
+        if (fixedRemindCount >= 0) {
+            item.remindCount = fixedRemindCount;
+        }
 
         notifications.add(0, item);
-        unreadCount++;
+        if (increaseUnread) {
+            unreadCount++;
+        }
 
         updateBadge();
         rebuildPopupList();
@@ -484,7 +520,7 @@ public class NotificationBell extends JPanel {
         JPanel titleGroup = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         titleGroup.setOpaque(false);
 
-        ImageIcon bellIcon = IconHelper.stock(18);
+        ImageIcon bellIcon = IconHelper.notification(18);
 
         if (bellIcon != null) {
             titleGroup.add(new JLabel(bellIcon));
@@ -620,7 +656,7 @@ public class NotificationBell extends JPanel {
             emptyPanel.setBorder(new EmptyBorder(30, 20, 30, 20));
 
             ImageIcon checkIcon = IconHelper.refresh(36);
-            JLabel lblIcon = checkIcon != null ? new JLabel(checkIcon) : new JLabel("✅");
+            JLabel lblIcon = checkIcon != null ? new JLabel(checkIcon) : new JLabel();
 
             lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
@@ -915,11 +951,9 @@ public class NotificationBell extends JPanel {
             return "";
         }
 
-        return extractProductIdFromText(
-                String.valueOf(n.key) + " "
-                + String.valueOf(n.title) + " "
-                + String.valueOf(n.body)
-        );
+        String combined = n.key + " " + n.title + " " + n.body;
+
+        return extractProductIdFromText(combined);
     }
 
     private static String extractProductIdFromText(String text) {
@@ -927,12 +961,12 @@ public class NotificationBell extends JPanel {
             return "";
         }
 
-        java.util.regex.Matcher m = java.util.regex.Pattern
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
                 .compile("(SP\\d{7})")
                 .matcher(text);
 
-        if (m.find()) {
-            return m.group(1);
+        if (matcher.find()) {
+            return matcher.group(1);
         }
 
         return "";
@@ -945,13 +979,15 @@ public class NotificationBell extends JPanel {
 
         String escaped = escapeHtml(input);
 
-        return escaped
+        escaped = escaped
                 .replace("&lt;br&gt;", "<br>")
                 .replace("&lt;br/&gt;", "<br>")
                 .replace("&lt;br /&gt;", "<br>")
                 .replace("&lt;b style=&#39;color:#DC3545&#39;&gt;", "<b style='color:#DC3545'>")
                 .replace("&lt;b style=&quot;color:#DC3545&quot;&gt;", "<b style='color:#DC3545'>")
                 .replace("&lt;/b&gt;", "</b>");
+
+        return escaped;
     }
 
     private String escapeHtml(String input) {
@@ -971,10 +1007,6 @@ public class NotificationBell extends JPanel {
         return value == null ? "" : value;
     }
 
-    /**
-     * Đọc field bằng reflection để tương thích cả InventoryNotifDTO cũ và DTO
-     * mới.
-     */
     private String readStringField(Object obj, String fieldName) {
         if (obj == null) {
             return "";
@@ -983,7 +1015,9 @@ public class NotificationBell extends JPanel {
         try {
             java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
             f.setAccessible(true);
+
             Object v = f.get(obj);
+
             return v == null ? "" : String.valueOf(v);
         } catch (Exception e) {
             return "";
@@ -998,14 +1032,15 @@ public class NotificationBell extends JPanel {
         try {
             java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
             f.setAccessible(true);
+
             Object v = f.get(obj);
 
             if (v == null) {
                 return defaultValue;
             }
 
-            if (v instanceof Number) {
-                return ((Number) v).intValue();
+            if (v instanceof Number number) {
+                return number.intValue();
             }
 
             return Integer.parseInt(String.valueOf(v));
@@ -1014,22 +1049,24 @@ public class NotificationBell extends JPanel {
         }
     }
 
-    public static class NotifItem {
+    private static class NotifItem {
 
-        public enum Type {
-            DANGER, WARNING, INFO
+        enum Type {
+            DANGER,
+            WARNING,
+            INFO
         }
 
-        public final String key;
-        public Type type;
-        public String title;
-        public String body;
-        public String time;
-        public int remindCount;
-        public boolean urgentManagerAlert;
-        public String productId;
+        final String key;
+        Type type;
+        String title;
+        String body;
+        String time;
+        int remindCount = 1;
+        boolean urgentManagerAlert;
+        String productId;
 
-        public NotifItem(
+        NotifItem(
                 String key,
                 Type type,
                 String title,
@@ -1039,12 +1076,11 @@ public class NotificationBell extends JPanel {
         ) {
             this.key = key == null ? title : key;
             this.type = type;
-            this.title = title;
-            this.body = body;
-            this.time = time;
-            this.remindCount = 1;
+            this.title = title == null ? "" : title;
+            this.body = body == null ? "" : body;
+            this.time = time == null ? "" : time;
             this.urgentManagerAlert = urgentManagerAlert;
-            this.productId = extractProductIdFromText(this.key + " " + title + " " + body);
+            this.productId = extractProductIdFromText(this.key + " " + this.title + " " + this.body);
         }
     }
 }
