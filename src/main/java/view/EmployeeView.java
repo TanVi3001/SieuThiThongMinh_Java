@@ -109,7 +109,7 @@ public class EmployeeView extends JPanel {
     private static final int COL_RAW_ID = 9;
 
     public EmployeeView() {
-        if (!business.service.AuthorizationService.canAccessEmployeeManagement()) {
+        if (!business.service.AuthorizationService.canAccessEmployees()) {
             showAccessDenied();
             return;
         }

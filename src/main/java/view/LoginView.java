@@ -327,17 +327,17 @@ public class LoginView extends JFrame {
 
                 SwingUtilities.invokeLater(() -> {
                     if (acc != null) {
-                        common.auth.UserSession.getInstance().createUserSession(
-                                acc.getAccountId(), acc.getUsername(), acc.getRoleValue());
+                        String roleId = getEffectiveRoleId(acc);
 
-                        if (business.service.AuthorizationService.isAdmin(acc)) {
-                            new AdminDashboardView().setVisible(true);
-                        } else if (business.service.AuthorizationService.isWarehouseStaff(acc)) {
-                            new WarehouseDashboardView().setVisible(true);
-                        } else {
-                            new DashboardView().setVisible(true);
+                        common.auth.UserSession.getInstance().createUserSession(
+                                acc.getAccountId(),
+                                acc.getUsername(),
+                                roleId
+                        );
+
+                        if (openDashboardByRole(acc)) {
+                            dispose();
                         }
-                        dispose();
                     } else {
                         JOptionPane.showMessageDialog(this, "Sai tài khoản hoặc mật khẩu!");
                         btnLogin.setEnabled(true);
@@ -352,6 +352,61 @@ public class LoginView extends JFrame {
                 Arrays.fill(passwordChars, '\0');
             }
         }, "login-auth-thread").start();
+    }
+
+    private String getEffectiveRoleId(model.account.Account acc) {
+        if (acc == null) {
+            return "";
+        }
+
+        if (acc.getRoleId() != null && !acc.getRoleId().trim().isEmpty()) {
+            return acc.getRoleId().trim();
+        }
+
+        if (acc.getRole() != null && !acc.getRole().trim().isEmpty()) {
+            return acc.getRole().trim();
+        }
+
+        if (acc.getRoleValue() != null && !acc.getRoleValue().trim().isEmpty()) {
+            return acc.getRoleValue().trim();
+        }
+
+        return "";
+    }
+
+    private boolean openDashboardByRole(model.account.Account acc) {
+        if (business.service.AuthorizationService.isAdmin(acc)) {
+            AdminDashboardView adminView = new AdminDashboardView();
+            adminView.setLocationRelativeTo(null);
+            adminView.setVisible(true);
+            return true;
+        }
+
+        if (business.service.AuthorizationService.isProductStaff(acc)
+                || business.service.AuthorizationService.isWarehouseStaff(acc)) {
+            WarehouseDashboardView warehouseView = new WarehouseDashboardView();
+            warehouseView.setLocationRelativeTo(null);
+            warehouseView.setVisible(true);
+            return true;
+        }
+
+        if (business.service.AuthorizationService.isStoreManager(acc)
+                || business.service.AuthorizationService.isCashier(acc)) {
+            DashboardView dashboard = new DashboardView();
+            dashboard.setLocationRelativeTo(null);
+            dashboard.setVisible(true);
+            return true;
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Tài khoản chưa được phân quyền hợp lệ.\nVui lòng liên hệ Admin.",
+                "Lỗi phân quyền",
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        btnLogin.setEnabled(true);
+        return false;
     }
 
     private void resetRegisterStage1() {
