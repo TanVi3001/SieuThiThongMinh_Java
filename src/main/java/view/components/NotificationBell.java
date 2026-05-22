@@ -1,98 +1,76 @@
 package view.components;
 
-import business.service.SessionManager;
-import business.sql.prod_inventory.InventoryNotificationSql;
-import business.sql.prod_inventory.ProductsSql;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
-import java.awt.AWTEvent;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Cursor;
-import java.awt.Dimension;
+import business.sql.prod_inventory.ProductsSql;
+import business.sql.prod_inventory.InventoryNotificationSql;
+import model.product.Product;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.*;
 import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Point;
 import java.awt.RenderingHints;
-import java.awt.Toolkit;
-import java.awt.Window;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.Graphics2D;
+import java.awt.Graphics;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JLayeredPane;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JWindow;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.border.EmptyBorder;
-import model.product.Product;
+import business.service.SessionManager;
 
 /**
- * Hộp thư thông báo góc phải.
+ * Hộp thư thông báo ở góc trên phải.
  *
- * Lưu ý: không dùng emoji/text-icon vì dễ render thành ô vuông trên Windows.
- * Toàn bộ icon trong UI lấy qua IconHelper.
+ * Chức năng: - Hiển thị cảnh báo tồn kho tự động. - Hiển thị cảnh báo nhập hàng
+ * do Manager/Staff gửi cho Kho. - Cảnh báo Manager/Staff được lưu DB nên không
+ * mất khi tắt app. - Click vào thông báo có mã SP sẽ gọi callback để mở đúng
+ * sản phẩm bên InventoryView.
  */
 public class NotificationBell extends JPanel {
 
     public static final int THRESHOLD_DANGER = 5;
     public static final int THRESHOLD_WARNING = 20;
 
-    public enum Audience {
-        WAREHOUSE, MANAGER, SALE, ALL
-    }
+    private final List<NotifItem> notifications = new ArrayList<>();
+    private final JLabel lblBell;
+    private final JLabel lblBadge;
+    private int unreadCount = 0;
+
+    private JWindow popup;
+    private final JPanel popupList;
 
     private static final Color COLOR_DANGER = new Color(220, 53, 69);
     private static final Color COLOR_WARNING = new Color(255, 152, 0);
     private static final Color COLOR_INFO = new Color(67, 97, 238);
-    private static final Color COLOR_BG = Color.WHITE;
+    private static final Color COLOR_BG = new Color(255, 255, 255);
+
     private static final int POPUP_WIDTH = 720;
     private static final int POPUP_HEIGHT = 560;
-    private static final int TEXT_WIDTH = 545;
+    private static final int NOTIF_TEXT_WIDTH = 545;
+
+    public enum Audience {
+        WAREHOUSE, MANAGER, SALE, ALL
+    }
 
     private final Audience audience;
-    private final List<NotifItem> notifications = new ArrayList<>();
-    private final JLabel lblBell;
-    private final JLabel lblBadge;
-    private final JPanel popupList;
-    private int unreadCount = 0;
-    private JWindow popup;
-    private Consumer<String> productClickListener;
+
+    /**
+     * Callback dùng để màn cha xử lý khi bấm vào thông báo có productId. Ví dụ
+     * WarehouseDashboardView sẽ mở InventoryView và focus đúng sản phẩm.
+     */
+    private java.util.function.Consumer<String> productClickListener;
 
     public NotificationBell(Audience audience) {
-        this.audience = audience == null ? Audience.ALL : audience;
+        this.audience = audience;
 
         setLayout(new FlowLayout(FlowLayout.CENTER, 0, 0));
         setOpaque(false);
 
-        lblBell = new JLabel();
-        ImageIcon bellIcon = IconHelper.stock(22);
-        if (bellIcon != null) {
-            lblBell.setIcon(bellIcon);
-        } else {
-            lblBell.setText("!");
-            lblBell.setFont(new Font("Segoe UI", Font.BOLD, 18));
-            lblBell.setForeground(COLOR_INFO);
-        }
-        lblBell.setHorizontalAlignment(SwingConstants.CENTER);
+        lblBell = new JLabel("🔔");
+        lblBell.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 22));
         lblBell.setCursor(new Cursor(Cursor.HAND_CURSOR));
         lblBell.setToolTipText("Thông báo hệ thống");
 
@@ -101,6 +79,17 @@ public class NotificationBell extends JPanel {
         lblBadge.setForeground(Color.WHITE);
         lblBadge.setHorizontalAlignment(SwingConstants.CENTER);
         lblBadge.setVisible(false);
+
+        JLayeredPane layered = new JLayeredPane();
+        layered.setPreferredSize(new Dimension(36, 36));
+        layered.setOpaque(false);
+
+        lblBell.setBounds(4, 4, 28, 28);
+        lblBadge.setBounds(22, 0, 16, 16);
+
+        layered.add(lblBell, JLayeredPane.DEFAULT_LAYER);
+        layered.add(lblBadge, JLayeredPane.PALETTE_LAYER);
+
         lblBadge.setUI(new javax.swing.plaf.basic.BasicLabelUI() {
             @Override
             public void paint(Graphics g, JComponent c) {
@@ -113,13 +102,6 @@ public class NotificationBell extends JPanel {
             }
         });
 
-        JLayeredPane layered = new JLayeredPane();
-        layered.setPreferredSize(new Dimension(36, 36));
-        layered.setOpaque(false);
-        lblBell.setBounds(4, 4, 28, 28);
-        lblBadge.setBounds(22, 0, 16, 16);
-        layered.add(lblBell, JLayeredPane.DEFAULT_LAYER);
-        layered.add(lblBadge, JLayeredPane.PALETTE_LAYER);
         add(layered);
 
         popupList = new JPanel();
@@ -141,7 +123,7 @@ public class NotificationBell extends JPanel {
             if (event.getType() == AppEventType.INVENTORY_ALERT) {
                 SwingUtilities.invokeLater(() -> {
                     handleInventoryAlert(event.getMessage());
-                    refreshPersistentWarehouseAlerts(false);
+                    refreshPersistentWarehouseAlerts();
                 });
                 return;
             }
@@ -151,19 +133,15 @@ public class NotificationBell extends JPanel {
                     || event.getType() == AppEventType.ORDERS) {
                 SwingUtilities.invokeLater(() -> {
                     checkLowStock();
-                    refreshPersistentWarehouseAlerts(false);
+                    refreshPersistentWarehouseAlerts();
                 });
             }
         });
 
         SwingUtilities.invokeLater(() -> {
             checkLowStock();
-            refreshPersistentWarehouseAlerts(false);
+            refreshPersistentWarehouseAlerts();
         });
-    }
-
-    public void setProductClickListener(Consumer<String> productClickListener) {
-        this.productClickListener = productClickListener;
     }
 
     private String currentStoreIdOrNull() {
@@ -171,8 +149,15 @@ public class NotificationBell extends JPanel {
             if (SessionManager.isAdmin()) {
                 return null;
             }
+
             String storeId = SessionManager.getCurrentStoreId();
-            return storeId == null || storeId.trim().isEmpty() ? null : storeId.trim();
+
+            if (storeId == null || storeId.trim().isEmpty()) {
+                return null;
+            }
+
+            return storeId.trim();
+
         } catch (Exception e) {
             return null;
         }
@@ -187,22 +172,30 @@ public class NotificationBell extends JPanel {
         if (productId == null || productId.trim().isEmpty()) {
             return false;
         }
+
         String storeId = currentStoreIdOrNull();
+
         if (storeId == null) {
             return true;
         }
+
         try {
-            return ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId) != null;
+            Product p = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
+            return p != null;
         } catch (Exception e) {
             return false;
         }
     }
 
+    public void setProductClickListener(java.util.function.Consumer<String> productClickListener) {
+        this.productClickListener = productClickListener;
+    }
+
     /**
-     * Load thông báo PENDING từ DB. Đây là refresh/sync nên không tăng unread.
+     * Load lại cảnh báo PENDING trong DB. Chỉ áp dụng cho Warehouse/ALL.
      */
-    private void refreshPersistentWarehouseAlerts(boolean increaseUnread) {
-        if (audience != Audience.WAREHOUSE && audience != Audience.ALL) {
+    private void refreshPersistentWarehouseAlerts() {
+        if (this.audience != Audience.WAREHOUSE && this.audience != Audience.ALL) {
             return;
         }
 
@@ -213,10 +206,10 @@ public class NotificationBell extends JPanel {
 
         try {
             String storeId = currentStoreIdOrNull();
+
             List<?> rawList = storeId == null
                     ? InventoryNotificationSql.getInstance().getPendingWarehouseAlerts()
                     : InventoryNotificationSql.getInstance().getPendingWarehouseAlertsByStore(storeId);
-
             for (Object raw : rawList) {
                 String productId = readStringField(raw, "productId");
                 String productName = readStringField(raw, "productName");
@@ -226,18 +219,21 @@ public class NotificationBell extends JPanel {
                 if (productId == null || productId.isBlank()) {
                     continue;
                 }
+
                 if (productName == null || productName.isBlank()) {
                     productName = "Sản phẩm";
                 }
 
-                String key = "MANAGER_STOCK_ALERT_STORE_" + storeKey + "_" + productId;
-                String title = "Nhắc nhập hàng: " + productName;
+                String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
+                String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+
                 String body = message == null ? "" : message;
 
                 if (remindCount >= 2) {
-                    body += "<br><br><b style='color:#DC3545'>Đã nhắc "
-                            + remindCount
-                            + " lần. Thông báo này sẽ chỉ mất khi sản phẩm được nhập thêm.</b>";
+                    body += "<br><br><b style='color:#DC3545'>"
+                            + "Đã nhắc " + remindCount
+                            + " lần. Thông báo này sẽ chỉ mất khi sản phẩm được nhập thêm."
+                            + "</b>";
                 }
 
                 addOrUpdateNotification(
@@ -246,28 +242,32 @@ public class NotificationBell extends JPanel {
                         title,
                         body,
                         Audience.WAREHOUSE,
-                        true,
-                        increaseUnread,
-                        remindCount
+                        true
                 );
             }
 
             updateBadge();
             rebuildPopupList();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     /**
-     * Auto low-stock chỉ là trạng thái hiện tại, không tính vào unread khi reload.
+     * Kiểm tra tồn kho tự động. Cảnh báo auto chỉ nằm ở UI, có thể xóa bằng
+     * "Xóa tất cả".
      */
     public void checkLowStock() {
         try {
             String storeId = currentStoreIdOrNull();
-            List<Product> products = storeId == null
-                    ? ProductsSql.getInstance().selectAll()
-                    : ProductsSql.getInstance().selectAllByStore(storeId);
+
+            List<Product> products;
+            if (storeId == null) {
+                products = ProductsSql.getInstance().selectAll();
+            } else {
+                products = ProductsSql.getInstance().selectAllByStore(storeId);
+            }
 
             String storeKey = currentStoreKey();
             notifications.removeIf(n -> !n.urgentManagerAlert
@@ -277,41 +277,42 @@ public class NotificationBell extends JPanel {
                 if (p == null) {
                     continue;
                 }
+
                 int qty = p.getQuantity();
-                String productId = safe(p.getProductId());
-                String name = safe(p.getProductName());
 
                 if (qty <= 0) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "Hết hàng: " + name,
-                            "Sản phẩm [" + productId + "] đã hết hoàn toàn. Cần nhập khẩn!",
-                            Audience.ALL,
-                            false
+                            "❌ HẾT HÀNG: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] đã hết hoàn toàn. Cần nhập khẩn!",
+                            Audience.ALL
                     );
                 } else if (qty <= THRESHOLD_DANGER) {
                     addNotification(
                             NotifItem.Type.DANGER,
-                            "Sắp hết: " + name,
-                            "Sản phẩm [" + productId + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
-                            Audience.ALL,
-                            false
+                            "⚠️ SẮP HẾT: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
+                            Audience.ALL
                     );
                 } else if (qty <= THRESHOLD_WARNING) {
                     addNotification(
                             NotifItem.Type.WARNING,
-                            "Tồn kho thấp: " + name,
-                            "Sản phẩm [" + productId + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
-                            Audience.WAREHOUSE,
-                            false
+                            "📦 Tồn kho thấp: " + safe(p.getProductName()),
+                            "Sản phẩm [" + safe(p.getProductId()) + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
+                            Audience.WAREHOUSE
                     );
                 }
             }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    /**
+     * Xử lý realtime message dạng: INVENTORY_ALERT:SP0000038:Cá hồi phi lê tươi
+     * 200g:0
+     */
     private void handleInventoryAlert(String rawMessage) {
         if (rawMessage == null || rawMessage.trim().isEmpty()) {
             return;
@@ -323,12 +324,15 @@ public class NotificationBell extends JPanel {
 
         try {
             String[] parts = rawMessage.split(":", 4);
+
             if (parts.length >= 2) {
                 productId = parts[1].trim();
             }
+
             if (parts.length >= 3) {
                 productName = parts[2].trim();
             }
+
             if (parts.length >= 4) {
                 quantity = parts[3].trim();
             }
@@ -338,14 +342,17 @@ public class NotificationBell extends JPanel {
         if (productId == null || productId.trim().isEmpty()) {
             return;
         }
+
         if (!productBelongsToCurrentStore(productId)) {
             return;
         }
 
         String key = "MANAGER_STOCK_ALERT_STORE_" + currentStoreKey() + "_" + productId;
-        String title = "Nhắc nhập hàng: " + productName;
-        String body = "Có cảnh báo nhập hàng. Sản phẩm [" + productId
-                + "] hiện còn " + quantity + " sản phẩm. Cần kiểm tra và nhập hàng.";
+        String title = "🚨 QUẢN LÝ/NHÂN VIÊN NHẮC NHẬP HÀNG: " + productName;
+
+        String body = "Có cảnh báo nhập hàng. "
+                + "Sản phẩm [" + productId + "] hiện còn " + quantity
+                + " sản phẩm. Cần kiểm tra và nhập hàng.";
 
         addOrUpdateNotification(
                 key,
@@ -353,35 +360,37 @@ public class NotificationBell extends JPanel {
                 title,
                 body,
                 Audience.WAREHOUSE,
-                true,
-                true,
-                -1
+                true
         );
     }
 
     public void addNotification(NotifItem.Type type, String title, String body, Audience target) {
-        addNotification(type, title, body, target, true);
-    }
-
-    private void addNotification(NotifItem.Type type, String title, String body, Audience target, boolean increaseUnread) {
-        if (target != Audience.ALL && target != audience) {
+        if (target != Audience.ALL && target != this.audience) {
             return;
         }
 
-        String key = "AUTO_STORE_" + currentStoreKey() + "_" + title + "_"
-                + extractProductIdFromText(title + " " + body);
+        String key = "AUTO_STORE_" + currentStoreKey() + "_" + title + "_" + extractProductIdFromText(title + " " + body);
 
         boolean exists = notifications.stream().anyMatch(n -> n.key.equals(key));
+
         if (exists) {
             return;
         }
 
-        NotifItem item = new NotifItem(key, type, title, body, now(), false);
-        notifications.add(0, item);
+        String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
 
-        if (increaseUnread) {
-            unreadCount++;
-        }
+        NotifItem item = new NotifItem(
+                key,
+                type,
+                title,
+                body,
+                time,
+                false
+        );
+
+        notifications.add(0, item);
+        unreadCount++;
+
         updateBadge();
         rebuildPopupList();
     }
@@ -392,57 +401,50 @@ public class NotificationBell extends JPanel {
             String title,
             String body,
             Audience target,
-            boolean urgentManagerAlert,
-            boolean increaseUnread,
-            int fixedRemindCount
+            boolean urgentManagerAlert
     ) {
-        if (target != Audience.ALL && target != audience) {
+        if (target != Audience.ALL && target != this.audience) {
             return;
         }
 
+        String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+
         for (int i = 0; i < notifications.size(); i++) {
             NotifItem n = notifications.get(i);
+
             if (n.key.equals(key)) {
+                n.remindCount++;
                 n.type = type;
                 n.title = title;
-                n.body = body;
-                n.time = now();
+                n.time = time;
                 n.urgentManagerAlert = urgentManagerAlert;
+                n.body = body;
                 n.productId = extractProductIdFromText(key + " " + title + " " + body);
-
-                if (fixedRemindCount >= 0) {
-                    n.remindCount = fixedRemindCount;
-                } else if (increaseUnread) {
-                    n.remindCount++;
-                }
 
                 notifications.remove(i);
                 notifications.add(0, n);
 
-                if (increaseUnread) {
-                    unreadCount++;
-                }
+                unreadCount++;
                 updateBadge();
                 rebuildPopupList();
                 return;
             }
         }
 
-        NotifItem item = new NotifItem(key, type, title, body, now(), urgentManagerAlert);
-        if (fixedRemindCount >= 0) {
-            item.remindCount = fixedRemindCount;
-        }
-        notifications.add(0, item);
+        NotifItem item = new NotifItem(
+                key,
+                type,
+                title,
+                body,
+                time,
+                urgentManagerAlert
+        );
 
-        if (increaseUnread) {
-            unreadCount++;
-        }
+        notifications.add(0, item);
+        unreadCount++;
+
         updateBadge();
         rebuildPopupList();
-    }
-
-    private String now() {
-        return LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
     }
 
     private void updateBadge() {
@@ -459,6 +461,7 @@ public class NotificationBell extends JPanel {
             popup.setVisible(false);
             return;
         }
+
         unreadCount = 0;
         updateBadge();
         showPopup();
@@ -466,6 +469,7 @@ public class NotificationBell extends JPanel {
 
     private void showPopup() {
         Window parentWindow = SwingUtilities.getWindowAncestor(this);
+
         if (parentWindow == null) {
             return;
         }
@@ -474,72 +478,115 @@ public class NotificationBell extends JPanel {
         popup.setLayout(new BorderLayout());
 
         JPanel header = new JPanel(new BorderLayout(10, 0));
-        header.setBackground(COLOR_INFO);
+        header.setBackground(new Color(67, 97, 238));
         header.setBorder(new EmptyBorder(11, 16, 11, 12));
 
         JPanel titleGroup = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         titleGroup.setOpaque(false);
-        ImageIcon headerIcon = IconHelper.stock(18);
-        if (headerIcon != null) {
-            titleGroup.add(new JLabel(headerIcon));
+
+        ImageIcon bellIcon = IconHelper.stock(18);
+
+        if (bellIcon != null) {
+            titleGroup.add(new JLabel(bellIcon));
         }
+
         JLabel lblTitle = new JLabel("Hộp thư thông báo");
         lblTitle.setForeground(Color.WHITE);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+
         titleGroup.add(lblTitle);
 
-        JLabel lblCount = new JLabel("  " + notifications.size() + " thông báo  ");
+        JLabel lblCount = new JLabel("  " + notifications.size() + " thông báo  ") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(255, 255, 255, 50));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
         lblCount.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblCount.setForeground(Color.WHITE);
+        lblCount.setOpaque(false);
         lblCount.setBorder(new EmptyBorder(4, 10, 4, 10));
 
-        JButton btnClear = new JButton("Xóa tất cả");
-        ImageIcon deleteIcon = IconHelper.delete(13);
-        if (deleteIcon != null) {
-            btnClear.setIcon(deleteIcon);
-            btnClear.setIconTextGap(6);
+        JButton btnClear = new JButton("  Xóa tất cả  ") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(220, 53, 69));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        ImageIcon delIcon = IconHelper.delete(13);
+
+        if (delIcon != null) {
+            btnClear.setIcon(delIcon);
+            btnClear.setIconTextGap(5);
         }
+
         btnClear.setFont(new Font("Segoe UI", Font.BOLD, 12));
         btnClear.setForeground(Color.WHITE);
-        btnClear.setBackground(COLOR_DANGER);
+        btnClear.setContentAreaFilled(false);
+        btnClear.setBorderPainted(false);
         btnClear.setFocusPainted(false);
         btnClear.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnClear.setBorder(new EmptyBorder(4, 10, 4, 10));
+
+        // Chỉ xóa thông báo tự động. Thông báo từ Manager/Staff vẫn giữ cho tới khi kho xử lý/resolve.
         btnClear.addActionListener(e -> {
             notifications.removeIf(n -> !n.urgentManagerAlert);
+
             unreadCount = 0;
             updateBadge();
             rebuildPopupList();
         });
 
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        right.setOpaque(false);
-        right.add(lblCount);
-        right.add(btnClear);
+        JPanel rightGroup = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        rightGroup.setOpaque(false);
+        rightGroup.add(lblCount);
+        rightGroup.add(btnClear);
 
         header.add(titleGroup, BorderLayout.WEST);
-        header.add(right, BorderLayout.EAST);
+        header.add(rightGroup, BorderLayout.EAST);
 
         rebuildPopupList();
 
         JScrollPane scroll = new JScrollPane(popupList);
         scroll.setBorder(null);
         scroll.setPreferredSize(new Dimension(POPUP_WIDTH, POPUP_HEIGHT));
-        scroll.getVerticalScrollBar().setUnitIncrement(14);
+        scroll.getVerticalScrollBar().setUnitIncrement(10);
 
         popup.add(header, BorderLayout.NORTH);
         popup.add(scroll, BorderLayout.CENTER);
         popup.pack();
 
         Point loc = lblBell.getLocationOnScreen();
+
         int x = loc.x - POPUP_WIDTH + 55;
         int y = loc.y + 38;
+
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+
         if (x + POPUP_WIDTH > screen.width) {
             x = screen.width - POPUP_WIDTH - 12;
         }
+
         if (x < 0) {
             x = 12;
         }
+
         if (y + POPUP_HEIGHT > screen.height) {
             y = screen.height - POPUP_HEIGHT - 12;
         }
@@ -548,10 +595,15 @@ public class NotificationBell extends JPanel {
         popup.setVisible(true);
 
         Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
-            if (event instanceof MouseEvent me && me.getID() == MouseEvent.MOUSE_PRESSED) {
-                if (popup != null && popup.isVisible()
-                        && !popup.getBounds().contains(me.getLocationOnScreen())) {
-                    popup.setVisible(false);
+            if (event instanceof MouseEvent) {
+                MouseEvent me = (MouseEvent) event;
+
+                if (me.getID() == MouseEvent.MOUSE_PRESSED) {
+                    if (popup != null && popup.isVisible()) {
+                        if (!popup.getBounds().contains(me.getLocationOnScreen())) {
+                            popup.setVisible(false);
+                        }
+                    }
                 }
             }
         }, AWTEvent.MOUSE_EVENT_MASK);
@@ -562,13 +614,14 @@ public class NotificationBell extends JPanel {
         popupList.setBackground(new Color(248, 249, 252));
 
         if (notifications.isEmpty()) {
-            JPanel empty = new JPanel();
-            empty.setLayout(new BoxLayout(empty, BoxLayout.Y_AXIS));
-            empty.setBackground(new Color(248, 249, 252));
-            empty.setBorder(new EmptyBorder(30, 20, 30, 20));
+            JPanel emptyPanel = new JPanel();
+            emptyPanel.setLayout(new BoxLayout(emptyPanel, BoxLayout.Y_AXIS));
+            emptyPanel.setBackground(new Color(248, 249, 252));
+            emptyPanel.setBorder(new EmptyBorder(30, 20, 30, 20));
 
-            ImageIcon emptyIcon = IconHelper.refresh(34);
-            JLabel lblIcon = emptyIcon != null ? new JLabel(emptyIcon) : new JLabel();
+            ImageIcon checkIcon = IconHelper.refresh(36);
+            JLabel lblIcon = checkIcon != null ? new JLabel(checkIcon) : new JLabel("✅");
+
             lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JLabel lblText = new JLabel("Không có thông báo mới");
@@ -581,19 +634,22 @@ public class NotificationBell extends JPanel {
             lblSub.setForeground(new Color(200, 210, 225));
             lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            empty.add(Box.createRigidArea(new Dimension(0, 10)));
-            empty.add(lblIcon);
-            empty.add(Box.createRigidArea(new Dimension(0, 10)));
-            empty.add(lblText);
-            empty.add(Box.createRigidArea(new Dimension(0, 5)));
-            empty.add(lblSub);
-            popupList.add(empty);
+            emptyPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+            emptyPanel.add(lblIcon);
+            emptyPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+            emptyPanel.add(lblText);
+            emptyPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+            emptyPanel.add(lblSub);
+
+            popupList.add(emptyPanel);
         } else {
             for (int i = 0; i < notifications.size(); i++) {
                 popupList.add(createNotifCard(notifications.get(i)));
+
                 if (i < notifications.size() - 1) {
                     JSeparator sep = new JSeparator();
                     sep.setForeground(new Color(230, 235, 245));
+                    sep.setBackground(new Color(230, 235, 245));
                     popupList.add(sep);
                 }
             }
@@ -601,113 +657,224 @@ public class NotificationBell extends JPanel {
 
         popupList.revalidate();
         popupList.repaint();
+
         if (popup != null) {
             popup.pack();
         }
     }
 
     private JPanel createNotifCard(NotifItem n) {
-        Color accent = switch (n.type) {
-            case DANGER -> COLOR_DANGER;
-            case WARNING -> COLOR_WARNING;
-            default -> COLOR_INFO;
-        };
-        Color bg = switch (n.type) {
-            case DANGER -> new Color(255, 247, 247);
-            case WARNING -> new Color(255, 251, 242);
-            default -> new Color(246, 248, 255);
-        };
-        String tag = switch (n.type) {
-            case DANGER -> "KHẨN";
-            case WARNING -> "CẢNH BÁO";
-            default -> "THÔNG TIN";
-        };
+        Color accent;
+        Color bgCard;
+        Color bgIcon;
+        ImageIcon typeIcon;
+        String typeTag;
+
+        if (n.type == NotifItem.Type.DANGER) {
+            accent = new Color(220, 53, 69);
+            bgCard = new Color(255, 247, 247);
+            bgIcon = new Color(255, 228, 230);
+            typeIcon = IconHelper.delivery(15);
+            typeTag = "KHẨN";
+        } else if (n.type == NotifItem.Type.WARNING) {
+            accent = new Color(230, 120, 0);
+            bgCard = new Color(255, 251, 242);
+            bgIcon = new Color(255, 237, 210);
+            typeIcon = IconHelper.stock(15);
+            typeTag = "CẢNH BÁO";
+        } else {
+            accent = COLOR_INFO;
+            bgCard = new Color(246, 248, 255);
+            bgIcon = new Color(225, 230, 255);
+            typeIcon = IconHelper.barChart(15);
+            typeTag = "THÔNG TIN";
+        }
 
         JPanel card = new JPanel(new BorderLayout());
-        card.setBackground(bg);
-        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        card.setBackground(bgCard);
 
         JPanel stripe = new JPanel();
         stripe.setBackground(accent);
         stripe.setPreferredSize(new Dimension(5, 0));
+
         card.add(stripe, BorderLayout.WEST);
 
         JPanel content = new JPanel(new BorderLayout(14, 0));
-        content.setBackground(bg);
-        content.setBorder(new EmptyBorder(16, 18, 16, 22));
+        content.setBackground(bgCard);
+        content.setBorder(new EmptyBorder(18, 18, 18, 22));
 
-        ImageIcon icon = iconForType(n.type, 22);
-        JLabel lblIcon = icon != null ? new JLabel(icon) : new JLabel();
-        lblIcon.setHorizontalAlignment(SwingConstants.CENTER);
-        lblIcon.setPreferredSize(new Dimension(46, 46));
-        content.add(lblIcon, BorderLayout.WEST);
+        int circleSize = 46;
 
-        JPanel text = new JPanel();
-        text.setOpaque(false);
-        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+        JPanel iconCircle = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
 
-        JLabel lblTitle = new JLabel("<html><b>" + tag + "</b> &nbsp; " + escapeHtml(cleanTitle(n.title)) + "</html>");
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(bgIcon);
+                g2.fillOval(0, 0, getWidth(), getHeight());
+
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        iconCircle.setOpaque(false);
+        iconCircle.setPreferredSize(new Dimension(circleSize, circleSize));
+        iconCircle.setMinimumSize(new Dimension(circleSize, circleSize));
+        iconCircle.setMaximumSize(new Dimension(circleSize, circleSize));
+
+        if (typeIcon != null) {
+            iconCircle.add(new JLabel(typeIcon));
+        }
+
+        JPanel iconWrapper = new JPanel(new GridBagLayout());
+        iconWrapper.setOpaque(false);
+        iconWrapper.add(iconCircle);
+
+        content.add(iconWrapper, BorderLayout.WEST);
+
+        JPanel textPanel = new JPanel(new GridBagLayout());
+        textPanel.setOpaque(false);
+        textPanel.setBorder(new EmptyBorder(0, 10, 0, 0));
+
+        GridBagConstraints gc = new GridBagConstraints();
+
+        JLabel lblTag = new JLabel(typeTag) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(accent);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        lblTag.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        lblTag.setForeground(Color.WHITE);
+        lblTag.setOpaque(false);
+        lblTag.setBorder(new EmptyBorder(3, 8, 3, 8));
+
+        gc.gridx = 0;
+        gc.gridy = 0;
+        gc.anchor = GridBagConstraints.WEST;
+        gc.insets = new Insets(0, 0, 4, 8);
+        gc.weightx = 0;
+        gc.fill = GridBagConstraints.NONE;
+
+        textPanel.add(lblTag, gc);
+
+        String cleanTitle = n.title.replaceAll("^[\\p{So}\\p{Sm}\\s]*[^:]+:\\s*", "").trim();
+
+        if (cleanTitle.isEmpty()) {
+            cleanTitle = n.title;
+        }
+
+        JLabel lblTitle = new JLabel(cleanTitle);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblTitle.setForeground(new Color(25, 35, 75));
 
-        JLabel lblBody = new JLabel("<html><div style='width:" + TEXT_WIDTH + "px; line-height:1.65;'>"
-                + toAllowedHtml(n.body) + "</div></html>");
+        gc.gridx = 1;
+        gc.gridy = 0;
+        gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.insets = new Insets(0, 0, 4, 0);
+
+        textPanel.add(lblTitle, gc);
+
+        String bodyHtml = toAllowedHtml(n.body);
+
+        JLabel lblBody = new JLabel(
+                "<html><div style='width:" + NOTIF_TEXT_WIDTH
+                + "px; color:#444444; font-size:13px; line-height:1.65;'>"
+                + bodyHtml
+                + "</div></html>"
+        );
+
         lblBody.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblBody.setForeground(new Color(68, 68, 68));
+
+        gc.gridx = 0;
+        gc.gridy = 1;
+        gc.gridwidth = 2;
+        gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.insets = new Insets(0, 0, 5, 0);
+
+        textPanel.add(lblBody, gc);
 
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         timeRow.setOpaque(false);
-        ImageIcon timeIcon = IconHelper.history(12);
-        if (timeIcon != null) {
-            timeRow.add(new JLabel(timeIcon));
+
+        ImageIcon histIcon = IconHelper.history(12);
+
+        if (histIcon != null) {
+            timeRow.add(new JLabel(histIcon));
         }
-        JLabel lblTime = new JLabel(safe(n.time));
+
+        JLabel lblTime = new JLabel(n.time);
         lblTime.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         lblTime.setForeground(new Color(163, 174, 208));
+
         timeRow.add(lblTime);
 
-        text.add(lblTitle);
-        text.add(Box.createVerticalStrut(6));
-        text.add(lblBody);
-        text.add(Box.createVerticalStrut(6));
-        text.add(timeRow);
+        gc.gridx = 0;
+        gc.gridy = 2;
+        gc.gridwidth = 2;
+        gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.insets = new Insets(0, 0, 0, 0);
 
-        content.add(text, BorderLayout.CENTER);
+        textPanel.add(timeRow, gc);
+
+        content.add(textPanel, BorderLayout.CENTER);
         card.add(content, BorderLayout.CENTER);
 
-        MouseAdapter adapter = new MouseAdapter() {
+        Color hoverBg = new Color(
+                Math.max(bgCard.getRed() - 8, 0),
+                Math.max(bgCard.getGreen() - 8, 0),
+                Math.max(bgCard.getBlue() - 8, 0)
+        );
+
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        content.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        textPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        MouseAdapter clickAdapter = new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                card.setBackground(hoverBg);
+                content.setBackground(hoverBg);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                card.setBackground(bgCard);
+                content.setBackground(bgCard);
+            }
+
             @Override
             public void mouseClicked(MouseEvent e) {
                 handleNotificationClick(n);
             }
         };
-        attachClickListenerRecursive(card, adapter);
+
+        attachClickListenerRecursive(card, clickAdapter);
 
         return card;
-    }
-
-    private ImageIcon iconForType(NotifItem.Type type, int size) {
-        return switch (type) {
-            case DANGER -> IconHelper.delivery(size);
-            case WARNING -> IconHelper.stock(size);
-            default -> IconHelper.barChart(size);
-        };
-    }
-
-    private String cleanTitle(String title) {
-        if (title == null) {
-            return "";
-        }
-        String t = title.replaceAll("^[\\p{So}\\p{Sm}\\s]*[^:]+:\\s*", "").trim();
-        return t.isEmpty() ? title : t;
     }
 
     private void attachClickListenerRecursive(Component component, MouseAdapter adapter) {
         if (component == null || adapter == null) {
             return;
         }
+
         component.setCursor(new Cursor(Cursor.HAND_CURSOR));
         component.addMouseListener(adapter);
+
         if (component instanceof Container container) {
             for (Component child : container.getComponents()) {
                 attachClickListenerRecursive(child, adapter);
@@ -719,45 +886,65 @@ public class NotificationBell extends JPanel {
         if (productClickListener == null) {
             return;
         }
-        String productId = n.productId;
-        if (productId == null || productId.isBlank()) {
-            productId = extractProductIdFromNotification(n);
+
+        String targetProductId = n.productId;
+
+        if (targetProductId == null || targetProductId.isBlank()) {
+            targetProductId = extractProductIdFromNotification(n);
         }
-        if (productId == null || productId.isBlank()) {
+
+        if (targetProductId == null || targetProductId.isBlank()) {
             JOptionPane.showMessageDialog(
-                    this,
+                    NotificationBell.this,
                     "Không tìm thấy mã sản phẩm trong thông báo này.",
                     "Không thể mở sản phẩm",
                     JOptionPane.WARNING_MESSAGE
             );
             return;
         }
+
         if (popup != null) {
             popup.setVisible(false);
         }
-        productClickListener.accept(productId);
+
+        productClickListener.accept(targetProductId);
     }
 
     private String extractProductIdFromNotification(NotifItem n) {
         if (n == null) {
             return "";
         }
-        return extractProductIdFromText(n.key + " " + n.title + " " + n.body);
+
+        return extractProductIdFromText(
+                String.valueOf(n.key) + " "
+                + String.valueOf(n.title) + " "
+                + String.valueOf(n.body)
+        );
     }
 
     private static String extractProductIdFromText(String text) {
         if (text == null) {
             return "";
         }
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(SP\\d{7})").matcher(text);
-        return m.find() ? m.group(1) : "";
+
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(SP\\d{7})")
+                .matcher(text);
+
+        if (m.find()) {
+            return m.group(1);
+        }
+
+        return "";
     }
 
     private String toAllowedHtml(String input) {
         if (input == null) {
             return "";
         }
+
         String escaped = escapeHtml(input);
+
         return escaped
                 .replace("&lt;br&gt;", "<br>")
                 .replace("&lt;br/&gt;", "<br>")
@@ -771,6 +958,7 @@ public class NotificationBell extends JPanel {
         if (input == null) {
             return "";
         }
+
         return input
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -783,10 +971,15 @@ public class NotificationBell extends JPanel {
         return value == null ? "" : value;
     }
 
+    /**
+     * Đọc field bằng reflection để tương thích cả InventoryNotifDTO cũ và DTO
+     * mới.
+     */
     private String readStringField(Object obj, String fieldName) {
         if (obj == null) {
             return "";
         }
+
         try {
             java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
             f.setAccessible(true);
@@ -801,16 +994,20 @@ public class NotificationBell extends JPanel {
         if (obj == null) {
             return defaultValue;
         }
+
         try {
             java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
             f.setAccessible(true);
             Object v = f.get(obj);
+
             if (v == null) {
                 return defaultValue;
             }
-            if (v instanceof Number number) {
-                return number.intValue();
+
+            if (v instanceof Number) {
+                return ((Number) v).intValue();
             }
+
             return Integer.parseInt(String.valueOf(v));
         } catch (Exception e) {
             return defaultValue;
@@ -832,15 +1029,22 @@ public class NotificationBell extends JPanel {
         public boolean urgentManagerAlert;
         public String productId;
 
-        public NotifItem(String key, Type type, String title, String body, String time, boolean urgentManagerAlert) {
+        public NotifItem(
+                String key,
+                Type type,
+                String title,
+                String body,
+                String time,
+                boolean urgentManagerAlert
+        ) {
             this.key = key == null ? title : key;
             this.type = type;
-            this.title = title == null ? "" : title;
-            this.body = body == null ? "" : body;
-            this.time = time == null ? "" : time;
+            this.title = title;
+            this.body = body;
+            this.time = time;
             this.remindCount = 1;
             this.urgentManagerAlert = urgentManagerAlert;
-            this.productId = extractProductIdFromText(this.key + " " + this.title + " " + this.body);
+            this.productId = extractProductIdFromText(this.key + " " + title + " " + body);
         }
     }
 }
