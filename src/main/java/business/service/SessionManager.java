@@ -22,11 +22,8 @@ public class SessionManager {
         currentToken = normalize(tk);
         currentSessionId = null;
 
-        // Không clear scope ở đây vì LoginService sẽ gọi SessionScopeService ngay sau đó.
-        // Nhưng để tránh dính session cũ khi login user khác, clear scope trước.
-        currentEmployeeId = null;
-        currentStoreId = null;
-        currentStoreName = null;
+        // Tránh dính scope của tài khoản đăng nhập trước.
+        clearScopeOnly();
     }
 
     public static void startSession(Account user, String tk, String sessionId) {
@@ -36,9 +33,7 @@ public class SessionManager {
         currentSessionId = normalize(sessionId);
 
         // Tránh dính scope của tài khoản đăng nhập trước.
-        currentEmployeeId = null;
-        currentStoreId = null;
-        currentStoreName = null;
+        clearScopeOnly();
     }
 
     public static Account getCurrentUser() {
@@ -67,6 +62,10 @@ public class SessionManager {
         token = null;
         currentToken = null;
         currentSessionId = null;
+        clearScopeOnly();
+    }
+
+    private static void clearScopeOnly() {
         currentEmployeeId = null;
         currentStoreId = null;
         currentStoreName = null;
@@ -77,8 +76,10 @@ public class SessionManager {
         currentStoreId = normalize(storeId);
         currentStoreName = normalize(storeName);
 
-        // Nếu Account chưa có userId nhưng scope load được employeeId thì đồng bộ ngược lại.
-        // Không bắt buộc, nhưng giúp các màn cũ dùng currentUser.getUserId() vẫn đúng hơn.
+        /*
+         * Nếu Account chưa có userId nhưng scope load được employeeId
+         * thì đồng bộ ngược lại để code cũ dùng currentUser.getUserId() vẫn chạy đúng.
+         */
         try {
             if (currentUser != null
                     && isBlank(currentUser.getUserId())
@@ -94,8 +95,10 @@ public class SessionManager {
             return currentEmployeeId;
         }
 
-        // Fallback quan trọng:
-        // ACCOUNTS.user_id thường chính là EMPLOYEES.employee_id.
+        /*
+         * Chuẩn mới:
+         * ACCOUNTS.user_id = EMPLOYEES.employee_id
+         */
         if (currentUser != null && !isBlank(currentUser.getUserId())) {
             return currentUser.getUserId().trim();
         }
@@ -125,6 +128,16 @@ public class SessionManager {
         return role;
     }
 
+    /*
+     * =========================================================
+     * 4 ROLE CHÍNH CỦA ĐỒ ÁN
+     * =========================================================
+     *
+     * R_ADMIN_ALL        : Admin toàn hệ thống
+     * R_STORE_MNG        : Manager / quản lý chi nhánh
+     * R_STAFF_SALE       : Nhân viên bán hàng
+     * R_STAFF_VIEW_PROD  : Nhân viên sản phẩm/kho/nhập hàng
+     */
     public static boolean isAdmin() {
         return "R_ADMIN_ALL".equalsIgnoreCase(getCurrentRole());
     }
@@ -137,29 +150,31 @@ public class SessionManager {
         return "R_STAFF_SALE".equalsIgnoreCase(getCurrentRole());
     }
 
-    public static boolean isWarehouseStaff() {
-        String role = getCurrentRole();
-
-        return "R_STAFF_WAREHOUSE".equalsIgnoreCase(role)
-                || "R_STAFF_IMPORT".equalsIgnoreCase(role)
-                || "R_STAFF_INVENTORY".equalsIgnoreCase(role);
-    }
-
-    public static boolean isProductViewStaff() {
+    /**
+     * Trong đồ án này: R_STAFF_VIEW_PROD = Staff Product = nhân viên sản
+     * phẩm/kho/nhập hàng. Không hiểu là "chỉ xem".
+     */
+    public static boolean isProductStaff() {
         return "R_STAFF_VIEW_PROD".equalsIgnoreCase(getCurrentRole());
     }
 
-    public static boolean isStoreStaff() {
-        String role = getCurrentRole();
-
-        return "R_STAFF".equalsIgnoreCase(role)
-                || "R_STAFF_SALE".equalsIgnoreCase(role)
-                || "R_STAFF_WAREHOUSE".equalsIgnoreCase(role)
-                || "R_STAFF_IMPORT".equalsIgnoreCase(role)
-                || "R_STAFF_INVENTORY".equalsIgnoreCase(role)
-                || "R_STAFF_VIEW_PROD".equalsIgnoreCase(role);
+    /**
+     * Giữ tên hàm cũ để các file khác gọi không bị lỗi compile. Ý nghĩa thật
+     * hiện tại: warehouse staff chính là Staff Product.
+     */
+    public static boolean isWarehouseStaff() {
+        return isProductStaff();
     }
 
+    public static boolean isStoreStaff() {
+        return isSaleStaff() || isProductStaff();
+    }
+
+    /**
+     * User bị giới hạn theo chi nhánh: - Manager - Staff Sale - Staff Product
+     *
+     * Admin không bị giới hạn store.
+     */
     public static boolean isStoreScopedUser() {
         return !isAdmin() && (isStoreManager() || isStoreStaff());
     }
@@ -169,7 +184,7 @@ public class SessionManager {
     }
 
     /**
-     * Dùng cho SQL/service cần filter dữ liệu theo chi nhánh.
+     * Dùng cho SQL/service cần filter theo chi nhánh.
      *
      * Admin: return null => xem toàn hệ thống. Manager/Staff: return
      * currentStoreId.
@@ -206,6 +221,79 @@ public class SessionManager {
         return employeeId;
     }
 
+    /*
+     * =========================================================
+     * HELPER PHÂN QUYỀN THEO NGHIỆP VỤ
+     * =========================================================
+     */
+    public static boolean canManageStock() {
+        return isAdmin() || isStoreManager() || isProductStaff();
+    }
+
+    public static boolean canAccessSales() {
+        return isAdmin() || isStoreManager() || isSaleStaff();
+    }
+
+    public static boolean canAccessProductsAndInventory() {
+        return isAdmin() || isStoreManager() || isProductStaff();
+    }
+
+    public static boolean canAccessCustomers() {
+        return isAdmin() || isStoreManager() || isSaleStaff();
+    }
+
+    public static boolean canAccessOrders() {
+        return isAdmin() || isStoreManager() || isSaleStaff();
+    }
+
+    public static boolean canAccessEmployees() {
+        return isAdmin() || isStoreManager();
+    }
+
+    public static boolean canAccessSupplierAndCategory() {
+        return isAdmin() || isStoreManager() || isProductStaff();
+    }
+
+    public static String getCurrentRoleLabel() {
+        if (isAdmin()) {
+            return "Admin";
+        }
+
+        if (isStoreManager()) {
+            return "Manager";
+        }
+
+        if (isSaleStaff()) {
+            return "Staff Sale";
+        }
+
+        if (isProductStaff()) {
+            return "Staff Product";
+        }
+
+        return "Unknown";
+    }
+
+    public static String getCurrentPortalTitle() {
+        if (isAdmin()) {
+            return "SMART SUPERMARKET - CENTRAL ADMIN PORTAL";
+        }
+
+        if (isStoreManager()) {
+            return "SMART SUPERMARKET - STORE PORTAL";
+        }
+
+        if (isSaleStaff()) {
+            return "SMART SUPERMARKET - SALE PORTAL";
+        }
+
+        if (isProductStaff()) {
+            return "SMART SUPERMARKET - WAREHOUSE PORTAL";
+        }
+
+        return "SMART SUPERMARKET";
+    }
+
     public static String getScopeLabel() {
         if (isAdmin()) {
             return "Toàn hệ thống";
@@ -228,10 +316,12 @@ public class SessionManager {
                 + ", userId=" + safeUserId()
                 + ", username=" + safeUsername()
                 + ", currentRole=" + getCurrentRole()
+                + ", roleLabel=" + getCurrentRoleLabel()
                 + ", currentEmployeeId=" + currentEmployeeId
                 + ", effectiveEmployeeId=" + getCurrentEmployeeId()
                 + ", currentStoreId=" + currentStoreId
-                + ", currentStoreName=" + currentStoreName);
+                + ", currentStoreName=" + currentStoreName
+                + ", scopeLabel=" + getScopeLabel());
     }
 
     private static String safeAccountId() {
