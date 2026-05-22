@@ -22,72 +22,6 @@
     <parameter name="P_LOW_STOCK" class="java.lang.String"/>
     <parameter name="P_ONLINE_SESSIONS" class="java.lang.String"/>
 
-    <subDataset name="RevenueByStoreChartDataset">
-        <queryString>
-            <![CDATA[
-                SELECT CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS store_name,
-                       NVL(SUM(o.total_amount), 0) AS revenue
-                FROM stores s
-                LEFT JOIN orders o
-                    ON o.store_id = s.store_id
-                   AND NVL(o.is_deleted, 0) = 0
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-                   AND (
-                        UPPER(TO_CHAR(o.status)) = 'COMPLETED'
-                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
-                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
-                   )
-                WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY NVL(TO_CHAR(s.store_name), TO_CHAR(s.address))
-                ORDER BY revenue DESC
-            ]]>
-        </queryString>
-        <field name="STORE_NAME" class="java.lang.String"/>
-        <field name="REVENUE" class="java.math.BigDecimal"/>
-    </subDataset>
-
-    <subDataset name="InventoryByStoreChartDataset">
-        <queryString>
-            <![CDATA[
-                SELECT CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS store_name,
-                       NVL(SUM(NVL(i.quantity, 0)), 0) AS total_stock
-                FROM stores s
-                LEFT JOIN inventory i
-                    ON i.store_id = s.store_id
-                   AND NVL(i.is_deleted, 0) = 0
-                WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY NVL(TO_CHAR(s.store_name), TO_CHAR(s.address))
-                ORDER BY total_stock DESC
-            ]]>
-        </queryString>
-        <field name="STORE_NAME" class="java.lang.String"/>
-        <field name="TOTAL_STOCK" class="java.math.BigDecimal"/>
-    </subDataset>
-
-    <subDataset name="OrderByStoreChartDataset">
-        <queryString>
-            <![CDATA[
-                SELECT CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS store_name,
-                       COUNT(o.order_id) AS total_orders
-                FROM stores s
-                LEFT JOIN orders o
-                    ON o.store_id = s.store_id
-                   AND NVL(o.is_deleted, 0) = 0
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-                   AND (
-                        UPPER(TO_CHAR(o.status)) = 'COMPLETED'
-                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOAN THANH%'
-                        OR UPPER(TO_CHAR(o.status)) LIKE '%HOÀN THÀNH%'
-                   )
-                WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY NVL(TO_CHAR(s.store_name), TO_CHAR(s.address))
-                ORDER BY total_orders DESC
-            ]]>
-        </queryString>
-        <field name="STORE_NAME" class="java.lang.String"/>
-        <field name="TOTAL_ORDERS" class="java.lang.Long"/>
-    </subDataset>
-
     <queryString>
         <![CDATA[
             SELECT section_no,
@@ -271,255 +205,72 @@
                 <textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
             </textField>
 
-            <rectangle radius="12">
-                <reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
-                <text><![CDATA[Tổng chi nhánh]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression>
-            </textField>
+            <rectangle radius="12"><reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement><text><![CDATA[Tổng chi nhánh]]></text></staticText>
+            <textField><reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression></textField>
 
-            <rectangle radius="12">
-                <reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
-                <text><![CDATA[Hoạt động]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression>
-            </textField>
+            <rectangle radius="12"><reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement><text><![CDATA[Hoạt động]]></text></staticText>
+            <textField><reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression></textField>
 
-            <rectangle radius="12">
-                <reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
-                <text><![CDATA[Hôm nay]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression>
-            </textField>
+            <rectangle radius="12"><reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement><text><![CDATA[Hôm nay]]></text></staticText>
+            <textField><reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression></textField>
 
-            <rectangle radius="12">
-                <reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement>
-                <text><![CDATA[Tháng này]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression>
-            </textField>
+            <rectangle radius="12"><reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7.5" isBold="true"/></textElement><text><![CDATA[Tháng này]]></text></staticText>
+            <textField><reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression></textField>
         </band>
     </title>
 
     <detail>
         <band height="24">
-            <rectangle>
-                <reportElement x="0" y="0" width="535" height="24" backcolor="#FFFFFF"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
-            <textField isBlankWhenNull="true">
-                <reportElement x="0" y="6" width="95" height="12"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression>
-            </textField>
-            <textField isBlankWhenNull="true">
-                <reportElement x="95" y="6" width="140" height="12"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression>
-            </textField>
-            <textField isBlankWhenNull="true">
-                <reportElement x="235" y="6" width="120" height="12"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression>
-            </textField>
-            <textField isBlankWhenNull="true">
-                <reportElement x="355" y="6" width="90" height="12"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression>
-            </textField>
-            <textField isBlankWhenNull="true">
-                <reportElement x="445" y="6" width="90" height="12"/>
-                <textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression>
-            </textField>
+            <rectangle><reportElement x="0" y="0" width="535" height="24" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <textField isBlankWhenNull="true"><reportElement x="0" y="6" width="95" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement x="95" y="6" width="140" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement x="235" y="6" width="120" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement x="355" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement x="445" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression></textField>
         </band>
     </detail>
 
     <summary>
-        <band height="520" splitType="Stretch">
-            <rectangle radius="14">
-                <reportElement x="0" y="18" width="535" height="474" backcolor="#FFFFFF"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
+        <band height="355" splitType="Stretch">
+            <rectangle radius="14"><reportElement x="0" y="18" width="535" height="306" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <rectangle radius="10"><reportElement x="15" y="34" width="505" height="34" backcolor="#FFF3E6"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <rectangle radius="6"><reportElement x="27" y="45" width="5" height="12" backcolor="#FF6F00"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <staticText><reportElement x="42" y="42" width="300" height="15" forecolor="#0F172A"/><textElement><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement><text><![CDATA[POWER BI INSIGHTS]]></text></staticText>
+            <staticText><reportElement x="42" y="56" width="455" height="10" forecolor="#64748B"/><textElement><font fontName="DejaVu Sans" size="7"/></textElement><text><![CDATA[Bảng phân tích nhanh giúp Admin đọc dữ liệu như một dashboard Power BI trong báo cáo.]]></text></staticText>
 
-            <rectangle radius="10">
-                <reportElement x="15" y="34" width="505" height="34" backcolor="#FFF3E6"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
-            <rectangle radius="6">
-                <reportElement x="27" y="45" width="5" height="12" backcolor="#FF6F00"/>
-                <graphicElement><pen lineWidth="0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="42" y="42" width="300" height="15" forecolor="#0F172A"/>
-                <textElement><font fontName="DejaVu Sans" size="11" isBold="true"/></textElement>
-                <text><![CDATA[POWER BI INSIGHTS]]></text>
-            </staticText>
-            <staticText>
-                <reportElement x="42" y="56" width="455" height="10" forecolor="#64748B"/>
-                <textElement><font fontName="DejaVu Sans" size="7"/></textElement>
-                <text><![CDATA[Biểu đồ hỗ trợ Admin nhìn nhanh doanh thu, đơn hàng và cơ cấu tồn kho theo chi nhánh.]]></text>
-            </staticText>
+            <rectangle radius="12"><reportElement x="20" y="90" width="155" height="92" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="34" y="104" width="125" height="14" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement><text><![CDATA[Doanh thu tháng]]></text></staticText>
+            <textField><reportElement x="34" y="126" width="125" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression></textField>
+            <rectangle radius="5"><reportElement x="40" y="154" width="100" height="8" backcolor="#F59E0B"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <staticText><reportElement x="34" y="166" width="125" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7"/></textElement><text><![CDATA[Chỉ tính đơn hoàn thành]]></text></staticText>
 
-            <barChart>
-                <chart>
-                    <reportElement x="20" y="84" width="240" height="170"/>
-                    <chartTitle>
-                        <titleExpression><![CDATA["Doanh thu tháng theo chi nhánh"]]></titleExpression>
-                    </chartTitle>
-                    <chartSubtitle>
-                        <subtitleExpression><![CDATA["Chỉ tính hóa đơn hoàn thành trong tháng hiện tại"]]></subtitleExpression>
-                    </chartSubtitle>
-                </chart>
-                <categoryDataset>
-                    <dataset>
-                        <datasetRun subDataset="RevenueByStoreChartDataset">
-                            <connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
-                        </datasetRun>
-                    </dataset>
-                    <categorySeries>
-                        <seriesExpression><![CDATA["Doanh thu"]]></seriesExpression>
-                        <categoryExpression><![CDATA[$F{STORE_NAME}]]></categoryExpression>
-                        <valueExpression><![CDATA[$F{REVENUE}]]></valueExpression>
-                    </categorySeries>
-                </categoryDataset>
-                <barPlot>
-                    <plot backcolor="#FFFFFF"/>
-                    <itemLabel/>
-                    <categoryAxisFormat>
-                        <axisFormat labelColor="#0F172A" tickLabelColor="#0F172A"/>
-                    </categoryAxisFormat>
-                    <valueAxisFormat>
-                        <axisFormat labelColor="#0F172A" tickLabelColor="#0F172A"/>
-                    </valueAxisFormat>
-                </barPlot>
-            </barChart>
+            <rectangle radius="12"><reportElement x="190" y="90" width="155" height="92" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="204" y="104" width="125" height="14" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement><text><![CDATA[Số đơn hợp lệ]]></text></staticText>
+            <textField><reportElement x="204" y="126" width="125" height="20" forecolor="#2563EB"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TOTAL_ORDERS}]]></textFieldExpression></textField>
+            <rectangle radius="5"><reportElement x="210" y="154" width="80" height="8" backcolor="#2563EB"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <staticText><reportElement x="204" y="166" width="125" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7"/></textElement><text><![CDATA[So sánh theo chi nhánh]]></text></staticText>
 
-            <barChart>
-                <chart>
-                    <reportElement x="280" y="84" width="235" height="170"/>
-                    <chartTitle>
-                        <titleExpression><![CDATA["Số đơn tháng theo chi nhánh"]]></titleExpression>
-                    </chartTitle>
-                    <chartSubtitle>
-                        <subtitleExpression><![CDATA["Dùng để so sánh hiệu quả bán hàng giữa các chi nhánh"]]></subtitleExpression>
-                    </chartSubtitle>
-                </chart>
-                <categoryDataset>
-                    <dataset>
-                        <datasetRun subDataset="OrderByStoreChartDataset">
-                            <connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
-                        </datasetRun>
-                    </dataset>
-                    <categorySeries>
-                        <seriesExpression><![CDATA["Số đơn"]]></seriesExpression>
-                        <categoryExpression><![CDATA[$F{STORE_NAME}]]></categoryExpression>
-                        <valueExpression><![CDATA[$F{TOTAL_ORDERS}]]></valueExpression>
-                    </categorySeries>
-                </categoryDataset>
-                <barPlot>
-                    <plot backcolor="#FFFFFF"/>
-                    <itemLabel/>
-                    <categoryAxisFormat>
-                        <axisFormat labelColor="#0F172A" tickLabelColor="#0F172A"/>
-                    </categoryAxisFormat>
-                    <valueAxisFormat>
-                        <axisFormat labelColor="#0F172A" tickLabelColor="#0F172A"/>
-                    </valueAxisFormat>
-                </barPlot>
-            </barChart>
+            <rectangle radius="12"><reportElement x="360" y="90" width="155" height="92" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="374" y="104" width="125" height="14" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement><text><![CDATA[Tồn kho thấp]]></text></staticText>
+            <textField><reportElement x="374" y="126" width="125" height="20" forecolor="#EF4444"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_LOW_STOCK}]]></textFieldExpression></textField>
+            <rectangle radius="5"><reportElement x="380" y="154" width="60" height="8" backcolor="#EF4444"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <staticText><reportElement x="374" y="166" width="125" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="DejaVu Sans" size="7"/></textElement><text><![CDATA[Cần theo dõi nhập hàng]]></text></staticText>
 
-            <pieChart>
-                <chart>
-                    <reportElement x="20" y="282" width="240" height="170"/>
-                    <chartTitle>
-                        <titleExpression><![CDATA["Cơ cấu tồn kho theo chi nhánh"]]></titleExpression>
-                    </chartTitle>
-                    <chartSubtitle>
-                        <subtitleExpression><![CDATA["Tỷ trọng số lượng tồn hiện tại"]]></subtitleExpression>
-                    </chartSubtitle>
-                </chart>
-                <pieDataset>
-                    <dataset>
-                        <datasetRun subDataset="InventoryByStoreChartDataset">
-                            <connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
-                        </datasetRun>
-                    </dataset>
-                    <keyExpression><![CDATA[$F{STORE_NAME}]]></keyExpression>
-                    <valueExpression><![CDATA[$F{TOTAL_STOCK}]]></valueExpression>
-                    <labelExpression><![CDATA[$F{STORE_NAME}]]></labelExpression>
-                </pieDataset>
-                <piePlot>
-                    <plot backcolor="#FFFFFF"/>
-                    <itemLabel/>
-                </piePlot>
-            </pieChart>
-
-            <rectangle radius="12">
-                <reportElement x="280" y="300" width="235" height="134" backcolor="#F8FAFC"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement>
-            </rectangle>
-            <staticText>
-                <reportElement x="296" y="316" width="200" height="15" forecolor="#0F172A"/>
-                <textElement><font fontName="DejaVu Sans" size="10" isBold="true"/></textElement>
-                <text><![CDATA[Mô tả phân tích]]></text>
-            </staticText>
-            <staticText>
-                <reportElement x="296" y="338" width="200" height="76" forecolor="#475569"/>
-                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
-                <text><![CDATA[Admin dùng nhóm biểu đồ này để so sánh doanh thu, số đơn và tỷ trọng tồn kho giữa các chi nhánh. Nếu một chi nhánh có doanh thu thấp nhưng tồn kho cao, cần kiểm tra kế hoạch bán hàng, khuyến mãi hoặc luân chuyển hàng hóa.]]></text>
-            </staticText>
+            <rectangle radius="12"><reportElement x="20" y="210" width="495" height="86" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="38" y="226" width="450" height="15" forecolor="#0F172A"/><textElement><font fontName="DejaVu Sans" size="10" isBold="true"/></textElement><text><![CDATA[Mô tả phân tích]]></text></staticText>
+            <staticText><reportElement x="38" y="248" width="450" height="34" forecolor="#475569"/><textElement><font fontName="DejaVu Sans" size="8"/></textElement><text><![CDATA[Admin dùng phần này để đọc nhanh hiệu quả vận hành toàn hệ thống: doanh thu phản ánh kết quả bán hàng, số đơn phản ánh lưu lượng giao dịch, tồn kho thấp phản ánh rủi ro thiếu hàng. Nếu chi nhánh có doanh thu thấp nhưng tồn kho cao, cần xem lại khuyến mãi, phân phối hàng hoặc hiệu suất nhân viên.]]></text></staticText>
         </band>
     </summary>
 
     <pageFooter>
         <band height="24">
-            <line>
-                <reportElement x="0" y="0" width="535" height="1"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1"/></graphicElement>
-            </line>
-            <staticText>
-                <reportElement x="0" y="8" width="270" height="12"/>
-                <textElement><font fontName="DejaVu Sans" size="8"/></textElement>
-                <text><![CDATA[Smart Supermarket - System Report]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="405" y="8" width="130" height="12"/>
-                <textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement>
-                <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
-            </textField>
+            <line><reportElement x="0" y="0" width="535" height="1"/><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1"/></graphicElement></line>
+            <staticText><reportElement x="0" y="8" width="270" height="12"/><textElement><font fontName="DejaVu Sans" size="8"/></textElement><text><![CDATA[Smart Supermarket - System Report]]></text></staticText>
+            <textField><reportElement x="405" y="8" width="130" height="12"/><textElement textAlignment="Right"><font fontName="DejaVu Sans" size="8"/></textElement><textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression></textField>
         </band>
     </pageFooter>
 </jasperReport>
