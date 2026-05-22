@@ -1,5 +1,8 @@
 package view;
 
+import common.events.AppDataChangedEvent;
+import common.events.AppEventType;
+import common.events.EventBus;
 import javax.swing.*;
 import java.awt.*;
 import view.components.AdminSidebar;
@@ -11,10 +14,12 @@ public class AdminDashboardView extends javax.swing.JFrame {
     private JPanel mainContentPanel;
     private AdminSidebar adminSidebar;
     private Color bgAdmin = new Color(240, 242, 245);
+    private String currentMenu = "Quản lý chi nhánh";
 
     public AdminDashboardView() {
         initComponents();
         setupAdminUI();
+        setupRealtimeSync();
 
         // Sidebar mặc định đang active mục đầu tiên là "Quản lý chi nhánh",
         // nên nội dung mặc định cũng phải là màn hình Quản lý chi nhánh.
@@ -52,6 +57,8 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
         // NỐI CÁC MỤC MENU VỚI PANEL TƯƠNG ỨNG
         adminSidebar.setMenuClickListener(title -> {
+            currentMenu = title;
+
             switch (title) {
                 case "Quản lý chi nhánh":
                     showPanel(new view.StoreManagementPanel());
@@ -97,6 +104,92 @@ public class AdminDashboardView extends javax.swing.JFrame {
         pack();
         setLocationRelativeTo(null);
         setExtendedState(JFrame.MAXIMIZED_BOTH);
+    }
+
+    private void setupRealtimeSync() {
+        EventBus.subscribe(AppDataChangedEvent.class, e -> {
+            if (e == null || e.getType() == null) {
+                return;
+            }
+
+            SwingUtilities.invokeLater(() -> refreshCurrentAdminPanel(e.getType()));
+        });
+    }
+
+    private void refreshCurrentAdminPanel(AppEventType type) {
+        if (currentMenu == null) {
+            return;
+        }
+
+        switch (currentMenu) {
+            case "Quản lý chi nhánh":
+                if (type == AppEventType.STORE_INFO
+                        || type == AppEventType.SYSTEM_CONFIG
+                        || type == AppEventType.DASHBOARD) {
+                    showPanel(new view.StoreManagementPanel());
+                }
+                break;
+
+            case "Quản lý khuyến mãi":
+                if (type == AppEventType.SYSTEM_CONFIG
+                        || type == AppEventType.PRODUCTS
+                        || type == AppEventType.DASHBOARD) {
+                    showPanel(new view.PromotionManagementPanel());
+                }
+                break;
+
+            case "Quản lý cửa hàng trưởng":
+                if (type == AppEventType.EMPLOYEES
+                        || type == AppEventType.ACCOUNT_SECURITY
+                        || type == AppEventType.STORE_INFO) {
+                    showPanel(new view.ManagerManagementView());
+                }
+                break;
+
+            case "Quản lý tài khoản":
+                if (type == AppEventType.ACCOUNT_SECURITY
+                        || type == AppEventType.EMPLOYEES) {
+                    showPanel(new view.AccountRoleAssignmentPanel());
+                }
+                break;
+
+            case "Quản lý phân quyền":
+                if (type == AppEventType.ACCOUNT_SECURITY
+                        || type == AppEventType.SYSTEM_CONFIG) {
+                    showPanel(new view.RoleManagementPanel());
+                }
+                break;
+
+            case "Lịch sử truy cập":
+                if (type == AppEventType.ACCOUNT_SECURITY
+                        || type == AppEventType.SYSTEM_CONFIG) {
+                    showPanel(new view.LoginManagementPanel());
+                }
+                break;
+
+            case "Nhật ký hệ thống":
+                if (type == AppEventType.SYSTEM_CONFIG
+                        || type == AppEventType.ACCOUNT_SECURITY
+                        || type == AppEventType.PRODUCTS
+                        || type == AppEventType.INVENTORY
+                        || type == AppEventType.ORDERS
+                        || type == AppEventType.CUSTOMERS
+                        || type == AppEventType.EMPLOYEES
+                        || type == AppEventType.STORE_INFO) {
+                    showPanel(new AuditLogPanel());
+                }
+                break;
+
+            case "Cài đặt":
+                if (type == AppEventType.SYSTEM_CONFIG
+                        || type == AppEventType.ACCOUNT_SECURITY) {
+                    showPanel(new view.components.UnifiedSettingsPanel());
+                }
+                break;
+
+            default:
+                break;
+        }
     }
 
     public void showPanel(JPanel panel) {
