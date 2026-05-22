@@ -96,40 +96,62 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private JPanel statCard(String title, JLabel value, Color accent) {
-        RoundedPanel card = new RoundedPanel(16, white);
+        RoundedPanel card = new RoundedPanel(18, withAlpha(accent, 16));
         card.setLayout(new BorderLayout(12, 0));
-        card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border), new EmptyBorder(14, 16, 14, 16)));
-        JPanel icon = new JPanel(new GridBagLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 24));
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 14, 14);
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        icon.setOpaque(false);
+        card.setBorder(new EmptyBorder(15, 16, 15, 16));
+
+        JPanel stripe = new JPanel();
+        stripe.setPreferredSize(new Dimension(5, 0));
+        stripe.setBackground(accent);
+
+        RoundedPanel icon = new RoundedPanel(14, withAlpha(accent, 42));
         icon.setPreferredSize(new Dimension(46, 46));
-        JLabel dot = new JLabel("●");
+        icon.setLayout(new BorderLayout());
+
+        JLabel dot = new JLabel("●", SwingConstants.CENTER);
         dot.setFont(new Font("Segoe UI", Font.BOLD, 22));
         dot.setForeground(accent);
-        icon.add(dot);
-        JPanel txt = new JPanel();
-        txt.setOpaque(false);
-        txt.setLayout(new BoxLayout(txt, BoxLayout.Y_AXIS));
+        icon.add(dot, BorderLayout.CENTER);
+
+        JPanel textPanel = new JPanel();
+        textPanel.setOpaque(false);
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+
         JLabel t = new JLabel(title);
-        t.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        t.setForeground(muted);
+        t.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        t.setForeground(new Color(71, 85, 105));
+
         value.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        value.setForeground(text);
-        txt.add(t);
-        txt.add(Box.createVerticalStrut(5));
-        txt.add(value);
-        card.add(icon, BorderLayout.WEST);
-        card.add(txt, BorderLayout.CENTER);
-        return card;
+        value.setForeground(accent);
+
+        textPanel.add(t);
+        textPanel.add(Box.createVerticalStrut(5));
+        textPanel.add(value);
+
+        JPanel center = new JPanel(new BorderLayout(12, 0));
+        center.setOpaque(false);
+        center.add(icon, BorderLayout.WEST);
+        center.add(textPanel, BorderLayout.CENTER);
+
+        card.add(stripe, BorderLayout.WEST);
+        card.add(center, BorderLayout.CENTER);
+
+        return wrapWithBorder(card);
+    }
+
+    private JPanel wrapWithBorder(JPanel panel) {
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(border),
+                BorderFactory.createEmptyBorder(0, 0, 0, 0)
+        ));
+        wrapper.add(panel, BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private Color withAlpha(Color c, int alpha) {
+        return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
     }
 
     private JPanel createTableArea() {

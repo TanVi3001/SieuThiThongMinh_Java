@@ -238,15 +238,53 @@ public class AdminSystemPanel extends JPanel {
     }
 
     private JButton createPrimaryButton(String text, Color bgColor) {
-        JButton btn = new JButton(text);
+        JButton btn = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                Color paintColor = getBackground();
+
+                if (getModel().isPressed()) {
+                    paintColor = paintColor.darker();
+                } else if (getModel().isRollover()) {
+                    paintColor = brighten(paintColor, 1.08f);
+                }
+
+                g2.setColor(paintColor);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            protected void paintBorder(Graphics g) {
+                // Không vẽ border vuông mặc định
+            }
+        };
+
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setForeground(Color.WHITE);
         btn.setBackground(bgColor);
         btn.setFocusPainted(false);
         btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setOpaque(false);
         btn.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        btn.setBorder(new EmptyBorder(10, 18, 10, 18));
+        btn.setBorder(new EmptyBorder(10, 20, 10, 20));
+        btn.setPreferredSize(new Dimension(112, 42));
+
         return btn;
+    }
+
+    private Color brighten(Color c, float factor) {
+        return new Color(
+                Math.min(255, Math.round(c.getRed() * factor)),
+                Math.min(255, Math.round(c.getGreen() * factor)),
+                Math.min(255, Math.round(c.getBlue() * factor))
+        );
     }
 
     private JPanel createOverviewTab() {
