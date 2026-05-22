@@ -35,6 +35,8 @@ public final class SyncWatcher {
         }
         started = true;
 
+        long safePeriodSeconds = Math.max(1, periodSeconds);
+
         // init version cache
         for (AppEventType t : AppEventType.values()) {
             if (t == AppEventType.UNKNOWN) {
@@ -43,8 +45,8 @@ public final class SyncWatcher {
             LAST.put(t, readVersion(t));
         }
 
-        SCHEDULER.scheduleAtFixedRate(SyncWatcher::tick, periodSeconds, periodSeconds, TimeUnit.SECONDS);
-        System.out.println("[SYNC] SyncWatcher started. periodSeconds=" + periodSeconds);
+        SCHEDULER.scheduleAtFixedRate(SyncWatcher::tick, safePeriodSeconds, safePeriodSeconds, TimeUnit.SECONDS);
+        System.out.println("[SYNC] SyncWatcher started. periodSeconds=" + safePeriodSeconds);
     }
 
     private static void tick() {
@@ -67,22 +69,30 @@ public final class SyncWatcher {
     }
 
     private static long readVersion(AppEventType type) {
-        // mapping enum -> APP_SYNC.sync_key
-        String key = switch (type) {
-            case PRODUCTS ->
-                "PRODUCTS";
-            case INVENTORY ->
-                "INVENTORY";
-            case SYSTEM_CONFIG ->
-                "SYSTEM_CONFIG";
-            case ACCOUNT_SECURITY ->
-                "ACCOUNT_SECURITY";
-            default ->
-                "UNKNOWN";
-        };
-        if ("UNKNOWN".equals(key)) {
+        String key = mapSyncKey(type);
+        if (key == null) {
             return -1;
         }
         return SyncVersionDao.getVersion(key);
+    }
+
+    private static String mapSyncKey(AppEventType type) {
+        if (type == null) {
+            return null;
+        }
+
+        return switch (type) {
+            case PRODUCTS -> "PRODUCTS";
+            case INVENTORY, INVENTORY_ALERT -> "INVENTORY";
+            case CUSTOMERS -> "CUSTOMERS";
+            case EMPLOYEES -> "EMPLOYEES";
+            case ORDERS -> "ORDERS";
+            case STATISTICS -> "STATISTICS";
+            case DASHBOARD -> "DASHBOARD";
+            case STORE_INFO -> "STORE_INFO";
+            case SYSTEM_CONFIG -> "SYSTEM_CONFIG";
+            case ACCOUNT_SECURITY -> "ACCOUNT_SECURITY";
+            default -> null;
+        };
     }
 }
