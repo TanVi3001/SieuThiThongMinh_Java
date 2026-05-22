@@ -36,11 +36,8 @@ import javax.swing.table.JTableHeader;
 /**
  * AdminSystemPanel
  *
- * Trung tâm quản lý hệ thống cho Admin.
- * Gồm 3 tab:
- * - Tổng quan hệ thống
- * - Quản lý chi nhánh
- * - Báo cáo tổng hợp
+ * Trung tâm quản lý hệ thống cho Admin. Gồm 3 tab: - Tổng quan hệ thống - Quản
+ * lý chi nhánh - Báo cáo tổng hợp
  */
 public class AdminSystemPanel extends JPanel {
 
@@ -276,12 +273,16 @@ public class AdminSystemPanel extends JPanel {
     }
 
     private JPanel statCard(String title, JLabel value, Color accent) {
-        RoundedPanel card = new RoundedPanel(18, white);
+        RoundedPanel card = new RoundedPanel(18, withAlpha(accent, 16));
         card.setLayout(new BorderLayout(12, 0));
-        card.setBorder(new EmptyBorder(16, 18, 16, 18));
+        card.setBorder(new EmptyBorder(15, 16, 15, 16));
 
-        RoundedPanel icon = new RoundedPanel(14, withAlpha(accent, 28));
-        icon.setPreferredSize(new Dimension(44, 44));
+        JPanel stripe = new JPanel();
+        stripe.setPreferredSize(new Dimension(5, 0));
+        stripe.setBackground(accent);
+
+        RoundedPanel icon = new RoundedPanel(14, withAlpha(accent, 42));
+        icon.setPreferredSize(new Dimension(46, 46));
         icon.setLayout(new BorderLayout());
 
         JLabel dot = new JLabel("●", SwingConstants.CENTER);
@@ -295,17 +296,22 @@ public class AdminSystemPanel extends JPanel {
 
         JLabel t = new JLabel(title);
         t.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        t.setForeground(muted);
+        t.setForeground(new Color(71, 85, 105));
 
         value.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        value.setForeground(text);
+        value.setForeground(accent);
 
         textPanel.add(t);
         textPanel.add(Box.createVerticalStrut(5));
         textPanel.add(value);
 
-        card.add(icon, BorderLayout.WEST);
-        card.add(textPanel, BorderLayout.CENTER);
+        JPanel center = new JPanel(new BorderLayout(12, 0));
+        center.setOpaque(false);
+        center.add(icon, BorderLayout.WEST);
+        center.add(textPanel, BorderLayout.CENTER);
+
+        card.add(stripe, BorderLayout.WEST);
+        card.add(center, BorderLayout.CENTER);
 
         return wrapWithBorder(card);
     }
@@ -315,9 +321,16 @@ public class AdminSystemPanel extends JPanel {
         card.setLayout(new BorderLayout(0, 12));
         card.setBorder(new EmptyBorder(16, 16, 16, 16));
 
-        JPanel header = new JPanel();
+        JPanel header = new JPanel(new BorderLayout(10, 0));
         header.setOpaque(false);
-        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+
+        JPanel accentBar = new JPanel();
+        accentBar.setPreferredSize(new Dimension(5, 34));
+        accentBar.setBackground(primary);
+
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
 
         JLabel lbl = new JLabel(title);
         lbl.setFont(new Font("Segoe UI", Font.BOLD, 16));
@@ -327,9 +340,12 @@ public class AdminSystemPanel extends JPanel {
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         sub.setForeground(mutedLight);
 
-        header.add(lbl);
-        header.add(Box.createVerticalStrut(3));
-        header.add(sub);
+        titleBox.add(lbl);
+        titleBox.add(Box.createVerticalStrut(3));
+        titleBox.add(sub);
+
+        header.add(accentBar, BorderLayout.WEST);
+        header.add(titleBox, BorderLayout.CENTER);
 
         JScrollPane sp = new JScrollPane(table);
         sp.setBorder(BorderFactory.createLineBorder(border));
@@ -587,9 +603,7 @@ public class AdminSystemPanel extends JPanel {
     }
 
     private long scalarLong(String sql) {
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
 
             return rs.next() ? rs.getLong(1) : 0L;
 
@@ -600,9 +614,7 @@ public class AdminSystemPanel extends JPanel {
     }
 
     private double scalarDouble(String sql) {
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
 
             return rs.next() ? rs.getDouble(1) : 0.0;
 
@@ -620,9 +632,7 @@ public class AdminSystemPanel extends JPanel {
         DefaultTableModel model = (DefaultTableModel) table.getModel();
         model.setRowCount(0);
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
                 Object[] row = new Object[columnCount];
