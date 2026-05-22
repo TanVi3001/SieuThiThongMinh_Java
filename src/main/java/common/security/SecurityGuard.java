@@ -47,20 +47,31 @@ public class SecurityGuard {
             return;
         }
 
-        Account currentUser = LoginService.getCurrentUser();
+        Account currentUser = business.service.SessionManager.getCurrentUser();
+
         if (currentUser == null) {
+            currentUser = LoginService.getCurrentUser();
+        }
+
+        if (currentUser == null || currentUser.getAccountId() == null) {
             return;
         }
 
         String accId = currentUser.getAccountId();
-        String roleSnapshot = currentUser.getRoleId();
-        if (roleSnapshot == null || roleSnapshot.trim().isEmpty()) {
-            roleSnapshot = currentUser.getRole();
+
+        String currentRole = business.service.SessionManager.getCurrentRole();
+
+        if (currentRole == null || currentRole.trim().isEmpty()) {
+            if (currentUser.getRoleId() != null && !currentUser.getRoleId().trim().isEmpty()) {
+                currentRole = currentUser.getRoleId();
+            } else if (currentUser.getRoleValue() != null && !currentUser.getRoleValue().trim().isEmpty()) {
+                currentRole = currentUser.getRoleValue();
+            } else {
+                currentRole = currentUser.getRole();
+            }
         }
-        if (roleSnapshot == null || roleSnapshot.trim().isEmpty()) {
-            roleSnapshot = currentUser.getRoleValue();
-        }
-        final String currentRole = roleSnapshot;
+
+        final String finalCurrentRole = currentRole;
 
         new Thread(() -> {
             try {
@@ -71,21 +82,23 @@ public class SecurityGuard {
                 }
 
                 String dbRoleId = latestData[4];
-                boolean isActive = "0".equals(latestData[5]);
+                boolean isActive = "0".equals(String.valueOf(latestData[5]).trim());
 
-                if (!isActive || dbRoleId == null || currentRole == null || !dbRoleId.equalsIgnoreCase(currentRole)) {
-                    // 🌟 LOCK NGAY LẬP TỨC: Thằng nào chạy đến đây trước thì set cờ true
-                    // Thằng Timer hay Listener thứ 2 chạy tới sẽ bị chặn đứng
+                boolean roleChanged = dbRoleId == null
+                        || finalCurrentRole == null
+                        || !dbRoleId.trim().equalsIgnoreCase(finalCurrentRole.trim());
+
+                if (!isActive || roleChanged) {
                     if (!isProcessingLogout) {
                         isProcessingLogout = true;
-                        System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN ĐỔI QUYỀN -> TIẾN HÀNH KICK!");
+                        System.out.println("🛡️ [SecurityGuard] 🚨 ROLE CHANGED/KHOÁ TK -> KICK!");
                         SwingUtilities.invokeLater(() -> forceLogout(view));
                     }
                 }
             } catch (Exception e) {
                 System.err.println("SecurityGuard Error: " + e.getMessage());
             }
-        }).start();
+        }, "security-guard-check-thread").start();
     }
 
     private static void forceLogout(JPanel view) {

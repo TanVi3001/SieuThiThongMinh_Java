@@ -987,7 +987,8 @@ public class EmployeeView extends JPanel {
             }
 
             emp.setEmployeeId(idToUpdate);
-
+            String oldRole = getEmployeeRoleById(idToUpdate);
+            String newRole = emp.getRoleId();
             int updateRows;
 
             if (SessionManager.isStoreManager()) {
@@ -998,7 +999,20 @@ public class EmployeeView extends JPanel {
             }
 
             if (updateRows > 0) {
-                RealtimeClient.send("EMPLOYEES_CHANGED");
+                boolean roleChanged = oldRole != null
+                        && newRole != null
+                        && !oldRole.trim().equalsIgnoreCase(newRole.trim());
+
+                if (roleChanged) {
+                    business.sql.rbac.AccountSql.getInstance()
+                            .updateAccountRoleByEmployeeId(idToUpdate, newRole);
+
+                    business.service.AccountService.notifyAccountSecurityChanged("EMPLOYEE_ROLE_UPDATED");
+                } else {
+                    RealtimeClient.send("EMPLOYEES_CHANGED");
+                }
+
+                touchAccountSecurityByEmployeeId(idToUpdate);
 
                 if (emailChanged && !isActivated) {
                     try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(
@@ -2094,6 +2108,57 @@ public class EmployeeView extends JPanel {
 
     private boolean isEmailDuplicate(String email, String excludeEmpId) {
         return employeeSql.existsByEmailGlobal(email, excludeEmpId);
+    }
+
+    private void touchAccountSecurityByEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            return;
+        }
+
+        String sql = """
+        UPDATE ACCOUNTS
+        SET UPDATED_AT = CURRENT_TIMESTAMP
+        WHERE USER_ID = ?
+          AND NVL(IS_DELETED, 0) = 0
+    """;
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, employeeId.trim());
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] touchAccountSecurityByEmployeeId error: " + e.getMessage());
+        }
+    }
+
+    private String getEmployeeRoleById(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+        SELECT role_id
+        FROM EMPLOYEES
+        WHERE employee_id = ?
+          AND NVL(is_deleted, 0) = 0
+    """;
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, employeeId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("role_id");
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] getEmployeeRoleById error: " + e.getMessage());
+        }
+
+        return null;
     }
 
     private boolean isValidPhone(String phone) {
