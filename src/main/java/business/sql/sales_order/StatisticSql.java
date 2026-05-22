@@ -771,88 +771,90 @@ public class StatisticSql {
     }
 
     private List<Object[]> getEmployeeReportInternal(java.util.Date fromDate, java.util.Date toDate, String storeId) {
-        List<Object[]> rows = new ArrayList<>();
-        String sid = cleanStoreId(storeId);
+    List<Object[]> rows = new ArrayList<>();
+    String sid = cleanStoreId(storeId);
 
-        String completed = completedCondition("o.status");
-        String cancelled = cancelledCondition("o.status");
+    String completed = completedCondition("o.status");
+    String cancelled = cancelledCondition("o.status");
 
-        StringBuilder sql = new StringBuilder("""
-            SELECT e.employee_id,
-                   e.employee_name,
-                   NVL(agg.don_thanh_cong, 0) AS don_thanh_cong,
-                   NVL(agg.don_huy, 0) AS don_huy,
-                   NVL(agg.doanh_thu, 0) AS doanh_thu
-            FROM EMPLOYEES e
-            INNER JOIN ACCOUNTS a
-                ON e.employee_id = a.user_id
-            LEFT JOIN (
-                SELECT NVL(a_ref.user_id, o.employee_id) AS final_emp_id,
-                       COUNT(CASE WHEN %s THEN 1 END) AS don_thanh_cong,
-                       COUNT(CASE WHEN %s THEN 1 END) AS don_huy,
-                       SUM(CASE WHEN %s THEN o.total_amount ELSE 0 END) AS doanh_thu
-                FROM ORDERS o
-                LEFT JOIN ACCOUNTS a_ref
-                    ON o.employee_id = a_ref.account_id
-                WHERE NVL(o.is_deleted, 0) = 0
-                  AND o.order_date >= ?
-                  AND o.order_date < (? + 1)
-        """.formatted(completed, cancelled, completed));
+    StringBuilder sql = new StringBuilder("""
+        SELECT e.employee_id,
+               e.employee_name,
+               NVL(agg.don_thanh_cong, 0) AS don_thanh_cong,
+               NVL(agg.don_huy, 0) AS don_huy,
+               NVL(agg.doanh_thu, 0) AS doanh_thu
+        FROM EMPLOYEES e
+        INNER JOIN ACCOUNTS a
+            ON e.employee_id = a.user_id
+        LEFT JOIN (
+            SELECT NVL(a_ref.user_id, o.employee_id) AS final_emp_id,
+                   COUNT(CASE WHEN %s THEN 1 END) AS don_thanh_cong,
+                   COUNT(CASE WHEN %s THEN 1 END) AS don_huy,
+                   SUM(CASE WHEN %s THEN o.total_amount ELSE 0 END) AS doanh_thu
+            FROM ORDERS o
+            LEFT JOIN ACCOUNTS a_ref
+                ON o.employee_id = a_ref.account_id
+            WHERE NVL(o.is_deleted, 0) = 0
+              AND o.order_date >= ?
+              AND o.order_date < (? + 1)
+    """.formatted(completed, cancelled, completed));
 
-        if (sid != null) {
-            sql.append(" AND o.store_id = ? ");
-        }
-
-        sql.append("""
-                GROUP BY NVL(a_ref.user_id, o.employee_id)
-            ) agg
-                ON e.employee_id = agg.final_emp_id
-            WHERE NVL(e.is_deleted, 0) = 0
-              AND e.role_id = 'R_STAFF_SALE'
-              AND (
-                    UPPER(NVL(a.status, '')) LIKE '%HOẠT ĐỘNG%'
-                    OR UPPER(NVL(a.status, '')) LIKE '%HOAT DONG%'
-                    OR a.status = N'Đã cấp'
-                  )
-        """);
-
-        if (sid != null) {
-            sql.append(" AND e.store_id = ? ");
-        }
-
-        sql.append(" ORDER BY doanh_thu DESC ");
-
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql.toString())) {
-            int i = 1;
-
-            pst.setDate(i++, new java.sql.Date(fromDate.getTime()));
-            pst.setDate(i++, new java.sql.Date(toDate.getTime()));
-
-            if (sid != null) {
-                pst.setString(i++, sid);
-                pst.setString(i++, sid);
-            }
-
-            try (ResultSet rs = pst.executeQuery()) {
-                while (rs.next()) {
-                    rows.add(new Object[]{
-                        rs.getString("employee_id"),
-                        rs.getString("employee_name"),
-                        rs.getInt("don_thanh_cong"),
-                        rs.getInt("don_huy"),
-                        rs.getDouble("doanh_thu")
-                    });
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("❌ Lỗi báo cáo nhân viên: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        return rows;
+    if (sid != null) {
+        sql.append(" AND o.store_id = ? ");
     }
+
+    sql.append("""
+            GROUP BY NVL(a_ref.user_id, o.employee_id)
+        ) agg
+            ON e.employee_id = agg.final_emp_id
+        WHERE NVL(e.is_deleted, 0) = 0
+          AND e.role_id = 'R_STAFF_SALE'
+          AND (
+                UPPER(NVL(a.status, '')) LIKE '%HOẠT ĐỘNG%'
+                OR UPPER(NVL(a.status, '')) LIKE '%HOAT DONG%'
+                OR a.status = N'Đã cấp'
+              )
+    """);
+
+    if (sid != null) {
+        sql.append(" AND e.store_id = ? ");
+    }
+
+    sql.append(" ORDER BY doanh_thu DESC ");
+
+    try (
+            Connection con = DatabaseConnection.getConnection();
+            PreparedStatement pst = con.prepareStatement(sql.toString())
+    ) {
+        int i = 1;
+
+        pst.setDate(i++, new java.sql.Date(fromDate.getTime()));
+        pst.setDate(i++, new java.sql.Date(toDate.getTime()));
+
+        if (sid != null) {
+            pst.setString(i++, sid); // o.store_id
+            pst.setString(i++, sid); // e.store_id
+        }
+
+        try (ResultSet rs = pst.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new Object[]{
+                    rs.getString("employee_id"),
+                    rs.getString("employee_name"),
+                    rs.getInt("don_thanh_cong"),
+                    rs.getInt("don_huy"),
+                    rs.getDouble("doanh_thu")
+                });
+            }
+        }
+
+    } catch (Exception e) {
+        System.err.println("❌ Lỗi báo cáo nhân viên: " + e.getMessage());
+        e.printStackTrace();
+    }
+
+    return rows;
+}
 
     // =========================================================
     // 4. COMMON QUERY HELPERS

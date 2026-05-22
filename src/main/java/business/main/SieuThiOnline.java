@@ -5,6 +5,7 @@ import business.sql.rbac.TokenSql;
 import common.db.DatabaseConnection;
 import common.realtime.RealtimeClient;
 import common.realtime.RealtimeServer;
+import common.sync.SyncWatcher;
 import com.formdev.flatlaf.FlatLightLaf;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
@@ -92,6 +93,7 @@ public class SieuThiOnline {
         System.out.println("=======================================================");
 
         startRealtimeSystem();
+        startSyncWatcher();
         runIntegrationChecks();
 
         System.out.println();
@@ -112,6 +114,17 @@ public class SieuThiOnline {
             System.out.println("[HOÀN TẤT] Real-time Server/Client đã khởi động.");
         } catch (Exception e) {
             System.err.println("[CẢNH BÁO] Không thể khởi động Real-time: " + e.getMessage());
+        }
+    }
+
+    private static void startSyncWatcher() {
+        try {
+            // DB polling fallback: giúp Admin/Manager/Staff vẫn reload khi APP_SYNC đổi version,
+            // kể cả khi WebSocket bị chặn hoặc chạy khác máy.
+            SyncWatcher.start(2);
+            System.out.println("[HOÀN TẤT] SyncWatcher đã khởi động.");
+        } catch (Exception e) {
+            System.err.println("[CẢNH BÁO] Không thể khởi động SyncWatcher: " + e.getMessage());
         }
     }
 
