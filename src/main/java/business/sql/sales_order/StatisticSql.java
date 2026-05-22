@@ -368,18 +368,18 @@ public class StatisticSql {
             FROM EMPLOYEES e
             INNER JOIN ACCOUNTS a ON e.employee_id = a.user_id
             LEFT JOIN (
-                SELECT NVL(a_ref.user_id, o.employee_id) AS final_emp_id,
-                       COUNT(CASE WHEN 
-        """ + completed + """ THEN 1 END) AS don_thanh_cong,
-                       COUNT(CASE WHEN 
-        """ + cancelled + """ THEN 1 END) AS don_huy,
-                       SUM(CASE WHEN 
-        """ + completed + """ THEN o.total_amount ELSE 0 END) AS doanh_thu
-                FROM ORDERS o
-                LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id
-                WHERE NVL(o.is_deleted, 0) = 0
-                  AND o.order_date >= ?
-                  AND o.order_date < (? + 1)
+                           SELECT NVL(a_ref.user_id, o.employee_id) AS final_emp_id,
+                                         COUNT(CASE WHEN 
+                          \""" + completed + \""" THEN 1 END) AS don_thanh_cong,
+                                         COUNT(CASE WHEN 
+                          \""" + cancelled + \""" THEN 1 END) AS don_huy,
+                                         SUM(CASE WHEN 
+                          \""" + completed + \""" THEN o.total_amount ELSE 0 END) AS doanh_thu
+                                  FROM ORDERS o
+                                  LEFT JOIN ACCOUNTS a_ref ON o.employee_id = a_ref.account_id
+                                  WHERE NVL(o.is_deleted, 0) = 0
+                                    AND o.order_date >= ?
+                                    AND o.order_date < (? + 1)
         """);
         if (storeId != null && !storeId.isBlank()) {
             sql.append(" AND o.store_id = ? ");
