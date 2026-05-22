@@ -1,6 +1,7 @@
 package view;
 
 import business.service.AccountService;
+import business.service.AuthorizationService;
 import business.service.HeartbeatService;
 import business.service.LoginService;
 import business.service.SessionManager;
@@ -34,6 +35,17 @@ public class WarehouseDashboardView extends JFrame {
     private final Color TOPBAR_BORDER = new Color(230, 230, 230);
 
     public WarehouseDashboardView() {
+        if (!AuthorizationService.isAdmin() && !AuthorizationService.isProductStaff()) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Bạn không có quyền truy cập Warehouse Portal.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            dispose();
+            return;
+        }
+
         setupWarehouseUI();
     }
 
@@ -44,7 +56,13 @@ public class WarehouseDashboardView extends JFrame {
                 ? currentUser.getUsername().trim()
                 : "Nhân viên Kho";
 
-        setTitle("SMART SUPERMARKET - WAREHOUSE PORTAL | " + username);
+        String portalTitle = AuthorizationService.currentPortalTitle();
+        if (portalTitle == null || portalTitle.trim().isEmpty()
+                || "SMART SUPERMARKET".equalsIgnoreCase(portalTitle.trim())) {
+            portalTitle = "SMART SUPERMARKET - WAREHOUSE PORTAL";
+        }
+
+        setTitle(portalTitle + " | " + username);
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         addWindowListener(new WindowAdapter() {
@@ -81,21 +99,37 @@ public class WarehouseDashboardView extends JFrame {
     private void handleSidebarMenuClick(String title) {
         switch (title) {
             case WarehouseSidebar.MENU_INVENTORY -> {
+                if (!AuthorizationService.canManageStock()) {
+                    showAccessDenied();
+                    return;
+                }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_INVENTORY);
                 showInventoryPanel(null);
             }
 
             case WarehouseSidebar.MENU_PRODUCTS -> {
+                if (!AuthorizationService.canAccessProductsAndInventory()) {
+                    showAccessDenied();
+                    return;
+                }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_PRODUCTS);
                 showPanel(new ProductView());
             }
 
             case WarehouseSidebar.MENU_SUPPLIERS -> {
+                if (!AuthorizationService.canAccessSupplierAndCategory()) {
+                    showAccessDenied();
+                    return;
+                }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SUPPLIERS);
                 showPanel(new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
             }
 
             case WarehouseSidebar.MENU_CATEGORY_TAX -> {
+                if (!AuthorizationService.canAccessSupplierAndCategory()) {
+                    showAccessDenied();
+                    return;
+                }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_CATEGORY_TAX);
                 showPanel(new CategoryTaxView());
             }
@@ -111,6 +145,15 @@ public class WarehouseDashboardView extends JFrame {
             default -> {
             }
         }
+    }
+
+    private void showAccessDenied() {
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn không có quyền truy cập chức năng này!",
+                "Từ chối",
+                JOptionPane.WARNING_MESSAGE
+        );
     }
 
     private JPanel createTopBar() {

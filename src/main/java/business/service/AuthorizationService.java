@@ -51,7 +51,7 @@ public class AuthorizationService {
 
     /**
      * Trong đồ án này: R_STAFF_VIEW_PROD = Staff Product = nhân viên sản
-     * phẩm/kho/nhập hàng. Không hiểu là view-only.
+     * phẩm/kho/nhập hàng.
      */
     public static boolean isProductStaff() {
         return isProductStaff(SessionManager.getCurrentUser());
@@ -62,8 +62,8 @@ public class AuthorizationService {
     }
 
     /**
-     * Giữ tên cũ để các file đang gọi isWarehouseStaff() không bị lỗi compile.
-     * Ý nghĩa thật hiện tại: Warehouse Staff chính là Staff Product.
+     * Alias cũ để code cũ không lỗi compile. Warehouse Staff chính là Staff
+     * Product.
      */
     public static boolean isWarehouseStaff() {
         return isProductStaff();
@@ -74,10 +74,8 @@ public class AuthorizationService {
     }
 
     /**
-     * Các user bị giới hạn theo store_id: - Manager - Staff Sale - Staff
-     * Product
-     *
-     * Admin không bị scope.
+     * User bị giới hạn theo store_id: Manager, Staff Sale, Staff Product. Admin
+     * không bị scope.
      */
     public static boolean isStoreScopedUser() {
         return isStoreScopedUser(SessionManager.getCurrentUser());
@@ -94,33 +92,51 @@ public class AuthorizationService {
      * =========================================================
      */
     /**
-     * Module bán hàng/POS: Admin, Manager, Staff Sale được vào.
+     * Module bán hàng/POS: Admin và Staff Sale được vào. Manager không trực
+     * tiếp bán hàng.
      */
     public static boolean canAccessSales() {
         return isAdmin() || isCashier();
-
     }
 
     /**
-     * Module sản phẩm/tồn kho: Admin, Manager, Staff Product được vào.
+     * Module quản lý sản phẩm: Admin, Manager, Staff Sale, Staff Product đều
+     * được vào.
+     *
+     * Nhưng: - Staff Sale chỉ xem + báo hết hàng. - Manager chỉ xem/tổng quan +
+     * báo hết hàng. - Staff Product/Admin mới được thao tác dữ liệu sản
+     * phẩm/kho.
      */
     public static boolean canAccessProductsAndInventory() {
         return isAdmin() || isStoreManager() || isCashier() || isProductStaff();
     }
 
     /**
-     * Nhập kho/import CSV/cập nhật tồn: Admin, Manager, Staff Product được thao
-     * tác.
+     * Module tồn kho / nhập kho / import CSV: Admin và Staff Product được thao
+     * tác. Manager không trực tiếp quản lý tồn kho.
      */
     public static boolean canManageStock() {
         return isAdmin() || isProductStaff();
-
     }
 
     /**
-     * Module khách hàng: Admin, Manager, Staff Sale được vào. Khách hàng vẫn là
-     * global để tra SĐT/voucher, nhưng dữ liệu chi tiêu/order vẫn phải tính
-     * theo store_id ở tầng SQL/service.
+     * Quyền thao tác CRUD sản phẩm. Staff Sale và Manager không được
+     * thêm/sửa/xóa.
+     */
+    public static boolean canManageProducts() {
+        return isAdmin() || isProductStaff();
+    }
+
+    /**
+     * Quyền gửi cảnh báo hết hàng từ ProductView. Manager và Staff Sale được
+     * báo cho kho.
+     */
+    public static boolean canSendInventoryAlert() {
+        return isStoreManager() || isCashier();
+    }
+
+    /**
+     * Module khách hàng: Admin, Manager, Staff Sale được vào.
      */
     public static boolean canAccessCustomers() {
         return isAdmin() || isStoreManager() || isCashier();
@@ -134,8 +150,7 @@ public class AuthorizationService {
     }
 
     /**
-     * Module nhân viên: Admin xem toàn hệ thống, Manager xem nhân viên cùng
-     * store.
+     * Module nhân viên: Admin toàn hệ thống, Manager theo chi nhánh.
      */
     public static boolean canAccessEmployees() {
         return isAdmin() || isStoreManager();
@@ -157,38 +172,27 @@ public class AuthorizationService {
     }
 
     /**
-     * Alias cho code cũ trong DashboardView. Báo cáo/thống kê + nhân viên chỉ
-     * dành cho Admin và Manager.
+     * Alias cho code cũ trong DashboardView.
      */
     public static boolean canAccessStatisticsAndEmployees() {
         return canAccessReports() || canAccessEmployees();
     }
 
     /**
-     * Alias cho code cũ trong EmployeeView. Quản lý nhân viên: Admin toàn hệ
-     * thống, Manager theo chi nhánh.
+     * Alias cho code cũ trong EmployeeView.
      */
     public static boolean canAccessEmployeeManagement() {
         return canAccessEmployees();
     }
 
-    /**
-     * Quản trị hệ thống: Chỉ Admin.
-     */
     public static boolean canAccessAdminPanel() {
         return isAdmin();
     }
 
-    /**
-     * Quản lý phân quyền/tài khoản: Chỉ Admin.
-     */
     public static boolean canManageAccountsAndRoles() {
         return isAdmin();
     }
 
-    /**
-     * Quản lý cửa hàng/chi nhánh: Chỉ Admin.
-     */
     public static boolean canManageStores() {
         return isAdmin();
     }
@@ -299,6 +303,15 @@ public class AuthorizationService {
 
             if (roleId != null && !roleId.trim().isEmpty()) {
                 return roleId.trim();
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            String roleValue = account.getRoleValue();
+
+            if (roleValue != null && !roleValue.trim().isEmpty()) {
+                return roleValue.trim();
             }
         } catch (Exception ignored) {
         }

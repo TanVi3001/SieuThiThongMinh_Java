@@ -1186,14 +1186,10 @@ public class ProductView extends JPanel {
          * Staff_Product / R_STAFF_VIEW_PROD:
          * - Được quản lý sản phẩm/tồn kho/nhập CSV.
          */
-        boolean readOnlyProductViewer = AuthorizationService.isStoreManager()
-                || AuthorizationService.isCashier();
+        boolean canManageProductData = AuthorizationService.canManageProducts();
+        boolean canSendAlert = AuthorizationService.canSendInventoryAlert();
 
-        boolean productManager = AuthorizationService.isAdmin()
-                || AuthorizationService.isWarehouseStaff()
-                || AuthorizationService.isProductStaff();
-
-        if (readOnlyProductViewer) {
+        if (!canManageProductData) {
             setProductFormVisible(false);
             setProductMutationButtonsVisible(false);
 
@@ -1203,8 +1199,8 @@ public class ProductView extends JPanel {
             }
 
             if (btnEmergencyAlert != null) {
-                btnEmergencyAlert.setVisible(true);
-                btnEmergencyAlert.setEnabled(true);
+                btnEmergencyAlert.setVisible(canSendAlert);
+                btnEmergencyAlert.setEnabled(canSendAlert);
             }
 
             if (btnExportPDF != null) {
@@ -1217,55 +1213,35 @@ public class ProductView extends JPanel {
             return;
         }
 
-        if (productManager) {
-            setProductFormVisible(true);
-            setProductMutationButtonsVisible(true);
-
-            if (btnImport != null) {
-                btnImport.setVisible(true);
-                btnImport.setEnabled(true);
-            }
-
-            if (btnEmergencyAlert != null) {
-                btnEmergencyAlert.setVisible(false);
-                btnEmergencyAlert.setEnabled(false);
-            }
-
-            /*
-             * Staff_Product quản lý kho/sản phẩm, không cần quản lý ảnh trong form này.
-             * Admin vẫn có thể giữ ảnh nếu cần.
-             */
-            if (!AuthorizationService.isAdmin()) {
-                if (lblImagePreview != null) {
-                    lblImagePreview.setVisible(false);
-                }
-
-                if (btnChooseImage != null) {
-                    btnChooseImage.setVisible(false);
-                }
-
-                if (lblImageSectionTitle != null) {
-                    lblImageSectionTitle.setVisible(false);
-                }
-            }
-
-            revalidate();
-            repaint();
-            return;
-        }
-
-        // Role lạ: chỉ cho xem bảng, không thao tác.
-        setProductFormVisible(false);
-        setProductMutationButtonsVisible(false);
+        setProductFormVisible(true);
+        setProductMutationButtonsVisible(true);
 
         if (btnImport != null) {
-            btnImport.setVisible(false);
-            btnImport.setEnabled(false);
+            btnImport.setVisible(AuthorizationService.canManageStock());
+            btnImport.setEnabled(AuthorizationService.canManageStock());
         }
 
         if (btnEmergencyAlert != null) {
             btnEmergencyAlert.setVisible(false);
             btnEmergencyAlert.setEnabled(false);
+        }
+
+        /*
+         * Staff_Product quản lý kho/sản phẩm, không cần quản lý ảnh trong form này.
+         * Admin vẫn có thể giữ ảnh nếu cần.
+         */
+        if (!AuthorizationService.isAdmin()) {
+            if (lblImagePreview != null) {
+                lblImagePreview.setVisible(false);
+            }
+
+            if (btnChooseImage != null) {
+                btnChooseImage.setVisible(false);
+            }
+
+            if (lblImageSectionTitle != null) {
+                lblImageSectionTitle.setVisible(false);
+            }
         }
 
         revalidate();
@@ -1318,9 +1294,7 @@ public class ProductView extends JPanel {
     }
 
     private boolean canMutateProductData() {
-        return AuthorizationService.isAdmin()
-                || AuthorizationService.isWarehouseStaff()
-                || AuthorizationService.isProductStaff();
+        return AuthorizationService.canManageProducts();
     }
 
     private boolean requireProductMutationPermission() {
@@ -1585,6 +1559,16 @@ public class ProductView extends JPanel {
     }
 
     private void sendLowStockNotification() {
+        if (!AuthorizationService.canSendInventoryAlert()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền gửi cảnh báo tồn kho.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         int row = tblProducts.getSelectedRow();
 
         if (row < 0) {
