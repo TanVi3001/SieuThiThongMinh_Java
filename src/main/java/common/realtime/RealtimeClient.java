@@ -23,6 +23,9 @@ public final class RealtimeClient {
     private static volatile boolean reconnectScheduled = false;
     private static volatile long lastAdminPanelRefreshAt = 0L;
 
+    private static final long ADMIN_REFRESH_THROTTLE_MS = 120L;
+    private static final long RECONNECT_DELAY_SECONDS = 1L;
+
     private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "RealtimeClient-Reconnect");
         t.setDaemon(true);
@@ -75,14 +78,7 @@ public final class RealtimeClient {
                 @Override
                 public void onMessage(String message) {
                     System.out.println("[RT] MSG RECEIVED: " + message);
-
-                    AppEventType type = mapMessageToType(message);
-
-                    if (type != null) {
-                        publishRealtimeEvent(type, message);
-                        publishCompanionEvents(type, message);
-                        refreshAdminSystemPanels(type, message);
-                    }
+                    dispatchRealtimeMessage(message);
                 }
 
                 @Override
@@ -113,17 +109,20 @@ public final class RealtimeClient {
         }
 
         reconnectScheduled = true;
-        System.out.println("[RT] Sẽ thử kết nối lại sau 3 giây...");
+        System.out.println("[RT] Sẽ thử kết nối lại sau " + RECONNECT_DELAY_SECONDS + " giây...");
 
         RECONNECT_SCHEDULER.schedule(() -> {
             reconnectScheduled = false;
             if (!isOnline()) {
                 connect(serverUri.toString());
             }
-        }, 3, TimeUnit.SECONDS);
+        }, RECONNECT_DELAY_SECONDS, TimeUnit.SECONDS);
     }
 
     public static void send(String message) {
+        // Publish local ngay lập tức để máy đang thao tác không phải chờ WebSocket echo/polling.
+        dispatchRealtimeMessage(message);
+
         try {
             if (isOnline()) {
                 client.send(message);
@@ -133,6 +132,16 @@ public final class RealtimeClient {
             }
         } catch (Exception e) {
             System.err.println("[RT] SEND ERROR: " + e.getMessage());
+        }
+    }
+
+    private static void dispatchRealtimeMessage(String message) {
+        AppEventType type = mapMessageToType(message);
+
+        if (type != null) {
+            publishRealtimeEvent(type, message);
+            publishCompanionEvents(type, message);
+            refreshAdminSystemPanels(type, message);
         }
     }
 
@@ -190,7 +199,7 @@ public final class RealtimeClient {
         }
 
         long now = System.currentTimeMillis();
-        if (now - lastAdminPanelRefreshAt < 450) {
+        if (now - lastAdminPanelRefreshAt < ADMIN_REFRESH_THROTTLE_MS) {
             return;
         }
         lastAdminPanelRefreshAt = now;
