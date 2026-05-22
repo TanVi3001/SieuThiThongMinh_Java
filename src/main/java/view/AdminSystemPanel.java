@@ -2,6 +2,7 @@ package view;
 
 import common.db.DatabaseConnection;
 import common.report.ReportViewer;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -12,11 +13,17 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.awt.geom.Ellipse2D;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
+import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -32,6 +39,30 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.CategoryAxis;
+import org.jfree.chart.axis.DateAxis;
+import org.jfree.chart.axis.DateTickUnit;
+import org.jfree.chart.axis.DateTickUnitType;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.NumberTickUnit;
+import org.jfree.chart.labels.StandardPieSectionLabelGenerator;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.PiePlot3D;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.category.LineAndShapeRenderer;
+import org.jfree.chart.renderer.xy.XYDifferenceRenderer;
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.chart.util.Rotation;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.general.DefaultPieDataset;
+import org.jfree.data.time.Day;
+import org.jfree.data.time.TimeSeries;
+import org.jfree.data.time.TimeSeriesCollection;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
 
 /**
  * AdminSystemPanel
@@ -401,6 +432,35 @@ public class AdminSystemPanel extends JPanel {
         return t;
     }
 
+    private double niceTickUnit(double maxValue) {
+        if (maxValue <= 0) {
+            return 1;
+        }
+
+        double raw = maxValue / 5.0;
+        double pow = Math.pow(10, Math.floor(Math.log10(raw)));
+        double normalized = raw / pow;
+
+        if (normalized <= 1) {
+            return pow;
+        } else if (normalized <= 2) {
+            return 2 * pow;
+        } else if (normalized <= 5) {
+            return 5 * pow;
+        } else {
+            return 10 * pow;
+        }
+    }
+
+    private void compactNumberAxis(NumberAxis axis, double maxValue) {
+        double upper = maxValue <= 0 ? 10 : maxValue * 1.12;
+        axis.setRange(0, upper);
+        axis.setTickUnit(new NumberTickUnit(niceTickUnit(upper)));
+        axis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+        axis.setLabelFont(new Font("Segoe UI", Font.BOLD, 15));
+        axis.setNumberFormatOverride(new DecimalFormat("#,##0.#"));
+    }
+
     private void reloadAll() {
         reloadCards();
         reloadRevenueByStore(tblOverviewRevenueByStore);
@@ -586,6 +646,12 @@ public class AdminSystemPanel extends JPanel {
             params.put("P_LOW_STOCK", safeText(lblLowStock));
             params.put("P_ONLINE_SESSIONS", safeText(lblOnlineSessions));
 
+            // Visualization charts for AdminSystemReport.jrxml
+            params.put("P_REVENUE_ORDER_CHART", createRevenueOrderLineChartImage());
+            params.put("P_PRODUCT_BUBBLE_CHART", createProductBubbleChartImage());
+            params.put("P_PRODUCT_PIE_3D_CHART", createProductRevenuePie3DChartImage());
+            params.put("P_REVENUE_ORDER_DIFFERENCE_CHART", createRevenueOrderDifferenceChartImage());
+
             ReportViewer.showReport("/reports/AdminSystemReport.jrxml", params);
 
         } catch (Exception ex) {
@@ -596,6 +662,451 @@ public class AdminSystemPanel extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private BufferedImage createProductRevenuePie3DChartImage() {
+        DefaultPieDataset dataset = new DefaultPieDataset();
+
+        String sql = """
+            SELECT product_name, revenue
+            FROM (
+                SELECT p.product_name AS product_name,
+                       SUM(od.quantity * od.unit_price) AS revenue
+                FROM stores s
+                JOIN orders o
+                    ON o.store_id = s.store_id
+                   AND NVL(o.is_deleted, 0) = 0
+                   AND o.store_id IS NOT NULL
+                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                   AND (
+                        UPPER(NVL(o.status, '')) = 'COMPLETED'
+                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+                   )
+                JOIN order_details od
+                    ON od.order_id = o.order_id
+                   AND NVL(od.is_deleted, 0) = 0
+                JOIN products p
+                    ON p.product_id = od.product_id
+                   AND NVL(p.is_deleted, 0) = 0
+                WHERE NVL(s.is_deleted, 0) = 0
+                GROUP BY p.product_name
+                ORDER BY revenue DESC
+            )
+            WHERE ROWNUM <= 5
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String productName = rs.getString("product_name");
+                double revenue = rs.getDouble("revenue");
+
+                if (revenue > 0) {
+                    String shortName = productName == null ? "Không rõ" : productName.trim();
+                    if (shortName.length() > 24) {
+                        shortName = shortName.substring(0, 24) + "...";
+                    }
+                    dataset.setValue(shortName, revenue);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[AdminSystemPanel] createProductRevenuePie3DChartImage error: " + e.getMessage());
+        }
+
+        JFreeChart chart = ChartFactory.createPieChart3D(
+                null,
+                dataset,
+                true,
+                true,
+                false
+        );
+
+        chart.setBackgroundPaint(Color.WHITE);
+        if (chart.getLegend() != null) {
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 15));
+            chart.getLegend().setBackgroundPaint(Color.WHITE);
+        }
+
+        PiePlot3D plot = (PiePlot3D) chart.getPlot();
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setOutlineVisible(false);
+
+        // Style 3D ngang giống demo JFreeChart: dẹt, có mặt bên rõ, không bị dựng đứng.
+        plot.setStartAngle(285);
+        plot.setDirection(Rotation.CLOCKWISE);
+        plot.setDepthFactor(0.24);
+        plot.setForegroundAlpha(0.82f);
+        plot.setInteriorGap(0.03);
+
+        plot.setLabelFont(new Font("Segoe UI", Font.BOLD, 16));
+        plot.setLabelGenerator(new StandardPieSectionLabelGenerator("{0}: {2}"));
+        plot.setSimpleLabels(false);
+        plot.setMaximumLabelWidth(0.28);
+        plot.setLabelBackgroundPaint(new Color(255, 255, 210));
+        plot.setLabelOutlinePaint(new Color(120, 120, 120));
+        plot.setLabelShadowPaint(null);
+
+        // Tỉ lệ ngang để khi đưa vào JRXML nhìn giống Pie Chart 3D Demo, không bị teo nhỏ.
+        return chart.createBufferedImage(1200, 620);
+    }
+
+    private BufferedImage createRevenueOrderDifferenceChartImage() {
+        XYSeries currentMonthSeries = new XYSeries("Tháng hiện tại");
+        XYSeries previousMonthSeries = new XYSeries("Tháng trước");
+
+        String sql = """
+        SELECT period_type,
+               day_no,
+               NVL(SUM(revenue), 0) AS revenue
+        FROM (
+            SELECT 'CURRENT' AS period_type,
+                   TO_NUMBER(TO_CHAR(o.order_date, 'DD')) AS day_no,
+                   o.total_amount AS revenue
+            FROM stores s
+            JOIN orders o
+                ON o.store_id = s.store_id
+               AND NVL(o.is_deleted, 0) = 0
+               AND o.store_id IS NOT NULL
+               AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+               AND (
+                    UPPER(NVL(o.status, '')) = 'COMPLETED'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+               )
+            WHERE NVL(s.is_deleted, 0) = 0
+
+            UNION ALL
+
+            SELECT 'PREVIOUS' AS period_type,
+                   TO_NUMBER(TO_CHAR(o.order_date, 'DD')) AS day_no,
+                   o.total_amount AS revenue
+            FROM stores s
+            JOIN orders o
+                ON o.store_id = s.store_id
+               AND NVL(o.is_deleted, 0) = 0
+               AND o.store_id IS NOT NULL
+               AND TRUNC(o.order_date, 'MM') = ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)
+               AND (
+                    UPPER(NVL(o.status, '')) = 'COMPLETED'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+               )
+            WHERE NVL(s.is_deleted, 0) = 0
+        )
+        GROUP BY period_type, day_no
+        ORDER BY day_no, period_type
+    """;
+
+        double maxRevenueMillion = 0;
+        int minDay = 32;
+        int maxDay = 0;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String periodType = rs.getString("period_type");
+                int dayNo = rs.getInt("day_no");
+                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+
+                if ("CURRENT".equalsIgnoreCase(periodType)) {
+                    currentMonthSeries.add(dayNo, revenueMillion);
+                } else {
+                    previousMonthSeries.add(dayNo, revenueMillion);
+                }
+
+                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                minDay = Math.min(minDay, dayNo);
+                maxDay = Math.max(maxDay, dayNo);
+            }
+        } catch (Exception e) {
+            System.err.println("[AdminSystemPanel] createRevenueOrderDifferenceChartImage error: " + e.getMessage());
+        }
+
+        if (maxDay == 0) {
+            minDay = 1;
+            maxDay = 2;
+            currentMonthSeries.add(1, 0);
+            previousMonthSeries.add(1, 0);
+        }
+
+        XYSeriesCollection dataset = new XYSeriesCollection();
+        dataset.addSeries(previousMonthSeries);
+        dataset.addSeries(currentMonthSeries);
+
+        JFreeChart chart = ChartFactory.createXYLineChart(
+                null,
+                "Ngày trong tháng",
+                "Doanh thu (triệu VND)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                true,
+                true,
+                false
+        );
+
+        chart.setBackgroundPaint(Color.WHITE);
+
+        if (chart.getLegend() != null) {
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 13));
+            chart.getLegend().setBackgroundPaint(Color.WHITE);
+        }
+
+        XYPlot plot = chart.getXYPlot();
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setDomainGridlinePaint(new Color(220, 226, 235));
+        plot.setRangeGridlinePaint(new Color(220, 226, 235));
+
+        XYDifferenceRenderer renderer = new XYDifferenceRenderer(
+                new Color(245, 158, 11, 85),
+                new Color(37, 99, 235, 75),
+                true
+        );
+
+        renderer.setSeriesPaint(0, blue);
+        renderer.setSeriesPaint(1, orange);
+        renderer.setSeriesStroke(0, new BasicStroke(3.2f));
+        renderer.setSeriesStroke(1, new BasicStroke(3.2f));
+
+        plot.setRenderer(renderer);
+
+        NumberAxis xAxis = (NumberAxis) plot.getDomainAxis();
+        xAxis.setRange(Math.max(1, minDay - 1), Math.min(31, maxDay + 1));
+
+        int daySpan = Math.max(1, maxDay - minDay);
+        if (daySpan <= 8) {
+            xAxis.setTickUnit(new NumberTickUnit(1));
+        } else if (daySpan <= 16) {
+            xAxis.setTickUnit(new NumberTickUnit(2));
+        } else {
+            xAxis.setTickUnit(new NumberTickUnit(5));
+        }
+
+        xAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 13));
+        xAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+        xAxis.setNumberFormatOverride(new DecimalFormat("00"));
+
+        NumberAxis yAxis = (NumberAxis) plot.getRangeAxis();
+        compactNumberAxis(yAxis, maxRevenueMillion);
+        yAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 13));
+        yAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+
+        return chart.createBufferedImage(1200, 650);
+    }
+
+    private BufferedImage createRevenueOrderLineChartImage() {
+        DefaultCategoryDataset revenueDataset = new DefaultCategoryDataset();
+        DefaultCategoryDataset orderDataset = new DefaultCategoryDataset();
+
+        double maxRevenueMillion = 0;
+        int maxOrderCount = 0;
+
+        String sql = """
+            SELECT TRUNC(o.order_date) AS report_date,
+                   NVL(SUM(o.total_amount), 0) AS revenue,
+                   COUNT(o.order_id) AS order_count
+            FROM stores s
+            JOIN orders o
+                ON o.store_id = s.store_id
+               AND NVL(o.is_deleted, 0) = 0
+               AND o.store_id IS NOT NULL
+               AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+               AND (
+                    UPPER(NVL(o.status, '')) = 'COMPLETED'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+               )
+            WHERE NVL(s.is_deleted, 0) = 0
+            GROUP BY TRUNC(o.order_date)
+            ORDER BY TRUNC(o.order_date)
+        """;
+
+        SimpleDateFormat dmy = new SimpleDateFormat("dd/MM");
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String day = dmy.format(rs.getDate("report_date"));
+                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+                int orderCount = rs.getInt("order_count");
+
+                revenueDataset.addValue(revenueMillion, "Doanh thu", day);
+                orderDataset.addValue(orderCount, "Số đơn", day);
+
+                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                maxOrderCount = Math.max(maxOrderCount, orderCount);
+            }
+        } catch (Exception e) {
+            System.err.println("[AdminSystemPanel] createRevenueOrderLineChartImage error: " + e.getMessage());
+        }
+
+        JFreeChart chart = ChartFactory.createLineChart(
+                null,
+                "Ngày",
+                "Doanh thu (triệu VND)",
+                revenueDataset,
+                PlotOrientation.VERTICAL,
+                true,
+                true,
+                false
+        );
+
+        chart.setBackgroundPaint(Color.WHITE);
+        if (chart.getLegend() != null) {
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 15));
+            chart.getLegend().setBackgroundPaint(Color.WHITE);
+        }
+
+        CategoryPlot plot = chart.getCategoryPlot();
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setRangeGridlinePaint(new Color(210, 218, 230));
+        plot.setDomainGridlinePaint(new Color(225, 231, 240));
+        plot.setDomainGridlinesVisible(true);
+        plot.setRangeGridlinesVisible(true);
+
+        CategoryAxis domainAxis = plot.getDomainAxis();
+        domainAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+        domainAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 15));
+        domainAxis.setLowerMargin(0.10);
+        domainAxis.setUpperMargin(0.10);
+        domainAxis.setCategoryMargin(0.20);
+
+        NumberAxis revenueAxis = (NumberAxis) plot.getRangeAxis();
+        compactNumberAxis(revenueAxis, maxRevenueMillion);
+
+        LineAndShapeRenderer revenueRenderer = new LineAndShapeRenderer(true, true);
+        revenueRenderer.setSeriesPaint(0, orange);
+        revenueRenderer.setSeriesStroke(0, new BasicStroke(4.0f));
+        revenueRenderer.setSeriesShapesVisible(0, true);
+        plot.setRenderer(0, revenueRenderer);
+
+        NumberAxis orderAxis = new NumberAxis("Số đơn");
+        compactNumberAxis(orderAxis, maxOrderCount);
+        plot.setRangeAxis(1, orderAxis);
+        plot.setDataset(1, orderDataset);
+        plot.mapDatasetToRangeAxis(1, 1);
+
+        LineAndShapeRenderer orderRenderer = new LineAndShapeRenderer(true, true);
+        orderRenderer.setSeriesPaint(0, blue);
+        orderRenderer.setSeriesStroke(0, new BasicStroke(4.0f));
+        orderRenderer.setSeriesShapesVisible(0, true);
+        plot.setRenderer(1, orderRenderer);
+
+        // 1200x650 vừa đủ nét, chữ không bị co quá nhỏ khi đưa vào JasperReport.
+        return chart.createBufferedImage(1200, 650);
+    }
+
+    private BufferedImage createProductBubbleChartImage() {
+        XYSeriesCollection dataset = new XYSeriesCollection();
+        List<Double> bubbleSizes = new ArrayList<>();
+
+        double maxQuantity = 0;
+        double maxRevenueMillion = 0;
+
+        String sql = """
+            SELECT *
+            FROM (
+                SELECT p.product_name AS product_name,
+                       SUM(od.quantity) AS quantity_sold,
+                       SUM(od.quantity * od.unit_price) AS revenue,
+                       COUNT(DISTINCT o.order_id) AS bubble_size
+                FROM stores s
+                JOIN orders o
+                    ON o.store_id = s.store_id
+                   AND NVL(o.is_deleted, 0) = 0
+                   AND o.store_id IS NOT NULL
+                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                   AND (
+                        UPPER(NVL(o.status, '')) = 'COMPLETED'
+                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+                   )
+                JOIN order_details od
+                    ON od.order_id = o.order_id
+                   AND NVL(od.is_deleted, 0) = 0
+                JOIN products p
+                    ON p.product_id = od.product_id
+                   AND NVL(p.is_deleted, 0) = 0
+                WHERE NVL(s.is_deleted, 0) = 0
+                GROUP BY p.product_name
+                ORDER BY revenue DESC
+            )
+            WHERE ROWNUM <= 10
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String productName = rs.getString("product_name");
+                double quantitySold = rs.getDouble("quantity_sold");
+                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+                double orderCount = Math.max(1.0, rs.getDouble("bubble_size"));
+
+                String seriesName = productName == null ? "Không rõ" : productName.trim();
+                XYSeries series = new XYSeries(seriesName);
+                series.add(quantitySold, revenueMillion);
+                dataset.addSeries(series);
+
+                bubbleSizes.add(orderCount);
+
+                maxQuantity = Math.max(maxQuantity, quantitySold);
+                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+            }
+        } catch (Exception e) {
+            System.err.println("[AdminSystemPanel] createProductBubbleChartImage error: " + e.getMessage());
+        }
+
+        JFreeChart chart = ChartFactory.createScatterPlot(
+                null,
+                "Số lượng bán",
+                "Doanh thu (triệu VND)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                true,
+                true,
+                false
+        );
+
+        chart.setBackgroundPaint(Color.WHITE);
+        if (chart.getLegend() != null) {
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 13));
+            chart.getLegend().setBackgroundPaint(Color.WHITE);
+        }
+
+        XYPlot plot = chart.getXYPlot();
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setDomainGridlinePaint(new Color(210, 218, 230));
+        plot.setRangeGridlinePaint(new Color(210, 218, 230));
+        plot.setDomainGridlinesVisible(true);
+        plot.setRangeGridlinesVisible(true);
+
+        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer(false, true);
+
+        for (int i = 0; i < dataset.getSeriesCount(); i++) {
+            double orderCount = bubbleSizes.get(i);
+            double size = 20 + Math.min(42, orderCount * 5.0);
+            renderer.setSeriesShape(
+                    i,
+                    new Ellipse2D.Double(-size / 2, -size / 2, size, size)
+            );
+        }
+
+        renderer.setDefaultItemLabelsVisible(true);
+        renderer.setDefaultItemLabelGenerator((xyDataset, series, item) -> {
+            String name = xyDataset.getSeriesKey(series).toString();
+            return name.length() > 16 ? name.substring(0, 16) + "..." : name;
+        });
+        renderer.setDefaultItemLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        plot.setRenderer(renderer);
+
+        NumberAxis xAxis = (NumberAxis) plot.getDomainAxis();
+        compactNumberAxis(xAxis, maxQuantity);
+
+        NumberAxis yAxis = (NumberAxis) plot.getRangeAxis();
+        compactNumberAxis(yAxis, maxRevenueMillion);
+
+        return chart.createBufferedImage(1200, 650);
     }
 
     private String safeText(JLabel label) {
