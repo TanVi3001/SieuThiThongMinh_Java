@@ -11,6 +11,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.*;
 import javax.swing.table.*;
 import view.components.IconHelper;
+import java.util.ArrayList;
+import java.util.List;
 
 public class StoreManagementPanel extends JPanel {
 
@@ -529,8 +531,25 @@ public class StoreManagementPanel extends JPanel {
             clearForm();
             loadStoreData(txtSearch.getText().trim());
             EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+            try {
+                common.realtime.RealtimeClient.send("STORE_INFO_CHANGED");
+                common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+            } catch (Exception ex) {
+                System.err.println("[StoreManagementPanel] realtime error: " + ex.getMessage());
+            }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi khi lưu dữ liệu: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+
+        clearForm();
+        loadStoreData(txtSearch.getText().trim());
+        EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
+
+        try {
+            common.realtime.RealtimeClient.send("STORE_INFO_CHANGED");
+            common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+        } catch (Exception ex) {
+            System.err.println("[StoreManagementPanel] realtime error: " + ex.getMessage());
         }
     }
 
@@ -591,6 +610,19 @@ public class StoreManagementPanel extends JPanel {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một chi nhánh để xóa.", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        String blockReason = getStoreDeleteBlockReason(id);
+
+        if (!blockReason.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể xóa chi nhánh " + id + " vì còn dữ liệu đang liên kết:\n\n"
+                    + blockReason
+                    + "\nBạn chỉ nên chuyển trạng thái chi nhánh sang Tạm ngưng.",
+                    "Không thể xóa chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa chi nhánh " + id + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) {
             return;
@@ -611,6 +643,60 @@ public class StoreManagementPanel extends JPanel {
             EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "STORE_UPDATED"));
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi khi xóa: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private String getStoreDeleteBlockReason(String storeId) {
+        List<String> reasons = new ArrayList<>();
+
+        if (hasColumn("EMPLOYEES", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM EMPLOYEES WHERE NVL(is_deleted, 0) = 0 AND store_id = ?",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " nhân viên thuộc chi nhánh.");
+            }
+        }
+
+        if (hasColumn("INVENTORY", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM INVENTORY WHERE NVL(is_deleted, 0) = 0 AND store_id = ? AND NVL(quantity, 0) > 0",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " mặt hàng đang có tồn kho.");
+            }
+        }
+
+        if (hasColumn("ORDERS", "STORE_ID")) {
+            int count = countRows(
+                    "SELECT COUNT(*) FROM ORDERS WHERE NVL(is_deleted, 0) = 0 AND store_id = ?",
+                    storeId
+            );
+
+            if (count > 0) {
+                reasons.add("- Còn " + count + " hóa đơn/đơn hàng thuộc chi nhánh.");
+            }
+        }
+
+        return String.join("\n", reasons);
+    }
+
+    private int countRows(String sql, String storeId) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, storeId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+
+        } catch (Exception e) {
+            System.err.println("[StoreManagementPanel] countRows error: " + e.getMessage());
+            return 0;
         }
     }
 

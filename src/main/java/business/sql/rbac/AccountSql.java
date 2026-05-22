@@ -137,6 +137,45 @@ public class AccountSql implements SqlInterface<Account> {
         }
     }
 
+    public boolean isAccountStoreActive(String accountId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return false;
+        }
+
+        String sql = """
+        SELECT
+            CASE
+                WHEN e.store_id IS NULL THEN 1
+                WHEN NVL(s.is_deleted, 0) = 0 THEN 1
+                ELSE 0
+            END AS store_active
+        FROM ACCOUNTS a
+        LEFT JOIN EMPLOYEES e
+            ON e.employee_id = a.user_id
+           AND NVL(e.is_deleted, 0) = 0
+        LEFT JOIN STORES s
+            ON s.store_id = e.store_id
+        WHERE a.account_id = ?
+          AND NVL(a.is_deleted, 0) = 0
+    """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("store_active") == 1;
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] isAccountStoreActive error: " + e.getMessage());
+        }
+
+        return false;
+    }
+
     public Account selectByUsername(String username) {
         Account acc = null;
 

@@ -377,6 +377,12 @@ public class DashboardView extends JFrame {
                                 || !dbRoleId.trim().equalsIgnoreCase(currentRole.trim())) {
                             forceLogout = true;
                         }
+                        if (!forceLogout
+                                && business.service.SessionManager.isStoreScopedUser()
+                                && !business.sql.rbac.AccountSql.getInstance()
+                                        .isAccountStoreActive(currentUser.getAccountId())) {
+                            forceLogout = true;
+                        }
                     }
 
                 } catch (Exception ex) {
@@ -428,7 +434,8 @@ public class DashboardView extends JFrame {
         try {
             JOptionPane.showMessageDialog(
                     this,
-                    "Phiên đăng nhập đã hết hạn hoặc tài khoản đã được đăng nhập ở thiết bị khác.\n"
+                    "Phiên đăng nhập không còn hợp lệ.\n"
+                    + "Tài khoản có thể đã bị đổi quyền, bị khóa hoặc chi nhánh đã tạm ngưng hoạt động.\n"
                     + "Vui lòng đăng nhập lại.",
                     "Thông báo bảo mật",
                     JOptionPane.WARNING_MESSAGE
