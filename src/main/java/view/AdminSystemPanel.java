@@ -3,6 +3,7 @@ package view;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
+import business.sql.report.ImportSalesEfficiencySql;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import common.db.DatabaseConnection;
@@ -107,6 +108,9 @@ public class AdminSystemPanel extends JPanel {
     private JLabel lblOrderTotal;
     private JLabel lblLowStock;
     private JLabel lblOnlineSessions;
+    private JLabel lblMonthImportCost;
+    private JLabel lblGrossProfit;
+    private JLabel lblGrossProfitMargin;
 
     private JTable tblOverviewRevenueByStore;
     private JTable tblOverviewInventoryByStore;
@@ -300,7 +304,7 @@ public class AdminSystemPanel extends JPanel {
         JPanel content = new JPanel(new BorderLayout(0, 18));
         content.setOpaque(false);
 
-        JPanel cards = new JPanel(new GridLayout(2, 4, 14, 14));
+        JPanel cards = new JPanel(new GridLayout(3, 4, 14, 14));
         cards.setOpaque(false);
 
         lblStoreTotal = new JLabel("0");
@@ -310,22 +314,39 @@ public class AdminSystemPanel extends JPanel {
         lblOrderTotal = new JLabel("0");
         lblLowStock = new JLabel("0");
         lblOnlineSessions = new JLabel("0");
+        lblMonthImportCost = new JLabel("0 đ");
+        lblGrossProfit = new JLabel("0 đ");
+        lblGrossProfitMargin = new JLabel("0%");
 
         cards.add(statCard("Tổng chi nhánh", lblStoreTotal, blue));
         cards.add(statCard("Đang hoạt động", lblStoreActive, green));
         cards.add(statCard("Doanh thu hôm nay", lblTodayRevenue, orange));
-        cards.add(statCard("Doanh thu tháng hợp lệ", lblMonthRevenue, orange));
+        cards.add(statCard("Tổng doanh thu tháng", lblMonthRevenue, orange));
+
+        cards.add(statCard("Tiền nhập kho tháng", lblMonthImportCost, purple));
+        cards.add(statCard("Lãi gộp tạm tính", lblGrossProfit, green));
+        cards.add(statCard("Biên lãi gộp", lblGrossProfitMargin, blue));
         cards.add(statCard("Tổng đơn hàng", lblOrderTotal, blue));
+
         cards.add(statCard("Tồn kho thấp", lblLowStock, red));
         cards.add(statCard("Phiên online", lblOnlineSessions, green));
         cards.add(statCard("Trạng thái hệ thống", new JLabel("OK"), purple));
+        cards.add(statCard("Hiệu quả nhập - bán", new JLabel("OK"), green));
 
         content.add(cards, BorderLayout.NORTH);
 
         JPanel tables = new JPanel(new GridLayout(1, 2, 18, 0));
         tables.setOpaque(false);
 
-        tblOverviewRevenueByStore = table(new String[]{"Mã CN", "Chi nhánh", "Số đơn tháng", "Doanh thu tháng"});
+        tblOverviewRevenueByStore = table(new String[]{
+            "Mã CN",
+            "Chi nhánh",
+            "Số đơn",
+            "Doanh thu",
+            "Tiền nhập",
+            "Lãi gộp",
+            "Biên lãi %"
+        });
         tblOverviewInventoryByStore = table(new String[]{"Mã CN", "Chi nhánh", "Mặt hàng", "Tổng tồn", "Tồn thấp"});
 
         tables.add(cardWithTable(
@@ -358,7 +379,15 @@ public class AdminSystemPanel extends JPanel {
         JPanel grid = new JPanel(new GridLayout(2, 2, 18, 18));
         grid.setOpaque(false);
 
-        tblReportRevenueByStore = table(new String[]{"Mã CN", "Chi nhánh", "Số đơn tháng", "Doanh thu tháng"});
+        tblReportRevenueByStore = table(new String[]{
+            "Mã CN",
+            "Chi nhánh",
+            "Số đơn",
+            "Doanh thu",
+            "Tiền nhập",
+            "Lãi gộp",
+            "Biên lãi %"
+        });
         tblReportInventoryByStore = table(new String[]{"Mã CN", "Chi nhánh", "Mặt hàng", "Tổng tồn", "Tồn thấp"});
         tblTopEmployee = table(new String[]{"Chi nhánh", "Mã NV", "Nhân viên", "Số đơn", "Doanh thu"});
         tblLowStock = table(new String[]{"Chi nhánh", "Mã SP", "Sản phẩm", "Tồn", "Mức cảnh báo"});
@@ -568,12 +597,55 @@ public class AdminSystemPanel extends JPanel {
 
     private void reloadAll() {
         reloadCards();
-        reloadRevenueByStore(tblOverviewRevenueByStore);
-        reloadRevenueByStore(tblReportRevenueByStore);
+
+        reloadImportSalesEfficiencyCards();
+        reloadImportSalesEfficiencyByStore(tblOverviewRevenueByStore);
+        reloadImportSalesEfficiencyByStore(tblReportRevenueByStore);
+
         reloadInventoryByStore(tblOverviewInventoryByStore);
         reloadInventoryByStore(tblReportInventoryByStore);
         reloadTopEmployee();
         reloadLowStock();
+    }
+
+    private void reloadImportSalesEfficiencyCards() {
+        ImportSalesEfficiencySql.EfficiencySummary summary
+                = ImportSalesEfficiencySql.getInstance().selectCurrentMonthSummaryForAdmin();
+
+        lblMonthRevenue.setText(money(summary.totalRevenue));
+        lblMonthImportCost.setText(money(summary.totalImportCost));
+        lblGrossProfit.setText(money(summary.grossProfit));
+        lblGrossProfitMargin.setText(percent(summary.grossProfitMargin));
+
+        if (summary.grossProfit < 0) {
+            lblGrossProfit.setForeground(red);
+        } else {
+            lblGrossProfit.setForeground(green);
+        }
+    }
+
+    private void reloadImportSalesEfficiencyByStore(JTable targetTable) {
+        if (targetTable == null) {
+            return;
+        }
+
+        DefaultTableModel model = (DefaultTableModel) targetTable.getModel();
+        model.setRowCount(0);
+
+        List<ImportSalesEfficiencySql.EfficiencyRow> rows
+                = ImportSalesEfficiencySql.getInstance().selectCurrentMonthByStoreForAdmin();
+
+        for (ImportSalesEfficiencySql.EfficiencyRow row : rows) {
+            model.addRow(new Object[]{
+                row.storeId,
+                row.storeName,
+                row.totalOrders,
+                money(row.totalRevenue),
+                money(row.totalImportCost),
+                money(row.grossProfit),
+                percent(row.grossProfitMargin)
+            });
+        }
     }
 
     private void reloadCards() {
@@ -1344,6 +1416,10 @@ public class AdminSystemPanel extends JPanel {
 
     private String money(double value) {
         return moneyFmt.format(value) + " đ";
+    }
+
+    private String percent(double value) {
+        return new DecimalFormat("#,##0.##").format(value) + "%";
     }
 
     private Color withAlpha(Color c, int alpha) {
