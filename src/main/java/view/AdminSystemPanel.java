@@ -769,6 +769,46 @@ public class AdminSystemPanel extends JPanel {
         }
     }
 
+    private void applyStrongCategoryGrid(CategoryPlot plot) {
+        if (plot == null) {
+            return;
+        }
+
+        Color gridColor = new Color(148, 163, 184);
+
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setOutlinePaint(new Color(71, 85, 105));
+        plot.setOutlineStroke(new BasicStroke(1.4f));
+
+        plot.setRangeGridlinesVisible(true);
+        plot.setRangeGridlinePaint(gridColor);
+        plot.setRangeGridlineStroke(new BasicStroke(1.15f));
+
+        plot.setDomainGridlinesVisible(true);
+        plot.setDomainGridlinePaint(new Color(203, 213, 225));
+        plot.setDomainGridlineStroke(new BasicStroke(0.9f));
+    }
+
+    private void applyStrongXYGrid(XYPlot plot) {
+        if (plot == null) {
+            return;
+        }
+
+        Color gridColor = new Color(148, 163, 184);
+
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setOutlinePaint(new Color(71, 85, 105));
+        plot.setOutlineStroke(new BasicStroke(1.4f));
+
+        plot.setDomainGridlinesVisible(true);
+        plot.setDomainGridlinePaint(gridColor);
+        plot.setDomainGridlineStroke(new BasicStroke(1.15f));
+
+        plot.setRangeGridlinesVisible(true);
+        plot.setRangeGridlinePaint(gridColor);
+        plot.setRangeGridlineStroke(new BasicStroke(1.15f));
+    }
+
     @SuppressWarnings("deprecation")
     private BufferedImage createProductRevenuePie3DChartImage() {
         DefaultPieDataset dataset = new DefaultPieDataset();
@@ -836,7 +876,9 @@ public class AdminSystemPanel extends JPanel {
 
         PiePlot3D plot = (PiePlot3D) chart.getPlot();
         plot.setBackgroundPaint(Color.WHITE);
-        plot.setOutlineVisible(false);
+        plot.setOutlineVisible(true);
+        plot.setOutlinePaint(new Color(71, 85, 105));
+        plot.setOutlineStroke(new BasicStroke(1.4f));
 
         // Style 3D ngang giống demo JFreeChart: dẹt, có mặt bên rõ, không bị dựng đứng.
         plot.setStartAngle(285);
@@ -850,7 +892,7 @@ public class AdminSystemPanel extends JPanel {
         plot.setSimpleLabels(false);
         plot.setMaximumLabelWidth(0.28);
         plot.setLabelBackgroundPaint(new Color(255, 255, 210));
-        plot.setLabelOutlinePaint(new Color(120, 120, 120));
+        plot.setLabelOutlinePaint(new Color(71, 85, 105));
         plot.setLabelShadowPaint(null);
 
         // Tỉ lệ ngang để khi đưa vào JRXML nhìn giống Pie Chart 3D Demo, không bị teo nhỏ.
@@ -959,9 +1001,7 @@ public class AdminSystemPanel extends JPanel {
         }
 
         XYPlot plot = chart.getXYPlot();
-        plot.setBackgroundPaint(new Color(248, 250, 252));
-        plot.setDomainGridlinePaint(new Color(220, 226, 235));
-        plot.setRangeGridlinePaint(new Color(220, 226, 235));
+        applyStrongXYGrid(plot);
 
         XYDifferenceRenderer renderer = new XYDifferenceRenderer(
                 new Color(245, 158, 11, 85),
@@ -1072,10 +1112,7 @@ public class AdminSystemPanel extends JPanel {
         }
 
         CategoryPlot plot = chart.getCategoryPlot();
-        plot.setBackgroundPaint(new Color(248, 250, 252));
-        plot.setRangeGridlinePaint(new Color(220, 226, 235));
-        plot.setDomainGridlinePaint(new Color(235, 239, 245));
-        plot.setOutlinePaint(new Color(148, 163, 184));
+        applyStrongCategoryGrid(plot);
 
         CategoryAxis domainAxis = plot.getDomainAxis();
         domainAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -1202,11 +1239,23 @@ public class AdminSystemPanel extends JPanel {
         }
 
         XYPlot plot = chart.getXYPlot();
+
         plot.setBackgroundPaint(new Color(248, 250, 252));
-        plot.setDomainGridlinePaint(new Color(210, 218, 230));
-        plot.setRangeGridlinePaint(new Color(210, 218, 230));
+
+// Viền ngoài chart đậm hơn
+        plot.setOutlineVisible(true);
+        plot.setOutlinePaint(new Color(51, 65, 85));
+        plot.setOutlineStroke(new BasicStroke(1.4f));
+
+// Lưới dọc
         plot.setDomainGridlinesVisible(true);
+        plot.setDomainGridlinePaint(new Color(148, 163, 184));
+        plot.setDomainGridlineStroke(new BasicStroke(1.25f));
+
+// Lưới ngang
         plot.setRangeGridlinesVisible(true);
+        plot.setRangeGridlinePaint(new Color(148, 163, 184));
+        plot.setRangeGridlineStroke(new BasicStroke(1.25f));
 
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer(false, true);
 

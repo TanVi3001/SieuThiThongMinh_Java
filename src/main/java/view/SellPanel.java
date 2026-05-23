@@ -1533,6 +1533,8 @@ public class SellPanel extends JPanel {
     }
 
     private void handlePaymentSuccess(String orderId) {
+        boolean shouldPrint = chkPrintBill != null && chkPrintBill.isSelected();
+
         // Clear UI trước để tránh giỏ hàng cũ bị validate lại khi realtime vừa bắn về
         clearCart();
         resetCustomerAfterPayment();
@@ -1540,10 +1542,55 @@ public class SellPanel extends JPanel {
         // Reload danh sách sản phẩm sau khi cart đã trống
         loadProducts();
 
-        JOptionPane.showMessageDialog(this, "✅ Thanh toán thành công! Hóa đơn: " + orderId);
+        JOptionPane.showMessageDialog(
+                this,
+                "✅ Thanh toán thành công! Hóa đơn: " + orderId,
+                "Thanh toán thành công",
+                JOptionPane.INFORMATION_MESSAGE
+        );
 
-        if (chkPrintBill.isSelected()) {
-            JOptionPane.showMessageDialog(this, "Đang gửi lệnh in hóa đơn...");
+        if (shouldPrint) {
+            openInvoiceReportAfterPayment(orderId);
+        }
+    }
+
+    private void openInvoiceReportAfterPayment(String orderId) {
+        if (orderId == null || orderId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Thanh toán đã thành công nhưng không tìm thấy mã hóa đơn để in.",
+                    "Không thể mở hóa đơn",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        try {
+            java.util.HashMap<String, Object> params = new java.util.HashMap<>();
+            params.put("ORDER_ID", orderId.trim());
+
+            try {
+                String storeId = SessionManager.getCurrentStoreId();
+                if (storeId != null && !storeId.trim().isEmpty()) {
+                    params.put("STORE_ID", storeId.trim());
+                }
+            } catch (Exception ignored) {
+            }
+
+            common.report.ReportViewer.showReport(
+                    "/reports/SalesInvoiceReport.jrxml",
+                    params
+            );
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Thanh toán đã thành công nhưng không mở được report hóa đơn:\n" + ex.getMessage(),
+                    "Lỗi mở hóa đơn",
+                    JOptionPane.WARNING_MESSAGE
+            );
         }
     }
 
