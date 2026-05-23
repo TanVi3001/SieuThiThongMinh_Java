@@ -233,24 +233,32 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         topSection.add(lblList, BorderLayout.NORTH);
         topSection.add(filterPanel, BorderLayout.CENTER);
 
-        JPanel tableHeader = new JPanel(new GridLayout(1, 4, 10, 0));
+        JPanel tableHeader = new JPanel(new GridLayout(1, 5, 10, 0));
         tableHeader.setBackground(new Color(248, 249, 252));
         tableHeader.setBorder(BorderFactory.createCompoundBorder(
                 new RoundBorder(borderGray, 10),
                 new EmptyBorder(10, 15, 10, 15)
         ));
 
-        String[] headers = {"Tài khoản", "Vai trò hiện tại", "Trạng thái", "Khóa / Mở"};
+        String[] headers = {
+            "Tài khoản",
+            "Vai trò hiện tại",
+            "Trạng thái tài khoản",
+            "Hoạt động",
+            "Khóa / Mở"
+        };
+
         for (String h : headers) {
             JLabel l = new JLabel(h);
             l.setFont(new Font("Segoe UI", Font.BOLD, 12));
             l.setForeground(textGray);
-            if ("Khóa / Mở".equals(h)) {
+
+            if ("Khóa / Mở".equals(h) || "Hoạt động".equals(h) || "Trạng thái tài khoản".equals(h)) {
                 l.setHorizontalAlignment(SwingConstants.CENTER);
             }
+
             tableHeader.add(l);
         }
-
         topSection.add(tableHeader, BorderLayout.SOUTH);
         container.add(topSection, BorderLayout.NORTH);
 
@@ -311,7 +319,7 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     private JPanel createAccountRow(AccountRowData acc) {
-        JPanel row = new JPanel(new GridLayout(1, 4, 10, 0));
+        JPanel row = new JPanel(new GridLayout(1, 5, 10, 0));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
         row.setBackground(cardWhite);
         row.setBorder(BorderFactory.createCompoundBorder(
@@ -341,36 +349,54 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
         String colorHex = acc.active ? "#10B981" : "#EF4444";
         String statusText = acc.active ? "Hoạt động" : "Bị khóa";
+
         JLabel lblStatus = new JLabel(
                 "<html><span style='color:" + colorHex + "; font-size:14px;'>●</span> "
-                + "<span style='color:#2B3674;'>" + statusText + "</span></html>"
+                + "<span style='color:#2B3674;'>" + statusText + "</span></html>",
+                SwingConstants.CENTER
         );
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        row.add(lblStatus);
+
+        JPanel pnlAccountStatus = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
+        pnlAccountStatus.setBackground(cardWhite);
+        pnlAccountStatus.add(lblStatus);
+        row.add(pnlAccountStatus);
+
+        JPanel pnlOnlineStatus = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
+        pnlOnlineStatus.setBackground(cardWhite);
+        pnlOnlineStatus.add(createOnlineStatusBadge(acc.onlineStatus));
+        row.add(pnlOnlineStatus);
 
         JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
         pnlToggle.setBackground(cardWhite);
 
-        ToggleSwitch toggleBtn = new ToggleSwitch(acc.active);
-        boolean canToggle = canToggleAccount(acc);
+        if (isAdmin(acc.roleId)) {
+            JLabel protectedBadge = createAdminProtectedBadge();
+            protectedBadge.setToolTipText("Tài khoản Quản trị viên được bảo vệ, không thể khóa/mở tại màn này.");
+            pnlToggle.add(protectedBadge);
+        } else {
+            ToggleSwitch toggleBtn = new ToggleSwitch(acc.active);
+            boolean canToggle = canToggleAccount(acc);
 
-        if (!canToggle) {
-            toggleBtn.setEnabled(false);
-            toggleBtn.setToolTipText(buildNoPermissionTooltip(acc));
+            if (!canToggle) {
+                toggleBtn.setEnabled(false);
+                toggleBtn.setToolTipText(buildNoPermissionTooltip(acc));
+            }
+
+            toggleBtn.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (!toggleBtn.isEnabled()) {
+                        return;
+                    }
+
+                    toggleAccountStatus(acc, toggleBtn);
+                }
+            });
+
+            pnlToggle.add(toggleBtn);
         }
 
-        toggleBtn.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (!toggleBtn.isEnabled()) {
-                    return;
-                }
-
-                toggleAccountStatus(acc, toggleBtn);
-            }
-        });
-
-        pnlToggle.add(toggleBtn);
         row.add(pnlToggle);
 
         row.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -1093,12 +1119,26 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     }
 
     private boolean canToggleAccount(AccountRowData acc) {
+        if (acc == null) {
+            return false;
+        }
+
+        // Bảo vệ toàn bộ tài khoản Admin: không cho khóa/mở bằng toggle ở màn phân quyền.
+        // Tránh trường hợp khóa nhầm tài khoản quản trị và mất quyền vận hành hệ thống.
+        if (isAdmin(acc.roleId)) {
+            return false;
+        }
+
         return canModifyTargetAccount(acc);
     }
 
     private String buildNoPermissionTooltip(AccountRowData acc) {
         if (acc == null) {
             return "Không có quyền thao tác.";
+        }
+
+        if (isAdmin(acc.roleId)) {
+            return "Tài khoản Quản trị viên được bảo vệ, không thể khóa/mở tại màn này.";
         }
 
         if (isSameAccount(currentAccountId, acc.accountId)) {
@@ -1281,6 +1321,64 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         badge.setForeground(fg);
         badge.setOpaque(false);
         badge.setBorder(new EmptyBorder(5, 15, 5, 15));
+
+        return badge;
+    }
+
+    private JLabel createAdminProtectedBadge() {
+        Color bg = new Color(255, 247, 237);
+        Color fg = new Color(234, 88, 12);
+
+        JLabel badge = new JLabel("Bảo vệ", SwingConstants.CENTER) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 14, 14);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        badge.setForeground(fg);
+        badge.setOpaque(false);
+        badge.setBorder(new EmptyBorder(5, 12, 5, 12));
+        return badge;
+    }
+
+    private JLabel createOnlineStatusBadge(String onlineStatus) {
+        String status = onlineStatus == null ? "OFFLINE" : onlineStatus.trim().toUpperCase();
+
+        boolean online = status.equals("ONLINE")
+                || status.equals("ACTIVE")
+                || status.equals("ĐANG HOẠT ĐỘNG")
+                || status.equals("DANG_HOAT_DONG");
+
+        String text = online ? "Online" : "Offline";
+        Color bg = online ? new Color(220, 252, 231) : new Color(254, 226, 226);
+        Color fg = online ? new Color(5, 150, 105) : new Color(220, 38, 38);
+
+        JLabel badge = new JLabel(
+                "<html><span style='font-size:13px;'>●</span> " + text + "</html>",
+                SwingConstants.CENTER
+        ) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        badge.setForeground(fg);
+        badge.setOpaque(false);
+        badge.setBorder(new EmptyBorder(5, 12, 5, 12));
 
         return badge;
     }
@@ -1550,13 +1648,18 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
 
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            if (on) {
+            if (!isEnabled()) {
+                g2.setColor(new Color(226, 232, 240));
+                g2.fillRoundRect(0, 0, 46, 24, 24, 24);
+                g2.setColor(new Color(248, 250, 252));
+                g2.fillOval(on ? 24 : 2, 2, 20, 20);
+            } else if (on) {
                 g2.setColor(new Color(16, 185, 129));
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
                 g2.setColor(Color.WHITE);
                 g2.fillOval(24, 2, 20, 20);
             } else {
-                g2.setColor(isEnabled() ? new Color(203, 213, 225) : new Color(241, 245, 249));
+                g2.setColor(new Color(203, 213, 225));
                 g2.fillRoundRect(0, 0, 46, 24, 24, 24);
                 g2.setColor(Color.WHITE);
                 g2.fillOval(2, 2, 20, 20);
