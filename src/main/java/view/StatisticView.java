@@ -1,13 +1,13 @@
 package view;
 
 import business.service.StatisticService;
+import business.sql.report.ImportSalesEfficiencySql;
 import com.toedter.calendar.JDateChooser;
 import common.report.ReportViewer;
 import view.components.IconHelper;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import business.service.SessionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -67,13 +67,15 @@ public class StatisticView extends JPanel {
 
     private JLabel lblTotalRevenueValue, lblTotalOrdersValue, lblAvgKpiValue, lblBestEmployeeValue;
     private JLabel lblTotalRevenueDelta, lblTotalOrdersDelta, lblAvgKpiDelta, lblBestEmployeeDelta;
+    private JLabel lblImportCostValue, lblGrossProfitValue, lblGrossProfitMarginValue, lblEfficiencyStatusValue;
+    private JLabel lblImportCostDelta, lblGrossProfitDelta, lblGrossProfitMarginDelta, lblEfficiencyStatusDelta;
     private JLabel lblInsight1, lblInsight2, lblInsight3;
 
     private MiniLineChartPanel revenueChart;
     private TopStaffPanel topStaffPanel;
 
-    private JTable tblKpi, tblRevenue, tblProducts;
-    private DefaultTableModel modKpi, modRevenue, modProducts;
+    private JTable tblKpi, tblRevenue, tblImportSalesEfficiency, tblProducts;
+    private DefaultTableModel modKpi, modRevenue, modImportSalesEfficiency, modProducts;
     private JTabbedPane detailTabs;
 
     private final StatisticService statisticService = new StatisticService();
@@ -111,7 +113,7 @@ public class StatisticView extends JPanel {
         lblTitle.setForeground(textDark);
 
         JLabel lblSub = new JLabel(
-                "Power BI style analytics: doanh thu, hàng hóa và hiệu suất nhân viên"
+                "Power BI style analytics: doanh thu, hàng hóa, hiệu suất nhân viên và hiệu quả nhập - bán"
                 + " | Phạm vi: "
                 + statisticService.getCurrentReportStoreName()
         );
@@ -178,17 +180,17 @@ public class StatisticView extends JPanel {
         gbc.fill = GridBagConstraints.BOTH;
 
         gbc.gridy = 0;
-        gbc.weighty = 0.16;
+        gbc.weighty = 0.22;
         gbc.insets = new Insets(0, 0, 14, 0);
         body.add(buildSummaryCards(), gbc);
 
         gbc.gridy = 1;
-        gbc.weighty = 0.38;
+        gbc.weighty = 0.34;
         gbc.insets = new Insets(0, 0, 14, 0);
         body.add(buildAnalyticsArea(), gbc);
 
         gbc.gridy = 2;
-        gbc.weighty = 0.36;
+        gbc.weighty = 0.34;
         gbc.insets = new Insets(0, 0, 14, 0);
         body.add(buildKpiTableArea(), gbc);
 
@@ -201,13 +203,18 @@ public class StatisticView extends JPanel {
     }
 
     private JPanel buildSummaryCards() {
-        JPanel grid = new JPanel(new GridLayout(1, 4, 14, 0));
+        JPanel grid = new JPanel(new GridLayout(2, 4, 14, 10));
         grid.setOpaque(false);
 
         SummaryCard revenue = new SummaryCard("Tổng doanh thu", "0 đ", "+0%", IconHelper.revenue(24), primaryBlue);
         SummaryCard orders = new SummaryCard("Tổng đơn hàng", "0", "+0%", IconHelper.order(24), successGreen);
         SummaryCard kpi = new SummaryCard("KPI trung bình", "0/100", "0 nhân viên", IconHelper.barChart(24), warningYellow);
         SummaryCard best = new SummaryCard("Nhân viên xuất sắc", "-", "Chưa có dữ liệu", IconHelper.employee(24), new Color(124, 58, 237));
+
+        SummaryCard importCost = new SummaryCard("Tiền nhập kho", "0 đ", "Sau VAT tháng hiện tại", IconHelper.order(24), new Color(124, 58, 237));
+        SummaryCard grossProfit = new SummaryCard("Lãi gộp tạm tính", "0 đ", "Doanh thu - nhập kho", IconHelper.revenue(24), successGreen);
+        SummaryCard grossMargin = new SummaryCard("Biên lãi gộp", "0%", "Tỷ suất tạm tính", IconHelper.barChart(24), primaryBlue);
+        SummaryCard efficiencyStatus = new SummaryCard("Hiệu quả nhập - bán", "OK", "Theo chi nhánh hiện tại", IconHelper.lineChart(24), successGreen);
 
         lblTotalRevenueValue = revenue.valueLabel;
         lblTotalRevenueDelta = revenue.deltaLabel;
@@ -218,10 +225,23 @@ public class StatisticView extends JPanel {
         lblBestEmployeeValue = best.valueLabel;
         lblBestEmployeeDelta = best.deltaLabel;
 
+        lblImportCostValue = importCost.valueLabel;
+        lblImportCostDelta = importCost.deltaLabel;
+        lblGrossProfitValue = grossProfit.valueLabel;
+        lblGrossProfitDelta = grossProfit.deltaLabel;
+        lblGrossProfitMarginValue = grossMargin.valueLabel;
+        lblGrossProfitMarginDelta = grossMargin.deltaLabel;
+        lblEfficiencyStatusValue = efficiencyStatus.valueLabel;
+        lblEfficiencyStatusDelta = efficiencyStatus.deltaLabel;
+
         grid.add(revenue);
         grid.add(orders);
         grid.add(kpi);
         grid.add(best);
+        grid.add(importCost);
+        grid.add(grossProfit);
+        grid.add(grossMargin);
+        grid.add(efficiencyStatus);
         return grid;
     }
 
@@ -284,6 +304,18 @@ public class StatisticView extends JPanel {
         tblRevenue.getColumnModel().getColumn(1).setCellRenderer(new CenterRenderer());
         tblRevenue.getColumnModel().getColumn(2).setCellRenderer(new RightRenderer());
 
+        modImportSalesEfficiency = new DefaultTableModel(new Object[]{"Chi nhánh", "Doanh thu", "Tiền nhập kho", "Lãi gộp", "Biên lãi %"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tblImportSalesEfficiency = createPowerTable(modImportSalesEfficiency);
+        tblImportSalesEfficiency.getColumnModel().getColumn(1).setCellRenderer(new RightRenderer());
+        tblImportSalesEfficiency.getColumnModel().getColumn(2).setCellRenderer(new RightRenderer());
+        tblImportSalesEfficiency.getColumnModel().getColumn(3).setCellRenderer(new RightRenderer());
+        tblImportSalesEfficiency.getColumnModel().getColumn(4).setCellRenderer(new CenterRenderer());
+
         modProducts = new DefaultTableModel(new Object[]{"Mã SP", "Tên sản phẩm", "SL đã bán", "Doanh thu", "Tồn kho"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -299,6 +331,7 @@ public class StatisticView extends JPanel {
         detailTabs.setFont(boldFont);
         detailTabs.addTab("KPI nhân viên", wrapTable(tblKpi));
         detailTabs.addTab("Doanh thu", wrapTable(tblRevenue));
+        detailTabs.addTab("Hiệu quả nhập - bán", wrapTable(tblImportSalesEfficiency));
         detailTabs.addTab("Hàng hóa", wrapTable(tblProducts));
         detailTabs.setBorder(BorderFactory.createEmptyBorder());
 
@@ -342,6 +375,8 @@ public class StatisticView extends JPanel {
             if (e.getType() == AppEventType.ORDERS
                     || e.getType() == AppEventType.INVENTORY
                     || e.getType() == AppEventType.PRODUCTS
+                    || e.getType() == AppEventType.STATISTICS
+                    || e.getType() == AppEventType.DASHBOARD
                     || e.getType().toString().contains("ORDER")) {
                 SwingUtilities.invokeLater(() -> refreshDataWithCurrentDates(true, false));
             }
@@ -383,6 +418,11 @@ public class StatisticView extends JPanel {
                 data.employeeRows = statisticService.getEmployeeReport(fromDate, toDate);
                 data.staffKpis = buildStaffKpis(data.employeeRows);
 
+                // Hiệu quả nhập - bán luôn scope theo chi nhánh hiện tại của Manager.
+                // Service tự lọc SQL bằng SessionManager.getCurrentStoreId(), không lọc UI.
+                data.importSalesSummary = ImportSalesEfficiencySql.getInstance().selectCurrentMonthSummaryForCurrentManager();
+                data.importSalesRows = ImportSalesEfficiencySql.getInstance().selectCurrentMonthByStoreForCurrentManager();
+
                 // Dữ liệu riêng cho biểu đồ tháng:
                 // Nếu khoảng lọc chỉ có 1 tháng, tự lấy thêm các tháng trước để có line chart đẹp
                 Date chartFromDate = getMonthlyChartFromDate(fromDate, toDate);
@@ -414,6 +454,7 @@ public class StatisticView extends JPanel {
 
     private void renderReport(ReportData data) {
         fillRevenueTable(data.monthlyRevenueRows);
+        fillImportSalesEfficiencyTable(data.importSalesRows, data.importSalesSummary);
         fillProductTable(data.productRows);
         fillKpiTable(data.staffKpis);
         updateSummaryCards(data);
@@ -428,6 +469,36 @@ public class StatisticView extends JPanel {
             Object orders = row.length > 1 ? row[1] : 0;
             double revenue = row.length > 2 ? toDouble(row[2]) : 0;
             modRevenue.addRow(new Object[]{date, orders, formatCurrency(revenue)});
+        }
+    }
+
+    private void fillImportSalesEfficiencyTable(
+            List<ImportSalesEfficiencySql.EfficiencyRow> rows,
+            ImportSalesEfficiencySql.EfficiencySummary summary
+    ) {
+        modImportSalesEfficiency.setRowCount(0);
+
+        if (rows != null && !rows.isEmpty()) {
+            for (ImportSalesEfficiencySql.EfficiencyRow row : rows) {
+                modImportSalesEfficiency.addRow(new Object[]{
+                    row.storeName,
+                    formatCurrency(row.totalRevenue),
+                    formatCurrency(row.totalImportCost),
+                    formatCurrency(row.grossProfit),
+                    formatPercent(row.grossProfitMargin)
+                });
+            }
+            return;
+        }
+
+        if (summary != null) {
+            modImportSalesEfficiency.addRow(new Object[]{
+                statisticService.getCurrentReportStoreName(),
+                formatCurrency(summary.totalRevenue),
+                formatCurrency(summary.totalImportCost),
+                formatCurrency(summary.grossProfit),
+                formatPercent(summary.grossProfitMargin)
+            });
         }
     }
 
@@ -489,6 +560,46 @@ public class StatisticView extends JPanel {
         lblAvgKpiDelta.setText(data.staffKpis.size() + " nhân viên được tính KPI");
         lblBestEmployeeValue.setText(best != null ? best.name : "-");
         lblBestEmployeeDelta.setText(best != null ? "KPI " + best.score + "/100" : "Chưa có dữ liệu");
+
+        updateImportSalesEfficiencyCards(data.importSalesSummary);
+    }
+
+    private void updateImportSalesEfficiencyCards(ImportSalesEfficiencySql.EfficiencySummary summary) {
+        if (summary == null) {
+            summary = new ImportSalesEfficiencySql.EfficiencySummary();
+        }
+
+        lblImportCostValue.setText(formatCurrency(summary.totalImportCost));
+        lblImportCostDelta.setText("Sau VAT tháng hiện tại");
+        lblGrossProfitValue.setText(formatCurrency(summary.grossProfit));
+        lblGrossProfitDelta.setText("Doanh thu - tiền nhập kho");
+        lblGrossProfitMarginValue.setText(formatPercent(summary.grossProfitMargin));
+        lblGrossProfitMarginDelta.setText("Lãi gộp / doanh thu");
+
+        boolean negative = summary.grossProfit < 0;
+        boolean hasRevenue = summary.totalRevenue > 0;
+
+        lblGrossProfitValue.setForeground(negative ? dangerRed : successGreen);
+        lblGrossProfitDelta.setForeground(negative ? dangerRed : successGreen);
+        lblGrossProfitMarginValue.setForeground(negative ? dangerRed : primaryBlue);
+        lblGrossProfitMarginDelta.setForeground(negative ? dangerRed : primaryBlue);
+
+        if (!hasRevenue && summary.totalImportCost <= 0) {
+            lblEfficiencyStatusValue.setText("Chưa có dữ liệu");
+            lblEfficiencyStatusDelta.setText("Chờ bán hàng/nhập kho");
+            lblEfficiencyStatusValue.setForeground(textGray);
+            lblEfficiencyStatusDelta.setForeground(textGray);
+        } else if (negative) {
+            lblEfficiencyStatusValue.setText("Lỗ tạm tính");
+            lblEfficiencyStatusDelta.setText("Tiền nhập kho lớn hơn doanh thu");
+            lblEfficiencyStatusValue.setForeground(dangerRed);
+            lblEfficiencyStatusDelta.setForeground(dangerRed);
+        } else {
+            lblEfficiencyStatusValue.setText("Có lãi");
+            lblEfficiencyStatusDelta.setText("Chi nhánh đang dương lãi gộp");
+            lblEfficiencyStatusValue.setForeground(successGreen);
+            lblEfficiencyStatusDelta.setForeground(successGreen);
+        }
     }
 
     private void updateCharts(ReportData data) {
@@ -549,7 +660,17 @@ public class StatisticView extends JPanel {
 
         lblInsight1.setText("Doanh thu kỳ này đạt " + formatCurrency(totalRevenue) + ", ghi nhận " + totalOrders + " đơn hàng hoàn thành.");
         lblInsight2.setText(best != null ? "Nhân viên nổi bật: " + best.name + " với KPI " + best.score + "/100." : "Chưa đủ dữ liệu để đánh giá nhân viên nổi bật.");
-        lblInsight3.setText(buildRiskInsight(data.staffKpis));
+
+        ImportSalesEfficiencySql.EfficiencySummary summary = data.importSalesSummary;
+        if (summary != null && (summary.totalRevenue > 0 || summary.totalImportCost > 0)) {
+            lblInsight3.setText(
+                    "Hiệu quả nhập - bán tháng này: nhập " + formatCurrency(summary.totalImportCost)
+                    + ", lãi gộp tạm tính " + formatCurrency(summary.grossProfit)
+                    + " (" + formatPercent(summary.grossProfitMargin) + ")."
+            );
+        } else {
+            lblInsight3.setText(buildRiskInsight(data.staffKpis));
+        }
     }
 
     private String buildRiskInsight(List<StaffKpi> staffKpis) {
@@ -884,6 +1005,9 @@ public class StatisticView extends JPanel {
             return tblRevenue;
         }
         if (index == 2) {
+            return tblImportSalesEfficiency;
+        }
+        if (index == 3) {
             return tblProducts;
         }
         return tblKpi;
@@ -994,6 +1118,10 @@ public class StatisticView extends JPanel {
 
     private String formatCurrency(double value) {
         return String.format("%,.0f đ", value).replace(',', '.');
+    }
+
+    private String formatPercent(double value) {
+        return String.format("%,.2f%%", value).replace('.', ',');
     }
 
     private double toDouble(Object value) {
@@ -1285,7 +1413,7 @@ public class StatisticView extends JPanel {
             titleLabel.setForeground(textGray);
 
             valueLabel = new JLabel(value);
-            valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+            valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
             valueLabel.setForeground(textDark);
 
             deltaLabel = new JLabel(delta);
@@ -1589,6 +1717,8 @@ public class StatisticView extends JPanel {
         List<Object[]> productRows = new ArrayList<>();
         List<Object[]> employeeRows = new ArrayList<>();
         List<StaffKpi> staffKpis = new ArrayList<>();
+        ImportSalesEfficiencySql.EfficiencySummary importSalesSummary = new ImportSalesEfficiencySql.EfficiencySummary();
+        List<ImportSalesEfficiencySql.EfficiencyRow> importSalesRows = new ArrayList<>();
     }
 
     static class StaffKpi {
