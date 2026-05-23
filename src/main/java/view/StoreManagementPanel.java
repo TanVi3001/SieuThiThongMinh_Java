@@ -37,7 +37,10 @@ public class StoreManagementPanel extends JPanel {
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnSoftDelete;
     private JLabel lblTotal, lblActive, lblInactive, lblHint, lblFormTitle;
-    private boolean isEditMode = false, hasNameColumn = false, hasStatusColumn = false;
+    private boolean isEditMode = false;
+    private boolean hasNameColumn = false;
+    private boolean hasPhoneColumn = false;
+    private boolean hasStatusColumn = false;
 
     public StoreManagementPanel() {
         setLayout(new BorderLayout(0, 22));
@@ -232,6 +235,8 @@ public class StoreManagementPanel extends JPanel {
         addField(form, g, y, "Tên chi nhánh", txtTenChiNhanh);
         y += 2;
         txtSoDienThoai = field("Nhập số điện thoại...");
+        txtSoDienThoai.setEnabled(hasPhoneColumn);
+        txtSoDienThoai.setBackground(hasPhoneColumn ? Color.WHITE : new Color(248, 250, 252));
         addField(form, g, y, "Số điện thoại", txtSoDienThoai);
         y += 2;
         txtDiaChi = field("Nhập địa chỉ chi nhánh...");
@@ -282,7 +287,6 @@ public class StoreManagementPanel extends JPanel {
         tblStores.setRowHeight(44);
         tblStores.setFont(new Font("Segoe UI", Font.PLAIN, 13));
 
-        // Giống bảng bên quản lý: sạch, không lưới dọc nặng
         tblStores.setShowVerticalLines(false);
         tblStores.setShowHorizontalLines(false);
         tblStores.setIntercellSpacing(new Dimension(0, 0));
@@ -299,39 +303,30 @@ public class StoreManagementPanel extends JPanel {
         tableHeader.setForeground(Color.BLACK);
         tableHeader.setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-        // Header: nền xám nhạt, chữ đen, in đậm, căn giữa
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(
                     JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column
             ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, isSelected, hasFocus, row, column
-                );
-
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 label.setOpaque(true);
                 label.setBackground(new Color(243, 246, 250));
                 label.setForeground(Color.BLACK);
                 label.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-
                 return label;
             }
         };
 
-        // Body: trắng / xám nhạt xen kẽ như hình mẫu
         DefaultTableCellRenderer bodyRenderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(
                     JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column
             ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, isSelected, hasFocus, row, column
-                );
-
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 label.setOpaque(true);
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
@@ -341,12 +336,7 @@ public class StoreManagementPanel extends JPanel {
                     label.setBackground(new Color(219, 234, 254));
                     label.setForeground(text);
                 } else {
-                    if (row % 2 == 0) {
-                        label.setBackground(Color.WHITE);
-                    } else {
-                        label.setBackground(new Color(248, 250, 252));
-                    }
-
+                    label.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     if (column == 0) {
                         label.setForeground(blue);
                         label.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -354,24 +344,18 @@ public class StoreManagementPanel extends JPanel {
                         label.setForeground(text);
                     }
                 }
-
                 return label;
             }
         };
 
-        // Cột trạng thái: tô màu riêng giống cột Hạng trong ảnh mẫu
         DefaultTableCellRenderer statusRenderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(
                     JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column
             ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, isSelected, hasFocus, row, column
-                );
-
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 String status = value == null ? "" : value.toString();
-
                 label.setOpaque(true);
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
@@ -380,16 +364,13 @@ public class StoreManagementPanel extends JPanel {
                 if (isSelected) {
                     label.setBackground(new Color(219, 234, 254));
                     label.setForeground(text);
+                } else if (ACTIVE.equals(status)) {
+                    label.setBackground(new Color(220, 252, 231));
+                    label.setForeground(new Color(0, 148, 92));
                 } else {
-                    if (ACTIVE.equals(status)) {
-                        label.setBackground(new Color(220, 252, 231)); // xanh nhạt
-                        label.setForeground(new Color(0, 148, 92));
-                    } else {
-                        label.setBackground(new Color(254, 226, 226)); // đỏ nhạt
-                        label.setForeground(new Color(220, 38, 38));
-                    }
+                    label.setBackground(new Color(254, 226, 226));
+                    label.setForeground(new Color(220, 38, 38));
                 }
-
                 return label;
             }
         };
@@ -404,8 +385,6 @@ public class StoreManagementPanel extends JPanel {
         tblStores.getColumnModel().getColumn(2).setPreferredWidth(140);
         tblStores.getColumnModel().getColumn(3).setPreferredWidth(300);
         tblStores.getColumnModel().getColumn(4).setPreferredWidth(130);
-
-        // Cột trạng thái dùng renderer riêng có màu nền
         tblStores.getColumnModel().getColumn(4).setCellRenderer(statusRenderer);
     }
 
@@ -471,6 +450,7 @@ public class StoreManagementPanel extends JPanel {
 
     private void refreshStoreSchemaFlags() {
         hasNameColumn = hasColumn("STORES", "STORE_NAME");
+        hasPhoneColumn = hasColumn("STORES", "PHONE");
         hasStatusColumn = hasColumn("STORES", "STATUS");
     }
 
@@ -496,33 +476,38 @@ public class StoreManagementPanel extends JPanel {
     private void loadStoreData(String keyword) {
         tableModel.setRowCount(0);
         int total = 0, active = 0, inactive = 0;
+
         String nameExpr = hasNameColumn ? "store_name" : "address";
+        String phoneExpr = hasPhoneColumn ? "phone" : "''";
         String statusExpr = hasStatusColumn ? "NVL(status, 'Hoạt động')" : "'Hoạt động'";
-        String sql = "SELECT store_id, " + nameExpr + " AS display_name, phone, address, " + statusExpr + " AS status "
+
+        String sql = "SELECT store_id, " + nameExpr + " AS display_name, " + phoneExpr + " AS phone_no, address, " + statusExpr + " AS status "
                 + "FROM stores WHERE NVL(is_deleted,0)=0 "
                 + "AND (LOWER(store_id) LIKE ? OR LOWER(" + nameExpr + ") LIKE ? OR LOWER(address) LIKE ?) "
                 + "ORDER BY store_id";
+
         try (Connection conn = common.db.DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             String kw = "%" + (keyword == null ? "" : keyword.toLowerCase()) + "%";
             ps.setString(1, kw);
             ps.setString(2, kw);
             ps.setString(3, kw);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                String status = normalizeStatus(rs.getString("status"));
-                tableModel.addRow(new Object[]{
-                    rs.getString("store_id"),
-                    rs.getString("display_name"),
-                    rs.getString("phone"),
-                    rs.getString("address"),
-                    status
-                });
-                total++;
-                if (ACTIVE.equals(status)) {
-                    active++;
-                } else {
-                    inactive++;
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String status = normalizeStatus(rs.getString("status"));
+                    tableModel.addRow(new Object[]{
+                        rs.getString("store_id"),
+                        rs.getString("display_name"),
+                        rs.getString("phone_no"),
+                        rs.getString("address"),
+                        status
+                    });
+                    total++;
+                    if (ACTIVE.equals(status)) {
+                        active++;
+                    } else {
+                        inactive++;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -595,38 +580,29 @@ public class StoreManagementPanel extends JPanel {
             return;
         }
         try (Connection conn = common.db.DatabaseConnection.getConnection()) {
-            String sql;
-            if (isEditMode) {
-                sql = buildUpdateSql();
-            } else {
-                sql = buildInsertSql();
-            }
+            String sql = isEditMode ? buildUpdateSql() : buildInsertSql();
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 int idx = 1;
                 if (hasNameColumn) {
                     ps.setString(idx++, name);
                 }
                 ps.setString(idx++, address);
-                ps.setString(idx++, phone);
+                if (hasPhoneColumn) {
+                    ps.setString(idx++, phone);
+                }
                 if (hasStatusColumn) {
                     ps.setString(idx++, status);
                 }
-                if (isEditMode) {
-                    ps.setString(idx++, id);
-                } else {
-                    ps.setString(idx++, id);
-                }
+                ps.setString(idx, id);
                 ps.executeUpdate();
                 conn.commit();
             }
+            String message = isEditMode ? "Cập nhật chi nhánh" : "Thêm chi nhánh";
             JOptionPane.showMessageDialog(this, isEditMode ? "Đã cập nhật chi nhánh." : "Đã thêm chi nhánh.");
             loadStoreData(txtSearch.getText().trim());
             clearForm();
 
-            EventBus.publish(AppDataChangedEvent.builder(AppEventType.STORE_INFO)
-                    .source("StoreManagementPanel")
-                    .message(isEditMode ? "Cập nhật chi nhánh" : "Thêm chi nhánh")
-                    .build());
+            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, message));
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi lưu chi nhánh: " + e.getMessage());
         }
@@ -641,8 +617,10 @@ public class StoreManagementPanel extends JPanel {
         }
         cols.add("address");
         qs.add("?");
-        cols.add("phone");
-        qs.add("?");
+        if (hasPhoneColumn) {
+            cols.add("phone");
+            qs.add("?");
+        }
         if (hasStatusColumn) {
             cols.add("status");
             qs.add("?");
@@ -660,7 +638,9 @@ public class StoreManagementPanel extends JPanel {
             sets.add("store_name=?");
         }
         sets.add("address=?");
-        sets.add("phone=?");
+        if (hasPhoneColumn) {
+            sets.add("phone=?");
+        }
         if (hasStatusColumn) {
             sets.add("status=?");
         }
@@ -686,10 +666,7 @@ public class StoreManagementPanel extends JPanel {
             loadStoreData(txtSearch.getText().trim());
             clearForm();
 
-            EventBus.publish(AppDataChangedEvent.builder(AppEventType.STORE_INFO)
-                    .source("StoreManagementPanel")
-                    .message("Xóa chi nhánh")
-                    .build());
+            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "Xóa chi nhánh"));
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi xóa chi nhánh: " + e.getMessage());
         }
