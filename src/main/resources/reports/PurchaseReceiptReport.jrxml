@@ -560,4 +560,4 @@ ORDER BY d.created_at, d.receipt_detail_id
             </line>
         </band>
     </summary>
-</jasperReport>i
+</jasperReport>

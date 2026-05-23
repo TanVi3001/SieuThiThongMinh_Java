@@ -1,5 +1,13 @@
 package view;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import javax.swing.JComboBox;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerDateModel;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
@@ -119,10 +127,21 @@ public class AdminSystemPanel extends JPanel {
     private JTable tblTopEmployee;
     private JTable tblLowStock;
 
+    private JComboBox<String> cboTimeFilter;
+    private JSpinner spnFilterDate;
+    private JLabel lblFilterInfo;
+
+    private LocalDateTime filterFrom;
+    private LocalDateTime filterTo;
+    private String filterLabel = "Tháng hiện tại";
+
     public AdminSystemPanel() {
         setLayout(new BorderLayout());
         setBackground(bg);
         setBorder(new EmptyBorder(22, 30, 22, 30));
+
+        resetFilterToCurrentMonth();
+
         initUI();
         initRealtime();
         reloadAll();
@@ -296,10 +315,17 @@ public class AdminSystemPanel extends JPanel {
         page.setOpaque(false);
         page.setBorder(new EmptyBorder(18, 0, 0, 0));
 
-        page.add(createPageIntro(
+        JPanel top = new JPanel(new BorderLayout(0, 12));
+        top.setOpaque(false);
+
+        top.add(createPageIntro(
                 "Tổng quan hệ thống",
                 "Theo dõi nhanh tình hình chi nhánh, doanh thu, tồn kho và phiên hoạt động"
         ), BorderLayout.NORTH);
+
+        top.add(createTimeFilterPanel(), BorderLayout.CENTER);
+
+        page.add(top, BorderLayout.NORTH);
 
         JPanel content = new JPanel(new BorderLayout(0, 18));
         content.setOpaque(false);
@@ -321,9 +347,8 @@ public class AdminSystemPanel extends JPanel {
         cards.add(statCard("Tổng chi nhánh", lblStoreTotal, blue));
         cards.add(statCard("Đang hoạt động", lblStoreActive, green));
         cards.add(statCard("Doanh thu hôm nay", lblTodayRevenue, orange));
-        cards.add(statCard("Tổng doanh thu tháng", lblMonthRevenue, orange));
-
-        cards.add(statCard("Tiền nhập kho tháng", lblMonthImportCost, purple));
+        cards.add(statCard("Tổng doanh thu kỳ lọc", lblMonthRevenue, orange));
+        cards.add(statCard("Tiền nhập kho kỳ lọc", lblMonthImportCost, purple));
         cards.add(statCard("Lãi gộp tạm tính", lblGrossProfit, green));
         cards.add(statCard("Biên lãi gộp", lblGrossProfitMargin, blue));
         cards.add(statCard("Tổng đơn hàng", lblOrderTotal, blue));
@@ -350,7 +375,7 @@ public class AdminSystemPanel extends JPanel {
         tblOverviewInventoryByStore = table(new String[]{"Mã CN", "Chi nhánh", "Mặt hàng", "Tổng tồn", "Tồn thấp"});
 
         tables.add(cardWithTable(
-                "Doanh thu tháng theo chi nhánh",
+                "Doanh thu theo chi nhánh",
                 "Chỉ tính hóa đơn hoàn thành trong tháng hiện tại",
                 tblOverviewRevenueByStore
         ));
@@ -364,6 +389,131 @@ public class AdminSystemPanel extends JPanel {
         page.add(content, BorderLayout.CENTER);
 
         return page;
+    }
+
+    private JPanel createTimeFilterPanel() {
+        RoundedPanel panel = new RoundedPanel(18, white);
+        panel.setLayout(new BorderLayout(12, 0));
+        panel.setBorder(new EmptyBorder(12, 14, 12, 14));
+
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        left.setOpaque(false);
+
+        JLabel lblMode = new JLabel("Lọc theo:");
+        lblMode.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblMode.setForeground(text);
+
+        cboTimeFilter = new JComboBox<>(new String[]{
+            "Theo giờ", "Theo ngày", "Theo tháng", "Theo năm"
+        });
+        cboTimeFilter.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cboTimeFilter.setPreferredSize(new Dimension(130, 36));
+        cboTimeFilter.setSelectedItem("Theo tháng");
+
+        SpinnerDateModel dateModel = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
+        spnFilterDate = new JSpinner(dateModel);
+        spnFilterDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        spnFilterDate.setPreferredSize(new Dimension(190, 36));
+
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spnFilterDate, "dd/MM/yyyy HH:mm");
+        spnFilterDate.setEditor(editor);
+
+        JButton btnApplyFilter = createPrimaryButton("Lọc", blue);
+        btnApplyFilter.setPreferredSize(new Dimension(86, 38));
+        btnApplyFilter.addActionListener(e -> applyTimeFilter());
+
+        JButton btnResetFilter = createPrimaryButton("Tháng hiện tại", primary);
+        btnResetFilter.setPreferredSize(new Dimension(135, 38));
+        btnResetFilter.addActionListener(e -> {
+            resetFilterToCurrentMonth();
+            cboTimeFilter.setSelectedItem("Theo tháng");
+            spnFilterDate.setValue(new Date());
+            updateFilterInfoLabel();
+            reloadAll();
+        });
+
+        left.add(lblMode);
+        left.add(cboTimeFilter);
+        left.add(spnFilterDate);
+        left.add(btnApplyFilter);
+        left.add(btnResetFilter);
+
+        lblFilterInfo = new JLabel();
+        lblFilterInfo.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblFilterInfo.setForeground(muted);
+        updateFilterInfoLabel();
+
+        panel.add(left, BorderLayout.WEST);
+        panel.add(lblFilterInfo, BorderLayout.EAST);
+
+        return wrapWithBorder(panel);
+    }
+
+    private void resetFilterToCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+
+        filterFrom = now
+                .withDayOfMonth(1)
+                .truncatedTo(ChronoUnit.DAYS);
+
+        filterTo = filterFrom.plusMonths(1);
+        filterLabel = "Tháng hiện tại";
+    }
+
+    private void applyTimeFilter() {
+        Date selectedDate = (Date) spnFilterDate.getValue();
+
+        LocalDateTime selected = selectedDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+
+        String mode = String.valueOf(cboTimeFilter.getSelectedItem());
+
+        if ("Theo giờ".equals(mode)) {
+            filterFrom = selected.truncatedTo(ChronoUnit.HOURS);
+            filterTo = filterFrom.plusHours(1);
+            filterLabel = "Theo giờ: "
+                    + new SimpleDateFormat("dd/MM/yyyy HH:00").format(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()));
+
+        } else if ("Theo ngày".equals(mode)) {
+            filterFrom = selected.truncatedTo(ChronoUnit.DAYS);
+            filterTo = filterFrom.plusDays(1);
+            filterLabel = "Theo ngày: "
+                    + new SimpleDateFormat("dd/MM/yyyy").format(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()));
+
+        } else if ("Theo tháng".equals(mode)) {
+            filterFrom = selected
+                    .withDayOfMonth(1)
+                    .truncatedTo(ChronoUnit.DAYS);
+
+            filterTo = filterFrom.plusMonths(1);
+            filterLabel = "Theo tháng: "
+                    + String.format("%02d/%d", filterFrom.getMonthValue(), filterFrom.getYear());
+
+        } else {
+            filterFrom = selected
+                    .withDayOfYear(1)
+                    .truncatedTo(ChronoUnit.DAYS);
+
+            filterTo = filterFrom.plusYears(1);
+            filterLabel = "Theo năm: " + filterFrom.getYear();
+        }
+
+        updateFilterInfoLabel();
+        reloadAll();
+    }
+
+    private void updateFilterInfoLabel() {
+        if (lblFilterInfo == null) {
+            return;
+        }
+
+        SimpleDateFormat fmt = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        Date fromDate = Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant());
+        Date toDate = Date.from(filterTo.atZone(ZoneId.systemDefault()).toInstant());
+
+        lblFilterInfo.setText(filterLabel + " | " + fmt.format(fromDate) + " → " + fmt.format(toDate));
     }
 
     private JPanel createReportTab() {
@@ -610,18 +760,15 @@ public class AdminSystemPanel extends JPanel {
 
     private void reloadImportSalesEfficiencyCards() {
         ImportSalesEfficiencySql.EfficiencySummary summary
-                = ImportSalesEfficiencySql.getInstance().selectCurrentMonthSummaryForAdmin();
+                = ImportSalesEfficiencySql.getInstance()
+                        .selectSummaryForAdmin(filterFrom, filterTo);
 
         lblMonthRevenue.setText(money(summary.totalRevenue));
         lblMonthImportCost.setText(money(summary.totalImportCost));
         lblGrossProfit.setText(money(summary.grossProfit));
         lblGrossProfitMargin.setText(percent(summary.grossProfitMargin));
 
-        if (summary.grossProfit < 0) {
-            lblGrossProfit.setForeground(red);
-        } else {
-            lblGrossProfit.setForeground(green);
-        }
+        lblGrossProfit.setForeground(summary.grossProfit < 0 ? red : green);
     }
 
     private void reloadImportSalesEfficiencyByStore(JTable targetTable) {
@@ -633,7 +780,8 @@ public class AdminSystemPanel extends JPanel {
         model.setRowCount(0);
 
         List<ImportSalesEfficiencySql.EfficiencyRow> rows
-                = ImportSalesEfficiencySql.getInstance().selectCurrentMonthByStoreForAdmin();
+                = ImportSalesEfficiencySql.getInstance()
+                        .selectByStoreForAdmin(filterFrom, filterTo);
 
         for (ImportSalesEfficiencySql.EfficiencyRow row : rows) {
             model.addRow(new Object[]{
@@ -691,19 +839,7 @@ public class AdminSystemPanel extends JPanel {
             WHERE NVL(s.is_deleted, 0) = 0
         """)));
 
-        lblOrderTotal.setText(String.valueOf(scalarLong("""
-            SELECT COUNT(*)
-            FROM STORES s
-            JOIN ORDERS o
-                ON o.store_id = s.store_id
-               AND NVL(o.is_deleted, 0) = 0
-               AND (
-                    UPPER(NVL(o.status, '')) = 'COMPLETED'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-               )
-            WHERE NVL(s.is_deleted, 0) = 0
-        """)));
+        lblOrderTotal.setText(String.valueOf(countOrdersByFilter()));
 
         lblLowStock.setText(String.valueOf(scalarLong("""
             SELECT COUNT(*)
@@ -828,6 +964,9 @@ public class AdminSystemPanel extends JPanel {
             params.put("P_PRODUCT_BUBBLE_CHART", createProductBubbleChartImage());
             params.put("P_PRODUCT_PIE_3D_CHART", createProductRevenuePie3DChartImage());
             params.put("P_REVENUE_ORDER_DIFFERENCE_CHART", createRevenueOrderDifferenceChartImage());
+            params.put("P_FILTER_LABEL", filterLabel);
+            params.put("P_FILTER_FROM", Timestamp.valueOf(filterFrom));
+            params.put("P_FILTER_TO", Timestamp.valueOf(filterTo));
 
             ReportViewer.showReport("/reports/AdminSystemReport.jrxml", params);
 
@@ -839,6 +978,41 @@ public class AdminSystemPanel extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private long countOrdersByFilter() {
+        String sql = """
+        SELECT COUNT(*)
+        FROM STORES s
+        JOIN ORDERS o
+            ON o.store_id = s.store_id
+           AND NVL(o.is_deleted, 0) = 0
+           AND o.order_date >= ?
+           AND o.order_date < ?
+           AND (
+                UPPER(NVL(o.status, '')) = 'COMPLETED'
+                OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
+                OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
+           )
+        WHERE NVL(s.is_deleted, 0) = 0
+    """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+
+        } catch (Exception ex) {
+            System.err.println("[AdminSystemPanel] countOrdersByFilter error: " + ex.getMessage());
+        }
+
+        return 0;
     }
 
     private void applyStrongCategoryGrid(CategoryPlot plot) {
