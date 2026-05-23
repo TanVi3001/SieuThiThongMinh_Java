@@ -70,7 +70,7 @@ public final class AdminFinalRevenueChartProvider {
             ) imports
                 ON imports.store_id = s.store_id
             WHERE NVL(s.is_deleted, 0) = 0
-            ORDER BY gross_profit DESC, total_revenue DESC, s.store_id
+            ORDER BY total_revenue DESC, gross_profit DESC, s.store_id
         """;
 
         try (Connection con = DatabaseConnection.getConnection();
