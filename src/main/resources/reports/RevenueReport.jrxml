@@ -19,7 +19,8 @@
     <style name="Base" fontName="SansSerif" fontSize="10" forecolor="#1F2937" />
     <style name="SmallMuted" style="Base" fontSize="8" forecolor="#6B7280" />
     <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#374151" />
-    <style name="TableHeader" style="Base" fontSize="9" isBold="true" forecolor="#FFFFFF" backcolor="#0F766E" mode="Opaque" />
+    <style name="TableHeader" style="Base" fontSize="9" isBold="true" forecolor="#FFFFFF"
+        backcolor="#0F766E" mode="Opaque" />
     <style name="TableCell" style="Base" fontSize="9" />
     <style name="Money" style="TableCell" hTextAlign="Right" />
 
@@ -238,159 +239,374 @@ ORDER BY period_start
     </variable>
 
     <title>
-        <band height="238" splitType="Stretch">
+        <band height="108" splitType="Stretch">
             <rectangle>
-                <reportElement x="0" y="0" width="782" height="72" backcolor="#0F766E" uuid="9f7f5ff6-4a93-4b42-95a1-c4b17d606de1" />
-                <graphicElement><pen lineWidth="0.0" /></graphicElement>
+                <reportElement x="0" y="0" width="782" height="72" backcolor="#0F766E"
+                    uuid="9f7f5ff6-4a93-4b42-95a1-c4b17d606de1" />
+                <graphicElement>
+                    <pen lineWidth="0.0" />
+                </graphicElement>
             </rectangle>
             <rectangle radius="6">
-                <reportElement x="18" y="12" width="48" height="48" backcolor="#FFFFFF" uuid="1c56c7ac-917d-441a-92f7-8d2dfd7316e2" />
-                <graphicElement><pen lineWidth="0.0" /></graphicElement>
+                <reportElement x="18" y="12" width="48" height="48" backcolor="#FFFFFF"
+                    uuid="1c56c7ac-917d-441a-92f7-8d2dfd7316e2" />
+                <graphicElement>
+                    <pen lineWidth="0.0" />
+                </graphicElement>
             </rectangle>
             <staticText>
-                <reportElement x="18" y="26" width="48" height="16" forecolor="#0F766E" uuid="b59cc0d5-85e8-47c0-89cb-17ce0dcbece6" />
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9" isBold="true" /></textElement>
+                <reportElement x="18" y="26" width="48" height="16" forecolor="#0F766E"
+                    uuid="b59cc0d5-85e8-47c0-89cb-17ce0dcbece6" />
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9" isBold="true" />
+                </textElement>
                 <text><![CDATA[LOGO]]></text>
             </staticText>
             <staticText>
-                <reportElement x="82" y="14" width="280" height="22" forecolor="#FFFFFF" uuid="bc102c54-7421-4a20-86d9-b2176d4251d7" />
-                <textElement><font size="17" isBold="true" /></textElement>
+                <reportElement x="82" y="14" width="280" height="22" forecolor="#FFFFFF"
+                    uuid="bc102c54-7421-4a20-86d9-b2176d4251d7" />
+                <textElement>
+                    <font size="17" isBold="true" />
+                </textElement>
                 <text><![CDATA[SIÊU THỊ SMART]]></text>
             </staticText>
             <staticText>
-                <reportElement x="82" y="39" width="300" height="14" forecolor="#CCFBF1" uuid="f0367c58-8ff2-42ec-949f-5b5dcc178cf8" />
-                <textElement><font size="9" /></textElement>
+                <reportElement x="82" y="39" width="300" height="14" forecolor="#CCFBF1"
+                    uuid="f0367c58-8ff2-42ec-949f-5b5dcc178cf8" />
+                <textElement>
+                    <font size="9" />
+                </textElement>
                 <text><![CDATA[Doanh thu, nhập kho và hiệu quả lãi gộp theo kỳ]]></text>
             </staticText>
             <staticText>
-                <reportElement x="470" y="18" width="292" height="24" forecolor="#FFFFFF" uuid="530ee471-c96c-418f-bb56-6fb5e8e6e612" />
-                <textElement textAlignment="Right"><font size="18" isBold="true" /></textElement>
+                <reportElement x="470" y="18" width="292" height="24" forecolor="#FFFFFF"
+                    uuid="530ee471-c96c-418f-bb56-6fb5e8e6e612" />
+                <textElement textAlignment="Right">
+                    <font size="18" isBold="true" />
+                </textElement>
                 <text><![CDATA[BÁO CÁO DOANH THU]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="Label" x="0" y="86" width="40" height="14" uuid="c68d35e7-bdbd-4198-99a1-2f6db92c5d24" />
+                <reportElement style="Label" x="0" y="86" width="40" height="14"
+                    uuid="c68d35e7-bdbd-4198-99a1-2f6db92c5d24" />
                 <text><![CDATA[Từ ngày:]]></text>
             </staticText>
             <textField pattern="dd/MM/yyyy">
-                <reportElement style="Base" x="42" y="86" width="84" height="14" uuid="3d814ba0-f6fa-40b8-a4f5-1e9372df2fef" />
+                <reportElement style="Base" x="42" y="86" width="84" height="14"
+                    uuid="3d814ba0-f6fa-40b8-a4f5-1e9372df2fef" />
                 <textFieldExpression><![CDATA[$P{START_DATE}]]></textFieldExpression>
             </textField>
             <staticText>
-                <reportElement style="Label" x="148" y="86" width="40" height="14" uuid="a487d559-dc1e-40aa-9f26-31d11cc6eaf5" />
+                <reportElement style="Label" x="148" y="86" width="40" height="14"
+                    uuid="a487d559-dc1e-40aa-9f26-31d11cc6eaf5" />
                 <text><![CDATA[Đến:]]></text>
             </staticText>
             <textField pattern="dd/MM/yyyy">
-                <reportElement style="Base" x="188" y="86" width="84" height="14" uuid="5e4b3e42-f9f3-48b7-98cc-78b0ecf18055" />
+                <reportElement style="Base" x="188" y="86" width="84" height="14"
+                    uuid="5e4b3e42-f9f3-48b7-98cc-78b0ecf18055" />
                 <textFieldExpression><![CDATA[$P{END_DATE}]]></textFieldExpression>
             </textField>
             <staticText>
-                <reportElement style="Label" x="294" y="86" width="60" height="14" uuid="ac171ab4-d9d4-49e2-9368-c1f5e03a3409" />
+                <reportElement style="Label" x="294" y="86" width="60" height="14"
+                    uuid="ac171ab4-d9d4-49e2-9368-c1f5e03a3409" />
                 <text><![CDATA[Nhóm theo:]]></text>
             </staticText>
             <textField>
-                <reportElement style="Base" x="356" y="86" width="120" height="14" uuid="ca2024ac-f563-48d2-bec3-06c13cc77a1c" />
+                <reportElement style="Base" x="356" y="86" width="120" height="14"
+                    uuid="ca2024ac-f563-48d2-bec3-06c13cc77a1c" />
                 <textFieldExpression><![CDATA[$P{REPORT_TYPE_LABEL}]]></textFieldExpression>
             </textField>
             <staticText>
-                <reportElement style="Label" x="500" y="86" width="58" height="14" uuid="b0a4a4cc-8d5e-4d43-9e0c-9d9a0d7d0101" />
+                <reportElement style="Label" x="500" y="86" width="58" height="14"
+                    uuid="b0a4a4cc-8d5e-4d43-9e0c-9d9a0d7d0101" />
                 <text><![CDATA[Phạm vi:]]></text>
             </staticText>
             <textField>
-                <reportElement style="Base" x="560" y="86" width="222" height="14" uuid="dcf27901-9936-43e0-a4c0-2b9b2c686b91" />
+                <reportElement style="Base" x="560" y="86" width="222" height="14"
+                    uuid="dcf27901-9936-43e0-a4c0-2b9b2c686b91" />
                 <textFieldExpression><![CDATA[$P{STORE_NAME} == null ? "Toàn hệ thống" : $P{STORE_NAME}]]></textFieldExpression>
             </textField>
 
-            <rectangle radius="6"><reportElement x="0" y="114" width="182" height="48" backcolor="#F0FDFA" uuid="d812a089-b5a3-4d5c-8a48-3870f59727e4" /><graphicElement><pen lineWidth="0.5" lineColor="#99F6E4" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="14" y="124" width="130" height="12" uuid="9d6d8714-9e1b-4b93-bb59-60209b258930" /><text><![CDATA[Tổng doanh thu]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="14" y="140" width="154" height="16" forecolor="#0F766E" uuid="3eef45ab-9e3f-4928-9cd4-6021954f92f4" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_revenue}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="198" y="114" width="182" height="48" backcolor="#F8FAFC" uuid="e40d62f7-cdfd-4c0f-a832-c0b0d98782ae" /><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="212" y="124" width="130" height="12" uuid="8ba51185-2677-4df0-b5cc-7a7257e5c4fa" /><text><![CDATA[Tổng số đơn]]></text></staticText>
-            <textField pattern="#,##0"><reportElement x="212" y="140" width="154" height="16" forecolor="#0F766E" uuid="3e83bf53-0a15-4ec4-9050-7d6ac8f96563" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_orders}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="396" y="114" width="182" height="48" backcolor="#F8FAFC" uuid="df5ecbf6-44f4-471f-b081-83f6d675e767" /><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="410" y="124" width="130" height="12" uuid="8f3b0310-7d95-41dc-8fe0-643970478af1" /><text><![CDATA[Sản phẩm bán ra]]></text></staticText>
-            <textField pattern="#,##0"><reportElement x="410" y="140" width="154" height="16" forecolor="#0F766E" uuid="944e2185-c095-43f0-8f51-0b8af7fdd85c" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_products_sold}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="594" y="114" width="188" height="48" backcolor="#F8FAFC" uuid="93077f7d-8a58-4a78-ac10-3b1604b1d5ec" /><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="608" y="124" width="130" height="12" uuid="78cf91d1-7fd0-49ec-8145-55d5a9688b1a" /><text><![CDATA[Giá trị TB/đơn]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="608" y="140" width="160" height="16" forecolor="#0F766E" uuid="2c67d7a3-d1d4-4b85-9e9b-01538d8728d0" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{avg_order_value}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="0" y="174" width="182" height="48" backcolor="#EEF2FF" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a01" /><graphicElement><pen lineWidth="0.5" lineColor="#C7D2FE" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="14" y="184" width="140" height="12" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a02" /><text><![CDATA[Tiền nhập kho sau VAT]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="14" y="200" width="154" height="16" forecolor="#4338CA" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a03" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_import_cost}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="198" y="174" width="182" height="48" backcolor="#ECFDF5" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a04" /><graphicElement><pen lineWidth="0.5" lineColor="#A7F3D0" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="212" y="184" width="140" height="12" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a05" /><text><![CDATA[Lãi gộp tạm tính]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="212" y="200" width="154" height="16" forecolor="#059669" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a06" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_gross_profit}]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="396" y="174" width="182" height="48" backcolor="#F8FAFC" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a07" /><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="410" y="184" width="140" height="12" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a08" /><text><![CDATA[Biên lãi gộp]]></text></staticText>
-            <textField><reportElement x="410" y="200" width="154" height="16" forecolor="#0F766E" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a09" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[($F{total_gross_profit_margin} == null ? "0" : new java.text.DecimalFormat("#,##0.##").format($F{total_gross_profit_margin})) + "%"]]></textFieldExpression></textField>
-
-            <rectangle radius="6"><reportElement x="594" y="174" width="188" height="48" backcolor="#FEF2F2" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a10" /><graphicElement><pen lineWidth="0.5" lineColor="#FECACA" /></graphicElement></rectangle>
-            <staticText><reportElement style="SmallMuted" x="608" y="184" width="140" height="12" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a11" /><text><![CDATA[Hiệu quả nhập - bán]]></text></staticText>
-            <textField><reportElement x="608" y="200" width="160" height="16" forecolor="#B91C1C" uuid="a0ed7e47-1234-4fa2-9b92-11269b2c1a12" /><textElement><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$F{total_gross_profit} == null ? "Chưa có dữ liệu" : ($F{total_gross_profit}.doubleValue() < 0 ? "Lỗ tạm tính" : "Có lãi")]]></textFieldExpression></textField>
         </band>
     </title>
 
     <columnHeader>
         <band height="26" splitType="Stretch">
-            <textField><reportElement style="TableHeader" x="0" y="0" width="130" height="24" uuid="74108b03-08cc-4868-a641-f40b86917ec6" /><box leftPadding="8" /><textElement verticalAlignment="Middle" /><textFieldExpression><![CDATA[$P{PERIOD_HEADER}]]></textFieldExpression></textField>
-            <staticText><reportElement style="TableHeader" x="130" y="0" width="70" height="24" uuid="2f31f3a9-0f6b-4718-80ef-91d95e9f9296" /><textElement textAlignment="Center" verticalAlignment="Middle" /><text><![CDATA[Số đơn]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="200" y="0" width="90" height="24" uuid="e40f77ff-9e9a-4e43-bc49-932cf835e1cb" /><textElement textAlignment="Center" verticalAlignment="Middle" /><text><![CDATA[SP bán ra]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="290" y="0" width="125" height="24" uuid="d07fe1b1-dce1-4a4b-8b98-a39a9030b770" /><box rightPadding="8" /><textElement textAlignment="Right" verticalAlignment="Middle" /><text><![CDATA[Doanh thu]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="415" y="0" width="125" height="24" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0001" /><box rightPadding="8" /><textElement textAlignment="Right" verticalAlignment="Middle" /><text><![CDATA[Tiền nhập]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="540" y="0" width="125" height="24" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0002" /><box rightPadding="8" /><textElement textAlignment="Right" verticalAlignment="Middle" /><text><![CDATA[Lãi gộp]]></text></staticText>
-            <staticText><reportElement style="TableHeader" x="665" y="0" width="117" height="24" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0003" /><box rightPadding="8" /><textElement textAlignment="Right" verticalAlignment="Middle" /><text><![CDATA[Biên lãi %]]></text></staticText>
+            <textField>
+                <reportElement style="TableHeader" x="0" y="0" width="130" height="24"
+                    uuid="74108b03-08cc-4868-a641-f40b86917ec6" />
+                <box leftPadding="8" />
+                <textElement verticalAlignment="Middle" />
+                <textFieldExpression><![CDATA[$P{PERIOD_HEADER}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement style="TableHeader" x="130" y="0" width="70" height="24"
+                    uuid="2f31f3a9-0f6b-4718-80ef-91d95e9f9296" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[Số đơn]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="200" y="0" width="90" height="24"
+                    uuid="e40f77ff-9e9a-4e43-bc49-932cf835e1cb" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[SP bán ra]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="290" y="0" width="125" height="24"
+                    uuid="d07fe1b1-dce1-4a4b-8b98-a39a9030b770" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Doanh thu]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="415" y="0" width="125" height="24"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0001" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Tiền nhập]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="540" y="0" width="125" height="24"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0002" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Lãi gộp]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="665" y="0" width="117" height="24"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0003" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Biên lãi %]]></text>
+            </staticText>
         </band>
     </columnHeader>
 
     <detail>
         <band height="24" splitType="Stretch">
-            <rectangle><reportElement x="0" y="0" width="782" height="24" backcolor="#FFFFFF" uuid="0a7be548-7df7-45ad-bef4-e067b15db31e" /><graphicElement><pen lineWidth="0.25" lineColor="#E5E7EB" /></graphicElement></rectangle>
-            <textField><reportElement style="TableCell" x="0" y="4" width="130" height="15" uuid="043f84ad-84bd-45a0-9200-2c3f8dd58871" /><box leftPadding="8" /><textFieldExpression><![CDATA[$F{period_label}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="TableCell" x="130" y="4" width="70" height="15" uuid="81e3ba2c-7997-4a56-90e0-18ac261ae3d6" /><textElement textAlignment="Center" /><textFieldExpression><![CDATA[$F{orders_count}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement style="TableCell" x="200" y="4" width="90" height="15" uuid="9eb831ba-b984-474b-9fd0-0a3e8ec551ec" /><textElement textAlignment="Center" /><textFieldExpression><![CDATA[$F{products_sold}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement style="Money" x="290" y="4" width="125" height="15" uuid="cd1f8fdb-af91-4b05-bbde-c067d53c7fe9" /><box rightPadding="8" /><textFieldExpression><![CDATA[$F{revenue}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement style="Money" x="415" y="4" width="125" height="15" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0004" /><box rightPadding="8" /><textFieldExpression><![CDATA[$F{import_cost}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement style="Money" x="540" y="4" width="125" height="15" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0005" /><box rightPadding="8" /><textFieldExpression><![CDATA[$F{gross_profit}]]></textFieldExpression></textField>
-            <textField><reportElement style="Money" x="665" y="4" width="117" height="15" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0006" /><box rightPadding="8" /><textFieldExpression><![CDATA[($F{gross_profit_margin} == null ? "0" : new java.text.DecimalFormat("#,##0.##").format($F{gross_profit_margin})) + "%"]]></textFieldExpression></textField>
+            <rectangle>
+                <reportElement x="0" y="0" width="782" height="24" backcolor="#FFFFFF"
+                    uuid="0a7be548-7df7-45ad-bef4-e067b15db31e" />
+                <graphicElement>
+                    <pen lineWidth="0.25" lineColor="#E5E7EB" />
+                </graphicElement>
+            </rectangle>
+            <textField>
+                <reportElement style="TableCell" x="0" y="4" width="130" height="15"
+                    uuid="043f84ad-84bd-45a0-9200-2c3f8dd58871" />
+                <box leftPadding="8" />
+                <textFieldExpression><![CDATA[$F{period_label}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="TableCell" x="130" y="4" width="70" height="15"
+                    uuid="81e3ba2c-7997-4a56-90e0-18ac261ae3d6" />
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA[$F{orders_count}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="TableCell" x="200" y="4" width="90" height="15"
+                    uuid="9eb831ba-b984-474b-9fd0-0a3e8ec551ec" />
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA[$F{products_sold}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement style="Money" x="290" y="4" width="125" height="15"
+                    uuid="cd1f8fdb-af91-4b05-bbde-c067d53c7fe9" />
+                <box rightPadding="8" />
+                <textFieldExpression><![CDATA[$F{revenue}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement style="Money" x="415" y="4" width="125" height="15"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0004" />
+                <box rightPadding="8" />
+                <textFieldExpression><![CDATA[$F{import_cost}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement style="Money" x="540" y="4" width="125" height="15"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0005" />
+                <box rightPadding="8" />
+                <textFieldExpression><![CDATA[$F{gross_profit}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="Money" x="665" y="4" width="117" height="15"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0006" />
+                <box rightPadding="8" />
+                <textFieldExpression><![CDATA[($F{gross_profit_margin} == null ? "0" : new java.text.DecimalFormat("#,##0.##").format($F{gross_profit_margin})) + "%"]]></textFieldExpression>
+            </textField>
         </band>
     </detail>
 
     <pageFooter>
         <band height="24" splitType="Stretch">
-            <line><reportElement x="0" y="0" width="782" height="1" uuid="9c988a1b-69bf-4b0f-b8ca-b1b4d1c05f5e" /><graphicElement><pen lineWidth="0.5" lineColor="#E5E7EB" /></graphicElement></line>
-            <textField pattern="dd/MM/yyyy HH:mm"><reportElement style="SmallMuted" x="0" y="8" width="180" height="12" uuid="6faad5c7-9536-4430-a57a-1477df5235fb" /><textFieldExpression><![CDATA[new java.util.Date()]]></textFieldExpression></textField>
-            <staticText><reportElement style="SmallMuted" x="190" y="8" width="220" height="12" uuid="557d3404-cf78-445d-98fb-78f35b7eb058" /><text><![CDATA[Tạo bởi JasperReports]]></text></staticText>
-            <textField><reportElement style="SmallMuted" x="700" y="8" width="82" height="12" uuid="62e4c5a3-224b-4182-ab9a-152833141f8d" /><textElement textAlignment="Right" /><textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression></textField>
+            <line>
+                <reportElement x="0" y="0" width="782" height="1"
+                    uuid="9c988a1b-69bf-4b0f-b8ca-b1b4d1c05f5e" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E5E7EB" />
+                </graphicElement>
+            </line>
+            <textField pattern="dd/MM/yyyy HH:mm">
+                <reportElement style="SmallMuted" x="0" y="8" width="180" height="12"
+                    uuid="6faad5c7-9536-4430-a57a-1477df5235fb" />
+                <textFieldExpression><![CDATA[new java.util.Date()]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement style="SmallMuted" x="190" y="8" width="220" height="12"
+                    uuid="557d3404-cf78-445d-98fb-78f35b7eb058" />
+                <text><![CDATA[Tạo bởi JasperReports]]></text>
+            </staticText>
+            <textField>
+                <reportElement style="SmallMuted" x="700" y="8" width="82" height="12"
+                    uuid="62e4c5a3-224b-4182-ab9a-152833141f8d" />
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
         </band>
     </pageFooter>
 
     <summary>
         <band height="102" splitType="Stretch">
-            <rectangle><reportElement x="0" y="10" width="782" height="24" backcolor="#ECFDF5" uuid="c1c2df51-d6b0-4f55-87f4-cf88db143269" /><graphicElement><pen lineWidth="0.5" lineColor="#A7F3D0" /></graphicElement></rectangle>
-            <staticText><reportElement x="0" y="15" width="130" height="14" forecolor="#065F46" uuid="f79e6899-d0fb-4175-a9e7-33306ca027c0" /><box leftPadding="8" /><textElement><font isBold="true" /></textElement><text><![CDATA[TỔNG CỘNG]]></text></staticText>
-            <textField pattern="#,##0"><reportElement x="130" y="15" width="70" height="14" forecolor="#065F46" uuid="6a0d8bb7-f85d-40bb-a5aa-29984baaa003" /><textElement textAlignment="Center"><font isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalOrders}]]></textFieldExpression></textField>
-            <textField pattern="#,##0"><reportElement x="200" y="15" width="90" height="14" forecolor="#065F46" uuid="8233ef51-ddea-47e4-842f-b7b27a7c2b28" /><textElement textAlignment="Center"><font isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalProductsSold}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement x="290" y="15" width="125" height="14" forecolor="#065F46" uuid="2b2a5ec1-fc26-49b3-b5e1-88a9721de3d2" /><box rightPadding="8" /><textElement textAlignment="Right"><font isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement x="415" y="15" width="125" height="14" forecolor="#065F46" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0007" /><box rightPadding="8" /><textElement textAlignment="Right"><font isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression></textField>
-            <textField pattern="#,##0.##"><reportElement x="540" y="15" width="125" height="14" forecolor="#065F46" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0008" /><box rightPadding="8" /><textElement textAlignment="Right"><font isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression></textField>
-            <textField><reportElement x="665" y="15" width="117" height="14" forecolor="#065F46" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0009" /><box rightPadding="8" /><textElement textAlignment="Right"><font isBold="true" /></textElement><textFieldExpression><![CDATA[($V{TotalRevenue} == null || $V{TotalRevenue}.doubleValue() == 0 ? "0" : new java.text.DecimalFormat("#,##0.##").format($V{TotalGrossProfit}.doubleValue() / $V{TotalRevenue}.doubleValue() * 100)) + "%"]]></textFieldExpression></textField>
+            <rectangle>
+                <reportElement x="0" y="10" width="782" height="24" backcolor="#ECFDF5"
+                    uuid="c1c2df51-d6b0-4f55-87f4-cf88db143269" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#A7F3D0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="15" width="130" height="14" forecolor="#065F46"
+                    uuid="f79e6899-d0fb-4175-a9e7-33306ca027c0" />
+                <box leftPadding="8" />
+                <textElement>
+                    <font isBold="true" />
+                </textElement>
+                <text><![CDATA[TỔNG CỘNG]]></text>
+            </staticText>
+            <textField pattern="#,##0">
+                <reportElement x="130" y="15" width="70" height="14" forecolor="#065F46"
+                    uuid="6a0d8bb7-f85d-40bb-a5aa-29984baaa003" />
+                <textElement textAlignment="Center">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalOrders}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement x="200" y="15" width="90" height="14" forecolor="#065F46"
+                    uuid="8233ef51-ddea-47e4-842f-b7b27a7c2b28" />
+                <textElement textAlignment="Center">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalProductsSold}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement x="290" y="15" width="125" height="14" forecolor="#065F46"
+                    uuid="2b2a5ec1-fc26-49b3-b5e1-88a9721de3d2" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement x="415" y="15" width="125" height="14" forecolor="#065F46"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0007" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##">
+                <reportElement x="540" y="15" width="125" height="14" forecolor="#065F46"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0008" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="665" y="15" width="117" height="14" forecolor="#065F46"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0009" />
+                <box rightPadding="8" />
+                <textElement textAlignment="Right">
+                    <font isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[($V{TotalRevenue} == null || $V{TotalRevenue}.doubleValue() == 0 ? "0" : new java.text.DecimalFormat("#,##0.##").format($V{TotalGrossProfit}.doubleValue() / $V{TotalRevenue}.doubleValue() * 100)) + "%"]]></textFieldExpression>
+            </textField>
 
-            <rectangle radius="6"><reportElement x="0" y="50" width="250" height="34" backcolor="#0F766E" uuid="8d36f7d1-f92e-4cca-9cf8-13c04db20d63" /><graphicElement><pen lineWidth="0.0" /></graphicElement></rectangle>
-            <staticText><reportElement x="14" y="59" width="100" height="16" forecolor="#CCFBF1" uuid="601569bf-a32c-4e6b-8cbb-39ec7d4d1152" /><textElement verticalAlignment="Middle"><font size="10" isBold="true" /></textElement><text><![CDATA[Doanh thu]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="122" y="57" width="112" height="18" forecolor="#FFFFFF" uuid="8f5de065-b261-4e5d-b3fb-9cced6f39d7e" /><textElement textAlignment="Right" verticalAlignment="Middle"><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression></textField>
+            <rectangle radius="6">
+                <reportElement x="0" y="50" width="250" height="34" backcolor="#0F766E"
+                    uuid="8d36f7d1-f92e-4cca-9cf8-13c04db20d63" />
+                <graphicElement>
+                    <pen lineWidth="0.0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="14" y="59" width="100" height="16" forecolor="#CCFBF1"
+                    uuid="601569bf-a32c-4e6b-8cbb-39ec7d4d1152" />
+                <textElement verticalAlignment="Middle">
+                    <font size="10" isBold="true" />
+                </textElement>
+                <text><![CDATA[Doanh thu]]></text>
+            </staticText>
+            <textField pattern="#,##0.##">
+                <reportElement x="122" y="57" width="112" height="18" forecolor="#FFFFFF"
+                    uuid="8f5de065-b261-4e5d-b3fb-9cced6f39d7e" />
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression>
+            </textField>
 
-            <rectangle radius="6"><reportElement x="266" y="50" width="250" height="34" backcolor="#4338CA" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0010" /><graphicElement><pen lineWidth="0.0" /></graphicElement></rectangle>
-            <staticText><reportElement x="280" y="59" width="100" height="16" forecolor="#E0E7FF" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0011" /><textElement verticalAlignment="Middle"><font size="10" isBold="true" /></textElement><text><![CDATA[Tiền nhập]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="388" y="57" width="112" height="18" forecolor="#FFFFFF" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0012" /><textElement textAlignment="Right" verticalAlignment="Middle"><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression></textField>
+            <rectangle radius="6">
+                <reportElement x="266" y="50" width="250" height="34" backcolor="#4338CA"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0010" />
+                <graphicElement>
+                    <pen lineWidth="0.0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="280" y="59" width="100" height="16" forecolor="#E0E7FF"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0011" />
+                <textElement verticalAlignment="Middle">
+                    <font size="10" isBold="true" />
+                </textElement>
+                <text><![CDATA[Tiền nhập]]></text>
+            </staticText>
+            <textField pattern="#,##0.##">
+                <reportElement x="388" y="57" width="112" height="18" forecolor="#FFFFFF"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0012" />
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression>
+            </textField>
 
-            <rectangle radius="6"><reportElement x="532" y="50" width="250" height="34" backcolor="#0F766E" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0013" /><graphicElement><pen lineWidth="0.0" /></graphicElement></rectangle>
-            <staticText><reportElement x="546" y="59" width="92" height="16" forecolor="#CCFBF1" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0014" /><textElement verticalAlignment="Middle"><font size="10" isBold="true" /></textElement><text><![CDATA[Lãi gộp]]></text></staticText>
-            <textField pattern="#,##0.##"><reportElement x="646" y="57" width="120" height="18" forecolor="#FFFFFF" uuid="a1f99038-ec23-49b8-a002-c4e7c02c0015" /><textElement textAlignment="Right" verticalAlignment="Middle"><font size="13" isBold="true" /></textElement><textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression></textField>
+            <rectangle radius="6">
+                <reportElement x="532" y="50" width="250" height="34" backcolor="#0F766E"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0013" />
+                <graphicElement>
+                    <pen lineWidth="0.0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="546" y="59" width="92" height="16" forecolor="#CCFBF1"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0014" />
+                <textElement verticalAlignment="Middle">
+                    <font size="10" isBold="true" />
+                </textElement>
+                <text><![CDATA[Lãi gộp]]></text>
+            </staticText>
+            <textField pattern="#,##0.##">
+                <reportElement x="646" y="57" width="120" height="18" forecolor="#FFFFFF"
+                    uuid="a1f99038-ec23-49b8-a002-c4e7c02c0015" />
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression>
+            </textField>
         </band>
     </summary>
 

@@ -10,8 +10,7 @@
     rightMargin="30"
     topMargin="25"
     bottomMargin="25"
-    whenNoDataType="AllSectionsNoDetail"
-    uuid="4a3f2a33-4d25-42b2-a2e7-4d7b0f6c4201">
+    whenNoDataType="AllSectionsNoDetail">
 
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle" />
 
@@ -27,6 +26,7 @@
     <parameter name="ORDER_ID" class="java.lang.String">
         <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
     </parameter>
+
     <parameter name="STORE_ID" class="java.lang.String">
         <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
     </parameter>
@@ -37,40 +37,71 @@ SELECT
     o.order_id,
     o.order_date,
     o.store_id,
-    NVL(s.store_name, o.store_id) AS store_name,
-    NVL(e.employee_name, o.employee_id) AS cashier_name,
-    NVL(o.payment_method_id, 'N/A') AS payment_method_name,
-    NVL(c.customer_name, 'Khách vãng lai') AS customer_name,
-    NVL(o.customer_id, 'N/A') AS customer_id,
-    o.status,
-    o.note,
+
+    NVL(s.store_name, TO_NCHAR(o.store_id)) AS store_name,
+    NVL(s.address, N'Chưa cập nhật') AS store_address,
+    NVL(TO_NCHAR(s.phone_number), N'Chưa cập nhật') AS store_phone,
+
+    NVL(e.employee_name, TO_NCHAR(o.employee_id)) AS cashier_name,
+
+    CASE
+        WHEN o.payment_method_id IS NULL THEN N'Chưa xác định'
+        WHEN UPPER(o.payment_method_id) LIKE '%CASH%' THEN N'Tiền mặt'
+        WHEN UPPER(o.payment_method_id) LIKE '%BANK%' THEN N'Chuyển khoản'
+        WHEN UPPER(o.payment_method_id) LIKE '%QR%' THEN N'QR/Chuyển khoản'
+        ELSE TO_NCHAR(o.payment_method_id)
+    END AS payment_method_name,
+
+    NVL(c.customer_name, N'Khách vãng lai') AS customer_name,
+    NVL(TO_NCHAR(o.customer_id), N'GUEST') AS customer_id,
+    NVL(TO_NCHAR(c.phone), N'Chưa cập nhật') AS customer_phone,
+    NVL(TO_NCHAR(c.email), N'Chưa cập nhật') AS customer_email,
+
+    CASE
+        WHEN UPPER(TO_CHAR(o.status)) = 'COMPLETED' THEN N'Đã thanh toán'
+        WHEN UPPER(TO_CHAR(o.status)) = 'PENDING' THEN N'Đang xử lý'
+        WHEN UPPER(TO_CHAR(o.status)) = 'CANCELLED' THEN N'Đã hủy'
+        ELSE NVL(o.status, N'Chưa xác định')
+    END AS status,
+
+    NVL(o.note, N'') AS note,
+
     CAST(0 AS NUMBER(15, 2)) AS discount_amount,
     NVL(o.total_amount, 0) AS subtotal_amount,
     NVL(o.total_amount, 0) AS total_amount,
+
     od.order_detail_id,
     od.product_id,
-    NVL(p.product_name, od.product_id) AS product_name,
+    NVL(p.product_name, TO_NCHAR(od.product_id)) AS product_name,
     NVL(od.quantity, 0) AS quantity,
     NVL(od.unit_price, 0) AS unit_price,
     NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total
+
 FROM ORDERS o
+
 JOIN ORDER_DETAILS od
     ON o.order_id = od.order_id
    AND NVL(od.is_deleted, 0) = 0
+
 LEFT JOIN PRODUCTS p
     ON od.product_id = p.product_id
+
 LEFT JOIN CUSTOMERS c
     ON o.customer_id = c.customer_id
+
 LEFT JOIN EMPLOYEES e
     ON o.employee_id = e.employee_id
+
 LEFT JOIN STORES s
     ON o.store_id = s.store_id
+
 WHERE o.order_id = $P{ORDER_ID}
   AND NVL(o.is_deleted, 0) = 0
   AND (
       $P{STORE_ID} IS NULL
       OR TRIM(o.store_id) = TRIM($P{STORE_ID})
   )
+
 ORDER BY od.order_detail_id
         ]]>
     </queryString>
@@ -79,10 +110,14 @@ ORDER BY od.order_detail_id
     <field name="order_date" class="java.util.Date" />
     <field name="store_id" class="java.lang.String" />
     <field name="store_name" class="java.lang.String" />
+    <field name="store_address" class="java.lang.String" />
+    <field name="store_phone" class="java.lang.String" />
     <field name="cashier_name" class="java.lang.String" />
     <field name="payment_method_name" class="java.lang.String" />
     <field name="customer_name" class="java.lang.String" />
     <field name="customer_id" class="java.lang.String" />
+    <field name="customer_phone" class="java.lang.String" />
+    <field name="customer_email" class="java.lang.String" />
     <field name="status" class="java.lang.String" />
     <field name="note" class="java.lang.String" />
     <field name="discount_amount" class="java.math.BigDecimal" />
@@ -95,36 +130,29 @@ ORDER BY od.order_detail_id
     <field name="unit_price" class="java.math.BigDecimal" />
     <field name="line_total" class="java.math.BigDecimal" />
 
-    <variable name="ItemCount" class="java.lang.Integer" calculation="Count">
-        <variableExpression><![CDATA[$F{order_detail_id}]]></variableExpression>
-    </variable>
-
     <variable name="LineSubtotal" class="java.math.BigDecimal" calculation="Sum">
         <variableExpression><![CDATA[$F{line_total}]]></variableExpression>
         <initialValueExpression><![CDATA[java.math.BigDecimal.ZERO]]></initialValueExpression>
     </variable>
 
     <title>
-        <band height="205" splitType="Stretch">
+        <band height="250" splitType="Stretch">
             <rectangle>
-                <reportElement x="0" y="0" width="535" height="82" backcolor="#0F766E"
-                    uuid="f0117990-dbd0-403e-866a-3eedb55c35e7" />
+                <reportElement x="0" y="0" width="535" height="82" backcolor="#0F766E" />
                 <graphicElement>
                     <pen lineWidth="0.0" />
                 </graphicElement>
             </rectangle>
 
             <rectangle radius="8">
-                <reportElement x="18" y="16" width="50" height="50" backcolor="#FFFFFF"
-                    uuid="c6b76fa1-78ef-4d2e-8f57-5d75c27a36a5" />
+                <reportElement x="18" y="16" width="50" height="50" backcolor="#FFFFFF" />
                 <graphicElement>
                     <pen lineWidth="0.0" />
                 </graphicElement>
             </rectangle>
 
             <staticText>
-                <reportElement x="18" y="31" width="50" height="18" forecolor="#0F766E"
-                    uuid="d72409f2-4b64-458a-86bd-d22f19d86319" />
+                <reportElement x="18" y="31" width="50" height="18" forecolor="#0F766E" />
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="9" isBold="true" />
                 </textElement>
@@ -132,8 +160,7 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <staticText>
-                <reportElement x="82" y="16" width="245" height="25" forecolor="#FFFFFF"
-                    uuid="ffdbf7b4-2eb0-49f4-a8bf-ce91088e4247" />
+                <reportElement x="82" y="16" width="245" height="25" forecolor="#FFFFFF" />
                 <textElement>
                     <font size="17" isBold="true" />
                 </textElement>
@@ -141,8 +168,7 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <staticText>
-                <reportElement x="82" y="43" width="250" height="14" forecolor="#CCFBF1"
-                    uuid="d64d345f-6a8b-4eec-a5a2-6207df7edbbb" />
+                <reportElement x="82" y="43" width="250" height="14" forecolor="#CCFBF1" />
                 <textElement>
                     <font size="9" />
                 </textElement>
@@ -150,8 +176,7 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <staticText>
-                <reportElement x="365" y="18" width="150" height="28" forecolor="#FFFFFF"
-                    uuid="ab09d1e4-f78f-4471-8b44-6288322e9037" />
+                <reportElement x="365" y="18" width="150" height="28" forecolor="#FFFFFF" />
                 <textElement textAlignment="Right">
                     <font size="18" isBold="true" />
                 </textElement>
@@ -159,8 +184,7 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <textField>
-                <reportElement x="365" y="50" width="150" height="14" forecolor="#CCFBF1"
-                    uuid="eb8eea59-958b-44bd-a1a2-dd465414fa0f" />
+                <reportElement x="365" y="50" width="150" height="14" forecolor="#CCFBF1" />
                 <textElement textAlignment="Right">
                     <font size="9" />
                 </textElement>
@@ -168,135 +192,157 @@ ORDER BY od.order_detail_id
             </textField>
 
             <rectangle radius="6">
-                <reportElement x="0" y="98" width="250" height="92" backcolor="#F8FAFC"
-                    uuid="a9c8d2e6-9a1a-4d18-9d1d-11f1d2010101" />
+                <reportElement x="0" y="98" width="250" height="132" backcolor="#F8FAFC" />
                 <graphicElement>
                     <pen lineWidth="0.4" lineColor="#E5E7EB" />
                 </graphicElement>
             </rectangle>
 
             <rectangle radius="6">
-                <reportElement x="285" y="98" width="250" height="92" backcolor="#F8FAFC"
-                    uuid="a9c8d2e6-9a1a-4d18-9d1d-11f1d2010102" />
+                <reportElement x="285" y="98" width="250" height="132" backcolor="#F8FAFC" />
                 <graphicElement>
                     <pen lineWidth="0.4" lineColor="#E5E7EB" />
                 </graphicElement>
             </rectangle>
 
             <staticText>
-                <reportElement style="SectionTitle" x="14" y="109" width="160" height="14"
-                    uuid="bb1a69af-b3e1-43e9-a3a9-5c75c6d9de43" />
+                <reportElement style="SectionTitle" x="14" y="109" width="160" height="14" />
                 <text><![CDATA[Thông tin hóa đơn]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="SmallMuted" x="14" y="130" width="58" height="12"
-                    uuid="6c00a77b-7f94-47cc-bda6-b2a09cce51ec" />
+                <reportElement style="SmallMuted" x="14" y="130" width="70" height="12" />
                 <text><![CDATA[Mã đơn]]></text>
             </staticText>
-
-            <textField>
-                <reportElement style="Base" x="82" y="130" width="150" height="12"
-                    uuid="40675cda-6629-4e94-a701-1521bd8df566" />
-                <textElement textAlignment="Right" />
+            <textField isBlankWhenNull="true">
+                <reportElement style="Base" x="92" y="130" width="140" height="12"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{order_id}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="14" y="145" width="58" height="12"
-                    uuid="53ed4719-3ff5-4b37-9349-d825d986a8ac" />
+                <reportElement style="SmallMuted" x="14" y="145" width="70" height="12" />
                 <text><![CDATA[Ngày lập]]></text>
             </staticText>
-
-            <textField pattern="dd/MM/yyyy">
-                <reportElement style="Base" x="82" y="145" width="150" height="12"
-                    uuid="14da8db2-0d89-42f0-abf9-12a10fe456de" />
-                <textElement textAlignment="Right" />
+            <textField pattern="dd/MM/yyyy HH:mm" isBlankWhenNull="true">
+                <reportElement style="Base" x="92" y="145" width="140" height="12"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{order_date}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="14" y="160" width="58" height="12"
-                    uuid="45454628-90b2-4994-a10e-e096f9098045" />
+                <reportElement style="SmallMuted" x="14" y="160" width="70" height="12" />
                 <text><![CDATA[Thu ngân]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
-                <reportElement style="Base" x="82" y="160" width="150" height="12"
-                    uuid="2a197f1d-4cce-4d40-80fd-818c0690f265" />
-                <textElement textAlignment="Right" />
+                <reportElement style="Base" x="92" y="160" width="140" height="12"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{cashier_name}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="14" y="175" width="58" height="12"
-                    uuid="b11d9a13-2801-48b4-a3e9-3a5d0f620001" />
+                <reportElement style="SmallMuted" x="14" y="175" width="70" height="12" />
                 <text><![CDATA[Chi nhánh]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
-                <reportElement style="Base" x="82" y="175" width="150" height="12"
-                    uuid="dd20d6c9-f6fb-4063-9d01-9a37de51f6e4" />
-                <textElement textAlignment="Right" />
-                <textFieldExpression><![CDATA[$F{store_name} == null ? $F{store_id} : $F{store_name}]]></textFieldExpression>
+                <reportElement style="Base" x="92" y="175" width="140" height="12"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
+                <textFieldExpression><![CDATA[$F{store_name}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SectionTitle" x="299" y="109" width="180" height="14"
-                    uuid="5ad26a28-9c41-438f-9e5c-93e9ff7845e4" />
+                <reportElement style="SmallMuted" x="14" y="190" width="70" height="12" />
+                <text><![CDATA[Địa chỉ]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true" textAdjust="StretchHeight">
+                <reportElement style="Base" x="92" y="190" width="140" height="20"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
+                <textFieldExpression><![CDATA[$F{store_address}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="SectionTitle" x="299" y="109" width="180" height="14" />
                 <text><![CDATA[Thông tin khách hàng]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="SmallMuted" x="299" y="130" width="70" height="12"
-                    uuid="afcc0a1f-b2ef-43aa-bf3a-80bc599187e1" />
+                <reportElement style="SmallMuted" x="299" y="130" width="74" height="12" />
                 <text><![CDATA[Khách hàng]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="130" width="135" height="12"
-                    uuid="cbeefab4-11cf-4ec6-a22c-b6f0f0ebfd15" />
-                <textElement textAlignment="Right" />
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{customer_name}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="299" y="145" width="70" height="12"
-                    uuid="841e131c-159c-40bf-b5fa-77ca747e61bb" />
+                <reportElement style="SmallMuted" x="299" y="145" width="74" height="12" />
                 <text><![CDATA[Mã khách]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="145" width="135" height="12"
-                    uuid="a5f44297-2e59-4547-b529-45bd70723f40" />
-                <textElement textAlignment="Right" />
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{customer_id}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="299" y="160" width="70" height="12"
-                    uuid="dc0d889d-2b87-4652-8e59-7c578de113d4" />
+                <reportElement style="SmallMuted" x="299" y="160" width="74" height="12" />
                 <text><![CDATA[Thanh toán]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="160" width="135" height="12"
-                    uuid="be4d559b-2744-485c-8400-1c4f7ae92d0e" />
-                <textElement textAlignment="Right" />
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{payment_method_name}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="299" y="175" width="70" height="12"
-                    uuid="ae8f6dcb-aaf8-4f75-8f5b-910bf0000001" />
+                <reportElement style="SmallMuted" x="299" y="175" width="74" height="12" />
                 <text><![CDATA[Trạng thái]]></text>
             </staticText>
-
             <textField isBlankWhenNull="true">
                 <reportElement style="Base" x="382" y="175" width="135" height="12"
-                    uuid="ae8f6dcb-aaf8-4f75-8f5b-910bf0000002" />
-                <textElement textAlignment="Right" />
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
                 <textFieldExpression><![CDATA[$F{status}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="SmallMuted" x="299" y="190" width="74" height="12" />
+                <text><![CDATA[Mã CH]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="Base" x="382" y="190" width="135" height="12"
+                    forecolor="#111827" />
+                <textElement textAlignment="Right">
+                    <font size="8" />
+                </textElement>
+                <textFieldExpression><![CDATA[$F{store_id}]]></textFieldExpression>
             </textField>
         </band>
     </title>
@@ -304,30 +350,26 @@ ORDER BY od.order_detail_id
     <columnHeader>
         <band height="28" splitType="Stretch">
             <staticText>
-                <reportElement style="TableHeader" x="0" y="0" width="245" height="26"
-                    uuid="1c885221-607e-4c26-bd62-0494c347ca3c" />
+                <reportElement style="TableHeader" x="0" y="0" width="245" height="26" />
                 <box leftPadding="8" />
                 <textElement verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="TableHeader" x="245" y="0" width="60" height="26"
-                    uuid="3f0197bf-8e66-4bf8-9e01-dc552642432b" />
+                <reportElement style="TableHeader" x="245" y="0" width="60" height="26" />
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[SL]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="TableHeader" x="305" y="0" width="105" height="26"
-                    uuid="55e35ee0-0d9b-424d-a65a-97c265398823" />
+                <reportElement style="TableHeader" x="305" y="0" width="105" height="26" />
                 <textElement textAlignment="Right" verticalAlignment="Middle" />
                 <text><![CDATA[Đơn giá]]></text>
             </staticText>
 
             <staticText>
-                <reportElement style="TableHeader" x="410" y="0" width="125" height="26"
-                    uuid="76b258bf-2391-474e-a308-abf1717053d3" />
+                <reportElement style="TableHeader" x="410" y="0" width="125" height="26" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right" verticalAlignment="Middle" />
                 <text><![CDATA[Thành tiền]]></text>
@@ -338,37 +380,32 @@ ORDER BY od.order_detail_id
     <detail>
         <band height="26" splitType="Stretch">
             <rectangle>
-                <reportElement x="0" y="0" width="535" height="26" backcolor="#FFFFFF"
-                    uuid="127023d1-bde3-4463-bd32-d14c1f1ed3dc" />
+                <reportElement x="0" y="0" width="535" height="26" backcolor="#FFFFFF" />
                 <graphicElement>
                     <pen lineWidth="0.25" lineColor="#E5E7EB" />
                 </graphicElement>
             </rectangle>
 
             <textField isBlankWhenNull="true" textAdjust="StretchHeight">
-                <reportElement style="TableCell" x="0" y="5" width="245" height="16"
-                    uuid="3c714d4a-2469-4c6b-9e16-ef4fd9e2e186" />
+                <reportElement style="TableCell" x="0" y="5" width="245" height="16" />
                 <box leftPadding="8" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
 
             <textField pattern="#,##0">
-                <reportElement style="TableCell" x="245" y="5" width="60" height="16"
-                    uuid="ba662723-0101-4850-9e5d-9a361a76dcb8" />
+                <reportElement style="TableCell" x="245" y="5" width="60" height="16" />
                 <textElement textAlignment="Center" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
 
             <textField pattern="#,##0">
-                <reportElement style="Money" x="305" y="5" width="105" height="16"
-                    uuid="19812911-635b-48d6-8489-d2d4f1cc6a33" />
+                <reportElement style="Money" x="305" y="5" width="105" height="16" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
 
             <textField pattern="#,##0">
-                <reportElement style="Money" x="410" y="5" width="125" height="16"
-                    uuid="f07742a5-c8c6-4691-bcc2-b6c74029b5bf" />
+                <reportElement style="Money" x="410" y="5" width="125" height="16" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
@@ -379,22 +416,19 @@ ORDER BY od.order_detail_id
     <pageFooter>
         <band height="25" splitType="Stretch">
             <line>
-                <reportElement x="0" y="0" width="535" height="1"
-                    uuid="be21e3ba-7455-40b3-a021-a73ac141dff7" />
+                <reportElement x="0" y="0" width="535" height="1" />
                 <graphicElement>
                     <pen lineWidth="0.5" lineColor="#E5E7EB" />
                 </graphicElement>
             </line>
 
             <staticText>
-                <reportElement style="SmallMuted" x="0" y="8" width="280" height="12"
-                    uuid="0c4187d0-6f24-4c66-8873-9c069dbbc6f8" />
+                <reportElement style="SmallMuted" x="0" y="8" width="280" height="12" />
                 <text><![CDATA[Smart Supermarket - Tạo bởi JasperReports]]></text>
             </staticText>
 
             <textField>
-                <reportElement style="SmallMuted" x="455" y="8" width="80" height="12"
-                    uuid="8d113a48-f93a-4ca6-bf92-12f197c6c04f" />
+                <reportElement style="SmallMuted" x="455" y="8" width="80" height="12" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression>
             </textField>
@@ -402,64 +436,65 @@ ORDER BY od.order_detail_id
     </pageFooter>
 
     <summary>
-        <band height="140" splitType="Stretch">
+        <band height="150" splitType="Stretch">
             <staticText>
-                <reportElement style="SmallMuted" x="0" y="12" width="300" height="14"
-                    uuid="6a9f1ad2-223d-4748-8eb0-3a6067c5cc10" />
+                <reportElement style="SmallMuted" x="0" y="12" width="300" height="14" />
                 <text><![CDATA[Cảm ơn quý khách đã mua hàng!]]></text>
             </staticText>
 
+            <textField isBlankWhenNull="true">
+                <reportElement style="SmallMuted" x="0" y="30" width="300" height="12" />
+                <textFieldExpression><![CDATA["Chi nhánh: " + $F{store_name}]]></textFieldExpression>
+            </textField>
+
+            <textField isBlankWhenNull="true">
+                <reportElement style="SmallMuted" x="0" y="45" width="300" height="12" />
+                <textFieldExpression><![CDATA["Địa chỉ: " + $F{store_address}]]></textFieldExpression>
+            </textField>
+
             <textField textAdjust="StretchHeight" isBlankWhenNull="true">
-                <reportElement style="SmallMuted" x="0" y="30" width="300" height="34"
-                    uuid="3318c09e-569f-48d7-973e-eb9a32b54cf3" />
-                <textFieldExpression><![CDATA[$F{note} == null ? "" : "Ghi chú: " + $F{note}]]></textFieldExpression>
+                <reportElement style="SmallMuted" x="0" y="62" width="300" height="34" />
+                <textFieldExpression><![CDATA[$F{note} == null || $F{note}.trim().isEmpty() ? "" : "Ghi chú: " + $F{note}]]></textFieldExpression>
             </textField>
 
             <rectangle radius="8">
-                <reportElement x="315" y="10" width="220" height="105" backcolor="#F8FAFC"
-                    uuid="0b33f707-8c87-4917-9945-899ea732755c" />
+                <reportElement x="315" y="10" width="220" height="115" backcolor="#F8FAFC" />
                 <graphicElement>
                     <pen lineWidth="0.5" lineColor="#CBD5E1" />
                 </graphicElement>
             </rectangle>
 
             <staticText>
-                <reportElement style="Label" x="335" y="26" width="80" height="14"
-                    uuid="85939c75-d3e8-41ad-af63-558c5e02ff43" />
+                <reportElement style="Label" x="335" y="26" width="80" height="14" />
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
 
             <textField pattern="#,##0">
-                <reportElement style="Money" x="425" y="26" width="90" height="14"
-                    uuid="31975ef6-19e6-4ea5-9160-6f3f511668c7" />
+                <reportElement style="Money" x="425" y="26" width="90" height="14" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$V{LineSubtotal} == null ? java.math.BigDecimal.ZERO : $V{LineSubtotal}]]></textFieldExpression>
             </textField>
 
             <staticText>
-                <reportElement style="Label" x="335" y="48" width="80" height="14"
-                    uuid="4126ba23-bd03-4ad8-8c97-63283fab89d9" />
+                <reportElement style="Label" x="335" y="48" width="80" height="14" />
                 <text><![CDATA[Giảm giá]]></text>
             </staticText>
 
             <textField pattern="#,##0">
-                <reportElement style="Money" x="425" y="48" width="90" height="14"
-                    uuid="bce74b44-dae6-4455-9ea5-c3b213627f4f" />
+                <reportElement style="Money" x="425" y="48" width="90" height="14" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$F{discount_amount} == null ? java.math.BigDecimal.ZERO : $F{discount_amount}]]></textFieldExpression>
             </textField>
 
             <line>
-                <reportElement x="335" y="70" width="180" height="1"
-                    uuid="41cc1440-49be-428f-b8b5-5b164c51462f" />
+                <reportElement x="335" y="70" width="180" height="1" />
                 <graphicElement>
                     <pen lineWidth="0.75" lineColor="#CBD5E1" />
                 </graphicElement>
             </line>
 
             <staticText>
-                <reportElement x="335" y="82" width="85" height="20" forecolor="#0F766E"
-                    uuid="b15f30c3-b078-4863-96e5-71f42fa785ca" />
+                <reportElement x="335" y="82" width="85" height="20" forecolor="#0F766E" />
                 <textElement verticalAlignment="Middle">
                     <font size="12" isBold="true" />
                 </textElement>
@@ -467,8 +502,7 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <textField pattern="#,##0">
-                <reportElement x="420" y="82" width="95" height="20" forecolor="#0F766E"
-                    uuid="f268c68f-9a8a-4996-8e12-880318e6526b" />
+                <reportElement x="420" y="82" width="95" height="20" forecolor="#0F766E" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
                     <font size="13" isBold="true" />
                 </textElement>
@@ -476,8 +510,7 @@ ORDER BY od.order_detail_id
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="452" y="103" width="63" height="10"
-                    uuid="82c46fef-ea8b-4483-a237-a2fabce59d77" />
+                <reportElement style="SmallMuted" x="452" y="106" width="63" height="10" />
                 <textElement textAlignment="Right" />
                 <text><![CDATA[VND]]></text>
             </staticText>
