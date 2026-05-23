@@ -40,7 +40,8 @@
                        CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
                        CAST(TO_CHAR(NVL(sales.total_revenue, 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(120)) AS col3,
                        CAST(TO_CHAR(NVL(imports.total_import_cost, 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(120)) AS col4,
-                       CAST(TO_CHAR(NVL(sales.total_revenue, 0) - NVL(imports.total_import_cost, 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(120)) AS col5
+                       CAST(TO_CHAR(NVL(sales.total_revenue, 0) - NVL(imports.total_import_cost, 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(120)) AS col5,
+                       NVL(sales.total_revenue, 0) AS sort_value
                 FROM stores s
                 LEFT JOIN (
                     SELECT store_id, SUM(total_amount) AS total_revenue
@@ -73,7 +74,8 @@
                        CAST(NVL(TO_CHAR(s.store_name), TO_CHAR(s.address)) AS VARCHAR2(180)) AS col2,
                        CAST(TO_CHAR(COUNT(DISTINCT i.product_id)) AS VARCHAR2(80)) AS col3,
                        CAST(TO_CHAR(NVL(SUM(NVL(i.quantity, 0)), 0)) AS VARCHAR2(80)) AS col4,
-                       CAST(TO_CHAR(SUM(CASE WHEN NVL(i.quantity, 0) <= 20 THEN 1 ELSE 0 END)) AS VARCHAR2(80)) AS col5
+                       CAST(TO_CHAR(SUM(CASE WHEN NVL(i.quantity, 0) <= 20 THEN 1 ELSE 0 END)) AS VARCHAR2(80)) AS col5,
+                       NVL(SUM(NVL(i.quantity, 0)), 0) AS sort_value
                 FROM stores s
                 LEFT JOIN inventory i ON i.store_id = s.store_id AND NVL(i.is_deleted, 0) = 0
                 WHERE NVL(s.is_deleted, 0) = 0
@@ -87,7 +89,8 @@
                        CAST(employee_id AS VARCHAR2(80)) AS col2,
                        CAST(employee_name AS VARCHAR2(180)) AS col3,
                        CAST(TO_CHAR(total_orders) AS VARCHAR2(80)) AS col4,
-                       CAST(TO_CHAR(revenue, 'FM999G999G999G999') || ' VND' AS VARCHAR2(100)) AS col5
+                       CAST(TO_CHAR(revenue, 'FM999G999G999G999') || ' VND' AS VARCHAR2(100)) AS col5,
+                       revenue AS sort_value
                 FROM (
                     SELECT NVL(TO_CHAR(s.store_name), e.store_id) AS store_name,
                            e.employee_id,
@@ -113,11 +116,11 @@
                 )
                 WHERE ROWNUM <= 10
 
-                UNION ALL SELECT 89, CAST('CHART_FINAL_REVENUE' AS VARCHAR2(100)), '', '', '', '', '' FROM dual
-                UNION ALL SELECT 90, CAST('CHART_PAGE_1' AS VARCHAR2(100)), '', '', '', '', '' FROM dual
-                UNION ALL SELECT 91, CAST('CHART_PAGE_2' AS VARCHAR2(100)), '', '', '', '', '' FROM dual
+                UNION ALL SELECT 89, CAST('CHART_FINAL_REVENUE' AS VARCHAR2(100)), '', '', '', '', '', 0 FROM dual
+                UNION ALL SELECT 90, CAST('CHART_PAGE_1' AS VARCHAR2(100)), '', '', '', '', '', 0 FROM dual
+                UNION ALL SELECT 91, CAST('CHART_PAGE_2' AS VARCHAR2(100)), '', '', '', '', '', 0 FROM dual
             )
-            ORDER BY section_no, col1, col2
+            ORDER BY section_no, sort_value DESC, col1, col2
         ]]>
     </queryString>
 
@@ -187,14 +190,15 @@
             <rectangle radius="10"><reportElement x="8" y="22" width="519" height="38" backcolor="#ECFDF5"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
             <rectangle radius="6"><reportElement x="20" y="34" width="6" height="14" backcolor="#10B981"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
             <staticText><reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A"/><textElement><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[BIỂU ĐỒ DOANH THU CUỐI CÙNG THEO CHI NHÁNH]]></text></staticText>
-            <staticText><reportElement x="38" y="46" width="470" height="12" forecolor="#64748B"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[So sánh Doanh thu, Tiền nhập kho sau VAT và Lãi gộp tạm tính trong tháng hiện tại.]]></text></staticText>
+            <staticText><reportElement x="38" y="46" width="470" height="12" forecolor="#64748B"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[Sắp xếp theo Doanh thu giảm dần. Công thức: Lãi gộp = Doanh thu - Tiền nhập kho sau VAT.]]></text></staticText>
             <rectangle radius="12"><reportElement x="8" y="72" width="519" height="630" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
             <staticText><reportElement x="18" y="86" width="499" height="22" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="14" isBold="true"/></textElement><text><![CDATA[Doanh thu - Tiền nhập - Lãi gộp theo chi nhánh]]></text></staticText>
+            <staticText><reportElement x="18" y="108" width="499" height="12" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8" isItalic="true"/></textElement><text><![CDATA[Công thức tính: Lãi gộp tạm tính = Doanh thu bán hàng - Tiền nhập kho sau VAT]]></text></staticText>
             <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
-                <reportElement x="12" y="118" width="511" height="550" />
+                <reportElement x="12" y="128" width="511" height="530" />
                 <imageExpression><![CDATA[view.AdminFinalRevenueChartProvider.createFinalRevenueChartImage()]]></imageExpression>
             </image>
-            <staticText><reportElement x="20" y="713" width="495" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isItalic="true"/></textElement><text><![CDATA[Ghi chú: Lãi gộp tạm tính = doanh thu bán hàng - tiền nhập kho sau VAT trong tháng hiện tại.]]></text></staticText>
+            <staticText><reportElement x="20" y="713" width="495" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isItalic="true"/></textElement><text><![CDATA[Ghi chú: Các chi nhánh trong biểu đồ được sắp xếp theo doanh thu tháng hiện tại từ cao xuống thấp.]]></text></staticText>
         </band>
         <band height="755" splitType="Prevent">
             <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 90]]></printWhenExpression>
