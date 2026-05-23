@@ -5,8 +5,7 @@ import business.sql.sales_order.OrderDetailsSql;
 import business.sql.sales_order.OrdersSql;
 import common.db.DatabaseConnection;
 import common.exception.ConcurrentCheckoutException;
-import common.realtime.RealtimeClient;
-import common.sync.SyncVersionDao;
+import common.realtime.RealtimeNotifier;
 import model.order.Order;
 import model.order.OrderDetail;
 
@@ -42,7 +41,7 @@ public class PaymentService {
             }
 
             con.commit();
-            publishPaymentChanges();
+            publishPaymentChanges("PAYMENT_SUCCESS:" + hoaDon.getOrderId() + ":STORE:" + storeId);
             return true;
 
         } catch (Exception e) {
@@ -148,7 +147,7 @@ public class PaymentService {
             }
 
             con.commit();
-            publishPaymentChanges();
+            publishPaymentChanges("ORDER_CANCELLED:" + orderId + ":STORE:" + storeId);
             return true;
 
         } catch (Exception e) {
@@ -253,7 +252,7 @@ public class PaymentService {
             }
 
             con.commit();
-            publishPaymentChanges();
+            publishPaymentChanges("PAYMENT_SUCCESS:" + order.getOrderId() + ":STORE:" + storeId);
             return true;
 
         } catch (ConcurrentCheckoutException e) {
@@ -505,25 +504,21 @@ public class PaymentService {
                 || s.equals("cancelled");
     }
 
-    private static void publishPaymentChanges() {
+    private static void publishPaymentChanges(String message) {
         try {
-            SyncVersionDao.bumpVersion("CUSTOMERS");
-            SyncVersionDao.bumpVersion("ORDERS");
-            SyncVersionDao.bumpVersion("ORDER_DETAILS");
-            SyncVersionDao.bumpVersion("INVENTORY");
-            SyncVersionDao.bumpVersion("PRODUCTS");
+            String baseMessage = message == null || message.trim().isEmpty()
+                    ? "PAYMENT_CHANGED"
+                    : message.trim();
 
-            RealtimeClient.send("CUSTOMERS_CHANGED");
-            RealtimeClient.send("ORDERS_CHANGED");
-            RealtimeClient.send("ORDER_DETAILS_CHANGED");
-            RealtimeClient.send("INVENTORY_CHANGED");
-            RealtimeClient.send("PRODUCTS_CHANGED");
-
-            common.events.EventBus.publish(new common.events.AppDataChangedEvent(common.events.AppEventType.CUSTOMERS, "CUSTOMERS_CHANGED_LOCAL"));
-            common.events.EventBus.publish(new common.events.AppDataChangedEvent(common.events.AppEventType.ORDERS, "ORDERS_CHANGED_LOCAL"));
-            common.events.EventBus.publish(new common.events.AppDataChangedEvent(common.events.AppEventType.INVENTORY, "INVENTORY_CHANGED_LOCAL"));
-            common.events.EventBus.publish(new common.events.AppDataChangedEvent(common.events.AppEventType.PRODUCTS, "PRODUCTS_CHANGED_LOCAL"));
-        } catch (Exception ignored) {
+            RealtimeNotifier.customersChanged("CUSTOMERS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.ordersChanged("ORDERS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.orderDetailsChanged("ORDER_DETAILS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.inventoryChanged("INVENTORY_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.productsChanged("PRODUCTS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.statisticsChanged("STATISTICS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.dashboardChanged("DASHBOARD_UPDATED_BY_" + baseMessage);
+        } catch (Exception ex) {
+            System.err.println("[PaymentService] realtime notify error: " + ex.getMessage());
         }
     }
 
