@@ -43,8 +43,7 @@
                        CAST(TO_CHAR(NVL(sales.total_revenue, 0) - NVL(imports.total_import_cost, 0), 'FM999G999G999G999') || ' VND' AS VARCHAR2(120)) AS col5
                 FROM stores s
                 LEFT JOIN (
-                    SELECT store_id,
-                           SUM(total_amount) AS total_revenue
+                    SELECT store_id, SUM(total_amount) AS total_revenue
                     FROM orders
                     WHERE NVL(is_deleted, 0) = 0
                       AND order_date >= TRUNC(SYSDATE, 'MM')
@@ -57,8 +56,7 @@
                     GROUP BY store_id
                 ) sales ON sales.store_id = s.store_id
                 LEFT JOIN (
-                    SELECT store_id,
-                           SUM(total_after_tax) AS total_import_cost
+                    SELECT store_id, SUM(total_after_tax) AS total_import_cost
                     FROM purchase_receipts
                     WHERE NVL(is_deleted, 0) = 0
                       AND created_at >= TRUNC(SYSDATE, 'MM')
@@ -131,34 +129,6 @@
     <field name="COL4" class="java.lang.String" />
     <field name="COL5" class="java.lang.String" />
 
-    <title>
-        <band height="202">
-            <rectangle radius="14"><reportElement x="0" y="0" width="535" height="82" backcolor="#FF6F00"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <rectangle radius="10"><reportElement x="18" y="17" width="52" height="48" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="35" width="52" height="12" forecolor="#FF6F00"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8" isBold="true"/></textElement><text><![CDATA[LOGO]]></text></staticText>
-            <textField><reportElement x="86" y="17" width="260" height="24" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="16" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_TITLE}]]></textFieldExpression></textField>
-            <textField><reportElement x="86" y="43" width="300" height="15" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_SUBTITLE}]]></textFieldExpression></textField>
-            <staticText><reportElement x="350" y="18" width="165" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="14" isBold="true"/></textElement><text><![CDATA[ADMIN REPORT]]></text></staticText>
-            <textField><reportElement x="350" y="45" width="165" height="14" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression></textField>
-
-            <rectangle radius="12"><reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tổng chi nhánh]]></text></staticText>
-            <textField><reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression></textField>
-
-            <rectangle radius="12"><reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hoạt động]]></text></staticText>
-            <textField><reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression></textField>
-
-            <rectangle radius="12"><reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hôm nay]]></text></staticText>
-            <textField><reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression></textField>
-
-            <rectangle radius="12"><reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tháng này]]></text></staticText>
-            <textField><reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression></textField>
-        </band>
-    </title>
-
     <group name="SectionGroup">
         <groupExpression><![CDATA[$F{SECTION_NAME}]]></groupExpression>
         <groupHeader>
@@ -177,6 +147,30 @@
         </groupHeader>
     </group>
 
+    <title>
+        <band height="202">
+            <rectangle radius="14"><reportElement x="0" y="0" width="535" height="82" backcolor="#FF6F00"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <rectangle radius="10"><reportElement x="18" y="17" width="52" height="48" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
+            <staticText><reportElement x="18" y="35" width="52" height="12" forecolor="#FF6F00"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8" isBold="true"/></textElement><text><![CDATA[LOGO]]></text></staticText>
+            <textField><reportElement x="86" y="17" width="260" height="24" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="16" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_TITLE}]]></textFieldExpression></textField>
+            <textField><reportElement x="86" y="43" width="300" height="15" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_SUBTITLE}]]></textFieldExpression></textField>
+            <staticText><reportElement x="350" y="18" width="165" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="14" isBold="true"/></textElement><text><![CDATA[ADMIN REPORT]]></text></staticText>
+            <textField><reportElement x="350" y="45" width="165" height="14" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression></textField>
+            <rectangle radius="12"><reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tổng chi nhánh]]></text></staticText>
+            <textField><reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression></textField>
+            <rectangle radius="12"><reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hoạt động]]></text></staticText>
+            <textField><reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression></textField>
+            <rectangle radius="12"><reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hôm nay]]></text></staticText>
+            <textField><reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression></textField>
+            <rectangle radius="12"><reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
+            <staticText><reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tháng này]]></text></staticText>
+            <textField><reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression></textField>
+        </band>
+    </title>
+
     <detail>
         <band height="24">
             <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() < 89]]></printWhenExpression>
@@ -187,7 +181,6 @@
             <textField isBlankWhenNull="true"><reportElement x="355" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression></textField>
             <textField isBlankWhenNull="true"><reportElement x="445" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression></textField>
         </band>
-
         <band height="755" splitType="Prevent">
             <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 89]]></printWhenExpression>
             <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
@@ -203,7 +196,6 @@
             </image>
             <staticText><reportElement x="20" y="713" width="495" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isItalic="true"/></textElement><text><![CDATA[Ghi chú: Lãi gộp tạm tính = doanh thu bán hàng - tiền nhập kho sau VAT trong tháng hiện tại.]]></text></staticText>
         </band>
-
         <band height="755" splitType="Prevent">
             <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 90]]></printWhenExpression>
             <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
@@ -218,7 +210,6 @@
             <staticText><reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[Biểu đồ bong bóng: Sản phẩm theo số lượng, doanh thu và số đơn]]></text></staticText>
             <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank"><reportElement x="12" y="441" width="511" height="269"/><imageExpression><![CDATA[$P{P_PRODUCT_BUBBLE_CHART}]]></imageExpression></image>
         </band>
-
         <band height="755" splitType="Prevent">
             <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 91]]></printWhenExpression>
             <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
