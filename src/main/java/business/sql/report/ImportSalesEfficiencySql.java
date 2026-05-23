@@ -6,6 +6,9 @@ import common.db.DatabaseConnection;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,23 +41,54 @@ public final class ImportSalesEfficiencySql {
     }
 
     public List<EfficiencyRow> selectCurrentMonthByStoreForAdmin() {
-        return selectCurrentMonthByStore(null);
+        LocalDateTime from = currentMonthFrom();
+        return selectByStore(null, from, from.plusMonths(1));
     }
 
     public EfficiencySummary selectCurrentMonthSummaryForAdmin() {
-        return selectCurrentMonthSummary(null);
+        LocalDateTime from = currentMonthFrom();
+        return selectSummary(null, from, from.plusMonths(1));
     }
 
     public List<EfficiencyRow> selectCurrentMonthByStoreForCurrentManager() {
-        return selectCurrentMonthByStore(resolveCurrentStoreId());
+        LocalDateTime from = currentMonthFrom();
+        return selectByStore(resolveCurrentStoreId(), from, from.plusMonths(1));
     }
 
     public EfficiencySummary selectCurrentMonthSummaryForCurrentManager() {
-        return selectCurrentMonthSummary(resolveCurrentStoreId());
+        LocalDateTime from = currentMonthFrom();
+        return selectSummary(resolveCurrentStoreId(), from, from.plusMonths(1));
+    }
+
+    public List<EfficiencyRow> selectByStoreForAdmin(LocalDateTime from, LocalDateTime to) {
+        return selectByStore(null, from, to);
+    }
+
+    public EfficiencySummary selectSummaryForAdmin(LocalDateTime from, LocalDateTime to) {
+        return selectSummary(null, from, to);
+    }
+
+    public List<EfficiencyRow> selectByStoreForCurrentManager(LocalDateTime from, LocalDateTime to) {
+        return selectByStore(resolveCurrentStoreId(), from, to);
+    }
+
+    public EfficiencySummary selectSummaryForCurrentManager(LocalDateTime from, LocalDateTime to) {
+        return selectSummary(resolveCurrentStoreId(), from, to);
     }
 
     public List<EfficiencyRow> selectCurrentMonthByStore(String storeId) {
+        LocalDateTime from = currentMonthFrom();
+        return selectByStore(storeId, from, from.plusMonths(1));
+    }
+
+    public EfficiencySummary selectCurrentMonthSummary(String storeId) {
+        LocalDateTime from = currentMonthFrom();
+        return selectSummary(storeId, from, from.plusMonths(1));
+    }
+
+    private List<EfficiencyRow> selectByStore(String storeId, LocalDateTime from, LocalDateTime to) {
         List<EfficiencyRow> rows = new ArrayList<>();
+        LocalDateTime[] range = normalizeRange(from, to);
 
         StringBuilder sql = new StringBuilder("""
             SELECT s.store_id,
@@ -78,8 +112,8 @@ public final class ImportSalesEfficiencySql {
                        SUM(total_amount) AS total_revenue
                 FROM ORDERS
                 WHERE NVL(is_deleted, 0) = 0
-                  AND order_date >= TRUNC(SYSDATE, 'MM')
-                  AND order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                  AND order_date >= ?
+                  AND order_date < ?
                   AND (
                        UPPER(NVL(status, '')) = 'COMPLETED'
                        OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
@@ -93,8 +127,8 @@ public final class ImportSalesEfficiencySql {
                        SUM(total_after_tax) AS total_import_cost
                 FROM PURCHASE_RECEIPTS
                 WHERE NVL(is_deleted, 0) = 0
-                  AND created_at >= TRUNC(SYSDATE, 'MM')
-                  AND created_at < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                  AND created_at >= ?
+                  AND created_at < ?
                 GROUP BY store_id
             ) imports
                 ON imports.store_id = s.store_id
@@ -107,15 +141,12 @@ public final class ImportSalesEfficiencySql {
             sql.append(" AND s.store_id = ? ");
         }
 
-        sql.append(" ORDER BY gross_profit DESC, total_revenue DESC, s.store_id ");
+        sql.append(" ORDER BY total_revenue DESC, gross_profit DESC, s.store_id ");
 
-        try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement ps = con.prepareStatement(sql.toString())
-        ) {
-            if (scoped) {
-                ps.setString(1, storeId.trim());
-            }
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql.toString())) {
+
+            bindRangeAndScope(ps, range[0], range[1], storeId, scoped);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -124,14 +155,15 @@ public final class ImportSalesEfficiencySql {
             }
 
         } catch (Exception ex) {
-            System.err.println("[ImportSalesEfficiencySql] selectCurrentMonthByStore error: " + ex.getMessage());
+            System.err.println("[ImportSalesEfficiencySql] selectByStore error: " + ex.getMessage());
         }
 
         return rows;
     }
 
-    public EfficiencySummary selectCurrentMonthSummary(String storeId) {
+    private EfficiencySummary selectSummary(String storeId, LocalDateTime from, LocalDateTime to) {
         EfficiencySummary summary = new EfficiencySummary();
+        LocalDateTime[] range = normalizeRange(from, to);
 
         StringBuilder sql = new StringBuilder("""
             SELECT NVL(SUM(t.total_revenue), 0) AS total_revenue,
@@ -155,8 +187,8 @@ public final class ImportSalesEfficiencySql {
                            SUM(total_amount) AS total_revenue
                     FROM ORDERS
                     WHERE NVL(is_deleted, 0) = 0
-                      AND order_date >= TRUNC(SYSDATE, 'MM')
-                      AND order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                      AND order_date >= ?
+                      AND order_date < ?
                       AND (
                            UPPER(NVL(status, '')) = 'COMPLETED'
                            OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
@@ -170,8 +202,8 @@ public final class ImportSalesEfficiencySql {
                            SUM(total_after_tax) AS total_import_cost
                     FROM PURCHASE_RECEIPTS
                     WHERE NVL(is_deleted, 0) = 0
-                      AND created_at >= TRUNC(SYSDATE, 'MM')
-                      AND created_at < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                      AND created_at >= ?
+                      AND created_at < ?
                     GROUP BY store_id
                 ) imports
                     ON imports.store_id = s.store_id
@@ -186,13 +218,10 @@ public final class ImportSalesEfficiencySql {
 
         sql.append(" ) t ");
 
-        try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement ps = con.prepareStatement(sql.toString())
-        ) {
-            if (scoped) {
-                ps.setString(1, storeId.trim());
-            }
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql.toString())) {
+
+            bindRangeAndScope(ps, range[0], range[1], storeId, scoped);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -204,10 +233,47 @@ public final class ImportSalesEfficiencySql {
             }
 
         } catch (Exception ex) {
-            System.err.println("[ImportSalesEfficiencySql] selectCurrentMonthSummary error: " + ex.getMessage());
+            System.err.println("[ImportSalesEfficiencySql] selectSummary error: " + ex.getMessage());
         }
 
         return summary;
+    }
+
+    private void bindRangeAndScope(
+            PreparedStatement ps,
+            LocalDateTime from,
+            LocalDateTime to,
+            String storeId,
+            boolean scoped
+    ) throws Exception {
+        ps.setTimestamp(1, Timestamp.valueOf(from));
+        ps.setTimestamp(2, Timestamp.valueOf(to));
+        ps.setTimestamp(3, Timestamp.valueOf(from));
+        ps.setTimestamp(4, Timestamp.valueOf(to));
+
+        if (scoped) {
+            ps.setString(5, storeId.trim());
+        }
+    }
+
+    private LocalDateTime[] normalizeRange(LocalDateTime from, LocalDateTime to) {
+        LocalDateTime safeFrom = from;
+        LocalDateTime safeTo = to;
+
+        if (safeFrom == null) {
+            safeFrom = currentMonthFrom();
+        }
+        if (safeTo == null || !safeTo.isAfter(safeFrom)) {
+            safeTo = safeFrom.plusMonths(1);
+        }
+
+        return new LocalDateTime[]{safeFrom, safeTo};
+    }
+
+    private LocalDateTime currentMonthFrom() {
+        return LocalDateTime.now()
+                .withDayOfMonth(1)
+                .truncatedTo(ChronoUnit.DAYS);
     }
 
     private EfficiencyRow mapRow(ResultSet rs) throws Exception {
