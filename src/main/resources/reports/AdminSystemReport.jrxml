@@ -1,34 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<jasperReport
-    xmlns="http://jasperreports.sourceforge.net/jasperreports"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-    name="AdminSystemReport"
-    pageWidth="595"
-    pageHeight="842"
-    columnWidth="535"
-    leftMargin="30"
-    rightMargin="30"
-    topMargin="30"
-    bottomMargin="30">
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+    name="AdminSystemReport" pageWidth="595" pageHeight="842" columnWidth="535" leftMargin="30" rightMargin="30" topMargin="30" bottomMargin="30">
 
     <parameter name="P_REPORT_TITLE" class="java.lang.String">
-        <defaultValueExpression><![CDATA["BÁO CÁO QUẢN LÝ HỆ THỐNG"]]></defaultValueExpression>
+        <defaultValueExpression>
+            <![CDATA["BÁO CÁO QUẢN LÝ HỆ THỐNG"]]>
+        </defaultValueExpression>
     </parameter>
     <parameter name="P_REPORT_SUBTITLE" class="java.lang.String">
-        <defaultValueExpression><![CDATA["Tổng hợp chi nhánh, doanh thu, tồn kho, nhân viên và cảnh báo vận hành"]]></defaultValueExpression>
+        <defaultValueExpression>
+            <![CDATA["Tổng hợp chi nhánh, doanh thu, tồn kho, nhân viên và cảnh báo vận hành"]]>
+        </defaultValueExpression>
     </parameter>
-    <parameter name="P_TOTAL_STORES" class="java.lang.String"><defaultValueExpression><![CDATA["0"]]></defaultValueExpression></parameter>
-    <parameter name="P_ACTIVE_STORES" class="java.lang.String"><defaultValueExpression><![CDATA["0"]]></defaultValueExpression></parameter>
-    <parameter name="P_TODAY_REVENUE" class="java.lang.String"><defaultValueExpression><![CDATA["0 đ"]]></defaultValueExpression></parameter>
-    <parameter name="P_MONTH_REVENUE" class="java.lang.String"><defaultValueExpression><![CDATA["0 đ"]]></defaultValueExpression></parameter>
-    <parameter name="P_TOTAL_ORDERS" class="java.lang.String"><defaultValueExpression><![CDATA["0"]]></defaultValueExpression></parameter>
-    <parameter name="P_LOW_STOCK" class="java.lang.String"><defaultValueExpression><![CDATA["0"]]></defaultValueExpression></parameter>
-    <parameter name="P_ONLINE_SESSIONS" class="java.lang.String"><defaultValueExpression><![CDATA["0"]]></defaultValueExpression></parameter>
-    <parameter name="P_REVENUE_ORDER_CHART" class="java.awt.Image"><defaultValueExpression><![CDATA[null]]></defaultValueExpression></parameter>
-    <parameter name="P_PRODUCT_BUBBLE_CHART" class="java.awt.Image"><defaultValueExpression><![CDATA[null]]></defaultValueExpression></parameter>
-    <parameter name="P_PRODUCT_PIE_3D_CHART" class="java.awt.Image"><defaultValueExpression><![CDATA[null]]></defaultValueExpression></parameter>
-    <parameter name="P_REVENUE_ORDER_DIFFERENCE_CHART" class="java.awt.Image"><defaultValueExpression><![CDATA[null]]></defaultValueExpression></parameter>
+    <parameter name="P_TOTAL_STORES" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_ACTIVE_STORES" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_TODAY_REVENUE" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0 đ"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_MONTH_REVENUE" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0 đ"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_TOTAL_ORDERS" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_LOW_STOCK" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_ONLINE_SESSIONS" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["0"]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_REVENUE_ORDER_CHART" class="java.awt.Image">
+        <defaultValueExpression>
+            <![CDATA[null]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_FINAL_REVENUE_CHART" class="java.awt.Image">
+        <defaultValueExpression>
+            <![CDATA[null]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_PRODUCT_BUBBLE_CHART" class="java.awt.Image">
+        <defaultValueExpression>
+            <![CDATA[null]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_PRODUCT_PIE_3D_CHART" class="java.awt.Image">
+        <defaultValueExpression>
+            <![CDATA[null]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_REVENUE_ORDER_DIFFERENCE_CHART" class="java.awt.Image">
+        <defaultValueExpression>
+            <![CDATA[null]]>
+        </defaultValueExpression>
+    </parameter>
+    <parameter name="P_FILTER_LABEL" class="java.lang.String">
+        <defaultValueExpression>
+            <![CDATA["Kỳ đang lọc"]]>
+        </defaultValueExpression>
+    </parameter>
+
+    <parameter name="P_FILTER_FROM" class="java.sql.Timestamp">
+        <defaultValueExpression>
+            <![CDATA[new java.sql.Timestamp(System.currentTimeMillis())]]>
+        </defaultValueExpression>
+    </parameter>
+
+    <parameter name="P_FILTER_TO" class="java.sql.Timestamp">
+        <defaultValueExpression>
+            <![CDATA[new java.sql.Timestamp(System.currentTimeMillis())]]>
+        </defaultValueExpression>
+    </parameter>
 
     <queryString language="SQL">
         <![CDATA[
@@ -47,8 +107,8 @@
                     SELECT store_id, SUM(total_amount) AS total_revenue
                     FROM orders
                     WHERE NVL(is_deleted, 0) = 0
-                      AND order_date >= TRUNC(SYSDATE, 'MM')
-                      AND order_date < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                      AND order_date >= $P{P_FILTER_FROM}
+                      AND order_date < $P{P_FILTER_TO}
                       AND (
                            UPPER(NVL(status, '')) = 'COMPLETED'
                            OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
@@ -60,8 +120,8 @@
                     SELECT store_id, SUM(total_after_tax) AS total_import_cost
                     FROM purchase_receipts
                     WHERE NVL(is_deleted, 0) = 0
-                      AND created_at >= TRUNC(SYSDATE, 'MM')
-                      AND created_at < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)
+                      AND created_at >= $P{P_FILTER_FROM}
+                      AND created_at < $P{P_FILTER_TO}
                     GROUP BY store_id
                 ) imports ON imports.store_id = s.store_id
                 WHERE NVL(s.is_deleted, 0) = 0
@@ -103,7 +163,8 @@
                         ON o.employee_id = e.employee_id
                        AND o.store_id = e.store_id
                        AND NVL(o.is_deleted, 0) = 0
-                       AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                       AND o.order_date >= $P{P_FILTER_FROM}
+                       AND o.order_date < $P{P_FILTER_TO}
                        AND (
                             UPPER(NVL(o.status, '')) = 'COMPLETED'
                             OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -133,109 +194,513 @@
     <field name="COL5" class="java.lang.String" />
 
     <group name="SectionGroup">
-        <groupExpression><![CDATA[$F{SECTION_NAME}]]></groupExpression>
+        <groupExpression>
+            <![CDATA[$F{SECTION_NAME}]]>
+        </groupExpression>
         <groupHeader>
             <band height="61">
-                <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() < 89]]></printWhenExpression>
-                <rectangle radius="10"><reportElement x="0" y="10" width="535" height="28" backcolor="#FFF3E6"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-                <rectangle radius="6"><reportElement x="10" y="18" width="5" height="12" backcolor="#FF6F00"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-                <textField><reportElement x="22" y="17" width="500" height="14" forecolor="#0F172A"/><textElement><font fontName="SansSerif" size="10" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "HIỆU QUẢ NHẬP - BÁN THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : "TOP NHÂN VIÊN THEO DOANH THU")]]></textFieldExpression></textField>
-                <rectangle radius="8"><reportElement x="0" y="41" width="535" height="20" backcolor="#F1F5F9"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-                <textField><reportElement x="0" y="46" width="95" height="11"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : "Mã CN"]]></textFieldExpression></textField>
-                <textField><reportElement x="95" y="46" width="140" height="11"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : "Chi nhánh"]]></textFieldExpression></textField>
-                <textField><reportElement x="235" y="46" width="120" height="11"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : "Nhân viên")]]></textFieldExpression></textField>
-                <textField><reportElement x="355" y="46" width="90" height="11"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Tiền nhập" : ($F{SECTION_NO}.intValue() == 2 ? "Tổng tồn" : "Số đơn")]]></textFieldExpression></textField>
-                <textField><reportElement x="445" y="46" width="90" height="11"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Lãi gộp" : ($F{SECTION_NO}.intValue() == 2 ? "Tồn thấp" : "Doanh thu")]]></textFieldExpression></textField>
+                <printWhenExpression>
+                    <![CDATA[$F{SECTION_NO}.intValue() < 89]]>
+                </printWhenExpression>
+                <rectangle radius="10">
+                    <reportElement x="0" y="10" width="535" height="28" backcolor="#FFF3E6" />
+                    <graphicElement>
+                        <pen lineWidth="0" />
+                    </graphicElement>
+                </rectangle>
+                <rectangle radius="6">
+                    <reportElement x="10" y="18" width="5" height="12" backcolor="#FF6F00" />
+                    <graphicElement>
+                        <pen lineWidth="0" />
+                    </graphicElement>
+                </rectangle>
+                <textField>
+                    <reportElement x="22" y="17" width="500" height="14" forecolor="#0F172A" />
+                    <textElement>
+                        <font fontName="SansSerif" size="10" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "HIỆU QUẢ NHẬP - BÁN THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : "TOP NHÂN VIÊN THEO DOANH THU")]]>
+                    </textFieldExpression>
+                </textField>
+                <rectangle radius="8">
+                    <reportElement x="0" y="41" width="535" height="20" backcolor="#F1F5F9" />
+                    <graphicElement>
+                        <pen lineWidth="0" />
+                    </graphicElement>
+                </rectangle>
+                <textField>
+                    <reportElement x="0" y="46" width="95" height="11" />
+                    <textElement textAlignment="Center">
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : "Mã CN"]]>
+                    </textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="95" y="46" width="140" height="11" />
+                    <textElement textAlignment="Center">
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : "Chi nhánh"]]>
+                    </textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="235" y="46" width="120" height="11" />
+                    <textElement textAlignment="Center">
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : "Nhân viên")]]>
+                    </textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="355" y="46" width="90" height="11" />
+                    <textElement textAlignment="Center">
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Tiền nhập" : ($F{SECTION_NO}.intValue() == 2 ? "Tổng tồn" : "Số đơn")]]>
+                    </textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="445" y="46" width="90" height="11" />
+                    <textElement textAlignment="Center">
+                        <font fontName="SansSerif" size="7.5" isBold="true" />
+                    </textElement>
+                    <textFieldExpression>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Lãi gộp" : ($F{SECTION_NO}.intValue() == 2 ? "Tồn thấp" : "Doanh thu")]]>
+                    </textFieldExpression>
+                </textField>
             </band>
         </groupHeader>
     </group>
 
     <title>
         <band height="202">
-            <rectangle radius="14"><reportElement x="0" y="0" width="535" height="82" backcolor="#FF6F00"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <rectangle radius="10"><reportElement x="18" y="17" width="52" height="48" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="35" width="52" height="12" forecolor="#FF6F00"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8" isBold="true"/></textElement><text><![CDATA[LOGO]]></text></staticText>
-            <textField><reportElement x="86" y="17" width="260" height="24" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="16" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_TITLE}]]></textFieldExpression></textField>
-            <textField><reportElement x="86" y="43" width="300" height="15" forecolor="#FFFFFF"/><textElement><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$P{P_REPORT_SUBTITLE}]]></textFieldExpression></textField>
-            <staticText><reportElement x="350" y="18" width="165" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="14" isBold="true"/></textElement><text><![CDATA[ADMIN REPORT]]></text></staticText>
-            <textField><reportElement x="350" y="45" width="165" height="14" forecolor="#FFFFFF"/><textElement textAlignment="Right"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression></textField>
-            <rectangle radius="12"><reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="12" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tổng chi nhánh]]></text></staticText>
-            <textField><reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TOTAL_STORES}]]></textFieldExpression></textField>
-            <rectangle radius="12"><reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="150" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hoạt động]]></text></staticText>
-            <textField><reportElement x="150" y="130" width="98" height="20" forecolor="#10B981"/><textElement textAlignment="Center"><font fontName="SansSerif" size="13" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_ACTIVE_STORES}]]></textFieldExpression></textField>
-            <rectangle radius="12"><reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="288" y="113" width="98" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Hôm nay]]></text></staticText>
-            <textField><reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_TODAY_REVENUE}]]></textFieldExpression></textField>
-            <rectangle radius="12"><reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <staticText><reportElement x="426" y="113" width="97" height="13" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isBold="true"/></textElement><text><![CDATA[Tháng này]]></text></staticText>
-            <textField><reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{P_MONTH_REVENUE}]]></textFieldExpression></textField>
+            <rectangle radius="14">
+                <reportElement x="0" y="0" width="535" height="82" backcolor="#FF6F00" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="10">
+                <reportElement x="18" y="17" width="52" height="48" backcolor="#FFFFFF" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="35" width="52" height="12" forecolor="#FF6F00" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" isBold="true" />
+                </textElement><text><![CDATA[LOGO]]></text></staticText>
+            <textField>
+                <reportElement x="86" y="17" width="260" height="24" forecolor="#FFFFFF" />
+                <textElement>
+                    <font fontName="SansSerif" size="16" isBold="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_REPORT_TITLE}]]>
+                </textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="86" y="43" width="300" height="15" forecolor="#FFFFFF" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_REPORT_SUBTITLE}]]>
+                </textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="86" y="58" width="300" height="14" forecolor="#FFFFFF" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" isItalic="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA["Kỳ lọc: " + $P{P_FILTER_LABEL}]]>
+                </textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="350" y="18" width="165" height="24" forecolor="#FFFFFF" />
+                <textElement textAlignment="Right">
+                    <font fontName="SansSerif" size="14" isBold="true" />
+                </textElement><text><![CDATA[ADMIN REPORT]]></text></staticText>
+            <textField>
+                <reportElement x="350" y="45" width="165" height="14" forecolor="#FFFFFF" />
+                <textElement textAlignment="Right">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA["Ngày lập: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]>
+                </textFieldExpression>
+            </textField>
+            <rectangle radius="12">
+                <reportElement x="0" y="102" width="122" height="64" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="12" y="113" width="98" height="13" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
+                </textElement><text><![CDATA[Tổng chi nhánh]]></text></staticText>
+            <textField>
+                <reportElement x="12" y="130" width="98" height="20" forecolor="#2563EB" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_TOTAL_STORES}]]>
+                </textFieldExpression>
+            </textField>
+            <rectangle radius="12">
+                <reportElement x="138" y="102" width="122" height="64" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="150" y="113" width="98" height="13" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
+                </textElement><text><![CDATA[Hoạt động]]></text></staticText>
+            <textField>
+                <reportElement x="150" y="130" width="98" height="20" forecolor="#10B981" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_ACTIVE_STORES}]]>
+                </textFieldExpression>
+            </textField>
+            <rectangle radius="12">
+                <reportElement x="276" y="102" width="122" height="64" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="288" y="113" width="98" height="13" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
+                </textElement><text><![CDATA[Hôm nay]]></text></staticText>
+            <textField>
+                <reportElement x="288" y="130" width="98" height="20" forecolor="#F59E0B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_TODAY_REVENUE}]]>
+                </textFieldExpression>
+            </textField>
+            <rectangle radius="12">
+                <reportElement x="414" y="102" width="121" height="64" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="426" y="113" width="97" height="13" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isBold="true" />
+                </textElement><text><![CDATA[Kỳ lọc]]></text></staticText>
+            <textField>
+                <reportElement x="426" y="130" width="97" height="20" forecolor="#F59E0B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$P{P_MONTH_REVENUE}]]>
+                </textFieldExpression>
+            </textField>
         </band>
     </title>
 
     <detail>
         <band height="24">
-            <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() < 89]]></printWhenExpression>
-            <rectangle><reportElement x="0" y="0" width="535" height="24" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <textField isBlankWhenNull="true"><reportElement x="0" y="6" width="95" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL1}]]></textFieldExpression></textField>
-            <textField isBlankWhenNull="true"><reportElement x="95" y="6" width="140" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL2}]]></textFieldExpression></textField>
-            <textField isBlankWhenNull="true"><reportElement x="235" y="6" width="120" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL3}]]></textFieldExpression></textField>
-            <textField isBlankWhenNull="true"><reportElement x="355" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL4}]]></textFieldExpression></textField>
-            <textField isBlankWhenNull="true"><reportElement x="445" y="6" width="90" height="12"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA[$F{COL5}]]></textFieldExpression></textField>
+            <printWhenExpression>
+                <![CDATA[$F{SECTION_NO}.intValue() < 89]]>
+            </printWhenExpression>
+            <rectangle>
+                <reportElement x="0" y="0" width="535" height="24" backcolor="#FFFFFF" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <textField isBlankWhenNull="true">
+                <reportElement x="0" y="6" width="95" height="12" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$F{COL1}]]>
+                </textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="95" y="6" width="140" height="12" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$F{COL2}]]>
+                </textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="235" y="6" width="120" height="12" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$F{COL3}]]>
+                </textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="355" y="6" width="90" height="12" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$F{COL4}]]>
+                </textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="445" y="6" width="90" height="12" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA[$F{COL5}]]>
+                </textFieldExpression>
+            </textField>
         </band>
         <band height="755" splitType="Prevent">
-            <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 89]]></printWhenExpression>
-            <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <rectangle radius="10"><reportElement x="8" y="22" width="519" height="38" backcolor="#ECFDF5"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <rectangle radius="6"><reportElement x="20" y="34" width="6" height="14" backcolor="#10B981"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <staticText><reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A"/><textElement><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[BIỂU ĐỒ DOANH THU CUỐI CÙNG THEO CHI NHÁNH]]></text></staticText>
-            <staticText><reportElement x="38" y="46" width="470" height="12" forecolor="#64748B"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[Sắp xếp theo Doanh thu giảm dần. Công thức: Lãi gộp = Doanh thu - Tiền nhập kho sau VAT.]]></text></staticText>
-            <rectangle radius="12"><reportElement x="8" y="72" width="519" height="630" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="86" width="499" height="22" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="14" isBold="true"/></textElement><text><![CDATA[Doanh thu - Tiền nhập - Lãi gộp theo chi nhánh]]></text></staticText>
-            <staticText><reportElement x="18" y="108" width="499" height="12" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="8" isItalic="true"/></textElement><text><![CDATA[Công thức tính: Lãi gộp tạm tính = Doanh thu bán hàng - Tiền nhập kho sau VAT]]></text></staticText>
+            <printWhenExpression>
+                <![CDATA[$F{SECTION_NO}.intValue() == 89]]>
+            </printWhenExpression>
+            <rectangle radius="14">
+                <reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="10">
+                <reportElement x="8" y="22" width="519" height="38" backcolor="#ECFDF5" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="6">
+                <reportElement x="20" y="34" width="6" height="14" backcolor="#10B981" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A" />
+                <textElement>
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[BIỂU ĐỒ DOANH THU CUỐI CÙNG THEO CHI NHÁNH]]></text></staticText>
+            <staticText>
+                <reportElement x="38" y="46" width="470" height="12" forecolor="#64748B" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" />
+                </textElement><text><![CDATA[Sắp xếp theo Doanh thu giảm dần. Công thức: Lãi gộp = Doanh thu - Tiền nhập kho sau VAT.]]></text></staticText>
+            <rectangle radius="12">
+                <reportElement x="8" y="72" width="519" height="630" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#D8E2EF" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="86" width="499" height="22" forecolor="#0F172A" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="14" isBold="true" />
+                </textElement><text><![CDATA[Doanh thu - Tiền nhập - Lãi gộp theo chi nhánh]]></text></staticText>
+            <staticText>
+                <reportElement x="18" y="108" width="499" height="12" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="8" isItalic="true" />
+                </textElement><text><![CDATA[Công thức tính: Lãi gộp tạm tính = Doanh thu bán hàng - Tiền nhập kho sau VAT]]></text></staticText>
             <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
                 <reportElement x="12" y="128" width="511" height="530" />
-                <imageExpression><![CDATA[view.AdminFinalRevenueChartProvider.createFinalRevenueChartImage()]]></imageExpression>
+                <imageExpression>
+                    <![CDATA[$P{P_FINAL_REVENUE_CHART}]]>
+                </imageExpression>
             </image>
-            <staticText><reportElement x="20" y="713" width="495" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isItalic="true"/></textElement><text><![CDATA[Ghi chú: Các chi nhánh trong biểu đồ được sắp xếp theo doanh thu tháng hiện tại từ cao xuống thấp.]]></text></staticText>
+            <staticText>
+                <reportElement x="20" y="713" width="495" height="10" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isItalic="true" />
+                </textElement><text><![CDATA[Ghi chú: Các chi nhánh trong biểu đồ được sắp xếp theo doanh thu kỳ lọc từ cao xuống thấp.]]></text></staticText>
         </band>
         <band height="755" splitType="Prevent">
-            <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 90]]></printWhenExpression>
-            <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <rectangle radius="10"><reportElement x="8" y="22" width="519" height="38" backcolor="#EFF6FF"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <rectangle radius="6"><reportElement x="20" y="34" width="6" height="14" backcolor="#2563EB"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <staticText><reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A"/><textElement><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[VISUALIZATION DOANH THU & HIỆU SUẤT]]></text></staticText>
-            <staticText><reportElement x="38" y="46" width="470" height="12" forecolor="#64748B"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[Hai biểu đồ lớn trên một trang, dữ liệu chỉ tính hóa đơn thuộc chi nhánh hợp lệ.]]></text></staticText>
-            <rectangle radius="12"><reportElement x="8" y="72" width="519" height="315" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[Biểu đồ so sánh: Doanh thu và số đơn theo chi nhánh]]></text></staticText>
-            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank"><reportElement x="12" y="108" width="511" height="269"/><imageExpression><![CDATA[$P{P_REVENUE_ORDER_CHART}]]></imageExpression></image>
-            <rectangle radius="12"><reportElement x="8" y="405" width="519" height="315" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[Biểu đồ bong bóng: Sản phẩm theo số lượng, doanh thu và số đơn]]></text></staticText>
-            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank"><reportElement x="12" y="441" width="511" height="269"/><imageExpression><![CDATA[$P{P_PRODUCT_BUBBLE_CHART}]]></imageExpression></image>
+            <printWhenExpression>
+                <![CDATA[$F{SECTION_NO}.intValue() == 90]]>
+            </printWhenExpression>
+            <rectangle radius="14">
+                <reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="10">
+                <reportElement x="8" y="22" width="519" height="38" backcolor="#EFF6FF" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="6">
+                <reportElement x="20" y="34" width="6" height="14" backcolor="#2563EB" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A" />
+                <textElement>
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[VISUALIZATION DOANH THU & HIỆU SUẤT]]></text></staticText>
+            <staticText>
+                <reportElement x="38" y="46" width="470" height="12" forecolor="#64748B" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" />
+                </textElement><text><![CDATA[Hai biểu đồ lớn trên một trang, dữ liệu chỉ tính hóa đơn thuộc chi nhánh hợp lệ.]]></text></staticText>
+            <rectangle radius="12">
+                <reportElement x="8" y="72" width="519" height="315" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#D8E2EF" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[Biểu đồ so sánh: Doanh thu và số đơn theo chi nhánh]]></text></staticText>
+            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
+                <reportElement x="12" y="108" width="511" height="269" />
+                <imageExpression>
+                    <![CDATA[$P{P_REVENUE_ORDER_CHART}]]>
+                </imageExpression>
+            </image>
+            <rectangle radius="12">
+                <reportElement x="8" y="405" width="519" height="315" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#D8E2EF" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[Biểu đồ bong bóng: Sản phẩm theo số lượng, doanh thu và số đơn]]></text></staticText>
+            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
+                <reportElement x="12" y="441" width="511" height="269" />
+                <imageExpression>
+                    <![CDATA[$P{P_PRODUCT_BUBBLE_CHART}]]>
+                </imageExpression>
+            </image>
         </band>
         <band height="755" splitType="Prevent">
-            <printWhenExpression><![CDATA[$F{SECTION_NO}.intValue() == 91]]></printWhenExpression>
-            <rectangle radius="14"><reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF"/><graphicElement><pen lineWidth="0.5" lineColor="#E2E8F0"/></graphicElement></rectangle>
-            <rectangle radius="10"><reportElement x="8" y="22" width="519" height="38" backcolor="#FFF7ED"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <rectangle radius="6"><reportElement x="20" y="34" width="6" height="14" backcolor="#F59E0B"/><graphicElement><pen lineWidth="0"/></graphicElement></rectangle>
-            <staticText><reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A"/><textElement><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[VISUALIZATION MỞ RỘNG]]></text></staticText>
-            <staticText><reportElement x="38" y="46" width="470" height="12" forecolor="#64748B"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[Pie 3D dùng doanh thu theo sản phẩm; Difference Chart so sánh doanh thu tháng này và tháng trước.]]></text></staticText>
-            <rectangle radius="12"><reportElement x="8" y="72" width="519" height="315" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[Biểu đồ 3D: Tỷ trọng doanh thu theo sản phẩm]]></text></staticText>
-            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank"><reportElement x="12" y="108" width="511" height="269"/><imageExpression><![CDATA[$P{P_PRODUCT_PIE_3D_CHART}]]></imageExpression></image>
-            <rectangle radius="12"><reportElement x="8" y="405" width="519" height="315" backcolor="#F8FAFC"/><graphicElement><pen lineWidth="0.5" lineColor="#D8E2EF"/></graphicElement></rectangle>
-            <staticText><reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A"/><textElement textAlignment="Center"><font fontName="SansSerif" size="12" isBold="true"/></textElement><text><![CDATA[Difference Chart: Doanh thu tháng này và tháng trước]]></text></staticText>
-            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank"><reportElement x="12" y="441" width="511" height="269"/><imageExpression><![CDATA[$P{P_REVENUE_ORDER_DIFFERENCE_CHART}]]></imageExpression></image>
-            <staticText><reportElement x="20" y="721" width="495" height="10" forecolor="#64748B"/><textElement textAlignment="Center"><font fontName="SansSerif" size="7.5" isItalic="true"/></textElement><text><![CDATA[Ghi chú: Difference Chart so sánh doanh thu tháng hiện tại với tháng trước theo từng ngày trong tháng.]]></text></staticText>
+            <printWhenExpression>
+                <![CDATA[$F{SECTION_NO}.intValue() == 91]]>
+            </printWhenExpression>
+            <rectangle radius="14">
+                <reportElement x="0" y="10" width="535" height="725" backcolor="#FFFFFF" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#E2E8F0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="10">
+                <reportElement x="8" y="22" width="519" height="38" backcolor="#FFF7ED" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <rectangle radius="6">
+                <reportElement x="20" y="34" width="6" height="14" backcolor="#F59E0B" />
+                <graphicElement>
+                    <pen lineWidth="0" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="38" y="30" width="470" height="18" forecolor="#0F172A" />
+                <textElement>
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[VISUALIZATION MỞ RỘNG]]></text></staticText>
+            <staticText>
+                <reportElement x="38" y="46" width="470" height="12" forecolor="#64748B" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" />
+                </textElement><text><![CDATA[Pie 3D dùng doanh thu theo sản phẩm; Difference Chart so sánh doanh thu kỳ lọc và kỳ liền trước.]]></text></staticText>
+            <rectangle radius="12">
+                <reportElement x="8" y="72" width="519" height="315" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#D8E2EF" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="84" width="499" height="19" forecolor="#0F172A" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[Biểu đồ 3D: Tỷ trọng doanh thu theo sản phẩm]]></text></staticText>
+            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
+                <reportElement x="12" y="108" width="511" height="269" />
+                <imageExpression>
+                    <![CDATA[$P{P_PRODUCT_PIE_3D_CHART}]]>
+                </imageExpression>
+            </image>
+            <rectangle radius="12">
+                <reportElement x="8" y="405" width="519" height="315" backcolor="#F8FAFC" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#D8E2EF" />
+                </graphicElement>
+            </rectangle>
+            <staticText>
+                <reportElement x="18" y="417" width="499" height="19" forecolor="#0F172A" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="12" isBold="true" />
+                </textElement><text><![CDATA[Difference Chart: Doanh thu tháng này và tháng trước]]></text></staticText>
+            <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle" onErrorType="Blank">
+                <reportElement x="12" y="441" width="511" height="269" />
+                <imageExpression>
+                    <![CDATA[$P{P_REVENUE_ORDER_DIFFERENCE_CHART}]]>
+                </imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="20" y="721" width="495" height="10" forecolor="#64748B" />
+                <textElement textAlignment="Center">
+                    <font fontName="SansSerif" size="7.5" isItalic="true" />
+                </textElement><text><![CDATA[Ghi chú: Difference Chart so sánh doanh thu kỳ lọc với tháng trước theo từng ngày trong tháng.]]></text></staticText>
         </band>
     </detail>
 
     <pageFooter>
         <band height="24">
-            <line><reportElement x="0" y="0" width="535" height="1"/><graphicElement><pen lineWidth="0.5" lineColor="#CBD5E1"/></graphicElement></line>
-            <staticText><reportElement x="0" y="8" width="270" height="12"/><textElement><font fontName="SansSerif" size="8"/></textElement><text><![CDATA[Smart Supermarket - System Report]]></text></staticText>
-            <textField><reportElement x="405" y="8" width="130" height="12"/><textElement textAlignment="Right"><font fontName="SansSerif" size="8"/></textElement><textFieldExpression><![CDATA["Trang " + $V{PAGE_NUMBER}]]></textFieldExpression></textField>
+            <line>
+                <reportElement x="0" y="0" width="535" height="1" />
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1" />
+                </graphicElement>
+            </line>
+            <staticText>
+                <reportElement x="0" y="8" width="270" height="12" />
+                <textElement>
+                    <font fontName="SansSerif" size="8" />
+                </textElement><text><![CDATA[Smart Supermarket - System Report]]></text></staticText>
+            <textField>
+                <reportElement x="405" y="8" width="130" height="12" />
+                <textElement textAlignment="Right">
+                    <font fontName="SansSerif" size="8" />
+                </textElement>
+                <textFieldExpression>
+                    <![CDATA["Trang " + $V{PAGE_NUMBER}]]>
+                </textFieldExpression>
+            </textField>
         </band>
     </pageFooter>
 </jasperReport>

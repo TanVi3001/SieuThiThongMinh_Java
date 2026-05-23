@@ -127,8 +127,8 @@ public class AdminSystemPanel extends JPanel {
     private JTable tblTopEmployee;
     private JTable tblLowStock;
 
-    private JComboBox<String> cboTimeFilter;
-    private JSpinner spnFilterDate;
+    private JSpinner spnFilterFromDate;
+    private JSpinner spnFilterToDate;
     private JLabel lblFilterInfo;
 
     private LocalDateTime filterFrom;
@@ -376,7 +376,7 @@ public class AdminSystemPanel extends JPanel {
 
         tables.add(cardWithTable(
                 "Doanh thu theo chi nhánh",
-                "Chỉ tính hóa đơn hoàn thành trong tháng hiện tại",
+                "Chỉ tính hóa đơn hoàn thành trong khoảng thời gian đang lọc",
                 tblOverviewRevenueByStore
         ));
         tables.add(cardWithTable(
@@ -399,42 +399,48 @@ public class AdminSystemPanel extends JPanel {
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         left.setOpaque(false);
 
-        JLabel lblMode = new JLabel("Lọc theo:");
-        lblMode.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblMode.setForeground(text);
+        JLabel lblFrom = new JLabel("Từ:");
+        lblFrom.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblFrom.setForeground(text);
 
-        cboTimeFilter = new JComboBox<>(new String[]{
-            "Theo giờ", "Theo ngày", "Theo tháng", "Theo năm"
-        });
-        cboTimeFilter.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        cboTimeFilter.setPreferredSize(new Dimension(130, 36));
-        cboTimeFilter.setSelectedItem("Theo tháng");
+        JLabel lblTo = new JLabel("Đến:");
+        lblTo.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTo.setForeground(text);
 
-        SpinnerDateModel dateModel = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
-        spnFilterDate = new JSpinner(dateModel);
-        spnFilterDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        spnFilterDate.setPreferredSize(new Dimension(190, 36));
+        SpinnerDateModel fromModel = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
+        SpinnerDateModel toModel = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
 
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spnFilterDate, "dd/MM/yyyy HH:mm");
-        spnFilterDate.setEditor(editor);
+        spnFilterFromDate = new JSpinner(fromModel);
+        spnFilterToDate = new JSpinner(toModel);
+
+        spnFilterFromDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        spnFilterToDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+
+        spnFilterFromDate.setPreferredSize(new Dimension(190, 36));
+        spnFilterToDate.setPreferredSize(new Dimension(190, 36));
+
+        spnFilterFromDate.setEditor(new JSpinner.DateEditor(spnFilterFromDate, "dd/MM/yyyy HH:mm"));
+        spnFilterToDate.setEditor(new JSpinner.DateEditor(spnFilterToDate, "dd/MM/yyyy HH:mm"));
+
+        syncSpinnerWithCurrentFilter();
 
         JButton btnApplyFilter = createPrimaryButton("Lọc", blue);
         btnApplyFilter.setPreferredSize(new Dimension(86, 38));
-        btnApplyFilter.addActionListener(e -> applyTimeFilter());
+        btnApplyFilter.addActionListener(e -> applyDateRangeFilter());
 
         JButton btnResetFilter = createPrimaryButton("Tháng hiện tại", primary);
         btnResetFilter.setPreferredSize(new Dimension(135, 38));
         btnResetFilter.addActionListener(e -> {
             resetFilterToCurrentMonth();
-            cboTimeFilter.setSelectedItem("Theo tháng");
-            spnFilterDate.setValue(new Date());
+            syncSpinnerWithCurrentFilter();
             updateFilterInfoLabel();
             reloadAll();
         });
 
-        left.add(lblMode);
-        left.add(cboTimeFilter);
-        left.add(spnFilterDate);
+        left.add(lblFrom);
+        left.add(spnFilterFromDate);
+        left.add(lblTo);
+        left.add(spnFilterToDate);
         left.add(btnApplyFilter);
         left.add(btnResetFilter);
 
@@ -449,6 +455,16 @@ public class AdminSystemPanel extends JPanel {
         return wrapWithBorder(panel);
     }
 
+    private void syncSpinnerWithCurrentFilter() {
+        if (spnFilterFromDate != null && filterFrom != null) {
+            spnFilterFromDate.setValue(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()));
+        }
+
+        if (spnFilterToDate != null && filterTo != null) {
+            spnFilterToDate.setValue(Date.from(filterTo.atZone(ZoneId.systemDefault()).toInstant()));
+        }
+    }
+
     private void resetFilterToCurrentMonth() {
         LocalDateTime now = LocalDateTime.now();
 
@@ -460,51 +476,45 @@ public class AdminSystemPanel extends JPanel {
         filterLabel = "Tháng hiện tại";
     }
 
-    private void applyTimeFilter() {
-        Date selectedDate = (Date) spnFilterDate.getValue();
+    private void applyDateRangeFilter() {
+        Date fromDate = (Date) spnFilterFromDate.getValue();
+        Date toDate = (Date) spnFilterToDate.getValue();
 
-        LocalDateTime selected = selectedDate.toInstant()
+        LocalDateTime from = fromDate.toInstant()
                 .atZone(ZoneId.systemDefault())
-                .toLocalDateTime();
+                .toLocalDateTime()
+                .truncatedTo(ChronoUnit.MINUTES);
 
-        String mode = String.valueOf(cboTimeFilter.getSelectedItem());
+        LocalDateTime to = toDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime()
+                .truncatedTo(ChronoUnit.MINUTES);
 
-        if ("Theo giờ".equals(mode)) {
-            filterFrom = selected.truncatedTo(ChronoUnit.HOURS);
-            filterTo = filterFrom.plusHours(1);
-            filterLabel = "Theo giờ: "
-                    + new SimpleDateFormat("dd/MM/yyyy HH:00").format(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()));
-
-        } else if ("Theo ngày".equals(mode)) {
-            filterFrom = selected.truncatedTo(ChronoUnit.DAYS);
-            filterTo = filterFrom.plusDays(1);
-            filterLabel = "Theo ngày: "
-                    + new SimpleDateFormat("dd/MM/yyyy").format(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()));
-
-        } else if ("Theo tháng".equals(mode)) {
-            filterFrom = selected
-                    .withDayOfMonth(1)
-                    .truncatedTo(ChronoUnit.DAYS);
-
-            filterTo = filterFrom.plusMonths(1);
-            filterLabel = "Theo tháng: "
-                    + String.format("%02d/%d", filterFrom.getMonthValue(), filterFrom.getYear());
-
-        } else {
-            filterFrom = selected
-                    .withDayOfYear(1)
-                    .truncatedTo(ChronoUnit.DAYS);
-
-            filterTo = filterFrom.plusYears(1);
-            filterLabel = "Theo năm: " + filterFrom.getYear();
+        if (!to.isAfter(from)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Thời gian kết thúc phải lớn hơn thời gian bắt đầu.",
+                    "Bộ lọc không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
         }
+
+        filterFrom = from;
+        filterTo = to;
+
+        SimpleDateFormat fmt = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        filterLabel = "Tùy chọn: "
+                + fmt.format(Date.from(filterFrom.atZone(ZoneId.systemDefault()).toInstant()))
+                + " - "
+                + fmt.format(Date.from(filterTo.atZone(ZoneId.systemDefault()).toInstant()));
 
         updateFilterInfoLabel();
         reloadAll();
     }
 
     private void updateFilterInfoLabel() {
-        if (lblFilterInfo == null) {
+        if (lblFilterInfo == null || filterFrom == null || filterTo == null) {
             return;
         }
 
@@ -543,8 +553,8 @@ public class AdminSystemPanel extends JPanel {
         tblLowStock = table(new String[]{"Chi nhánh", "Mã SP", "Sản phẩm", "Tồn", "Mức cảnh báo"});
 
         grid.add(cardWithTable(
-                "Doanh thu tháng toàn hệ thống",
-                "Tổng hợp doanh thu tháng theo từng chi nhánh",
+                "Doanh thu theo kỳ lọc toàn hệ thống",
+                "Tổng hợp doanh thu theo khoảng thời gian đang lọc",
                 tblReportRevenueByStore
         ));
         grid.add(cardWithTable(
@@ -824,21 +834,7 @@ public class AdminSystemPanel extends JPanel {
             WHERE NVL(s.is_deleted, 0) = 0
         """)));
 
-        lblMonthRevenue.setText(money(scalarDouble("""
-            SELECT NVL(SUM(o.total_amount), 0)
-            FROM STORES s
-            JOIN ORDERS o
-                ON o.store_id = s.store_id
-               AND NVL(o.is_deleted, 0) = 0
-               AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
-               AND (
-                    UPPER(NVL(o.status, '')) = 'COMPLETED'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                    OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-               )
-            WHERE NVL(s.is_deleted, 0) = 0
-        """)));
-
+        // lblMonthRevenue được cập nhật theo filter trong reloadImportSalesEfficiencyCards().
         lblOrderTotal.setText(String.valueOf(countOrdersByFilter()));
 
         lblLowStock.setText(String.valueOf(scalarLong("""
@@ -897,7 +893,14 @@ public class AdminSystemPanel extends JPanel {
     }
 
     private void reloadTopEmployee() {
-        fillTable(tblTopEmployee, """
+        if (tblTopEmployee == null) {
+            return;
+        }
+
+        DefaultTableModel model = (DefaultTableModel) tblTopEmployee.getModel();
+        model.setRowCount(0);
+
+        String sql = """
             SELECT *
             FROM (
                 SELECT NVL(s.store_name, e.store_id) AS store_name,
@@ -912,7 +915,8 @@ public class AdminSystemPanel extends JPanel {
                     ON o.employee_id = e.employee_id
                    AND o.store_id = e.store_id
                    AND NVL(o.is_deleted, 0) = 0
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                   AND o.order_date >= ?
+                   AND o.order_date < ?
                    AND (
                         UPPER(NVL(o.status, '')) = 'COMPLETED'
                         OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -924,7 +928,27 @@ public class AdminSystemPanel extends JPanel {
                 ORDER BY revenue DESC, total_orders DESC
             )
             WHERE ROWNUM <= 10
-        """, 5, true);
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    model.addRow(new Object[]{
+                        rs.getString("store_name"),
+                        rs.getString("employee_id"),
+                        rs.getString("employee_name"),
+                        rs.getLong("total_orders"),
+                        money(rs.getDouble("revenue"))
+                    });
+                }
+            }
+        } catch (Exception ex) {
+            System.err.println("[AdminSystemPanel] reloadTopEmployee error: " + ex.getMessage());
+        }
     }
 
     private void reloadLowStock() {
@@ -960,6 +984,7 @@ public class AdminSystemPanel extends JPanel {
             params.put("P_ONLINE_SESSIONS", safeText(lblOnlineSessions));
 
             // Visualization charts for AdminSystemReport.jrxml
+            params.put("P_FINAL_REVENUE_CHART", createFinalRevenueChartImage());
             params.put("P_REVENUE_ORDER_CHART", createRevenueOrderLineChartImage());
             params.put("P_PRODUCT_BUBBLE_CHART", createProductBubbleChartImage());
             params.put("P_PRODUCT_PIE_3D_CHART", createProductRevenuePie3DChartImage());
@@ -1055,6 +1080,147 @@ public class AdminSystemPanel extends JPanel {
         plot.setRangeGridlineStroke(new BasicStroke(1.15f));
     }
 
+    private BufferedImage createFinalRevenueChartImage() {
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+
+        double maxAbsMillion = 0.0;
+        boolean hasData = false;
+
+        String sql = """
+            SELECT s.store_id,
+                   NVL(s.store_name, s.address) AS store_name,
+                   NVL(sales.total_revenue, 0) AS total_revenue,
+                   NVL(imports.total_import_cost, 0) AS total_import_cost,
+                   NVL(sales.total_revenue, 0) - NVL(imports.total_import_cost, 0) AS gross_profit
+            FROM stores s
+            LEFT JOIN (
+                SELECT store_id,
+                       SUM(total_amount) AS total_revenue
+                FROM orders
+                WHERE NVL(is_deleted, 0) = 0
+                  AND order_date >= ?
+                  AND order_date < ?
+                  AND (
+                       UPPER(NVL(status, '')) = 'COMPLETED'
+                       OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
+                       OR UPPER(NVL(status, '')) LIKE '%HOAN THANH%'
+                  )
+                GROUP BY store_id
+            ) sales
+                ON sales.store_id = s.store_id
+            LEFT JOIN (
+                SELECT store_id,
+                       SUM(total_after_tax) AS total_import_cost
+                FROM purchase_receipts
+                WHERE NVL(is_deleted, 0) = 0
+                  AND created_at >= ?
+                  AND created_at < ?
+                GROUP BY store_id
+            ) imports
+                ON imports.store_id = s.store_id
+            WHERE NVL(s.is_deleted, 0) = 0
+            ORDER BY total_revenue DESC, gross_profit DESC, s.store_id
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
+            ps.setTimestamp(3, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(4, Timestamp.valueOf(filterTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String storeName = rs.getString("store_name");
+                    if (storeName == null || storeName.trim().isEmpty()) {
+                        storeName = rs.getString("store_id");
+                    }
+                    if (storeName.length() > 18) {
+                        storeName = storeName.substring(0, 18) + "...";
+                    }
+
+                    double revenueMillion = rs.getDouble("total_revenue") / 1_000_000.0;
+                    double importMillion = rs.getDouble("total_import_cost") / 1_000_000.0;
+                    double grossProfitMillion = rs.getDouble("gross_profit") / 1_000_000.0;
+
+                    dataset.addValue(revenueMillion, "Doanh thu", storeName);
+                    dataset.addValue(importMillion, "Tiền nhập", storeName);
+                    dataset.addValue(grossProfitMillion, "Lãi gộp", storeName);
+
+                    maxAbsMillion = Math.max(maxAbsMillion, Math.abs(revenueMillion));
+                    maxAbsMillion = Math.max(maxAbsMillion, Math.abs(importMillion));
+                    maxAbsMillion = Math.max(maxAbsMillion, Math.abs(grossProfitMillion));
+                    hasData = true;
+                }
+            }
+        } catch (Exception ex) {
+            System.err.println("[AdminSystemPanel] createFinalRevenueChartImage error: " + ex.getMessage());
+        }
+
+        if (!hasData) {
+            dataset.addValue(0, "Doanh thu", "Không có dữ liệu");
+            dataset.addValue(0, "Tiền nhập", "Không có dữ liệu");
+            dataset.addValue(0, "Lãi gộp", "Không có dữ liệu");
+            maxAbsMillion = 10;
+        }
+
+        JFreeChart chart = ChartFactory.createBarChart(
+                null,
+                "Chi nhánh",
+                "Giá trị (triệu VND)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                true,
+                true,
+                false
+        );
+
+        chart.setBackgroundPaint(Color.WHITE);
+
+        if (chart.getLegend() != null) {
+            chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 13));
+            chart.getLegend().setBackgroundPaint(Color.WHITE);
+        }
+
+        CategoryPlot plot = chart.getCategoryPlot();
+        plot.setBackgroundPaint(new Color(248, 250, 252));
+        plot.setOutlinePaint(new Color(71, 85, 105));
+        plot.setOutlineStroke(new BasicStroke(1.3f));
+        plot.setRangeGridlinesVisible(true);
+        plot.setRangeGridlinePaint(new Color(148, 163, 184));
+        plot.setRangeGridlineStroke(new BasicStroke(1.15f));
+        plot.setDomainGridlinesVisible(true);
+        plot.setDomainGridlinePaint(new Color(203, 213, 225));
+        plot.setDomainGridlineStroke(new BasicStroke(0.9f));
+
+        CategoryAxis domainAxis = plot.getDomainAxis();
+        domainAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        domainAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+        domainAxis.setCategoryMargin(0.25);
+        domainAxis.setLowerMargin(0.06);
+        domainAxis.setUpperMargin(0.06);
+
+        NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
+        double upper = maxAbsMillion <= 0 ? 10 : maxAbsMillion * 1.25;
+        rangeAxis.setRange(-upper, upper);
+        rangeAxis.setTickUnit(new NumberTickUnit(niceTickUnit(upper)));
+        rangeAxis.setNumberFormatOverride(new DecimalFormat("#,##0.#"));
+        rangeAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        rangeAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
+
+        BarRenderer renderer = new BarRenderer();
+        renderer.setBarPainter(new StandardBarPainter());
+        renderer.setShadowVisible(false);
+        renderer.setMaximumBarWidth(0.08);
+        renderer.setItemMargin(0.12);
+        renderer.setSeriesPaint(0, new Color(245, 158, 11, 210));
+        renderer.setSeriesPaint(1, new Color(124, 58, 237, 190));
+        renderer.setSeriesPaint(2, new Color(16, 185, 129, 210));
+        plot.setRenderer(renderer);
+
+        return chart.createBufferedImage(1200, 650);
+    }
+
     @SuppressWarnings("deprecation")
     private BufferedImage createProductRevenuePie3DChartImage() {
         DefaultPieDataset dataset = new DefaultPieDataset();
@@ -1069,7 +1235,8 @@ public class AdminSystemPanel extends JPanel {
                     ON o.store_id = s.store_id
                    AND NVL(o.is_deleted, 0) = 0
                    AND o.store_id IS NOT NULL
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                   AND o.order_date >= ?
+                   AND o.order_date < ?
                    AND (
                         UPPER(NVL(o.status, '')) = 'COMPLETED'
                         OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -1088,18 +1255,23 @@ public class AdminSystemPanel extends JPanel {
             WHERE ROWNUM <= 5
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String productName = rs.getString("product_name");
-                double revenue = rs.getDouble("revenue");
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
-                if (revenue > 0) {
-                    String shortName = productName == null ? "Không rõ" : productName.trim();
-                    if (shortName.length() > 24) {
-                        shortName = shortName.substring(0, 24) + "...";
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String productName = rs.getString("product_name");
+                    double revenue = rs.getDouble("revenue");
+
+                    if (revenue > 0) {
+                        String shortName = productName == null ? "Không rõ" : productName.trim();
+                        if (shortName.length() > 24) {
+                            shortName = shortName.substring(0, 24) + "...";
+                        }
+                        dataset.setValue(shortName, revenue);
                     }
-                    dataset.setValue(shortName, revenue);
                 }
             }
         } catch (Exception e) {
@@ -1126,7 +1298,6 @@ public class AdminSystemPanel extends JPanel {
         plot.setOutlinePaint(new Color(71, 85, 105));
         plot.setOutlineStroke(new BasicStroke(1.4f));
 
-        // Style 3D ngang giống demo JFreeChart: dẹt, có mặt bên rõ, không bị dựng đứng.
         plot.setStartAngle(285);
         plot.setDirection(Rotation.CLOCKWISE);
         plot.setDepthFactor(0.24);
@@ -1141,13 +1312,16 @@ public class AdminSystemPanel extends JPanel {
         plot.setLabelOutlinePaint(new Color(71, 85, 105));
         plot.setLabelShadowPaint(null);
 
-        // Tỉ lệ ngang để khi đưa vào JRXML nhìn giống Pie Chart 3D Demo, không bị teo nhỏ.
         return chart.createBufferedImage(1200, 620);
     }
 
     private BufferedImage createRevenueOrderDifferenceChartImage() {
-        XYSeries currentMonthSeries = new XYSeries("Tháng hiện tại");
-        XYSeries previousMonthSeries = new XYSeries("Tháng trước");
+        XYSeries currentPeriodSeries = new XYSeries("Kỳ đang lọc");
+        XYSeries previousPeriodSeries = new XYSeries("Kỳ liền trước");
+
+        long durationMinutes = Math.max(1, java.time.Duration.between(filterFrom, filterTo).toMinutes());
+        LocalDateTime previousFrom = filterFrom.minusMinutes(durationMinutes);
+        LocalDateTime previousTo = filterFrom;
 
         String sql = """
         SELECT period_type,
@@ -1155,14 +1329,15 @@ public class AdminSystemPanel extends JPanel {
                NVL(SUM(revenue), 0) AS revenue
         FROM (
             SELECT 'CURRENT' AS period_type,
-                   TO_NUMBER(TO_CHAR(o.order_date, 'DD')) AS day_no,
+                   TRUNC(o.order_date) - TRUNC(?) + 1 AS day_no,
                    o.total_amount AS revenue
             FROM stores s
             JOIN orders o
                 ON o.store_id = s.store_id
                AND NVL(o.is_deleted, 0) = 0
                AND o.store_id IS NOT NULL
-               AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+               AND o.order_date >= ?
+               AND o.order_date < ?
                AND (
                     UPPER(NVL(o.status, '')) = 'COMPLETED'
                     OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -1173,14 +1348,15 @@ public class AdminSystemPanel extends JPanel {
             UNION ALL
 
             SELECT 'PREVIOUS' AS period_type,
-                   TO_NUMBER(TO_CHAR(o.order_date, 'DD')) AS day_no,
+                   TRUNC(o.order_date) - TRUNC(?) + 1 AS day_no,
                    o.total_amount AS revenue
             FROM stores s
             JOIN orders o
                 ON o.store_id = s.store_id
                AND NVL(o.is_deleted, 0) = 0
                AND o.store_id IS NOT NULL
-               AND TRUNC(o.order_date, 'MM') = ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)
+               AND o.order_date >= ?
+               AND o.order_date < ?
                AND (
                     UPPER(NVL(o.status, '')) = 'COMPLETED'
                     OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -1196,22 +1372,31 @@ public class AdminSystemPanel extends JPanel {
         int minDay = 32;
         int maxDay = 0;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String periodType = rs.getString("period_type");
-                int dayNo = rs.getInt("day_no");
-                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
-                if ("CURRENT".equalsIgnoreCase(periodType)) {
-                    currentMonthSeries.add(dayNo, revenueMillion);
-                } else {
-                    previousMonthSeries.add(dayNo, revenueMillion);
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(3, Timestamp.valueOf(filterTo));
+            ps.setTimestamp(4, Timestamp.valueOf(previousFrom));
+            ps.setTimestamp(5, Timestamp.valueOf(previousFrom));
+            ps.setTimestamp(6, Timestamp.valueOf(previousTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String periodType = rs.getString("period_type");
+                    int dayNo = rs.getInt("day_no");
+                    double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+
+                    if ("CURRENT".equalsIgnoreCase(periodType)) {
+                        currentPeriodSeries.add(dayNo, revenueMillion);
+                    } else {
+                        previousPeriodSeries.add(dayNo, revenueMillion);
+                    }
+
+                    maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                    minDay = Math.min(minDay, dayNo);
+                    maxDay = Math.max(maxDay, dayNo);
                 }
-
-                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
-                minDay = Math.min(minDay, dayNo);
-                maxDay = Math.max(maxDay, dayNo);
             }
         } catch (Exception e) {
             System.err.println("[AdminSystemPanel] createRevenueOrderDifferenceChartImage error: " + e.getMessage());
@@ -1220,17 +1405,17 @@ public class AdminSystemPanel extends JPanel {
         if (maxDay == 0) {
             minDay = 1;
             maxDay = 2;
-            currentMonthSeries.add(1, 0);
-            previousMonthSeries.add(1, 0);
+            currentPeriodSeries.add(1, 0);
+            previousPeriodSeries.add(1, 0);
         }
 
         XYSeriesCollection dataset = new XYSeriesCollection();
-        dataset.addSeries(previousMonthSeries);
-        dataset.addSeries(currentMonthSeries);
+        dataset.addSeries(previousPeriodSeries);
+        dataset.addSeries(currentPeriodSeries);
 
         JFreeChart chart = ChartFactory.createXYLineChart(
                 null,
-                "Ngày trong tháng",
+                "Ngày thứ trong kỳ lọc",
                 "Doanh thu (triệu VND)",
                 dataset,
                 PlotOrientation.VERTICAL,
@@ -1263,7 +1448,7 @@ public class AdminSystemPanel extends JPanel {
         plot.setRenderer(renderer);
 
         NumberAxis xAxis = (NumberAxis) plot.getDomainAxis();
-        xAxis.setRange(Math.max(1, minDay - 1), Math.min(31, maxDay + 1));
+        xAxis.setRange(Math.max(1, minDay - 1), Math.max(2, maxDay + 1));
 
         int daySpan = Math.max(1, maxDay - minDay);
         if (daySpan <= 8) {
@@ -1303,7 +1488,8 @@ public class AdminSystemPanel extends JPanel {
             ON o.store_id = s.store_id
            AND NVL(o.is_deleted, 0) = 0
            AND o.store_id IS NOT NULL
-           AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+           AND o.order_date >= ?
+           AND o.order_date < ?
            AND (
                 UPPER(NVL(o.status, '')) = 'COMPLETED'
                 OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -1314,26 +1500,31 @@ public class AdminSystemPanel extends JPanel {
         ORDER BY revenue DESC, s.store_id
     """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String storeName = rs.getString("store_name");
-                if (storeName == null || storeName.trim().isEmpty()) {
-                    storeName = rs.getString("store_id");
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String storeName = rs.getString("store_name");
+                    if (storeName == null || storeName.trim().isEmpty()) {
+                        storeName = rs.getString("store_id");
+                    }
+
+                    if (storeName.length() > 18) {
+                        storeName = storeName.substring(0, 18) + "...";
+                    }
+
+                    double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+                    int orderCount = rs.getInt("order_count");
+
+                    revenueDataset.addValue(revenueMillion, "Doanh thu", storeName);
+                    orderDataset.addValue(orderCount, "Số đơn", storeName);
+
+                    maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                    maxOrderCount = Math.max(maxOrderCount, orderCount);
                 }
-
-                if (storeName.length() > 18) {
-                    storeName = storeName.substring(0, 18) + "...";
-                }
-
-                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
-                int orderCount = rs.getInt("order_count");
-
-                revenueDataset.addValue(revenueMillion, "Doanh thu", storeName);
-                orderDataset.addValue(orderCount, "Số đơn", storeName);
-
-                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
-                maxOrderCount = Math.max(maxOrderCount, orderCount);
             }
         } catch (Exception e) {
             System.err.println("[AdminSystemPanel] createRevenueOrderLineChartImage error: " + e.getMessage());
@@ -1376,32 +1567,25 @@ public class AdminSystemPanel extends JPanel {
         revenueRenderer.setSeriesPaint(0, new Color(245, 158, 11, 190));
         revenueRenderer.setBarPainter(new StandardBarPainter());
         revenueRenderer.setShadowVisible(false);
-
-        // Cái này là phần quan trọng: giảm độ rộng cột để không bị đè hình.
         revenueRenderer.setMaximumBarWidth(0.045);
         revenueRenderer.setItemMargin(0.35);
 
         plot.setRenderer(0, revenueRenderer);
 
         NumberAxis orderAxis = new NumberAxis("Số đơn");
-        compactNumberAxis(orderAxis, maxOrderCount);
+        orderAxis.setRange(0, Math.max(1, maxOrderCount) * 1.15);
+        orderAxis.setTickUnit(new NumberTickUnit(niceTickUnit(Math.max(1, maxOrderCount))));
         orderAxis.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
         orderAxis.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
-
         plot.setRangeAxis(1, orderAxis);
         plot.setDataset(1, orderDataset);
         plot.mapDatasetToRangeAxis(1, 1);
 
-        LineAndShapeRenderer orderRenderer = new LineAndShapeRenderer(true, true);
+        LineAndShapeRenderer orderRenderer = new LineAndShapeRenderer();
         orderRenderer.setSeriesPaint(0, blue);
-        orderRenderer.setSeriesStroke(0, new BasicStroke(3.4f));
+        orderRenderer.setSeriesStroke(0, new BasicStroke(3.2f));
         orderRenderer.setSeriesShapesVisible(0, true);
-        orderRenderer.setSeriesShape(
-                0,
-                new java.awt.geom.Ellipse2D.Double(-5, -5, 10, 10)
-        );
-
-        // Renderer số đơn đặt ở dataset 1 nên sẽ vẽ nổi trên cột doanh thu.
+        orderRenderer.setSeriesShapesFilled(0, true);
         plot.setRenderer(1, orderRenderer);
 
         return chart.createBufferedImage(1200, 650);
@@ -1426,7 +1610,8 @@ public class AdminSystemPanel extends JPanel {
                     ON o.store_id = s.store_id
                    AND NVL(o.is_deleted, 0) = 0
                    AND o.store_id IS NOT NULL
-                   AND TRUNC(o.order_date, 'MM') = TRUNC(SYSDATE, 'MM')
+                   AND o.order_date >= ?
+                   AND o.order_date < ?
                    AND (
                         UPPER(NVL(o.status, '')) = 'COMPLETED'
                         OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
@@ -1445,26 +1630,38 @@ public class AdminSystemPanel extends JPanel {
             WHERE ROWNUM <= 10
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String productName = rs.getString("product_name");
-                double quantitySold = rs.getDouble("quantity_sold");
-                double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
-                double orderCount = Math.max(1.0, rs.getDouble("bubble_size"));
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
-                String seriesName = productName == null ? "Không rõ" : productName.trim();
-                XYSeries series = new XYSeries(seriesName);
-                series.add(quantitySold, revenueMillion);
-                dataset.addSeries(series);
+            ps.setTimestamp(1, Timestamp.valueOf(filterFrom));
+            ps.setTimestamp(2, Timestamp.valueOf(filterTo));
 
-                bubbleSizes.add(orderCount);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String productName = rs.getString("product_name");
+                    double quantitySold = rs.getDouble("quantity_sold");
+                    double revenueMillion = rs.getDouble("revenue") / 1_000_000.0;
+                    double orderCount = Math.max(1.0, rs.getDouble("bubble_size"));
 
-                maxQuantity = Math.max(maxQuantity, quantitySold);
-                maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                    String seriesName = productName == null ? "Không rõ" : productName.trim();
+                    XYSeries series = new XYSeries(seriesName);
+                    series.add(quantitySold, revenueMillion);
+                    dataset.addSeries(series);
+
+                    bubbleSizes.add(orderCount);
+
+                    maxQuantity = Math.max(maxQuantity, quantitySold);
+                    maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
+                }
             }
         } catch (Exception e) {
             System.err.println("[AdminSystemPanel] createProductBubbleChartImage error: " + e.getMessage());
+        }
+
+        if (dataset.getSeriesCount() == 0) {
+            XYSeries empty = new XYSeries("Không có dữ liệu");
+            empty.add(0, 0);
+            dataset.addSeries(empty);
+            bubbleSizes.add(1.0);
         }
 
         JFreeChart chart = ChartFactory.createScatterPlot(
@@ -1485,48 +1682,48 @@ public class AdminSystemPanel extends JPanel {
         }
 
         XYPlot plot = chart.getXYPlot();
+        applyStrongXYGrid(plot);
 
-        plot.setBackgroundPaint(new Color(248, 250, 252));
+        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer(false, true) {
+            @Override
+            public java.awt.Shape getItemShape(int row, int column) {
+                double orderCount = row < bubbleSizes.size() ? bubbleSizes.get(row) : 1.0;
+                double size = Math.max(18, Math.min(54, 18 + orderCount * 7));
+                return new Ellipse2D.Double(-size / 2, -size / 2, size, size);
+            }
+        };
 
-// Viền ngoài chart đậm hơn
-        plot.setOutlineVisible(true);
-        plot.setOutlinePaint(new Color(51, 65, 85));
-        plot.setOutlineStroke(new BasicStroke(1.4f));
-
-// Lưới dọc
-        plot.setDomainGridlinesVisible(true);
-        plot.setDomainGridlinePaint(new Color(148, 163, 184));
-        plot.setDomainGridlineStroke(new BasicStroke(1.25f));
-
-// Lưới ngang
-        plot.setRangeGridlinesVisible(true);
-        plot.setRangeGridlinePaint(new Color(148, 163, 184));
-        plot.setRangeGridlineStroke(new BasicStroke(1.25f));
-
-        XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer(false, true);
+        Color[] colors = new Color[]{
+            new Color(239, 68, 68, 230),
+            new Color(37, 99, 235, 220),
+            new Color(34, 197, 94, 220),
+            new Color(245, 158, 11, 220),
+            new Color(217, 70, 239, 220),
+            new Color(20, 184, 166, 220),
+            new Color(148, 163, 184, 220),
+            new Color(234, 88, 12, 220),
+            new Color(99, 102, 241, 220),
+            new Color(16, 185, 129, 220)
+        };
 
         for (int i = 0; i < dataset.getSeriesCount(); i++) {
-            double orderCount = bubbleSizes.get(i);
-            double size = 20 + Math.min(42, orderCount * 5.0);
-            renderer.setSeriesShape(
-                    i,
-                    new Ellipse2D.Double(-size / 2, -size / 2, size, size)
-            );
+            renderer.setSeriesPaint(i, colors[i % colors.length]);
+            renderer.setSeriesFillPaint(i, colors[i % colors.length]);
+            renderer.setSeriesOutlinePaint(i, Color.WHITE);
+            renderer.setSeriesOutlineStroke(i, new BasicStroke(1.2f));
         }
 
-        renderer.setDefaultItemLabelsVisible(true);
-        renderer.setDefaultItemLabelGenerator((xyDataset, series, item) -> {
-            String name = xyDataset.getSeriesKey(series).toString();
-            return name.length() > 16 ? name.substring(0, 16) + "..." : name;
-        });
-        renderer.setDefaultItemLabelFont(new Font("Segoe UI", Font.BOLD, 12));
         plot.setRenderer(renderer);
 
-        NumberAxis xAxis = (NumberAxis) plot.getDomainAxis();
-        compactNumberAxis(xAxis, maxQuantity);
+        NumberAxis domain = (NumberAxis) plot.getDomainAxis();
+        compactNumberAxis(domain, maxQuantity);
+        domain.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        domain.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
 
-        NumberAxis yAxis = (NumberAxis) plot.getRangeAxis();
-        compactNumberAxis(yAxis, maxRevenueMillion);
+        NumberAxis range = (NumberAxis) plot.getRangeAxis();
+        compactNumberAxis(range, maxRevenueMillion);
+        range.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
+        range.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
 
         return chart.createBufferedImage(1200, 650);
     }
