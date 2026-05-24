@@ -657,6 +657,27 @@ WHERE last_updated IS NULL;
 
 COMMIT;
 
+
+-- Thêm bảng để phục vụ phân ca
+CREATE TABLE EMPLOYEE_SHIFT_ASSIGNMENTS (
+    assignment_id VARCHAR2(50) PRIMARY KEY,
+    employee_id   VARCHAR2(50) NOT NULL,
+    shift_id      VARCHAR2(50) NOT NULL,
+    work_date     DATE NOT NULL,
+    status        VARCHAR2(30) DEFAULT 'ASSIGNED',
+    note          NVARCHAR2(255),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted    NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_ESA_EMPLOYEE
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id),
+
+    CONSTRAINT FK_ESA_SHIFT
+        FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)
+);
+
+
 ALTER TABLE EMPLOYEE_SHIFT_ASSIGNMENTS ADD start_date DATE;
 ALTER TABLE EMPLOYEE_SHIFT_ASSIGNMENTS ADD end_date DATE;
 
