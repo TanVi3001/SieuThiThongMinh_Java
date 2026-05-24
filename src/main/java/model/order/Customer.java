@@ -1,7 +1,7 @@
 package model.order;
 
 /**
- * @author nguye
+ * Model khách hàng.
  */
 public class Customer {
 
@@ -14,12 +14,19 @@ public class Customer {
     private int isDeleted;
     private double totalSpending;
     private String memberRank;
+
     public Customer() {
     }
 
-    // --- LOGIC HẠNG THÀNH VIÊN ĐỘNG ---
-    // Tự động tính hạng dựa trên số tiền đã nạp vào totalSpending
+    /*
+     * Ưu tiên hạng thành viên được load từ DB qua setMemberRank().
+     * Nếu DB không truyền memberRank thì mới tự suy theo totalSpending.
+     */
     public String getMemberRank() {
+        if (memberRank != null && !memberRank.trim().isEmpty()) {
+            return memberRank.trim();
+        }
+
         if (totalSpending >= 80_000_000) {
             return "Kim cương";
         }
@@ -35,24 +42,35 @@ public class Customer {
         return "Thường";
     }
 
-    // --- TỶ LỆ GIẢM GIÁ (ÁP DỤNG ĐƠN SAU) ---
     public double getDiscountRate() {
         String rank = getMemberRank();
-        return switch (rank) {
-            case "Kim cương" ->
+
+        if (rank == null || rank.trim().isEmpty()) {
+            return 0.0;
+        }
+
+        String normalized = java.text.Normalizer
+                .normalize(rank, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .trim()
+                .toLowerCase();
+
+        return switch (normalized) {
+            case "kim cuong" ->
                 0.12;
-            case "Vàng" ->
+            case "vang" ->
                 0.08;
-            case "Bạc" ->
+            case "bac" ->
                 0.05;
-            case "Đồng" ->
+            case "dong" ->
                 0.02;
             default ->
-                0.00;
+                0.0;
         };
     }
 
-    // --- GETTERS & SETTERS (Đã dọn dẹp trùng lặp) ---
     public String getCustomerId() {
         return customerId;
     }
@@ -61,10 +79,12 @@ public class Customer {
         this.customerId = customerId;
     }
 
+    // Alias cho code cũ
     public String getCustomerID() {
         return customerId;
-    } // Alias cho code cũ
+    }
 
+    // Alias cho code cũ
     public void setCustomerID(String customerId) {
         this.customerId = customerId;
     }
