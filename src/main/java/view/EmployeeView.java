@@ -1244,42 +1244,7 @@ public class EmployeeView extends JPanel {
 
     private void saveShiftAssignment(boolean update) {
         if (update) {
-            List<String> oldIds = new ArrayList<>();
-
-            if (selectedTimelineBlock != null && !selectedTimelineBlock.getAssignmentIds().isEmpty()) {
-                oldIds.addAll(selectedTimelineBlock.getAssignmentIds());
-            } else if (selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
-                oldIds.add(selectedAssignmentId);
-            }
-
-            if (oldIds.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn một lịch phân ca trên timeline để cập nhật.");
-                return;
-            }
-
-            EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
-            ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
-            LocalDate from = parseUiDate(txtWorkFromDate != null ? txtWorkFromDate.getText() : "");
-            LocalDate to = parseUiDate(txtWorkToDate != null ? txtWorkToDate.getText() : "");
-            String status = cbAssignmentStatus == null ? "ASSIGNED" : String.valueOf(cbAssignmentStatus.getSelectedItem());
-            String note = txtAssignmentNote == null ? "" : txtAssignmentNote.getText().trim();
-
-            boolean ok = replaceShiftAssignmentsFromValues(
-                    this,
-                    oldIds,
-                    employeeOption,
-                    shiftOption,
-                    from,
-                    to,
-                    status,
-                    note,
-                    "Cập nhật lịch phân ca"
-            );
-
-            if (ok) {
-                clearShiftForm();
-                loadShiftAssignments();
-            }
+            updateSelectedShiftBlockFromForm();
             return;
         }
 
@@ -1318,91 +1283,110 @@ public class EmployeeView extends JPanel {
         loadShiftAssignments();
     }
 
-    private boolean replaceShiftAssignmentsFromValues(
-            Component parent,
-            List<String> oldAssignmentIds,
-            EmployeeOption employeeOption,
-            ShiftOption shiftOption,
-            LocalDate from,
-            LocalDate to,
-            String status,
-            String note,
-            String title
-    ) {
-        Component dialogParent = parent == null ? this : parent;
+    private void updateSelectedShiftBlockFromForm() {
+        if (selectedTimelineBlock == null && (selectedAssignmentId == null || selectedAssignmentId.isBlank())) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn một lịch phân ca trên timeline để cập nhật.",
+                    "Chưa chọn lịch",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
+        ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
+
+        Date fromDate = parseRequiredSqlDate(txtWorkFromDate != null ? txtWorkFromDate.getText().trim() : "");
+        Date toDate = parseRequiredSqlDate(txtWorkToDate != null ? txtWorkToDate.getText().trim() : "");
 
         if (employeeOption == null || employeeOption.employee == null) {
-            JOptionPane.showMessageDialog(dialogParent, "Vui lòng chọn nhân viên.");
-            return false;
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên cần cập nhật lịch.");
+            return;
         }
 
         if (shiftOption == null || shiftOption.shift == null || shiftOption.all) {
-            JOptionPane.showMessageDialog(dialogParent, "Vui lòng chọn ca làm việc.");
-            return false;
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn ca làm việc.");
+            return;
         }
 
-        if (from == null || to == null) {
-            JOptionPane.showMessageDialog(
-                    dialogParent,
-                    "Ngày không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy.",
-                    "Lỗi định dạng ngày",
-                    JOptionPane.WARNING_MESSAGE
-            );
-            return false;
+        if (fromDate == null || toDate == null) {
+            return;
         }
 
-        if (from.isAfter(to)) {
+        if (fromDate.after(toDate)) {
             JOptionPane.showMessageDialog(
-                    dialogParent,
+                    this,
                     "Từ ngày không được lớn hơn Đến ngày.",
                     "Khoảng ngày không hợp lệ",
                     JOptionPane.WARNING_MESSAGE
             );
-            return false;
+            return;
         }
 
-        List<String> oldIds = oldAssignmentIds == null ? new ArrayList<>() : new ArrayList<>(oldAssignmentIds);
+        List<String> oldIds = new ArrayList<>();
+        if (selectedTimelineBlock != null && !selectedTimelineBlock.getAssignmentIds().isEmpty()) {
+            oldIds.addAll(selectedTimelineBlock.getAssignmentIds());
+        } else if (selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
+            oldIds.add(selectedAssignmentId);
+        }
+
+        if (oldIds.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Không tìm thấy mã phân ca cũ để cập nhật.");
+            return;
+        }
 
         int confirm = JOptionPane.showConfirmDialog(
-                dialogParent,
-                "Cập nhật lịch này sẽ thay thế lịch cũ trên gantt bằng thông tin mới đang nhập.\n"
-                + "Bạn có chắc muốn tiếp tục không?",
-                title == null ? "Cập nhật lịch phân ca" : title,
+                this,
+                oldIds.size() > 1
+                ? "Block này gồm " + oldIds.size() + " ngày. Cập nhật sẽ thay thế toàn bộ block cũ bằng lịch mới.\nBạn có muốn tiếp tục?"
+                : "Cập nhật lịch phân ca đang chọn?",
+                "Xác nhận cập nhật lịch",
                 JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                JOptionPane.QUESTION_MESSAGE
         );
 
         if (confirm != JOptionPane.YES_OPTION) {
-            return false;
+            return;
         }
 
-        int removed = 0;
-        if (!oldIds.isEmpty()) {
-            removed = oldIds.size() == 1
-                    ? employeeShiftSql.delete(oldIds.get(0))
-                    : employeeShiftSql.deleteMany(oldIds);
+        int deleted = oldIds.size() == 1
+                ? employeeShiftSql.delete(oldIds.get(0))
+                : employeeShiftSql.deleteMany(oldIds);
+
+        if (deleted <= 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể cập nhật vì xóa mềm lịch cũ thất bại.",
+                    "Lỗi cập nhật",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
         }
+
+        LocalDate start = fromDate.toLocalDate();
+        LocalDate end = toDate.toLocalDate();
 
         int success = 0;
         int duplicate = 0;
         int failed = 0;
         int sequence = 0;
 
-        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            EmployeeShift item = new EmployeeShift();
-            item.setAssignmentId("PC" + System.currentTimeMillis() + "_UPD_" + (++sequence));
-            item.setEmployeeId(employeeOption.employee.getEmployeeId());
-            item.setShiftId(shiftOption.shift.getShiftId());
-            item.setWorkDate(Date.valueOf(d));
-            item.setStatus(status == null || status.isBlank() ? "ASSIGNED" : status);
-            item.setNote(note == null ? "" : note.trim());
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            EmployeeShift newItem = new EmployeeShift();
+            newItem.setAssignmentId("PC" + System.currentTimeMillis() + "_UPD_" + (++sequence));
+            newItem.setEmployeeId(employeeOption.employee.getEmployeeId());
+            newItem.setShiftId(shiftOption.shift.getShiftId());
+            newItem.setWorkDate(Date.valueOf(d));
+            newItem.setStatus(String.valueOf(cbAssignmentStatus.getSelectedItem()));
+            newItem.setNote(txtAssignmentNote == null ? "" : txtAssignmentNote.getText().trim());
 
-            if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(), item.getWorkDate(), null)) {
+            if (employeeShiftSql.existsDuplicate(newItem.getEmployeeId(), newItem.getShiftId(), newItem.getWorkDate(), null)) {
                 duplicate++;
                 continue;
             }
 
-            int rows = employeeShiftSql.insert(item);
+            int rows = employeeShiftSql.insert(newItem);
             if (rows > 0) {
                 success++;
             } else {
@@ -1411,17 +1395,18 @@ public class EmployeeView extends JPanel {
         }
 
         JOptionPane.showMessageDialog(
-                dialogParent,
+                this,
                 "Kết quả cập nhật lịch:\n"
-                + "- Lịch cũ đã xóa mềm: " + removed + "\n"
-                + "- Thêm lịch mới thành công: " + success + "\n"
+                + "- Đã xóa lịch cũ: " + deleted + "\n"
+                + "- Tạo lịch mới thành công: " + success + "\n"
                 + "- Bỏ qua do trùng: " + duplicate + "\n"
                 + "- Thất bại: " + failed,
-                title == null ? "Cập nhật lịch phân ca" : title,
-                success > 0 ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE
+                "Cập nhật hoàn tất",
+                JOptionPane.INFORMATION_MESSAGE
         );
 
-        return success > 0;
+        clearShiftForm();
+        loadShiftAssignments();
     }
 
     private void cancelShiftAssignment() {
@@ -1698,6 +1683,7 @@ public class EmployeeView extends JPanel {
             return;
         }
 
+        selectedTimelineBlock = null;
         selectedAssignmentId = item.getAssignmentId();
         selectEmployeeOption(item.getEmployeeId());
         selectShiftOption(cbWorkShift, item.getShiftId());
@@ -1705,7 +1691,8 @@ public class EmployeeView extends JPanel {
         String d = item.getWorkDate() == null ? "" : formatUiDate(item.getWorkDate().toLocalDate());
         txtWorkFromDate.setText(d);
         txtWorkToDate.setText(d);
-        cbAssignmentStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
+
+        cbAssignmentStatus.setSelectedItem(item.getStatus());
         txtAssignmentNote.setText(item.getNote() == null ? "" : item.getNote());
         updateSelectedShiftEmployeeCard();
     }
@@ -1725,54 +1712,14 @@ public class EmployeeView extends JPanel {
 
         txtWorkFromDate.setText(block.startDate == null ? "" : formatUiDate(block.startDate));
         txtWorkToDate.setText(block.endDate == null ? "" : formatUiDate(block.endDate));
-        cbAssignmentStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
+
+        cbAssignmentStatus.setSelectedItem(item.getStatus());
         txtAssignmentNote.setText(item.getNote() == null ? "" : item.getNote());
-
         updateSelectedShiftEmployeeCard();
-    }
 
-    private void syncShiftFormFromValues(
-            EmployeeOption employeeOption,
-            ShiftOption shiftOption,
-            LocalDate from,
-            LocalDate to,
-            String status,
-            String note,
-            boolean clearSelection
-    ) {
-        if (clearSelection) {
-            selectedAssignmentId = "";
-            selectedTimelineBlock = null;
-            if (shiftTimelinePanel != null) {
-                shiftTimelinePanel.clearSelectedAssignment();
-            }
+        if (shiftTimelinePanel != null) {
+            shiftTimelinePanel.setSelectedBlock(block);
         }
-
-        if (employeeOption != null && employeeOption.employee != null) {
-            selectEmployeeOption(employeeOption.employee.getEmployeeId());
-        }
-
-        if (shiftOption != null && shiftOption.shift != null) {
-            selectShiftOption(cbWorkShift, shiftOption.shift.getShiftId());
-        }
-
-        if (txtWorkFromDate != null && from != null) {
-            txtWorkFromDate.setText(formatUiDate(from));
-        }
-
-        if (txtWorkToDate != null && to != null) {
-            txtWorkToDate.setText(formatUiDate(to));
-        }
-
-        if (cbAssignmentStatus != null) {
-            cbAssignmentStatus.setSelectedItem(status == null || status.isBlank() ? "ASSIGNED" : status);
-        }
-
-        if (txtAssignmentNote != null) {
-            txtAssignmentNote.setText(note == null ? "" : note);
-        }
-
-        updateSelectedShiftEmployeeCard();
     }
 
     private void clearShiftForm() {
@@ -1856,6 +1803,7 @@ public class EmployeeView extends JPanel {
             return;
         }
 
+        // Vẫn fill nhẹ vào form bên trái để người dùng thấy context đang chọn.
         prepareNewShiftFromTimelineCell(employeeId, date, clickedHour);
 
         JDialog dialog = new JDialog(
@@ -1864,22 +1812,21 @@ public class EmployeeView extends JPanel {
                 Dialog.ModalityType.APPLICATION_MODAL
         );
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setSize(780, 700);
-        dialog.setMinimumSize(new Dimension(720, 640));
+        dialog.setSize(760, 680);
         dialog.setLocationRelativeTo(this);
 
         JPanel root = new JPanel(new BorderLayout(0, 16));
         root.setBackground(Color.WHITE);
-        root.setBorder(new EmptyBorder(24, 28, 24, 28));
+        root.setBorder(new EmptyBorder(22, 24, 22, 24));
 
         JPanel header = new JPanel(new BorderLayout(12, 0));
         header.setOpaque(false);
 
         JLabel title = new JLabel("Thêm lịch làm việc mới");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(textDark);
 
-        JLabel sub = new JLabel("Tạo phân ca trực tiếp từ ô timeline vừa chọn. Thông tin sẽ đồng bộ với form bên trái.");
+        JLabel sub = new JLabel("Tạo phân ca trực tiếp từ ô timeline vừa chọn.");
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         sub.setForeground(new Color(107, 119, 140));
 
@@ -1907,18 +1854,18 @@ public class EmployeeView extends JPanel {
 
         JTextField dlgFromDate = createDateField(date);
         JTextField dlgToDate = createDateField(date);
-        dlgFromDate.setPreferredSize(new Dimension(300, 42));
-        dlgToDate.setPreferredSize(new Dimension(300, 42));
+        dlgFromDate.setPreferredSize(new Dimension(240, 40));
+        dlgToDate.setPreferredSize(new Dimension(240, 40));
 
         JComboBox<String> dlgStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
         stylePlainCombo(dlgStatus);
         dlgStatus.setSelectedItem("ASSIGNED");
 
-        JTextArea dlgNote = new JTextArea(6, 24);
+        JTextArea dlgNote = new JTextArea(4, 18);
         dlgNote.setLineWrap(true);
         dlgNote.setWrapStyleWord(true);
         dlgNote.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        dlgNote.setBorder(new EmptyBorder(10, 12, 10, 12));
+        dlgNote.setBorder(new EmptyBorder(8, 10, 8, 10));
         JScrollPane noteScroll = new JScrollPane(dlgNote);
         noteScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 10));
         noteScroll.getViewport().setBackground(Color.WHITE);
@@ -1931,22 +1878,22 @@ public class EmployeeView extends JPanel {
         gbc.weightx = 1.0;
         int y = 0;
 
-        form.add(createDialogField("Nhân viên (*)", dlgEmployee), addGbc(gbc, y++, 12));
-        form.add(createDialogField("Ca làm việc (*)", dlgShift), addGbc(gbc, y++, 12));
+        form.add(createDialogField("Nhân viên (*)", dlgEmployee), addGbc(gbc, y++, 10));
+        form.add(createDialogField("Ca làm việc (*)", dlgShift), addGbc(gbc, y++, 10));
 
-        JPanel dateRow = new JPanel(new GridLayout(1, 2, 14, 0));
+        JPanel dateRow = new JPanel(new GridLayout(1, 2, 12, 0));
         dateRow.setOpaque(false);
         dateRow.add(createDialogField("Từ ngày (*)", dlgFromDate));
         dateRow.add(createDialogField("Đến ngày (*)", dlgToDate));
-        form.add(dateRow, addGbc(gbc, y++, 12));
+        form.add(dateRow, addGbc(gbc, y++, 10));
 
-        form.add(createDialogField("Trạng thái (*)", dlgStatus), addGbc(gbc, y++, 12));
+        form.add(createDialogField("Trạng thái (*)", dlgStatus), addGbc(gbc, y++, 10));
         form.add(createDialogField("Ghi chú", noteScroll), addGbc(gbc, y++, 0));
 
         JButton btnSave = createCustomButton("Thêm lịch", primaryOrange, Color.WHITE, null);
         JButton btnCancel = createCustomButton("Đóng", new Color(235, 239, 245), textDark, null);
-        btnSave.setPreferredSize(new Dimension(140, 44));
-        btnCancel.setPreferredSize(new Dimension(110, 44));
+        btnSave.setPreferredSize(new Dimension(130, 42));
+        btnCancel.setPreferredSize(new Dimension(100, 42));
 
         btnSave.addActionListener(e -> {
             EmployeeOption employeeOption = (EmployeeOption) dlgEmployee.getSelectedItem();
@@ -2022,17 +1969,19 @@ public class EmployeeView extends JPanel {
             );
 
             if (success > 0) {
-                syncShiftFormFromValues(
-                        employeeOption,
-                        shiftOption,
-                        from,
-                        to,
-                        String.valueOf(dlgStatus.getSelectedItem()),
-                        dlgNote.getText() == null ? "" : dlgNote.getText().trim(),
-                        true
-                );
-                loadShiftAssignments();
+                // Đồng bộ lại form bên trái theo đúng thông tin vừa thêm nhanh.
+                selectEmployeeOption(employeeOption.employee.getEmployeeId());
+                selectShiftOption(cbWorkShift, shiftOption.shift.getShiftId());
+                txtWorkFromDate.setText(formatUiDate(from));
+                txtWorkToDate.setText(formatUiDate(to));
+                cbAssignmentStatus.setSelectedItem(String.valueOf(dlgStatus.getSelectedItem()));
+                txtAssignmentNote.setText(dlgNote.getText() == null ? "" : dlgNote.getText().trim());
+                selectedAssignmentId = "";
+                selectedTimelineBlock = null;
+                updateSelectedShiftEmployeeCard();
+
                 dialog.dispose();
+                loadShiftAssignments();
             }
         });
 
@@ -2072,20 +2021,6 @@ public class EmployeeView extends JPanel {
             EmployeeOption option = combo.getItemAt(i);
             if (option != null && option.employee != null
                     && employeeId.equals(option.employee.getEmployeeId())) {
-                combo.setSelectedIndex(i);
-                return;
-            }
-        }
-    }
-
-    private void selectShiftOptionInCombo(JComboBox<ShiftOption> combo, String shiftId) {
-        if (combo == null || shiftId == null) {
-            return;
-        }
-        for (int i = 0; i < combo.getItemCount(); i++) {
-            ShiftOption option = combo.getItemAt(i);
-            if (option != null && !option.all && option.shift != null
-                    && shiftId.equals(option.shift.getShiftId())) {
                 combo.setSelectedIndex(i);
                 return;
             }
@@ -2540,40 +2475,30 @@ public class EmployeeView extends JPanel {
             return;
         }
 
-        selectedTimelineBlock = block;
-        fillShiftForm(block);
-
         EmployeeShift item = block.getPrimary();
-
-        JDialog dialog = new JDialog(
-                SwingUtilities.getWindowAncestor(this),
-                "Chi tiết / cập nhật ca làm việc",
-                Dialog.ModalityType.APPLICATION_MODAL
-        );
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Chi tiết ca làm việc", Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setSize(860, 720);
-        dialog.setMinimumSize(new Dimension(800, 660));
+        dialog.setSize(760, 620);
         dialog.setLocationRelativeTo(this);
 
-        JPanel root = new JPanel(new BorderLayout(0, 16));
+        JPanel root = new JPanel(new BorderLayout(0, 14));
         root.setBackground(Color.WHITE);
-        root.setBorder(new EmptyBorder(24, 28, 24, 28));
+        root.setBorder(new EmptyBorder(22, 24, 20, 24));
 
         JPanel header = new JPanel(new BorderLayout(12, 0));
         header.setOpaque(false);
 
         JLabel title = new JLabel(item.getShiftName() == null ? "Ca làm việc" : item.getShiftName());
-        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(textDark);
 
         String dateRange = formatUiDate(block.startDate)
                 + (block.startDate.equals(block.endDate) ? "" : " - " + formatUiDate(block.endDate));
-        JLabel sub = new JLabel((item.getEmployeeName() == null ? "—" : item.getEmployeeName()) + " • " + dateRange
-                + " • " + block.getDayCount() + " ngày");
+        JLabel sub = new JLabel((item.getEmployeeName() == null ? "—" : item.getEmployeeName()) + " • " + dateRange);
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         sub.setForeground(new Color(107, 119, 140));
 
-        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 4));
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 3));
         titleBox.setOpaque(false);
         titleBox.add(title);
         titleBox.add(sub);
@@ -2588,50 +2513,18 @@ public class EmployeeView extends JPanel {
         header.add(titleBox, BorderLayout.WEST);
         header.add(badge, BorderLayout.EAST);
 
-        JComboBox<EmployeeOption> dlgEmployee = new JComboBox<>();
-        for (Employee emp : assignableEmployees) {
-            if (emp != null && isShiftAssignableRole(emp.getRoleId())) {
-                dlgEmployee.addItem(new EmployeeOption(emp));
-            }
-        }
-        stylePlainCombo(dlgEmployee);
-        selectEmployeeOptionInCombo(dlgEmployee, item.getEmployeeId());
-
-        JComboBox<ShiftOption> dlgShift = new JComboBox<>();
-        for (Shift shift : shiftList) {
-            dlgShift.addItem(new ShiftOption(shift, false));
-        }
-        stylePlainCombo(dlgShift);
-        selectShiftOptionInCombo(dlgShift, item.getShiftId());
-
-        JTextField dlgFromDate = createDateField(block.startDate);
-        JTextField dlgToDate = createDateField(block.endDate);
-        dlgFromDate.setPreferredSize(new Dimension(300, 42));
-        dlgToDate.setPreferredSize(new Dimension(300, 42));
-
-        JComboBox<String> dlgStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
-        stylePlainCombo(dlgStatus);
-        dlgStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
-
-        JTextArea dlgNote = new JTextArea(5, 24);
-        dlgNote.setLineWrap(true);
-        dlgNote.setWrapStyleWord(true);
-        dlgNote.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        dlgNote.setText(item.getNote() == null ? "" : item.getNote());
-        dlgNote.setBorder(new EmptyBorder(10, 12, 10, 12));
-        JScrollPane noteScroll = new JScrollPane(dlgNote);
-        noteScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 10));
-        noteScroll.getViewport().setBackground(Color.WHITE);
-
         String ids = block.getAssignmentIdsText();
         String[][] rows = new String[][]{
             {"Mã phân ca", ids},
-            {"Nhân viên hiện tại", safeDetail(item.getEmployeeName())},
+            {"Nhân viên", safeDetail(item.getEmployeeName())},
             {"Loại nhân viên", safeDetail(item.getEmployeeType())},
             {"Từ ngày", formatUiDate(block.startDate)},
             {"Đến ngày", formatUiDate(block.endDate)},
             {"Số ngày được gom", String.valueOf(block.getDayCount())},
-            {"Thời gian", safeDetail(item.getStartTimeText()) + " - " + safeDetail(item.getEndTimeText())}
+            {"Ca làm việc", safeDetail(item.getShiftName())},
+            {"Thời gian", safeDetail(item.getStartTimeText()) + " - " + safeDetail(item.getEndTimeText())},
+            {"Trạng thái", normalizeShiftStatusForView(item.getStatus())},
+            {"Ghi chú", safeDetail(item.getNote())}
         };
 
         JTable detailTable = new JTable(new DefaultTableModel(rows, new String[]{"Thông tin", "Giá trị"}) {
@@ -2640,7 +2533,7 @@ public class EmployeeView extends JPanel {
                 return false;
             }
         });
-        detailTable.setRowHeight(32);
+        detailTable.setRowHeight(34);
         detailTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         detailTable.setShowHorizontalLines(true);
         detailTable.setShowVerticalLines(false);
@@ -2649,7 +2542,7 @@ public class EmployeeView extends JPanel {
         detailTable.getTableHeader().setBackground(new Color(248, 250, 252));
         detailTable.getTableHeader().setForeground(textDark);
         detailTable.getColumnModel().getColumn(0).setPreferredWidth(170);
-        detailTable.getColumnModel().getColumn(1).setPreferredWidth(420);
+        detailTable.getColumnModel().getColumn(1).setPreferredWidth(380);
 
         detailTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
@@ -2668,82 +2561,34 @@ public class EmployeeView extends JPanel {
         tableScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 12));
         tableScroll.getViewport().setBackground(Color.WHITE);
 
-        JPanel editForm = new JPanel(new GridBagLayout());
-        editForm.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        int y = 0;
-
-        editForm.add(createDialogField("Nhân viên (*)", dlgEmployee), addGbc(gbc, y++, 10));
-        editForm.add(createDialogField("Ca làm việc (*)", dlgShift), addGbc(gbc, y++, 10));
-
-        JPanel dateRow = new JPanel(new GridLayout(1, 2, 14, 0));
-        dateRow.setOpaque(false);
-        dateRow.add(createDialogField("Từ ngày (*)", dlgFromDate));
-        dateRow.add(createDialogField("Đến ngày (*)", dlgToDate));
-        editForm.add(dateRow, addGbc(gbc, y++, 10));
-
-        editForm.add(createDialogField("Trạng thái (*)", dlgStatus), addGbc(gbc, y++, 10));
-        editForm.add(createDialogField("Ghi chú", noteScroll), addGbc(gbc, y++, 0));
-
-        JPanel center = new JPanel(new GridLayout(1, 2, 16, 0));
-        center.setOpaque(false);
-        center.add(tableScroll);
-        center.add(editForm);
-
-        JButton btnUpdateSchedule = createCustomButton("Cập nhật lịch", primaryBlue, Color.WHITE, null);
+        JButton btnEdit = createCustomButton("Đưa lên form", primaryBlue, Color.WHITE, null);
         JButton btnDelete = createCustomButton("Xóa lịch", new Color(185, 28, 28), Color.WHITE, null);
         JButton btnClose = createCustomButton("Đóng", new Color(235, 239, 245), textDark, null);
-        btnUpdateSchedule.setPreferredSize(new Dimension(140, 42));
-        btnDelete.setPreferredSize(new Dimension(110, 42));
-        btnClose.setPreferredSize(new Dimension(100, 42));
+        btnEdit.setPreferredSize(new Dimension(130, 40));
+        btnDelete.setPreferredSize(new Dimension(110, 40));
+        btnClose.setPreferredSize(new Dimension(100, 40));
 
-        btnUpdateSchedule.addActionListener(e -> {
-            EmployeeOption employeeOption = (EmployeeOption) dlgEmployee.getSelectedItem();
-            ShiftOption shiftOption = (ShiftOption) dlgShift.getSelectedItem();
-            LocalDate from = parseUiDate(dlgFromDate.getText());
-            LocalDate to = parseUiDate(dlgToDate.getText());
-            String status = String.valueOf(dlgStatus.getSelectedItem());
-            String note = dlgNote.getText() == null ? "" : dlgNote.getText().trim();
-
-            boolean ok = replaceShiftAssignmentsFromValues(
-                    dialog,
-                    block.getAssignmentIds(),
-                    employeeOption,
-                    shiftOption,
-                    from,
-                    to,
-                    status,
-                    note,
-                    "Cập nhật lịch phân ca"
-            );
-
-            if (ok) {
-                syncShiftFormFromValues(employeeOption, shiftOption, from, to, status, note, true);
-                loadShiftAssignments();
-                dialog.dispose();
-            }
+        btnEdit.addActionListener(e -> {
+            selectedTimelineBlock = block;
+            fillShiftForm(block);
+            dialog.dispose();
         });
-
         btnDelete.addActionListener(e -> {
             selectedTimelineBlock = block;
             fillShiftForm(block);
             dialog.dispose();
             deleteShiftAssignment();
         });
-
         btnClose.addActionListener(e -> dialog.dispose());
 
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         footer.setOpaque(false);
-        footer.add(btnUpdateSchedule);
+        footer.add(btnEdit);
         footer.add(btnDelete);
         footer.add(btnClose);
 
         root.add(header, BorderLayout.NORTH);
-        root.add(center, BorderLayout.CENTER);
+        root.add(tableScroll, BorderLayout.CENTER);
         root.add(footer, BorderLayout.SOUTH);
 
         dialog.setContentPane(root);
@@ -3596,6 +3441,12 @@ public class EmployeeView extends JPanel {
             repaint();
         }
 
+        void setSelectedBlock(TimelineBlock block) {
+            selectedBlock = block;
+            selectedAssignment = block == null ? null : block.getPrimary();
+            repaint();
+        }
+
         void setAssignments(List<EmployeeShift> data) {
             assignments = data == null ? new ArrayList<>() : new ArrayList<>(data);
             buildTimelineIndex();
@@ -3792,12 +3643,6 @@ public class EmployeeView extends JPanel {
                 if (fullTime && block.getDayCount() > 1) {
                     blockX = startDayX + 8;
                     blockW = Math.max(44, (endDayX + dayWidth - 8) - blockX);
-                } else if (block.getDayCount() > 1 && overnight) {
-                    blockX = startDayX + minuteToX(block.startMinutes);
-                    blockW = Math.max(44, (endDayX + dayWidth + minuteToX(block.endMinutes)) - blockX);
-                } else if (block.getDayCount() > 1) {
-                    blockX = startDayX + minuteToX(block.startMinutes);
-                    blockW = Math.max(44, (endDayX + minuteToX(block.endMinutes)) - blockX);
                 } else if (fullTime) {
                     blockX = startDayX + 8;
                     blockW = dayWidth - 16;
