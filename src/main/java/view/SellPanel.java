@@ -31,9 +31,6 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 
 public class SellPanel extends JPanel {
 
@@ -299,30 +296,14 @@ public class SellPanel extends JPanel {
 
         pnl.add(toolbar, BorderLayout.NORTH);
 
-        modProducts = new DefaultTableModel(new Object[]{"Ảnh", "Mã SP", "Tên SP", "Giá bán", "Kho"}, 0) {
+        modProducts = new DefaultTableModel(new Object[]{"Mã SP", "Tên SP", "Giá bán", "Kho"}, 0) {
             @Override
-            public Class<?> getColumnClass(int col) {
-                if (col == 0) return ImageIcon.class;
-                return Object.class;
+            public boolean isCellEditable(int r, int c) {
+                return false;
             }
-            @Override
-            public boolean isCellEditable(int r, int c) { return false; }
         };
         tblProducts = createTable(modProducts);
-        tblProducts.setRowHeight(60);
-        tblProducts.getColumnModel().getColumn(0).setPreferredWidth(70);
-        tblProducts.getColumnModel().getColumn(0).setMaxWidth(70);
-        tblProducts.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
-                JLabel lbl = new JLabel();
-                lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon) lbl.setIcon((ImageIcon) v);
-                else lbl.setText("—");
-                return lbl;
-            }
-        });
-        tblProducts.getColumnModel().getColumn(2).setPreferredWidth(230);
+        tblProducts.getColumnModel().getColumn(1).setPreferredWidth(250);
 
         productsCardLayout = new CardLayout();
         pnlProductsBody = new JPanel(productsCardLayout);
@@ -391,40 +372,24 @@ public class SellPanel extends JPanel {
         headerWrap.add(pnlWarning, BorderLayout.SOUTH);
         pnl.add(headerWrap, BorderLayout.NORTH);
 
-        modCart = new DefaultTableModel(new Object[]{"Ảnh", "Mã SP", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tồn", "Trạng thái"}, 0) {
+        modCart = new DefaultTableModel(new Object[]{"Mã SP", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tồn", "Trạng thái"}, 0) {
             @Override
-            public Class<?> getColumnClass(int col) {
-                if (col == 0) return ImageIcon.class;
-                return Object.class;
+            public boolean isCellEditable(int row, int col) {
+                return col == 2;
             }
-            @Override
-            public boolean isCellEditable(int row, int col) { return col == 3; }
         };
         tblCart = new JTable(modCart);
         tblCart.setRowHeight(52);
-        tblCart.getColumnModel().getColumn(2).setPreferredWidth(220);
-        tblCart.getColumnModel().getColumn(3).setPreferredWidth(130);
-        tblCart.getColumnModel().getColumn(3).setMinWidth(110);
-        tblCart.getColumnModel().getColumn(3).setMaxWidth(150);
+        tblCart.getColumnModel().getColumn(1).setPreferredWidth(220);
+        tblCart.getColumnModel().getColumn(2).setPreferredWidth(130);
+        tblCart.getColumnModel().getColumn(2).setMinWidth(110);
+        tblCart.getColumnModel().getColumn(2).setMaxWidth(150);
 
         tblCart.setSurrendersFocusOnKeystroke(true);
         tblCart.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
-        tblCart.getColumnModel().getColumn(3).setCellRenderer(new QuantitySpinnerRenderer());
-        tblCart.getColumnModel().getColumn(3).setCellEditor(new QuantitySpinnerEditor());
-        
-        tblCart.getColumnModel().getColumn(0).setPreferredWidth(65);
-        tblCart.getColumnModel().getColumn(0).setMaxWidth(65);
-        tblCart.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
-                JLabel lbl = new JLabel();
-                lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon) lbl.setIcon((ImageIcon) v);
-                else lbl.setText("—");
-                return lbl;
-            }
-        });
+        tblCart.getColumnModel().getColumn(2).setCellRenderer(new QuantitySpinnerRenderer());
+        tblCart.getColumnModel().getColumn(2).setCellEditor(new QuantitySpinnerEditor());
 
         CartTableRenderer cartRenderer = new CartTableRenderer();
         for (int i = 0; i < tblCart.getColumnCount(); i++) {
@@ -469,19 +434,10 @@ public class SellPanel extends JPanel {
         cboKhuyenMai.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         loadActivePromotions();
         cboKhuyenMai.addActionListener(e -> {
-            if (cboKhuyenMai.getSelectedIndex() <= 0) {
-                discountPercentage = 0.0;
-            } else {
-                String selected = cboKhuyenMai.getSelectedItem().toString();
-                try {
-                    String[] parts = selected.split("Giảm ");
-                    if (parts.length > 1) {
-                        discountPercentage = Double.parseDouble(parts[1].replace("%)", "").trim());
-                    }
-                } catch (Exception ex) {
-                    discountPercentage = 0.0;
-                }
-            }
+            String selected = cboKhuyenMai.getSelectedItem() != null
+                    ? cboKhuyenMai.getSelectedItem().toString()
+                    : "";
+            discountPercentage = getPromoRateFromString(selected);
             calculateTotal(); // Tính lại tiền ngay khi chọn
         });
 
@@ -573,7 +529,7 @@ public class SellPanel extends JPanel {
         actionRow.add(chkPrintBill, BorderLayout.WEST);
         actionRow.add(btnPay, BorderLayout.CENTER);
         pnlPayment.add(actionRow, gbc);
-        
+
         return pnlPayment;
     }
 
@@ -712,7 +668,7 @@ public class SellPanel extends JPanel {
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.insets = new Insets(0, 0, 8, 0);
-        JLabel icon = new JLabel("⏳");
+        JLabel icon = new JLabel("");
         icon.setFont(new Font("Segoe UI", Font.PLAIN, 26));
         panel.add(icon, gbc);
         gbc.gridy = 1;
@@ -830,7 +786,7 @@ public class SellPanel extends JPanel {
                 if (e.getClickCount() == 2 && tblProducts.getSelectedRow() >= 0) {
                     int viewRow = tblProducts.getSelectedRow();
                     int modelRow = tblProducts.convertRowIndexToModel(viewRow);
-                    addToCart(tblProducts.getValueAt(modelRow, 1).toString(), getQtyToAdd());
+                    addToCart(modProducts.getValueAt(modelRow, 0).toString(), getQtyToAdd());
                     spnQtyAdd.setValue(1);
                 }
             }
@@ -867,7 +823,7 @@ public class SellPanel extends JPanel {
             if (isUpdatingCart) {
                 return;
             }
-            if (e.getColumn() != 3 || e.getType() != javax.swing.event.TableModelEvent.UPDATE) {
+            if (e.getColumn() != 2 || e.getType() != javax.swing.event.TableModelEvent.UPDATE) {
                 return;
             }
             final int r = e.getFirstRow();
@@ -878,7 +834,7 @@ public class SellPanel extends JPanel {
                 }
                 isUpdatingCart = true;
                 try {
-                    Object qtyObj = modCart.getValueAt(r, 3);
+                    Object qtyObj = modCart.getValueAt(r, 2);
                     if (qtyObj == null) {
                         return;
                     }
@@ -888,8 +844,8 @@ public class SellPanel extends JPanel {
                             modCart.removeRow(r);
                         }
                     } else {
-                        double price = Double.parseDouble(modCart.getValueAt(r, 4).toString());
-                        modCart.setValueAt(price * qty, r, 5);
+                        double price = Double.parseDouble(modCart.getValueAt(r, 3).toString());
+                        modCart.setValueAt(price * qty, r, 4);
                     }
                     calculateTotal();
                     validateCartAgainstDatabase();
@@ -916,7 +872,7 @@ public class SellPanel extends JPanel {
                     StringBuilder productIds = new StringBuilder();
                     for (int i = 0; i < selectedRows.length; i++) {
                         int modelRow = table.convertRowIndexToModel(selectedRows[i]);
-                        String pId = table.getValueAt(modelRow, 1).toString();
+                        String pId = ((DefaultTableModel) table.getModel()).getValueAt(modelRow, 0).toString();
                         productIds.append(pId);
                         if (i < selectedRows.length - 1) {
                             productIds.append(",");
@@ -971,7 +927,7 @@ public class SellPanel extends JPanel {
         if (selectedRows.length > 0) {
             for (int i = 0; i < selectedRows.length; i++) {
                 int modelRow = tblProducts.convertRowIndexToModel(selectedRows[i]);
-                String pId = tblProducts.getValueAt(modelRow, 1).toString();
+                String pId = modProducts.getValueAt(modelRow, 0).toString();
                 addToCart(pId, getQtyToAdd());
             }
             spnQtyAdd.setValue(1);
@@ -1001,22 +957,21 @@ public class SellPanel extends JPanel {
         double price = p.getBasePrice().doubleValue();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            if (modCart.getValueAt(i, 1).equals(pId)) {
-                int currentQty = Integer.parseInt(modCart.getValueAt(i, 3).toString());
+            if (modCart.getValueAt(i, 0).equals(pId)) {
+                int currentQty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
                 int newQty = currentQty + qty;
 
                 if (newQty > p.getQuantity()) {
                     JOptionPane.showMessageDialog(this, "Số lượng vượt tồn kho!\nTồn hiện tại: " + p.getQuantity(), "Cảnh báo", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
-                modCart.setValueAt(newQty, i, 3);
+                modCart.setValueAt(newQty, i, 2);
                 return;
             }
         }
 
         isUpdatingCart = true;
-        ImageIcon cartThumb = loadProductThumb(p.getImagePath(), 50, 42);
-        modCart.addRow(new Object[]{cartThumb, pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
+        modCart.addRow(new Object[]{pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
         isUpdatingCart = false;
 
         calculateTotal();
@@ -1110,8 +1065,7 @@ public class SellPanel extends JPanel {
             }
             String haystack = (p.getProductId() + " " + p.getProductName()).toLowerCase();
             if (normalized.isBlank() || haystack.contains(normalized)) {
-                ImageIcon thumb = loadProductThumb(p.getImagePath(), 55, 45);
-                modProducts.addRow(new Object[]{thumb, p.getProductId(), p.getProductName(), moneyFormat.format(p.getBasePrice()), p.getQuantity()});
+                modProducts.addRow(new Object[]{p.getProductId(), p.getProductName(), moneyFormat.format(p.getBasePrice()), p.getQuantity()});
             }
         }
 
@@ -1149,9 +1103,9 @@ public class SellPanel extends JPanel {
 
         isUpdatingCart = true;
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            int q = Integer.parseInt(modCart.getValueAt(i, 3).toString());
-            int stock = getStockFromDB(modCart.getValueAt(i, 1).toString());
-            modCart.setValueAt(stock, i, 6);
+            int q = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            int stock = getStockFromDB(modCart.getValueAt(i, 0).toString());
+            modCart.setValueAt(stock, i, 5);
             if (q > stock) {
                 hasError = true;
             }
@@ -1161,7 +1115,7 @@ public class SellPanel extends JPanel {
         if (hasError) {
             pnlWarning.setBackground(new Color(253, 237, 236));
             lblWarningMsg.setForeground(DANGER_RED);
-            lblWarningMsg.setText("⚠ Lỗi: Có sản phẩm vượt tồn kho hoặc đã bị thay đổi!");
+            lblWarningMsg.setText("Lỗi: Có sản phẩm vượt tồn kho hoặc đã bị thay đổi!");
             pnlWarning.setVisible(true);
             btnPay.setEnabled(false);
         } else {
@@ -1192,7 +1146,16 @@ public class SellPanel extends JPanel {
             return 0.0;
         }
 
-        // Ưu tiên hàm trong model Customer nếu object đã được load đủ rank.
+        /*
+         * BUG CŨ:
+         * Ở đây từng gọi lại chính getSelectedCustomerDiscountRate(), gây đệ quy sai.
+         * Kết quả là giảm giá thành viên không được tính ổn định, report nhận MEMBER_DISCOUNT_AMOUNT = 0.
+         *
+         * FIX:
+         * 1) Ưu tiên rate từ Customer.getDiscountRate().
+         * 2) Nếu model/DB chưa đủ dữ liệu thì fallback theo rank.
+         * 3) Nếu rank trống thì fallback theo totalSpending.
+         */
         try {
             double rate = selectedCustomer.getDiscountRate();
             if (rate > 0) {
@@ -1201,44 +1164,42 @@ public class SellPanel extends JPanel {
         } catch (Exception ignored) {
         }
 
-        // Fallback 1: đọc trực tiếp rank nếu có.
         String rank = null;
         try {
             rank = selectedCustomer.getMemberRank();
         } catch (Exception ignored) {
         }
 
-        if (rank != null) {
+        if (rank != null && !rank.trim().isEmpty()) {
             String normalizedRank = normalizeVietnamese(rank).toLowerCase().trim();
-            if (normalizedRank.equals("kim cuong")) {
+
+            if (normalizedRank.equals("kim cuong") || normalizedRank.equals("kim cương")) {
                 return 0.12;
             }
-            if (normalizedRank.equals("vang")) {
+            if (normalizedRank.equals("vang") || normalizedRank.equals("vàng")) {
                 return 0.08;
             }
-            if (normalizedRank.equals("bac")) {
+            if (normalizedRank.equals("bac") || normalizedRank.equals("bạc")) {
                 return 0.05;
             }
-            if (normalizedRank.equals("dong")) {
+            if (normalizedRank.equals("dong") || normalizedRank.equals("đồng")) {
                 return 0.02;
             }
         }
 
-        // Fallback 2: suy theo tổng chi trong trường hợp CustomersSql chỉ trả totalSpending.
-        // Các mốc này khớp với bảng khách hàng hiện tại của đồ án:
-        // 50M+ = Vàng, 10M+ = Bạc, 1M+ = Đồng, 100M+ = Kim cương.
         try {
             double spend = selectedCustomer.getTotalSpending();
-            if (spend >= 100_000_000) {
+
+            if (spend >= 80_000_000) {
                 return 0.12;
             }
-            if (spend >= 50_000_000) {
+            if (spend >= 40_000_000) {
                 return 0.08;
             }
-            if (spend >= 10_000_000) {
+            if (spend >= 15_000_000) {
                 return 0.05;
             }
-            if (spend >= 1_000_000) {
+            if (spend >= 5_000_000) {
                 return 0.02;
             }
         } catch (Exception ignored) {
@@ -1266,21 +1227,25 @@ public class SellPanel extends JPanel {
         double memberDiscount = 0.0;
         double programDiscount = 0.0;
 
-        String selectedPromo = (cboKhuyenMai.getSelectedItem() != null)
-                ? cboKhuyenMai.getSelectedItem().toString()
-                : "";
+        String selectedPromo = "";
+        if (cboKhuyenMai != null && cboKhuyenMai.getSelectedItem() != null) {
+            selectedPromo = cboKhuyenMai.getSelectedItem().toString();
+        }
 
-        double currentPromoRate = getPromoRateFromString(selectedPromo);
+        boolean hasProgramPromotion
+                = selectedPromo != null
+                && !selectedPromo.trim().isEmpty()
+                && !selectedPromo.equalsIgnoreCase("Không áp dụng mã giảm giá");
 
-        // 1) Tính thành tiền gốc
+        double currentPromoRate = hasProgramPromotion ? getPromoRateFromString(selectedPromo) : 0.0;
+
+        // 1. Thành tiền gốc
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 5));
+            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
             subTotal += lineTotal;
         }
 
-        // 2) Giảm giá thành viên: lấy đúng hạng khách hàng đang chọn.
-        // Có fallback theo rank/tổng chi để tránh trường hợp Customer.getDiscountRate()
-        // trả 0 do object chưa được set đủ memberRank từ DB.
+        // 2. Giảm giá thành viên
         if (selectedCustomer != null && subTotal > 0) {
             double memberRate = getSelectedCustomerDiscountRate();
             if (memberRate > 0) {
@@ -1288,34 +1253,37 @@ public class SellPanel extends JPanel {
             }
         }
 
-        // 3) Giảm giá chương trình/voucher: tính riêng, không cộng dồn vào giảm thành viên
-        if (currentPromoRate > 0) {
+        // 3. Giảm giá chương trình / voucher
+        if (hasProgramPromotion && currentPromoRate > 0) {
             for (int i = 0; i < modCart.getRowCount(); i++) {
                 double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
-                String pId = modCart.getValueAt(i, 0).toString();
+                String productId = modCart.getValueAt(i, 0).toString();
 
-                Product p = allProducts.stream()
-                        .filter(x -> x.getProductId().equals(pId))
+                Product product = allProducts.stream()
+                        .filter(x -> x.getProductId().equals(productId))
                         .findFirst()
                         .orElse(null);
 
-                if (p != null && isEligibleForPromotion(p, selectedPromo)) {
+                if (product != null && isEligibleForPromotion(product, selectedPromo)) {
                     programDiscount += lineTotal * (currentPromoRate / 100.0);
                 }
             }
         }
 
-        // 4) Chặn tổng giảm vượt quá thành tiền
+        // 4. Chặn tổng giảm vượt quá thành tiền
         double totalDiscount = memberDiscount + programDiscount;
+
         if (totalDiscount > subTotal) {
             double overflow = totalDiscount - subTotal;
+
             if (programDiscount >= overflow) {
                 programDiscount -= overflow;
             } else {
                 overflow -= programDiscount;
-                programDiscount = 0;
-                memberDiscount = Math.max(0, memberDiscount - overflow);
+                programDiscount = 0.0;
+                memberDiscount = Math.max(0.0, memberDiscount - overflow);
             }
+
             totalDiscount = memberDiscount + programDiscount;
         }
 
@@ -1324,31 +1292,82 @@ public class SellPanel extends JPanel {
         currentProgramDiscountAmount = roundMoney(programDiscount);
         finalAmountToPay = roundMoney(subTotal - totalDiscount);
 
-        // UPDATE UI
         lblSubTotal.setText(moneyFormat.format(currentSubTotalAmount));
-        lblDiscount.setText(moneyFormat.format(currentMemberDiscountAmount + currentProgramDiscountAmount));
-        lblTotalPay.setText(moneyFormat.format(finalAmountToPay));
-        lblCartEmptyHint.setText("Tổng cộng: " + moneyFormat.format(finalAmountToPay));
 
-        btnPay.setEnabled(modCart.getRowCount() > 0);
+        if (lblDiscount != null) {
+            lblDiscount.setText(moneyFormat.format(currentMemberDiscountAmount + currentProgramDiscountAmount));
+        }
+
+        lblTotalPay.setText(moneyFormat.format(finalAmountToPay));
+
+        if (lblCartEmptyHint != null) {
+            lblCartEmptyHint.setText("Tổng cộng: " + moneyFormat.format(finalAmountToPay));
+        }
+
+        if (btnPay != null) {
+            btnPay.setEnabled(modCart.getRowCount() > 0);
+        }
     }
 
     private double parseMoneyObject(Object value) {
         if (value == null) {
             return 0.0;
         }
+
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
         }
+
         try {
-            String s = value.toString()
-                    .replace("đ", "")
-                    .replace(",", "")
-                    .replace(".", "")
-                    .trim();
+            String s = value.toString().trim();
             if (s.isEmpty()) {
                 return 0.0;
             }
+
+            // Các ô tiền trong model thường là Number. Nhánh này xử lý thêm nếu lỡ là String.
+            // Ví dụ:
+            // - "180.000 đ"  -> 180000
+            // - "180,000 đ"  -> 180000
+            // - "180000.0"   -> 180000.0
+            // Không được xóa dấu "." một cách mù quáng vì sẽ biến "180000.0" thành "1800000".
+            s = s.replace("đ", "")
+                    .replace("VND", "")
+                    .trim();
+
+            boolean hasComma = s.contains(",");
+            boolean hasDot = s.contains(".");
+
+            if (hasComma && hasDot) {
+                // Dạng có cả dấu phẩy và dấu chấm: ưu tiên xem dấu cuối là dấu thập phân.
+                int lastComma = s.lastIndexOf(',');
+                int lastDot = s.lastIndexOf('.');
+
+                if (lastDot > lastComma) {
+                    // 1,234,567.89
+                    s = s.replace(",", "");
+                } else {
+                    // 1.234.567,89
+                    s = s.replace(".", "").replace(",", ".");
+                }
+            } else if (hasComma) {
+                // Nếu sau dấu phẩy là 3 số thì coi là phân cách hàng nghìn.
+                int lastComma = s.lastIndexOf(',');
+                int digitsAfter = s.length() - lastComma - 1;
+                if (digitsAfter == 3) {
+                    s = s.replace(",", "");
+                } else {
+                    s = s.replace(",", ".");
+                }
+            } else if (hasDot) {
+                // Nếu sau dấu chấm là 3 số thì coi là phân cách hàng nghìn.
+                // Nếu là .0, .00 thì giữ lại để parse double.
+                int lastDot = s.lastIndexOf('.');
+                int digitsAfter = s.length() - lastDot - 1;
+                if (digitsAfter == 3) {
+                    s = s.replace(".", "");
+                }
+            }
+
             return Double.parseDouble(s);
         } catch (Exception ex) {
             return 0.0;
@@ -1410,7 +1429,7 @@ public class SellPanel extends JPanel {
             lblCusName.setText(selectedCustomer.getCustomerName() != null ? selectedCustomer.getCustomerName() : "Khách hàng");
             double spend = selectedCustomer.getTotalSpending();
             String rank = selectedCustomer.getMemberRank();
-            double rate = selectedCustomer.getDiscountRate();
+            double rate = getSelectedCustomerDiscountRate();
 
             if (rank == null || rank.trim().isEmpty()) {
                 rank = "Thường";
@@ -1422,13 +1441,13 @@ public class SellPanel extends JPanel {
 
             if (rank.equalsIgnoreCase("Kim Cương")) {
                 c = new Color(155, 89, 182);
-                rankDisplay = "Kim Cương 💎";
+                rankDisplay = "Kim Cương";
             } else if (rank.equalsIgnoreCase("Vàng")) {
                 c = WARNING_YELLOW;
-                rankDisplay = "Vàng 🥇";
+                rankDisplay = "Vàng";
             } else if (rank.equalsIgnoreCase("Bạc")) {
                 c = new Color(189, 195, 199);
-                rankDisplay = "Bạc 🥈";
+                rankDisplay = "Bạc";
             } else if (rank.equalsIgnoreCase("Đồng")) {
                 c = new Color(205, 127, 50);
                 rankDisplay = "Đồng";
@@ -1509,7 +1528,6 @@ public class SellPanel extends JPanel {
         }
     }
 
-    
     private void loadPaymentMethods() {
         new SwingWorker<List<PaymentMethod>, Void>() {
             @Override
@@ -1610,12 +1628,12 @@ public class SellPanel extends JPanel {
         // Chốt lại tiền ngay trước khi thanh toán để đảm bảo đã tính đúng
         // giảm giá thành viên + giảm giá chương trình theo khách/voucher hiện tại.
         calculateTotal();
-
+ 
         paymentProcessing = true;
         paymentJustSucceeded = false;
 
         btnPay.setEnabled(false);
-        btnPay.setText("⏳ ĐANG XỬ LÝ...");
+        btnPay.setText("ĐANG XỬ LÝ...");
         btnPay.setBackground(Color.GRAY);
         btnCancel.setEnabled(false);
         btnRemove.setEnabled(false);
@@ -1651,9 +1669,9 @@ public class SellPanel extends JPanel {
         List<OrderDetail> dt = new ArrayList<>();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            String id = modCart.getValueAt(i, 1).toString();
-            int qty = Integer.parseInt(modCart.getValueAt(i, 3).toString());
-            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 4).toString());
+            String id = modCart.getValueAt(i, 0).toString();
+            int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 3).toString());
 
             Product p = allProducts.stream()
                     .filter(x -> x.getProductId().equals(id))
@@ -1757,9 +1775,19 @@ public class SellPanel extends JPanel {
 
         try {
             java.util.HashMap<String, Object> params = new java.util.HashMap<>();
+
             params.put("ORDER_ID", orderId.trim());
-            params.put("MEMBER_DISCOUNT_AMOUNT", java.math.BigDecimal.valueOf(lastPaidMemberDiscountAmount));
-            params.put("PROGRAM_DISCOUNT_AMOUNT", java.math.BigDecimal.valueOf(lastPaidProgramDiscountAmount));
+
+            // Bắt buộc truyền 2 số này để report không tự dồn hết về giảm chương trình
+            params.put(
+                    "MEMBER_DISCOUNT_AMOUNT",
+                    java.math.BigDecimal.valueOf(roundMoney(lastPaidMemberDiscountAmount))
+            );
+
+            params.put(
+                    "PROGRAM_DISCOUNT_AMOUNT",
+                    java.math.BigDecimal.valueOf(roundMoney(lastPaidProgramDiscountAmount))
+            );
 
             try {
                 String storeId = SessionManager.getCurrentStoreId();
@@ -2037,8 +2065,8 @@ public class SellPanel extends JPanel {
                         });
                         return super.stopCellEditing();
                     }
-                    double price = Double.parseDouble(modCart.getValueAt(row, 4).toString());
-                    modCart.setValueAt(price * qty, row, 5);
+                    double price = Double.parseDouble(modCart.getValueAt(row, 3).toString());
+                    modCart.setValueAt(price * qty, row, 4);
                     calculateTotal();
                     validateCartAgainstDatabase();
                 }
@@ -2065,8 +2093,8 @@ public class SellPanel extends JPanel {
 
             int q = 0, st = 0;
             try {
-                q = Integer.parseInt(t.getValueAt(r, 3).toString());
-                st = Integer.parseInt(t.getValueAt(r, 6).toString());
+                q = Integer.parseInt(t.getValueAt(r, 2).toString());
+                st = Integer.parseInt(t.getValueAt(r, 5).toString());
             } catch (Exception ex) {
             }
             spinner.setValue(q);
@@ -2088,13 +2116,13 @@ public class SellPanel extends JPanel {
 
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
-            if ((c == 4 || c == 5) && v instanceof Number) {
+            if ((c == 3 || c == 4) && v instanceof Number) {
                 v = moneyFormat.format(v);
             }
             Component cp = super.getTableCellRendererComponent(t, v, s, f, r, c);
             Color rowBg = (r == hoverRow) ? new Color(244, 248, 255) : (r % 2 == 0 ? Color.WHITE : new Color(249, 251, 253));
 
-            if (c == 4 || c == 5) {
+            if (c == 3 || c == 4) {
                 setHorizontalAlignment(JLabel.RIGHT);
             } else if (c == 1) {
                 setHorizontalAlignment(JLabel.LEFT);
@@ -2103,9 +2131,9 @@ public class SellPanel extends JPanel {
             }
 
             try {
-                int q = Integer.parseInt(t.getValueAt(r, 3).toString());
-                int st = Integer.parseInt(t.getValueAt(r, 6).toString());
-                if (c == 7) {
+                int q = Integer.parseInt(t.getValueAt(r, 2).toString());
+                int st = Integer.parseInt(t.getValueAt(r, 5).toString());
+                if (c == 6) {
                     setFont(new Font("Segoe UI", Font.BOLD, 12));
                     setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
                     setOpaque(true);
@@ -2129,7 +2157,7 @@ public class SellPanel extends JPanel {
                     setBackground(q > st ? new Color(253, 237, 236) : (st <= 5 ? new Color(254, 249, 231) : rowBg));
                 }
 
-                if (c != 7 && s) {
+                if (c != 6 && s) {
                     setBackground(new Color(230, 240, 255));
                 }
             } catch (Exception e) {
@@ -2166,9 +2194,5 @@ public class SellPanel extends JPanel {
         // Sau này nếu bạn muốn khuyến mãi theo danh mục, bạn có thể sửa logic ở đây
         // Ví dụ: return p.getCategoryId().equals(promoCategoryId);
         return true;
-    }
-    
-    private ImageIcon loadProductThumb(String imagePath, int w, int h) {
-        return view.components.ProductImageLoader.load(imagePath, w, h);
     }
 }
