@@ -218,7 +218,67 @@ public class IconHelper {
     public static ImageIcon shield(int size) {
         return load("security.png", size);
     }
+    
+    public static ImageIcon QLSanPham(int size) {
+        return load("quanly_sanpham.png", size);
+    }
+    
+    public static ImageIcon TonKho(int size) {
+        return load("quanly_tonkho.png", size);
+    }
+    
+    public static ImageIcon NhaCungCap(int size) {
+        return load("quanly_nhacungcap.png", size);
+    }
+    
+    public static ImageIcon NhanVien(int size) {
+        return load("quanly_nhanvien.png", size);
+    }
+    
+    public static ImageIcon KhachHang(int size) {
+        return load("quanly_khachhang.png", size);
+    }
+    
+    public static ImageIcon HoaDon(int size) {
+        return load("hoadon.png", size);
+    }
+    
+    public static ImageIcon CaiDat(int size) {
+        return load("caidat.png", size);
+    }
 
+    public static ImageIcon HeThong(int size) {
+        return load("quanly_heThong.png", size);
+    }
+    
+    public static ImageIcon KhuyenMai(int size) {
+        return load("quanly_khuyenmai.png", size);
+    }
+    
+    public static ImageIcon CuaHangTruong(int size) {
+        return load("quanly_cuahangtruong.png", size);
+    }
+    
+    public static ImageIcon TaiKhoan(int size) {
+        return load("quanly_taikhoan.png", size);
+    }
+    
+    public static ImageIcon PhanQuyen(int size) {
+        return load("quanly_phanquyen.png", size);
+    }
+    
+    public static ImageIcon LichSuTruyCap(int size) {
+        return load("lichsu_truycap.png", size);
+    }
+    
+    public static ImageIcon NhatKyHeThong(int size) {
+        return load("nhatky_hethong.png", size);
+    }
+    
+    public static ImageIcon BanHang(int size) {
+        return load("banhang.png", size);
+    }
+    
     public static ImageIcon accessDenied(int size) {
         ImageIcon originalIcon = load("access_denied_icon.png", size);
         if (originalIcon == null) {

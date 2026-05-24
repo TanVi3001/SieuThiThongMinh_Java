@@ -54,14 +54,14 @@ public class AdminSidebar extends JPanel {
 
         // Hiển thị tên mới cho đồng bộ với màn hình tổng quan hệ thống,
         // nhưng vẫn gửi action cũ để không phá switch-case hiện tại trong AdminDashboardView.
-        addMenuItem("Quản lý hệ thống", IconHelper.dashboard(24), "Quản lý chi nhánh");
-        addMenuItem("Quản lý khuyến mãi", IconHelper.coupon(24));
-        addMenuItem("Quản lý cửa hàng trưởng", IconHelper.employee(24));
-        addMenuItem("Quản lý tài khoản", IconHelper.employee(24));
-        addMenuItem("Quản lý phân quyền", IconHelper.customer(24));
-        addMenuItem("Lịch sử truy cập", IconHelper.history(24));
-        addMenuItem("Nhật ký hệ thống", IconHelper.barChart(24));
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        addMenuItem("Quản lý hệ thống", IconHelper.HeThong(24), "Quản lý chi nhánh");
+        addMenuItem("Quản lý khuyến mãi", IconHelper.KhuyenMai(24));
+        addMenuItem("Quản lý cửa hàng trưởng", IconHelper.CuaHangTruong(24));
+        addMenuItem("Quản lý tài khoản", IconHelper.TaiKhoan(24));
+        addMenuItem("Quản lý phân quyền", IconHelper.PhanQuyen(24));
+        addMenuItem("Lịch sử truy cập", IconHelper.LichSuTruyCap(24));
+        addMenuItem("Nhật ký hệ thống", IconHelper.NhatKyHeThong(24));
+        addMenuItem("Cài đặt", IconHelper.CaiDat(24));
 
         JScrollPane scrollPane = new JScrollPane(menuPanel);
         scrollPane.setOpaque(false);

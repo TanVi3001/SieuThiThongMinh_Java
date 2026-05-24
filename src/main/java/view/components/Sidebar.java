@@ -99,14 +99,14 @@ public class Sidebar extends JPanel {
     }
 
     private void addAdminMenu() {
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
-        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
-        addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
-        addMenuItem("Khách hàng", IconHelper.customer(24));
-        addMenuItem("Hóa đơn", IconHelper.bill(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.QLSanPham(24));
+        addMenuItem("Quản lý tồn kho", IconHelper.TonKho(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.NhaCungCap(24));
+        addMenuItem("Quản lý nhân viên", IconHelper.NhanVien(24));
+        addMenuItem("Khách hàng", IconHelper.KhachHang(24));
+        addMenuItem("Hóa đơn", IconHelper.HoaDon(24));
         addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        addMenuItem("Cài đặt", IconHelper.CaiDat(24));
     }
 
     private void addManagerMenu() {
@@ -116,13 +116,13 @@ public class Sidebar extends JPanel {
          * Không trực tiếp quản lý tồn kho.
          * Hai chức năng đó giao cho Staff_Sale và Staff_Product.
          */
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
-        addMenuItem("Quản lý nhân viên", IconHelper.employee(24));
-        addMenuItem("Khách hàng", IconHelper.customer(24));
-        addMenuItem("Hóa đơn", IconHelper.bill(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.QLSanPham(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.NhaCungCap(24));
+        addMenuItem("Quản lý nhân viên", IconHelper.NhanVien(24));
+        addMenuItem("Khách hàng", IconHelper.KhachHang(24));
+        addMenuItem("Hóa đơn", IconHelper.HoaDon(24));
         addMenuItem("Báo cáo & Thống kê", IconHelper.barChart(24));
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        addMenuItem("Cài đặt", IconHelper.CaiDat(24));
     }
 
     private void addStaffSaleMenu() {
@@ -131,21 +131,21 @@ public class Sidebar extends JPanel {
          * và gửi cảnh báo khẩn cho nhân viên sản phẩm/kho.
          * Không được full thêm/sửa/xóa sản phẩm ở ProductView.
          */
-        addMenuItem("Bán hàng", IconHelper.order(24));
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-        addMenuItem("Khách hàng", IconHelper.customer(24));
-        addMenuItem("Hóa đơn", IconHelper.bill(24));
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        addMenuItem("Bán hàng", IconHelper.BanHang(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.QLSanPham(24));
+        addMenuItem("Khách hàng", IconHelper.KhachHang(24));
+        addMenuItem("Hóa đơn", IconHelper.HoaDon(24));
+        addMenuItem("Cài đặt", IconHelper.CaiDat(24));
     }
 
     private void addStaffProductMenu() {
         /*
          * R_STAFF_VIEW_PROD = Staff Product / nhân viên kho / nhập hàng.
          */
-        addMenuItem("Quản lý tồn kho", IconHelper.product(24));
-        addMenuItem("Quản lý sản phẩm", IconHelper.product(24));
-        addMenuItem("Quản lý nhà cung cấp", IconHelper.delivery(24));
-        addMenuItem("Cài đặt", IconHelper.settings(24));
+        addMenuItem("Quản lý tồn kho", IconHelper.TonKho(24));
+        addMenuItem("Quản lý sản phẩm", IconHelper.QLSanPham(24));
+        addMenuItem("Quản lý nhà cung cấp", IconHelper.NhaCungCap(24));
+        addMenuItem("Cài đặt", IconHelper.CaiDat(24));
     }
 
     private boolean isAdmin() {

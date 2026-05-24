@@ -164,96 +164,246 @@ public class ModernSidebarMenuItem extends JPanel {
         g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         String key = title.toLowerCase();
 
-        if (key.contains("tổng quan") || key.contains("chi nhánh")) {
-            paintHomeIcon(g2, x, y);
-        } else if (key.contains("sản phẩm") || key.contains("khuyến mãi")) {
+        // --- Admin sidebar ---
+        if (key.contains("hệ thống")) {
+            paintServerIcon(g2, x, y);
+        } else if (key.contains("khuyến mãi")) {
+            paintTagIcon(g2, x, y);
+        } else if (key.contains("cửa hàng trưởng")) {
+            paintBuildingIcon(g2, x, y);
+        } else if (key.contains("tài khoản")) {
+            paintIdCardIcon(g2, x, y);
+        } else if (key.contains("phân quyền")) {
+            paintKeyIcon(g2, x, y);
+        } else if (key.contains("lịch sử")) {
+            paintClockIcon(g2, x, y);
+        } else if (key.contains("nhật ký")) {
+            paintClipboardIcon(g2, x, y);
+        // --- Shared sidebar ---
+        } else if (key.contains("tổng quan") || key.contains("chi nhánh")) {
+            paintDashboardIcon(g2, x, y);
+        } else if (key.contains("bán hàng")) {
+            paintCartIcon(g2, x, y);
+        } else if (key.contains("sản phẩm")) {
             paintBoxIcon(g2, x, y);
-        } else if (key.contains("nhân viên") || key.contains("khách") || key.contains("trưởng") || key.contains("tài khoản") || key.contains("phân quyền")) {
-            paintUsersIcon(g2, x, y);
-        } else if (key.contains("hóa đơn") || key.contains("lịch sử") || key.contains("nhật ký")) {
+        } else if (key.contains("tồn kho")) {
+            paintWarehouseIcon(g2, x, y);
+        } else if (key.contains("nhà cung cấp")) {
+            paintTruckIcon(g2, x, y);
+        } else if (key.contains("nhân viên")) {
+            paintBadgeIcon(g2, x, y);
+        } else if (key.contains("khách")) {
+            paintPersonIcon(g2, x, y);
+        } else if (key.contains("hóa đơn")) {
             paintReceiptIcon(g2, x, y);
         } else if (key.contains("báo cáo") || key.contains("thống kê")) {
             paintChartIcon(g2, x, y);
+        } else if (key.contains("danh mục") || key.contains("thuế")) {
+            paintFolderTagIcon(g2, x, y);
         } else if (key.contains("cài")) {
             paintSettingsIcon(g2, x, y);
-        } else if (key.contains("bán hàng")) {
-            paintCartIcon(g2, x, y);
         } else {
             paintBoxIcon(g2, x, y);
         }
     }
 
-    private void paintHomeIcon(Graphics2D g2, int x, int y) {
-        Path2D roof = new Path2D.Double();
-        roof.moveTo(x + 3, y + 11);
-        roof.lineTo(x + 11, y + 4);
-        roof.lineTo(x + 19, y + 11);
-        g2.draw(roof);
-        g2.drawRoundRect(x + 6, y + 10, 10, 9, 2, 2);
-        g2.drawLine(x + 10, y + 19, x + 10, y + 14);
+    // 🖥 Server stack — "Quản lý hệ thống"
+    private void paintServerIcon(Graphics2D g2, int x, int y) {
+        g2.drawRoundRect(x + 3, y + 3,  16, 5, 2, 2);
+        g2.drawRoundRect(x + 3, y + 10, 16, 5, 2, 2);
+        g2.fillOval(x + 15, y + 5,  2, 2);
+        g2.fillOval(x + 15, y + 12, 2, 2);
+        g2.drawLine(x + 6,  y + 20, x + 16, y + 20);
+        g2.drawLine(x + 11, y + 15, x + 11, y + 20);
     }
 
+    // 🏷 Price tag — "Quản lý khuyến mãi"
+    private void paintTagIcon(Graphics2D g2, int x, int y) {
+        Path2D tag = new Path2D.Double();
+        tag.moveTo(x + 4,  y + 4);
+        tag.lineTo(x + 13, y + 4);
+        tag.lineTo(x + 20, y + 11);
+        tag.lineTo(x + 13, y + 18);
+        tag.lineTo(x + 4,  y + 18);
+        tag.closePath();
+        g2.draw(tag);
+        g2.fillOval(x + 7, y + 7, 3, 3);
+        g2.drawLine(x + 14, y + 8, x + 8, y + 14);
+    }
+
+    // 🏬 Store building — "Quản lý cửa hàng trưởng"
+    private void paintBuildingIcon(Graphics2D g2, int x, int y) {
+        g2.drawRect(x + 4, y + 8, 14, 12);
+        g2.drawLine(x + 4,  y + 8,  x + 11, y + 3);
+        g2.drawLine(x + 11, y + 3,  x + 18, y + 8);
+        g2.drawRect(x + 9,  y + 14, 4, 6);
+        g2.drawRect(x + 6,  y + 10, 3, 3);
+        g2.drawRect(x + 13, y + 10, 3, 3);
+    }
+
+    // 🪪 ID Card — "Quản lý tài khoản"
+    private void paintIdCardIcon(Graphics2D g2, int x, int y) {
+        g2.drawRoundRect(x + 3, y + 6, 16, 10, 3, 3);
+        g2.drawOval(x + 5,  y + 8, 4, 4);
+        g2.drawLine(x + 11, y + 9,  x + 17, y + 9);
+        g2.drawLine(x + 11, y + 13, x + 15, y + 13);
+    }
+
+    // 🔑 Key — "Quản lý phân quyền"
+    private void paintKeyIcon(Graphics2D g2, int x, int y) {
+        g2.drawOval(x + 3, y + 7, 8, 8);
+        g2.drawLine(x + 11, y + 13, x + 19, y + 5);
+        g2.drawLine(x + 17, y + 7,  x + 19, y + 5);
+        g2.drawLine(x + 15, y + 15, x + 17, y + 13);
+        g2.drawLine(x + 17, y + 15, x + 19, y + 13);
+    }
+
+    // 🕐 Clock — "Lịch sử truy cập"
+    private void paintClockIcon(Graphics2D g2, int x, int y) {
+        g2.drawOval(x + 3, y + 3, 16, 16);
+        g2.drawLine(x + 11, y + 11, x + 11, y + 6);
+        g2.drawLine(x + 11, y + 11, x + 15, y + 13);
+        g2.fillOval(x + 10, y + 10, 2, 2);
+    }
+
+    // 📋 Clipboard — "Nhật ký hệ thống"
+    private void paintClipboardIcon(Graphics2D g2, int x, int y) {
+        g2.drawRoundRect(x + 5, y + 4, 12, 15, 2, 2);
+        g2.drawRect(x + 8, y + 2, 6, 4);
+        g2.drawLine(x + 8,  y + 10, x + 14, y + 10);
+        g2.drawLine(x + 8,  y + 13, x + 14, y + 13);
+        g2.drawLine(x + 8,  y + 16, x + 12, y + 16);
+    }
+
+    // ⊞ Dashboard grid — "Tổng quan"
+    private void paintDashboardIcon(Graphics2D g2, int x, int y) {
+        g2.drawRoundRect(x + 3,  y + 3,  7, 7, 2, 2);
+        g2.drawRoundRect(x + 12, y + 3,  7, 7, 2, 2);
+        g2.drawRoundRect(x + 3,  y + 12, 7, 7, 2, 2);
+        g2.drawRoundRect(x + 12, y + 12, 7, 7, 2, 2);
+    }
+
+    // 🛒 Cart — "Bán hàng"
+    private void paintCartIcon(Graphics2D g2, int x, int y) {
+        g2.drawLine(x + 3,  y + 5,  x + 6,  y + 5);
+        g2.drawLine(x + 6,  y + 5,  x + 9,  y + 16);
+        g2.drawLine(x + 9,  y + 16, x + 18, y + 16);
+        g2.drawLine(x + 8,  y + 8,  x + 19, y + 8);
+        g2.drawLine(x + 19, y + 8,  x + 17, y + 14);
+        g2.fillOval(x + 9,  y + 18, 3, 3);
+        g2.fillOval(x + 17, y + 18, 3, 3);
+    }
+
+    // 📦 3D Box — "Quản lý sản phẩm"
     private void paintBoxIcon(Graphics2D g2, int x, int y) {
         Path2D box = new Path2D.Double();
-        box.moveTo(x + 4, y + 8);
+        box.moveTo(x + 4,  y + 8);
         box.lineTo(x + 11, y + 4);
         box.lineTo(x + 18, y + 8);
         box.lineTo(x + 18, y + 16);
         box.lineTo(x + 11, y + 20);
-        box.lineTo(x + 4, y + 16);
+        box.lineTo(x + 4,  y + 16);
         box.closePath();
         g2.draw(box);
-        g2.drawLine(x + 4, y + 8, x + 11, y + 12);
-        g2.drawLine(x + 18, y + 8, x + 11, y + 12);
+        g2.drawLine(x + 4,  y + 8,  x + 11, y + 12);
+        g2.drawLine(x + 18, y + 8,  x + 11, y + 12);
         g2.drawLine(x + 11, y + 12, x + 11, y + 20);
+        g2.drawLine(x + 7,  y + 6,  x + 14, y + 10);
     }
 
-    private void paintUsersIcon(Graphics2D g2, int x, int y) {
-        g2.drawOval(x + 8, y + 4, 6, 6);
-        g2.drawArc(x + 5, y + 11, 12, 9, 0, 180);
-        g2.drawOval(x + 2, y + 7, 5, 5);
-        g2.drawArc(x, y + 13, 9, 7, 10, 150);
-        g2.drawOval(x + 16, y + 7, 5, 5);
-        g2.drawArc(x + 13, y + 13, 9, 7, 20, 150);
+    // 🏭 Warehouse shelves — "Quản lý tồn kho"
+    private void paintWarehouseIcon(Graphics2D g2, int x, int y) {
+        g2.drawLine(x + 3,  y + 4,  x + 19, y + 4);
+        g2.drawLine(x + 3,  y + 11, x + 19, y + 11);
+        g2.drawLine(x + 3,  y + 18, x + 19, y + 18);
+        g2.drawLine(x + 5,  y + 4,  x + 5,  y + 18);
+        g2.drawLine(x + 17, y + 4,  x + 17, y + 18);
+        g2.drawRoundRect(x + 7,  y + 5,  4, 5, 1, 1);
+        g2.drawRoundRect(x + 7,  y + 12, 4, 5, 1, 1);
+        g2.drawRoundRect(x + 12, y + 5,  4, 5, 1, 1);
+        g2.drawRoundRect(x + 12, y + 12, 4, 5, 1, 1);
     }
 
+    // 🚚 Truck — "Quản lý nhà cung cấp"
+    private void paintTruckIcon(Graphics2D g2, int x, int y) {
+        g2.drawRect(x + 3,  y + 7, 11, 9);
+        Path2D cabin = new Path2D.Double();
+        cabin.moveTo(x + 14, y + 7);
+        cabin.lineTo(x + 14, y + 10);
+        cabin.lineTo(x + 19, y + 10);
+        cabin.lineTo(x + 19, y + 16);
+        cabin.lineTo(x + 14, y + 16);
+        g2.draw(cabin);
+        g2.fillOval(x + 5,  y + 16, 4, 4);
+        g2.fillOval(x + 14, y + 16, 4, 4);
+        g2.drawLine(x + 14, y + 12, x + 19, y + 12);
+    }
+
+    // 👤 Badge — "Quản lý nhân viên"
+    private void paintBadgeIcon(Graphics2D g2, int x, int y) {
+        g2.drawRoundRect(x + 5, y + 3, 12, 16, 3, 3);
+        g2.drawOval(x + 9,  y + 6, 4, 4);
+        g2.drawArc(x + 7,   y + 11, 8, 5, 0, 180);
+        g2.drawLine(x + 8,  y + 3,  x + 8,  y + 6);
+        g2.drawLine(x + 14, y + 3,  x + 14, y + 6);
+        g2.drawLine(x + 8,  y + 3,  x + 14, y + 3);
+    }
+
+    // 🙍 Person — "Khách hàng"
+    private void paintPersonIcon(Graphics2D g2, int x, int y) {
+        g2.drawOval(x + 7, y + 3, 8, 8);
+        g2.drawArc(x + 3,  y + 12, 16, 9, 0, 180);
+    }
+
+    // 🧾 Receipt — "Hóa đơn"
     private void paintReceiptIcon(Graphics2D g2, int x, int y) {
-        g2.drawRoundRect(x + 5, y + 3, 12, 16, 2, 2);
-        g2.drawLine(x + 8, y + 8, x + 14, y + 8);
-        g2.drawLine(x + 8, y + 12, x + 14, y + 12);
-        g2.drawLine(x + 8, y + 16, x + 12, y + 16);
+        Path2D receipt = new Path2D.Double();
+        receipt.moveTo(x + 5,  y + 2);
+        receipt.lineTo(x + 17, y + 2);
+        receipt.lineTo(x + 17, y + 20);
+        receipt.lineTo(x + 14, y + 18);
+        receipt.lineTo(x + 11, y + 20);
+        receipt.lineTo(x + 8,  y + 18);
+        receipt.lineTo(x + 5,  y + 20);
+        receipt.closePath();
+        g2.draw(receipt);
+        g2.drawLine(x + 8, y + 7,  x + 14, y + 7);
+        g2.drawLine(x + 8, y + 11, x + 14, y + 11);
+        g2.drawLine(x + 8, y + 15, x + 12, y + 15);
     }
 
+    // 📊 Bar chart — "Báo cáo & Thống kê"
     private void paintChartIcon(Graphics2D g2, int x, int y) {
         g2.drawLine(x + 3, y + 19, x + 20, y + 19);
-        g2.drawLine(x + 5, y + 19, x + 5, y + 13);
-        g2.drawLine(x + 11, y + 19, x + 11, y + 9);
-        g2.drawLine(x + 17, y + 19, x + 17, y + 5);
-        Path2D trend = new Path2D.Double();
-        trend.moveTo(x + 4, y + 11);
-        trend.lineTo(x + 9, y + 7);
-        trend.lineTo(x + 13, y + 9);
-        trend.lineTo(x + 18, y + 4);
-        g2.draw(trend);
+        g2.drawLine(x + 3, y + 19, x + 3,  y + 4);
+        g2.fillRect(x + 5,  y + 12, 4, 7);
+        g2.fillRect(x + 11, y + 8,  4, 11);
+        g2.fillRect(x + 17, y + 5,  3, 14);
     }
 
+    // 🗂 Folder — "Danh mục & Thuế VAT"
+    private void paintFolderTagIcon(Graphics2D g2, int x, int y) {
+        Path2D folder = new Path2D.Double();
+        folder.moveTo(x + 3,  y + 7);
+        folder.lineTo(x + 3,  y + 18);
+        folder.lineTo(x + 19, y + 18);
+        folder.lineTo(x + 19, y + 9);
+        folder.lineTo(x + 10, y + 9);
+        folder.lineTo(x + 8,  y + 7);
+        folder.closePath();
+        g2.draw(folder);
+        g2.drawLine(x + 8,  y + 13, x + 14, y + 13);
+        g2.drawLine(x + 11, y + 11, x + 11, y + 15);
+    }
+
+    // ⚙ Gear — "Cài đặt"
     private void paintSettingsIcon(Graphics2D g2, int x, int y) {
         g2.drawOval(x + 7, y + 7, 8, 8);
-        g2.drawOval(x + 3, y + 3, 16, 16);
-        g2.drawLine(x + 11, y + 1, x + 11, y + 4);
-        g2.drawLine(x + 11, y + 18, x + 11, y + 21);
-        g2.drawLine(x + 1, y + 11, x + 4, y + 11);
-        g2.drawLine(x + 18, y + 11, x + 21, y + 11);
-    }
-
-    private void paintCartIcon(Graphics2D g2, int x, int y) {
-        g2.drawLine(x + 3, y + 5, x + 6, y + 5);
-        g2.drawLine(x + 6, y + 5, x + 9, y + 16);
-        g2.drawLine(x + 9, y + 16, x + 18, y + 16);
-        g2.drawLine(x + 8, y + 8, x + 19, y + 8);
-        g2.drawLine(x + 19, y + 8, x + 17, y + 14);
-        g2.fillOval(x + 9, y + 18, 3, 3);
-        g2.fillOval(x + 17, y + 18, 3, 3);
+        int cx = x + 11, cy = y + 11;
+        int[][] spokes = {{0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1}};
+        for (int[] s : spokes) {
+            g2.drawLine(cx + s[0]*5, cy + s[1]*5, cx + s[0]*8, cy + s[1]*8);
+        }
     }
 
     private void paintLogoutIcon(Graphics2D g2, int x, int y, Color color) {

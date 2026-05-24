@@ -202,7 +202,7 @@ public class WarehouseSidebar extends JPanel {
         }
 
         if (key.contains("danh mục") || key.contains("thuế")) {
-            return IconHelper.product(24);
+            return IconHelper.coupon(24);
         }
 
         if (key.contains("cài")) {

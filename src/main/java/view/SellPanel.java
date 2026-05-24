@@ -391,41 +391,27 @@ public class SellPanel extends JPanel {
         headerWrap.add(pnlWarning, BorderLayout.SOUTH);
         pnl.add(headerWrap, BorderLayout.NORTH);
 
-        modCart = new DefaultTableModel(new Object[]{"Ảnh", "Mã SP", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tồn", "Trạng thái"}, 0) {
+        modCart = new DefaultTableModel(new Object[]{"Mã SP", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tồn", "Trạng thái"}, 0) {
             @Override
             public Class<?> getColumnClass(int col) {
-                if (col == 0) return ImageIcon.class;
                 return Object.class;
             }
             @Override
-            public boolean isCellEditable(int row, int col) { return col == 3; }
+            public boolean isCellEditable(int row, int col) { return col == 2; }
         };
         tblCart = new JTable(modCart);
         tblCart.setRowHeight(52);
-        tblCart.getColumnModel().getColumn(2).setPreferredWidth(220);
-        tblCart.getColumnModel().getColumn(3).setPreferredWidth(130);
-        tblCart.getColumnModel().getColumn(3).setMinWidth(110);
-        tblCart.getColumnModel().getColumn(3).setMaxWidth(150);
+        tblCart.getColumnModel().getColumn(1).setPreferredWidth(220);
+        tblCart.getColumnModel().getColumn(2).setPreferredWidth(130);
+        tblCart.getColumnModel().getColumn(2).setMinWidth(110);
+        tblCart.getColumnModel().getColumn(2).setMaxWidth(150);
 
         tblCart.setSurrendersFocusOnKeystroke(true);
         tblCart.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
-        tblCart.getColumnModel().getColumn(3).setCellRenderer(new QuantitySpinnerRenderer());
-        tblCart.getColumnModel().getColumn(3).setCellEditor(new QuantitySpinnerEditor());
+        tblCart.getColumnModel().getColumn(2).setCellRenderer(new QuantitySpinnerRenderer());
+        tblCart.getColumnModel().getColumn(2).setCellEditor(new QuantitySpinnerEditor());
         
-        tblCart.getColumnModel().getColumn(0).setPreferredWidth(65);
-        tblCart.getColumnModel().getColumn(0).setMaxWidth(65);
-        tblCart.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
-                JLabel lbl = new JLabel();
-                lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon) lbl.setIcon((ImageIcon) v);
-                else lbl.setText("—");
-                return lbl;
-            }
-        });
-
         CartTableRenderer cartRenderer = new CartTableRenderer();
         for (int i = 0; i < tblCart.getColumnCount(); i++) {
             if (i != 2) {
@@ -878,7 +864,7 @@ public class SellPanel extends JPanel {
                 }
                 isUpdatingCart = true;
                 try {
-                    Object qtyObj = modCart.getValueAt(r, 3);
+                    Object qtyObj = modCart.getValueAt(r, 2);
                     if (qtyObj == null) {
                         return;
                     }
@@ -888,8 +874,8 @@ public class SellPanel extends JPanel {
                             modCart.removeRow(r);
                         }
                     } else {
-                        double price = Double.parseDouble(modCart.getValueAt(r, 4).toString());
-                        modCart.setValueAt(price * qty, r, 5);
+                        double price = Double.parseDouble(modCart.getValueAt(r, 3).toString());
+                        modCart.setValueAt(price * qty, r, 4);
                     }
                     calculateTotal();
                     validateCartAgainstDatabase();
@@ -1001,22 +987,21 @@ public class SellPanel extends JPanel {
         double price = p.getBasePrice().doubleValue();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            if (modCart.getValueAt(i, 1).equals(pId)) {
-                int currentQty = Integer.parseInt(modCart.getValueAt(i, 3).toString());
+            if (modCart.getValueAt(i, 0).equals(pId)) {
+                int currentQty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
                 int newQty = currentQty + qty;
 
                 if (newQty > p.getQuantity()) {
                     JOptionPane.showMessageDialog(this, "Số lượng vượt tồn kho!\nTồn hiện tại: " + p.getQuantity(), "Cảnh báo", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
-                modCart.setValueAt(newQty, i, 3);
+                modCart.setValueAt(newQty, i, 2);
                 return;
             }
         }
 
         isUpdatingCart = true;
-        ImageIcon cartThumb = loadProductThumb(p.getImagePath(), 50, 42);
-        modCart.addRow(new Object[]{cartThumb, pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
+        modCart.addRow(new Object[]{pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
         isUpdatingCart = false;
 
         calculateTotal();
@@ -1149,9 +1134,9 @@ public class SellPanel extends JPanel {
 
         isUpdatingCart = true;
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            int q = Integer.parseInt(modCart.getValueAt(i, 3).toString());
-            int stock = getStockFromDB(modCart.getValueAt(i, 1).toString());
-            modCart.setValueAt(stock, i, 6);
+            int q = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            int stock = getStockFromDB(modCart.getValueAt(i, 0).toString());
+            modCart.setValueAt(stock, i, 5);
             if (q > stock) {
                 hasError = true;
             }
@@ -1274,7 +1259,7 @@ public class SellPanel extends JPanel {
 
         // 1) Tính thành tiền gốc
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 5));
+            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
             subTotal += lineTotal;
         }
 
@@ -1651,9 +1636,9 @@ public class SellPanel extends JPanel {
         List<OrderDetail> dt = new ArrayList<>();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            String id = modCart.getValueAt(i, 1).toString();
-            int qty = Integer.parseInt(modCart.getValueAt(i, 3).toString());
-            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 4).toString());
+            String id = modCart.getValueAt(i, 0).toString();
+            int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 3).toString());
 
             Product p = allProducts.stream()
                     .filter(x -> x.getProductId().equals(id))
@@ -2037,8 +2022,8 @@ public class SellPanel extends JPanel {
                         });
                         return super.stopCellEditing();
                     }
-                    double price = Double.parseDouble(modCart.getValueAt(row, 4).toString());
-                    modCart.setValueAt(price * qty, row, 5);
+                    double price = Double.parseDouble(modCart.getValueAt(row, 3).toString());
+                    modCart.setValueAt(price * qty, row, 4);
                     calculateTotal();
                     validateCartAgainstDatabase();
                 }
