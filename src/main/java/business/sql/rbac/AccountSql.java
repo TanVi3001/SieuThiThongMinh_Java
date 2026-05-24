@@ -647,63 +647,85 @@ public class AccountSql implements SqlInterface<Account> {
             return false;
         }
 
-        accountId = accountId.trim();
-        newRoleId = newRoleId.trim().toUpperCase();
+        String cleanAccountId = accountId.trim();
+        String cleanRoleId = newRoleId.trim().toUpperCase();
 
         String sqlGetUserId = """
-        SELECT user_id
-        FROM ACCOUNTS
-        WHERE account_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+            SELECT user_id
+            FROM ACCOUNTS
+            WHERE account_id = ?
+            FETCH FIRST 1 ROWS ONLY
+        """;
 
-        String sqlCheck = """
-        SELECT 1
-        FROM ACCOUNT_ASSIGN_ROLE
-        WHERE account_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+        String sqlDisableOldRoleGroups = """
+            UPDATE ACCOUNT_ASSIGN_ROLE_GROUP
+            SET is_deleted = 1
+            WHERE account_id = ?
+        """;
 
-        String sqlUpdateRole = """
-        UPDATE ACCOUNT_ASSIGN_ROLE
-        SET role_id = ?,
-            is_deleted = 0
-        WHERE account_id = ?
-    """;
+        String sqlDisableOldDirectRoles = """
+            UPDATE ACCOUNT_ASSIGN_ROLE
+            SET is_deleted = 1
+            WHERE account_id = ?
+        """;
 
-        String sqlInsertRole = """
-        INSERT INTO ACCOUNT_ASSIGN_ROLE (
-            account_id,
-            role_id,
-            is_deleted
-        )
-        VALUES (?, ?, 0)
-    """;
+        /*
+         * Không dùng MERGE ON(account_id) vì dữ liệu cũ có thể đã có nhiều dòng role
+         * cho cùng một account_id. Cách an toàn hơn:
+         * 1) khóa mềm toàn bộ role cũ;
+         * 2) update một dòng role hiện có thành role mới;
+         * 3) nếu chưa có dòng nào thì insert mới.
+         */
+        String sqlReuseOneDirectRoleRow = """
+            UPDATE ACCOUNT_ASSIGN_ROLE
+            SET role_id = ?,
+                is_deleted = 0
+            WHERE ROWID = (
+                SELECT ROWID
+                FROM ACCOUNT_ASSIGN_ROLE
+                WHERE account_id = ?
+                FETCH FIRST 1 ROWS ONLY
+            )
+        """;
 
-        String sqlTouchAccount = """
-        UPDATE ACCOUNTS
-        SET updated_at = CURRENT_TIMESTAMP
-        WHERE account_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+        String sqlInsertDirectRole = """
+            INSERT INTO ACCOUNT_ASSIGN_ROLE (
+                account_id,
+                role_id,
+                is_deleted
+            )
+            VALUES (?, ?, 0)
+        """;
 
         String sqlUpdateEmployeeRole = """
-        UPDATE EMPLOYEES
-        SET role_id = ?
-        WHERE employee_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+            UPDATE EMPLOYEES
+            SET role_id = ?
+            WHERE employee_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
+
+        String sqlTouchAccount = """
+            UPDATE ACCOUNTS
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE account_id = ?
+        """;
 
         Connection con = null;
+        boolean oldAutoCommit = true;
 
         try {
             con = DatabaseConnection.getConnection();
+            if (con == null) {
+                return false;
+            }
+
+            oldAutoCommit = con.getAutoCommit();
             con.setAutoCommit(false);
 
             String userId = null;
 
             try (PreparedStatement ps = con.prepareStatement(sqlGetUserId)) {
-                ps.setString(1, accountId);
+                ps.setString(1, cleanAccountId);
 
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -714,41 +736,43 @@ public class AccountSql implements SqlInterface<Account> {
 
             if (userId == null || userId.trim().isEmpty()) {
                 con.rollback();
+                System.err.println("[AccountSql] updateAccountRole failed: ACCOUNT_NOT_FOUND " + cleanAccountId);
                 return false;
             }
 
-            boolean exists = false;
-
-            try (PreparedStatement ps = con.prepareStatement(sqlCheck)) {
-                ps.setString(1, accountId);
-
-                try (ResultSet rs = ps.executeQuery()) {
-                    exists = rs.next();
-                }
+            try (PreparedStatement ps = con.prepareStatement(sqlDisableOldRoleGroups)) {
+                ps.setString(1, cleanAccountId);
+                ps.executeUpdate();
             }
 
-            if (exists) {
-                try (PreparedStatement ps = con.prepareStatement(sqlUpdateRole)) {
-                    ps.setString(1, newRoleId);
-                    ps.setString(2, accountId);
-                    ps.executeUpdate();
-                }
-            } else {
-                try (PreparedStatement ps = con.prepareStatement(sqlInsertRole)) {
-                    ps.setString(1, accountId);
-                    ps.setString(2, newRoleId);
+            try (PreparedStatement ps = con.prepareStatement(sqlDisableOldDirectRoles)) {
+                ps.setString(1, cleanAccountId);
+                ps.executeUpdate();
+            }
+
+            int roleRows;
+            try (PreparedStatement ps = con.prepareStatement(sqlReuseOneDirectRoleRow)) {
+                ps.setString(1, cleanRoleId);
+                ps.setString(2, cleanAccountId);
+                roleRows = ps.executeUpdate();
+            }
+
+            if (roleRows <= 0) {
+                try (PreparedStatement ps = con.prepareStatement(sqlInsertDirectRole)) {
+                    ps.setString(1, cleanAccountId);
+                    ps.setString(2, cleanRoleId);
                     ps.executeUpdate();
                 }
             }
 
             try (PreparedStatement ps = con.prepareStatement(sqlUpdateEmployeeRole)) {
-                ps.setString(1, newRoleId);
-                ps.setString(2, userId);
+                ps.setString(1, cleanRoleId);
+                ps.setString(2, userId.trim());
                 ps.executeUpdate();
             }
 
             try (PreparedStatement ps = con.prepareStatement(sqlTouchAccount)) {
-                ps.setString(1, accountId);
+                ps.setString(1, cleanAccountId);
                 ps.executeUpdate();
             }
 
@@ -763,13 +787,18 @@ public class AccountSql implements SqlInterface<Account> {
                 }
             }
 
+            System.err.println("[AccountSql] updateAccountRole error: " + e.getMessage());
             e.printStackTrace();
             return false;
 
         } finally {
             if (con != null) {
                 try {
-                    con.setAutoCommit(true);
+                    con.setAutoCommit(oldAutoCommit);
+                } catch (Exception ignored) {
+                }
+
+                try {
                     con.close();
                 } catch (Exception ignored) {
                 }
@@ -783,25 +812,38 @@ public class AccountSql implements SqlInterface<Account> {
             return false;
         }
 
+        String cleanEmployeeId = employeeId.trim();
+        String cleanRoleId = newRoleId.trim().toUpperCase();
+
+        /*
+         * Không lọc NVL(is_deleted,0)=0 ở ACCOUNTS tại đây.
+         * Tài khoản bị khóa vẫn phải được đồng bộ role, nếu không EMPLOYEES.role_id
+         * và ACCOUNT_ASSIGN_ROLE.role_id sẽ lệch nhau.
+         */
         String sql = """
-        SELECT account_id
-        FROM ACCOUNTS
-        WHERE user_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+            SELECT account_id
+            FROM ACCOUNTS
+            WHERE user_id = ?
+            ORDER BY NVL(is_deleted, 0), updated_at DESC NULLS LAST, account_id DESC
+            FETCH FIRST 1 ROWS ONLY
+        """;
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
-            ps.setString(1, employeeId.trim());
+            ps.setString(1, cleanEmployeeId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String accountId = rs.getString("account_id");
-                    return updateAccountRole(accountId, newRoleId);
+                    return updateAccountRole(accountId, cleanRoleId);
                 }
             }
 
+            System.err.println("[AccountSql] updateAccountRoleByEmployeeId failed: ACCOUNT_NOT_FOUND_BY_EMPLOYEE " + cleanEmployeeId);
+
         } catch (Exception e) {
+            System.err.println("[AccountSql] updateAccountRoleByEmployeeId error: " + e.getMessage());
             e.printStackTrace();
         }
 
@@ -859,7 +901,7 @@ public class AccountSql implements SqlInterface<Account> {
 
         String sqlAccount = ""
                 + "INSERT INTO ACCOUNTS (account_id, user_id, username, password, status, is_deleted) "
-                + "VALUES (?, ?, ?, ?, N'Hoạt động', 0)";
+                + "VALUES (?, ?, ?, ?, 'Hoạt động', 0)";
 
         String sqlAssignRole = ""
                 + "INSERT INTO ACCOUNT_ASSIGN_ROLE (account_id, role_id, is_deleted) "

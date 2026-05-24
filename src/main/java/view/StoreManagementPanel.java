@@ -280,12 +280,19 @@ public class StoreManagementPanel extends JPanel {
         actions.setOpaque(false);
         actions.setBorder(new EmptyBorder(8, 0, 0, 0));
 
-        JButton btnAddFromForm = button("Thêm", blue, Color.WHITE, IconHelper.add(18));
+        JButton btnAddFromForm = button("Thêm mới", blue, Color.WHITE, IconHelper.add(18));
         btnSave = button("Cập nhật", orange, Color.WHITE, IconHelper.edit(18));
         btnSoftDelete = button("Xóa", red, Color.WHITE, IconHelper.delete(18));
         btnClear = button("Làm mới", grayBtn, Color.WHITE, IconHelper.refresh(18));
 
-        btnAddFromForm.addActionListener(e -> prepareAddNewStore());
+        btnAddFromForm.addActionListener(e -> {
+            if (isFormEmptyForNewStore()) {
+                prepareAddNewStore();
+            } else {
+                isEditMode = false;
+                saveStore();
+            }
+        });
 
         actions.add(btnAddFromForm);
         actions.add(btnSave);
@@ -306,6 +313,18 @@ public class StoreManagementPanel extends JPanel {
         card.add(header, BorderLayout.NORTH);
         card.add(formTopWrapper, BorderLayout.CENTER);
         return card;
+    }
+
+    private boolean isFormEmptyForNewStore() {
+        String id = txtMaChiNhanh.getText() == null ? "" : txtMaChiNhanh.getText().trim();
+        String name = txtTenChiNhanh.getText() == null ? "" : txtTenChiNhanh.getText().trim();
+        String phone = txtSoDienThoai.getText() == null ? "" : txtSoDienThoai.getText().trim();
+        String address = txtDiaChi.getText() == null ? "" : txtDiaChi.getText().trim();
+
+        return id.isEmpty()
+                && name.isEmpty()
+                && phone.isEmpty()
+                && address.isEmpty();
     }
 
     private void addField(JPanel p, GridBagConstraints g, int y, String title, JTextField f) {
@@ -504,8 +523,7 @@ public class StoreManagementPanel extends JPanel {
             WHERE UPPER(TABLE_NAME) = UPPER(?)
               AND UPPER(COLUMN_NAME) = UPPER(?)
         """;
-        try (Connection conn = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try (Connection conn = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, table);
             ps.setString(2, column);
             try (ResultSet rs = ps.executeQuery()) {
@@ -522,15 +540,14 @@ public class StoreManagementPanel extends JPanel {
 
         String nameExpr = hasNameColumn ? "store_name" : "address";
         String phoneExpr = hasPhoneColumn ? phoneColumnName : "''";
-        String statusExpr = hasStatusColumn ? "NVL(status, 'Hoạt động')" : "'Hoạt động'";
+        String statusExpr = hasStatusColumn ? "TO_CHAR(status)" : "NULL";
 
         String sql = "SELECT store_id, " + nameExpr + " AS display_name, " + phoneExpr + " AS phone_no, address, " + statusExpr + " AS status "
                 + "FROM stores WHERE NVL(is_deleted,0)=0 "
                 + "AND (LOWER(store_id) LIKE ? OR LOWER(" + nameExpr + ") LIKE ? OR LOWER(address) LIKE ? OR LOWER(email) LIKE ?) "
                 + "ORDER BY store_id";
 
-        try (Connection conn = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        try (Connection conn = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             String kw = "%" + (keyword == null ? "" : keyword.toLowerCase()) + "%";
             ps.setString(1, kw);
             ps.setString(2, kw);
@@ -594,10 +611,13 @@ public class StoreManagementPanel extends JPanel {
 
     private void prepareAddNewStore() {
         clearForm();
+
         txtMaChiNhanh.setText(generateStoreId());
         txtTenChiNhanh.requestFocus();
+
         lblFormTitle.setText("Thêm Chi Nhánh Mới");
-        lblHint.setText("Nhập thông tin chi nhánh rồi bấm Cập nhật để lưu");
+        lblHint.setText("Nhập thông tin chi nhánh rồi bấm Thêm để lưu");
+
         isEditMode = false;
     }
 
@@ -614,45 +634,111 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void saveStore() {
-        String id = txtMaChiNhanh.getText().trim();
-        String name = txtTenChiNhanh.getText().trim();
-        String phone = txtSoDienThoai.getText().trim();
-        String address = txtDiaChi.getText().trim();
+        String id = txtMaChiNhanh.getText() == null ? "" : txtMaChiNhanh.getText().trim();
+        String name = txtTenChiNhanh.getText() == null ? "" : txtTenChiNhanh.getText().trim();
+        String phone = txtSoDienThoai.getText() == null ? "" : txtSoDienThoai.getText().trim();
+        String address = txtDiaChi.getText() == null ? "" : txtDiaChi.getText().trim();
         String status = toDbStatus(String.valueOf(cbTrangThai.getSelectedItem()));
+
         if (id.isEmpty()) {
             id = generateStoreId();
             txtMaChiNhanh.setText(id);
         }
-        if (name.isEmpty() || address.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên chi nhánh và địa chỉ.");
+
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng nhập tên chi nhánh.",
+                    "Thiếu tên chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            txtTenChiNhanh.requestFocus();
             return;
         }
+
+        if (address.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng nhập địa chỉ chi nhánh.",
+                    "Thiếu địa chỉ",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            txtDiaChi.requestFocus();
+            return;
+        }
+
         try (Connection conn = common.db.DatabaseConnection.getConnection()) {
-            String sql = isEditMode ? buildUpdateSql() : buildInsertSql();
+
+            boolean existed = storeExists(conn, id);
+            boolean doUpdate = isEditMode && existed;
+
+            String sql = doUpdate ? buildUpdateSql() : buildInsertSql();
+
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 int idx = 1;
+
                 if (hasNameColumn) {
                     ps.setString(idx++, name);
                 }
+
                 ps.setString(idx++, address);
+
                 if (hasPhoneColumn) {
                     ps.setString(idx++, phone);
                 }
+
                 if (hasStatusColumn) {
                     ps.setString(idx++, status);
                 }
+
                 ps.setString(idx, id);
-                ps.executeUpdate();
-                conn.commit();
+
+                int affected = ps.executeUpdate();
+
+                if (affected <= 0) {
+                    JOptionPane.showMessageDialog(
+                            this,
+                            "Không có dữ liệu chi nhánh nào được lưu.",
+                            "Lưu thất bại",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+                    return;
+                }
             }
-            String message = isEditMode ? "Cập nhật chi nhánh" : "Thêm chi nhánh";
-            JOptionPane.showMessageDialog(this, isEditMode ? "Đã cập nhật chi nhánh." : "Đã thêm chi nhánh.");
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    doUpdate ? "Đã cập nhật chi nhánh." : "Đã thêm chi nhánh."
+            );
+
             loadStoreData(txtSearch.getText().trim());
             clearForm();
 
-            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, message));
+            EventBus.publish(new AppDataChangedEvent(
+                    AppEventType.STORE_INFO,
+                    doUpdate ? "Cập nhật chi nhánh" : "Thêm chi nhánh"
+            ));
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi lưu chi nhánh: " + e.getMessage());
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi lưu chi nhánh:\n" + e.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private boolean storeExists(Connection conn, String storeId) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM STORES WHERE store_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, storeId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
         }
     }
 
@@ -696,27 +782,73 @@ public class StoreManagementPanel extends JPanel {
     }
 
     private void softDeleteStore() {
-        String id = txtMaChiNhanh.getText().trim();
+        String id = txtMaChiNhanh.getText() == null ? "" : txtMaChiNhanh.getText().trim();
+
         if (id.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn chi nhánh cần xóa.");
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn chi nhánh cần xóa.",
+                    "Chưa chọn chi nhánh",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
-        int confirm = JOptionPane.showConfirmDialog(this, "Xóa chi nhánh " + id + "?", "Xác nhận", JOptionPane.YES_NO_OPTION);
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Xóa chi nhánh " + id + "?",
+                "Xác nhận",
+                JOptionPane.YES_NO_OPTION
+        );
+
         if (confirm != JOptionPane.YES_OPTION) {
             return;
         }
-        try (Connection conn = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement("UPDATE stores SET is_deleted=1 WHERE store_id=?")) {
+
+        String sql = "UPDATE STORES "
+                + "SET is_deleted = 1 "
+                + "WHERE store_id = ? "
+                + "AND NVL(is_deleted, 0) = 0";
+
+        try (
+                Connection conn = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, id);
-            ps.executeUpdate();
-            conn.commit();
-            JOptionPane.showMessageDialog(this, "Đã xóa chi nhánh.");
+
+            int affected = ps.executeUpdate();
+
+            if (affected <= 0) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Không tìm thấy chi nhánh cần xóa hoặc chi nhánh đã bị xóa.",
+                        "Xóa thất bại",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Đã xóa chi nhánh.",
+                    "Thành công",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
             loadStoreData(txtSearch.getText().trim());
             clearForm();
 
-            EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "Xóa chi nhánh"));
+            EventBus.publish(new AppDataChangedEvent(
+                    AppEventType.STORE_INFO,
+                    "Xóa chi nhánh"
+            ));
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi xóa chi nhánh: " + e.getMessage());
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi xóa chi nhánh:\n" + e.getMessage(),
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 

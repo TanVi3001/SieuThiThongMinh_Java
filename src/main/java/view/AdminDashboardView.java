@@ -126,7 +126,7 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 if (type == AppEventType.STORE_INFO
                         || type == AppEventType.SYSTEM_CONFIG
                         || type == AppEventType.DASHBOARD) {
-                    showPanel(new view.StoreManagementPanel());
+                    showPanel(new view.AdminSystemPanel(1));
                 }
                 break;
 

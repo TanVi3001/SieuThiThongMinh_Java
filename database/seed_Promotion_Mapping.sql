@@ -133,14 +133,4 @@ SET pp.discount_percent = (
 )
 WHERE NVL(pp.discount_percent, 0) = 0;
 
--- Fix trạng thái cũ và tránh ORA-12704: không dùng N'...' với cột VARCHAR2
-UPDATE PROMOTIONS
-SET status = 'Tạm ngưng'
-WHERE status = 'Tạm ngưng / Kết thúc';
 
-COMMIT;
-
--- Kiểm tra nhanh
-SELECT promotion_id, promotion_name, status
-FROM PROMOTIONS
-ORDER BY promotion_id;

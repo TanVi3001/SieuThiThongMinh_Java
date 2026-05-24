@@ -106,6 +106,7 @@ public class AdminSystemPanel extends JPanel {
     private final Color orange = new Color(245, 158, 11);
     private final Color red = new Color(239, 68, 68);
     private final Color purple = new Color(124, 58, 237);
+    private final int initialTabIndex;
 
     private final DecimalFormat moneyFmt = new DecimalFormat("#,###");
 
@@ -136,6 +137,12 @@ public class AdminSystemPanel extends JPanel {
     private String filterLabel = "Tháng hiện tại";
 
     public AdminSystemPanel() {
+        this(0);
+    }
+
+    public AdminSystemPanel(int initialTabIndex) {
+        this.initialTabIndex = initialTabIndex;
+
         setLayout(new BorderLayout());
         setBackground(bg);
         setBorder(new EmptyBorder(22, 30, 22, 30));
@@ -218,6 +225,10 @@ public class AdminSystemPanel extends JPanel {
         tabs.addTab("Tổng quan hệ thống", createOverviewTab());
         tabs.addTab("Quản lý chi nhánh", new StoreManagementPanel());
         tabs.addTab("Báo cáo tổng hợp", createReportTab());
+
+        if (initialTabIndex >= 0 && initialTabIndex < tabs.getTabCount()) {
+            tabs.setSelectedIndex(initialTabIndex);
+        }
 
         root.add(tabs, BorderLayout.CENTER);
         add(root, BorderLayout.CENTER);
