@@ -54,7 +54,7 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
             pst.setString(3, ct.getProductId());
             pst.setInt(4, ct.getQuantity());
             pst.setDouble(5, ct.getUnitPrice());
-            pst.setString(6, ct.getUnitId());
+            pst.setString(6, resolveValidUnitId(con, ct));
             pst.setInt(7, ct.getQuantityInBaseUnit());
 
             return pst.executeUpdate();
@@ -78,6 +78,52 @@ public class OrderDetailsSql implements SqlInterface<OrderDetail> {
             pst.setDouble(5, ct.getUnitPrice());
             return pst.executeUpdate();
         }
+    }
+
+    private String resolveValidUnitId(Connection con, OrderDetail ct) throws SQLException {
+        String unitId = trimToNull(ct.getUnitId());
+        if (unitExists(con, unitId)) {
+            return unitId;
+        }
+
+        String productBaseUnitId = findProductBaseUnitId(con, ct.getProductId());
+        if (unitExists(con, productBaseUnitId)) {
+            return productBaseUnitId;
+        }
+
+        return null;
+    }
+
+    private boolean unitExists(Connection con, String unitId) throws SQLException {
+        unitId = trimToNull(unitId);
+        if (unitId == null) {
+            return false;
+        }
+
+        String sql = "SELECT 1 FROM UNITS WHERE unit_id = ? AND NVL(is_deleted, 0) = 0";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, unitId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private String findProductBaseUnitId(Connection con, String productId) throws SQLException {
+        String sql = "SELECT base_unit_id FROM PRODUCTS WHERE product_id = ? AND NVL(is_deleted, 0) = 0";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return trimToNull(rs.getString("base_unit_id"));
+                }
+            }
+        }
+        return null;
+    }
+
+    private String trimToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
     @Override
