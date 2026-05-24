@@ -339,12 +339,30 @@ public class ProductView extends JPanel {
                 String fileName = srcFile.getName();
                 // Copy ảnh vào resources/view/image/
                 try {
-                    java.net.URL resUrl = getClass().getClassLoader().getResource("view/image");
+                    // Copy vào target/classes (có hiệu lực ngay khi chạy)
+                    java.net.URL resUrl = getClass().getClassLoader().getResource("view/image/products");
+                    java.io.File destDir = null;
                     if (resUrl != null) {
-                        java.io.File destDir = new java.io.File(resUrl.toURI());
+                        destDir = new java.io.File(resUrl.toURI());
+                    } else {
+                        java.net.URL baseUrl = getClass().getClassLoader().getResource(".");
+                        if (baseUrl != null) {
+                            destDir = new java.io.File(new java.io.File(baseUrl.toURI()), "view/image/products");
+                            destDir.mkdirs();
+                        }
+                    }
+                    if (destDir != null) {
                         java.io.File destFile = new java.io.File(destDir, fileName);
                         java.nio.file.Files.copy(srcFile.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     }
+
+                    // Copy vào src/main/resources (lâu dài, không mất khi rebuild)
+                    String projectDir = System.getProperty("user.dir");
+                    java.io.File srcResDir = new java.io.File(projectDir, "src/main/resources/view/image/products");
+                    if (!srcResDir.exists()) srcResDir.mkdirs();
+                    java.io.File srcResDest = new java.io.File(srcResDir, fileName);
+                    java.nio.file.Files.copy(srcFile.toPath(), srcResDest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
@@ -1230,19 +1248,19 @@ public class ProductView extends JPanel {
          * Staff_Product quản lý kho/sản phẩm, không cần quản lý ảnh trong form này.
          * Admin vẫn có thể giữ ảnh nếu cần.
          */
-        if (!AuthorizationService.isAdmin()) {
-            if (lblImagePreview != null) {
-                lblImagePreview.setVisible(false);
-            }
-
-            if (btnChooseImage != null) {
-                btnChooseImage.setVisible(false);
-            }
-
-            if (lblImageSectionTitle != null) {
-                lblImageSectionTitle.setVisible(false);
-            }
-        }
+//        if (!AuthorizationService.isAdmin()) {
+//            if (lblImagePreview != null) {
+//                lblImagePreview.setVisible(false);
+//            }
+//
+//            if (btnChooseImage != null) {
+//                btnChooseImage.setVisible(false);
+//            }
+//
+//            if (lblImageSectionTitle != null) {
+//                lblImageSectionTitle.setVisible(false);
+//            }
+//        }
 
         revalidate();
         repaint();
@@ -2054,19 +2072,13 @@ public class ProductView extends JPanel {
         Product selected = ProductsSql.getInstance().findById(productId);
         if (selected != null && selected.getImagePath() != null && !selected.getImagePath().isEmpty()) {
             selectedImagePath = selected.getImagePath();
-            try {
-                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + selectedImagePath);
-                if (imgUrl != null) {
-                    ImageIcon icon = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
-                    lblImagePreview.setIcon(icon);
-                    lblImagePreview.setText("");
-                } else {
-                    lblImagePreview.setIcon(null);
-                    lblImagePreview.setText("Không tìm thấy ảnh");
-                }
-            } catch (Exception e) {
+            ImageIcon previewIcon = view.components.ProductImageLoader.load(selectedImagePath, 180, 120);
+            if (previewIcon != null) {
+                lblImagePreview.setIcon(previewIcon);
+                lblImagePreview.setText("");
+            } else {
                 lblImagePreview.setIcon(null);
-                lblImagePreview.setText("Không tải được ảnh");
+                lblImagePreview.setText("Không tìm thấy ảnh");
             }
         } else {
             selectedImagePath = null;
@@ -2272,14 +2284,10 @@ public class ProductView extends JPanel {
             ImageIcon thumb = null;
 
             if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
-                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
+                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/products/" + p.getImagePath());
 
                 if (imgUrl != null) {
-                    thumb = new ImageIcon(
-                            new ImageIcon(imgUrl)
-                                    .getImage()
-                                    .getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH)
-                    );
+                    thumb = view.components.ProductImageLoader.load(p.getImagePath(), 60, 45);
                 }
             }
 

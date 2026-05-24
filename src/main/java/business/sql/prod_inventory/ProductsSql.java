@@ -1023,12 +1023,19 @@ public class ProductsSql {
                 INSERT (store_id, product_id, selling_price, is_active, min_stock, is_deleted, created_at, updated_at)
                 VALUES (src.store_id, src.product_id, src.selling_price, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """;
+        
+        String sqlUpdateImage = """
+        UPDATE PRODUCTS
+        SET image_path = ?
+        WHERE product_id = ?
+        """;
 
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
 
             try (
-                    PreparedStatement psInv = con.prepareStatement(sqlInventory); PreparedStatement psSp = con.prepareStatement(sqlStoreProduct)) {
+                    PreparedStatement psInv = con.prepareStatement(sqlInventory); PreparedStatement psSp = con.prepareStatement(sqlStoreProduct); 
+                    PreparedStatement psImg = con.prepareStatement(sqlUpdateImage)) {
                 psInv.setString(1, productId);
                 psInv.setString(2, cleanStoreId);
                 psInv.setInt(3, p.getQuantity());
@@ -1039,6 +1046,11 @@ public class ProductsSql {
                 psSp.setString(2, productId);
                 psSp.setBigDecimal(3, sellingPrice);
                 psSp.executeUpdate();
+                if (p.getImagePath() != null && !p.getImagePath().trim().isEmpty()) {
+                    psImg.setString(1, p.getImagePath().trim());
+                    psImg.setString(2, productId);
+                    psImg.executeUpdate();
+                }
 
                 ProductUnitsSql.getInstance().ensureBaseUnitWithConn(con, productId, safeUnit(p));
 

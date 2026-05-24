@@ -388,26 +388,32 @@ public class InventoryView extends JPanel {
         actionBar.add(buttons, BorderLayout.EAST);
 
         tableModel = new DefaultTableModel(
-                new Object[]{
-                    "Mã SP",
-                    "Tên sản phẩm",
-                    "Tồn hiện tại",
-                    "Mức cảnh báo",
-                    "Đơn vị",
-                    "Chi nhánh",
-                    "Trạng thái",
-                    "Cập nhật cuối"
-                },
-                0
-        ) {
+            new Object[]{"Ảnh","Mã SP","Tên sản phẩm","Tồn hiện tại","Mức cảnh báo","Đơn vị",
+                "Chi nhánh","Trạng thái","Cập nhật cuối"},0) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            public Class<?> getColumnClass(int col) {
+                if (col == 0) return ImageIcon.class;
+                return Object.class;
             }
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; }
         };
 
         tblInventory = new JTable(tableModel);
         setupTableStyle();
+        tblInventory.setRowHeight(60);
+        tblInventory.getColumnModel().getColumn(0).setPreferredWidth(70);
+        tblInventory.getColumnModel().getColumn(0).setMaxWidth(70);
+        tblInventory.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+                JLabel lbl = new JLabel();
+                lbl.setHorizontalAlignment(SwingConstants.CENTER);
+                if (v instanceof ImageIcon) lbl.setIcon((ImageIcon) v);
+                else lbl.setText("—");
+                return lbl;
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(tblInventory);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -455,8 +461,8 @@ public class InventoryView extends JPanel {
                 );
 
                 int modelRow = table.convertRowIndexToModel(row);
-                int qty = parseInt(table.getModel().getValueAt(modelRow, 2));
-                String status = String.valueOf(table.getModel().getValueAt(modelRow, 6));
+                int qty = parseInt(table.getModel().getValueAt(modelRow, 3));
+                String status = String.valueOf(table.getModel().getValueAt(modelRow, 7));
 
                 if (isSelected) {
                     c.setBackground(table.getSelectionBackground());
@@ -464,10 +470,10 @@ public class InventoryView extends JPanel {
                 } else if (qty <= 0) {
                     c.setBackground(new Color(255, 235, 235));
                     c.setForeground(column == 6 ? RED : new Color(120, 20, 20));
-                } else if (qty <= 5) {
+                } else if (qty <= 10) {
                     c.setBackground(new Color(255, 243, 224));
                     c.setForeground(column == 6 ? new Color(230, 81, 0) : new Color(120, 70, 0));
-                } else if (qty <= 20) {
+                } else if (qty <= 30) {
                     c.setBackground(new Color(255, 253, 231));
                     c.setForeground(column == 6 ? ORANGE : NAVY);
                 } else {
@@ -1006,26 +1012,28 @@ public class InventoryView extends JPanel {
             if (qty <= 0) {
                 status = "Hết hàng";
                 threshold = "Khẩn cấp";
-            } else if (qty <= 5) {
+            } else if (qty <= 10) {
                 status = "Nguy hiểm";
-                threshold = "≤ 5";
-            } else if (qty <= 20) {
+                threshold = "≤ 10";
+            } else if (qty <= 30) {
                 status = "Sắp hết";
-                threshold = "≤ 20";
+                threshold = "≤ 30";
             } else {
                 status = "Ổn định";
-                threshold = "> 20";
+                threshold = "> 30";
             }
 
+            ImageIcon thumb = loadInventoryThumb(p.getImagePath());
             tableModel.addRow(new Object[]{
+                thumb,
                 safe(p.getProductId(), ""),
                 safe(p.getProductName(), ""),
-                qty,
-                threshold,
-                safe(p.getUnit(), "Cái"),
-                safe(p.getStoreId(), "Chưa xác định"),
-                status,
-                formatLastUpdated(p.getLastUpdated())
+            qty,
+            threshold,
+            safe(p.getUnit(), "Cái"),
+            safe(p.getStoreId(), "Chưa xác định"),
+            status,
+            formatLastUpdated(p.getLastUpdated())
             });
         }
     }
@@ -1111,7 +1119,7 @@ public class InventoryView extends JPanel {
 
                 if (qty <= 0) {
                     outOfStock++;
-                } else if (qty <= 20) {
+                } else if (qty <= 30) {
                     lowStock++;
                 }
             }
@@ -1130,7 +1138,7 @@ public class InventoryView extends JPanel {
 
         if (list != null) {
             for (Product p : list) {
-                if (p.getQuantity() <= 20) {
+                if (p.getQuantity() <= 30) {
                     alertListPanel.add(createAlertItem(p));
                     count++;
 
@@ -1544,5 +1552,8 @@ public class InventoryView extends JPanel {
         }
 
         return text;
+    }
+    private ImageIcon loadInventoryThumb(String imagePath) {
+        return view.components.ProductImageLoader.load(imagePath, 55, 45);
     }
 }

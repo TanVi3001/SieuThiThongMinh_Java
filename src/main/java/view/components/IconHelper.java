@@ -91,6 +91,10 @@ public class IconHelper {
         return load("search-interface-symbol.png", size);
     }
 
+    public static ImageIcon remove(int size) {
+        return load("remove.png", size);
+    }
+    
     public static ImageIcon getCategoryIcon(String categoryId, int size) {
         String key = categoryId + "_" + size;
         if (categoryIconCache.containsKey(key)) {
