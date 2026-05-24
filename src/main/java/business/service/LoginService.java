@@ -4,9 +4,13 @@ import business.sql.rbac.AccountSql;
 import business.sql.rbac.LoginHistorySql;
 import business.sql.rbac.TokenSql;
 import common.utils.PasswordUtils;
+import common.db.DatabaseConnection;
 import model.account.Account;
 import model.account.Token;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +26,7 @@ import javax.swing.JOptionPane;
  */
 public class LoginService {
 
-    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V6_STORE_SCOPE_2026-05-21";
+    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V8_STORE_SCOPE_STAFF_SHIFT_GUARD_2026-05-24";
 
     public static Account authenticate(String username, String password) {
         System.out.println("[" + LOGIN_VERSION + "] authenticate called, username=" + username);
@@ -76,6 +80,34 @@ public class LoginService {
         if (!ok) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "WRONG_PASSWORD", localIp(), deviceInfo());
             System.out.println("[" + LOGIN_VERSION + "] FAIL: WRONG_PASSWORD");
+            return null;
+        }
+
+        // =========================================================
+        // SHIFT GUARD: Chỉ chặn nhân viên đăng nhập ngoài ca làm việc.
+        // Đặt sau khi password đúng, trước khi tạo token/session.
+        // Admin và Manager được bỏ qua để luôn vào được hệ thống quản lý/phân ca.
+        // Staff muốn vào mọi lúc để test thì gán SHIFT_FULLTIME.
+        // =========================================================
+        if (!canLoginByCurrentShift(acc)) {
+            LoginHistorySql.getInstance().log(
+                    acc.getAccountId(),
+                    "LOGIN_FAILED",
+                    "FAILURE",
+                    "SHIFT_NOT_ALLOWED",
+                    localIp(),
+                    deviceInfo()
+            );
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Tài khoản chưa tới ca làm việc hoặc không có lịch làm việc hợp lệ ở thời điểm hiện tại.\n"
+                    + "Vui lòng liên hệ quản lý để kiểm tra phân ca.",
+                    "Không được phép đăng nhập",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            System.out.println("[" + LOGIN_VERSION + "] FAIL: SHIFT_NOT_ALLOWED accountId=" + acc.getAccountId());
             return null;
         }
 
@@ -182,6 +214,123 @@ public class LoginService {
 
         SessionManager.clear();
         System.out.println("[" + LOGIN_VERSION + "] user logged out");
+    }
+
+    /**
+     * Kiểm tra tài khoản có được đăng nhập ở thời điểm hiện tại theo lịch phân
+     * ca không.
+     *
+     * Bảng cần có: - SHIFTS(shift_id, shift_name, start_time, end_time,
+     * is_deleted) - EMPLOYEE_SHIFT_ASSIGNMENTS(assignment_id, employee_id,
+     * shift_id, work_date, status, is_deleted)
+     *
+     * Lưu ý: - Admin/Manager bypass để tránh khóa hệ thống và vẫn vào được màn
+     * quản lý phân ca. - SHIFT_FULLTIME dùng cho tài khoản staff test/demo hoặc
+     * tài khoản cần login cả ngày. - Ca qua ngày như 23:00 -> 07:00 được xử lý
+     * bằng work_date hôm nay hoặc hôm qua.
+     */
+    private static boolean canLoginByCurrentShift(Account acc) {
+        if (acc == null || acc.getAccountId() == null || acc.getAccountId().isBlank()) {
+            return false;
+        }
+
+        String role = acc.getRole();
+        if (isShiftBypassRole(role)) {
+            return true;
+        }
+
+        String sql = """
+            SELECT COUNT(*) AS valid_shift_count
+            FROM ACCOUNTS a
+            JOIN EMPLOYEES e
+                ON e.employee_id = a.user_id
+            JOIN EMPLOYEE_SHIFT_ASSIGNMENTS esa
+                ON esa.employee_id = e.employee_id
+            JOIN SHIFTS s
+                ON s.shift_id = esa.shift_id
+            WHERE a.account_id = ?
+              AND NVL(a.is_deleted, 0) = 0
+              AND NVL(e.is_deleted, 0) = 0
+              AND NVL(esa.is_deleted, 0) = 0
+              AND NVL(s.is_deleted, 0) = 0
+              AND UPPER(TRIM(TO_CHAR(esa.status))) = 'ASSIGNED'
+              AND (
+                    s.shift_id = 'SHIFT_FULLTIME'
+
+                    OR
+
+                    (
+                        TO_CHAR(s.start_time, 'HH24:MI:SS') <= TO_CHAR(s.end_time, 'HH24:MI:SS')
+                        AND TRUNC(esa.work_date) = TRUNC(SYSDATE)
+                        AND TO_CHAR(SYSDATE, 'HH24:MI:SS')
+                            BETWEEN TO_CHAR(s.start_time, 'HH24:MI:SS')
+                                AND TO_CHAR(s.end_time, 'HH24:MI:SS')
+                    )
+
+                    OR
+
+                    (
+                        TO_CHAR(s.start_time, 'HH24:MI:SS') > TO_CHAR(s.end_time, 'HH24:MI:SS')
+                        AND (
+                                (
+                                    TRUNC(esa.work_date) = TRUNC(SYSDATE)
+                                    AND TO_CHAR(SYSDATE, 'HH24:MI:SS') >= TO_CHAR(s.start_time, 'HH24:MI:SS')
+                                )
+                                OR
+                                (
+                                    TRUNC(esa.work_date) = TRUNC(SYSDATE) - 1
+                                    AND TO_CHAR(SYSDATE, 'HH24:MI:SS') <= TO_CHAR(s.end_time, 'HH24:MI:SS')
+                                )
+                            )
+                    )
+              )
+        """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, acc.getAccountId());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean allowed = rs.next() && rs.getInt("valid_shift_count") > 0;
+
+                System.out.println(
+                        "[" + LOGIN_VERSION + "] shiftGuard accountId=" + acc.getAccountId()
+                        + ", role=" + role
+                        + ", allowed=" + allowed
+                );
+
+                return allowed;
+            }
+
+        } catch (Exception ex) {
+            // Fail-closed cho nhân viên: nếu bảng phân ca/query lỗi thì không cho login để tránh bypass.
+            // Admin/Manager đã được bypass ở trên.
+            System.out.println(
+                    "[" + LOGIN_VERSION + "] FAIL: SHIFT_CHECK_ERROR accountId="
+                    + acc.getAccountId() + " - " + ex.getMessage()
+            );
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    private static boolean isShiftBypassRole(String role) {
+        if (role == null) {
+            return false;
+        }
+
+        String r = role.trim().toUpperCase();
+
+        return r.equals("R_ADMIN_ALL")
+                || r.equals("ADMIN")
+                || r.equals("R_ADMIN")
+                || r.equals("R_SYSTEM_ADMIN")
+                || r.equals("R_CENTRAL_ADMIN")
+                // Store Manager / Manager luôn được đăng nhập để quản lý nhân viên và phân ca.
+                || r.equals("R_STORE_MNG")
+                || r.equals("R_STORE_MANAGER")
+                || r.equals("STORE_MANAGER")
+                || r.equals("MANAGER");
     }
 
     private static String localIp() {

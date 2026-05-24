@@ -1726,4 +1726,71 @@ public class AccountSql implements SqlInterface<Account> {
             System.err.println("[AccountSql] cleanupDeadSessions error: " + e.getMessage());
         }
     }
+
+    public boolean canLoginByCurrentShift(String accountId, String roleId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return false;
+        }
+
+        // Admin cho đăng nhập luôn.
+        if ("R_ADMIN_ALL".equalsIgnoreCase(roleId)) {
+            return true;
+        }
+
+        String sql = """
+        SELECT COUNT(*) AS valid_shift_count
+        FROM ACCOUNTS a
+        JOIN EMPLOYEES e
+            ON e.employee_id = a.user_id
+        JOIN EMPLOYEE_SHIFT_ASSIGNMENTS esa
+            ON esa.employee_id = e.employee_id
+        JOIN SHIFTS s
+            ON s.shift_id = esa.shift_id
+        WHERE a.account_id = ?
+          AND NVL(a.is_deleted, 0) = 0
+          AND NVL(e.is_deleted, 0) = 0
+          AND NVL(esa.is_deleted, 0) = 0
+          AND NVL(s.is_deleted, 0) = 0
+          AND esa.status = 'ASSIGNED'
+          AND (
+                s.shift_id = 'SHIFT_FULLTIME'
+                OR
+                (
+                    TO_CHAR(s.start_time, 'HH24:MI:SS') <= TO_CHAR(s.end_time, 'HH24:MI:SS')
+                    AND TRUNC(esa.work_date) = TRUNC(SYSDATE)
+                    AND TO_CHAR(SYSDATE, 'HH24:MI:SS')
+                        BETWEEN TO_CHAR(s.start_time, 'HH24:MI:SS')
+                            AND TO_CHAR(s.end_time, 'HH24:MI:SS')
+                )
+                OR
+                (
+                    TO_CHAR(s.start_time, 'HH24:MI:SS') > TO_CHAR(s.end_time, 'HH24:MI:SS')
+                    AND (
+                            (
+                                TRUNC(esa.work_date) = TRUNC(SYSDATE)
+                                AND TO_CHAR(SYSDATE, 'HH24:MI:SS') >= TO_CHAR(s.start_time, 'HH24:MI:SS')
+                            )
+                            OR
+                            (
+                                TRUNC(esa.work_date) = TRUNC(SYSDATE) - 1
+                                AND TO_CHAR(SYSDATE, 'HH24:MI:SS') <= TO_CHAR(s.end_time, 'HH24:MI:SS')
+                            )
+                        )
+                )
+          )
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, accountId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt("valid_shift_count") > 0;
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }

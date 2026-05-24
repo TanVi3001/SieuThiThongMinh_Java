@@ -17,6 +17,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,68 +37,70 @@ import business.sql.prod_inventory.StoresSql;
 
 public class EmployeeView extends JPanel {
 
+    // ==================== COLOR PALETTE ====================
     private final Color bgLight = new Color(244, 246, 250);
     private final Color cardWhite = Color.WHITE;
     private final Color primaryBlue = new Color(54, 92, 245);
     private final Color textDark = new Color(43, 54, 116);
     private final Color textGray = new Color(163, 174, 208);
     private final Color borderGray = new Color(230, 235, 241);
-
     private final Color onlineGreen = new Color(39, 174, 96);
     private final Color offlineRed = new Color(231, 76, 60);
     private final Color primaryOrange = new Color(255, 112, 28);
     private final Color successGreen = new Color(22, 163, 74);
 
+    // ==================== TAB HỒ SƠ NHÂN VIÊN ====================
     private JTextField txtId, txtName, txtPhone, txtEmail;
     private JComboBox<String> cbRole, cbSearch;
-
     private JComboBox<String> cbStoreForm;
-    private java.util.List<Store> listStores = new java.util.ArrayList<>();
-
+    private List<Store> listStores = new ArrayList<>();
     private JRadioButton rdoMale, rdoFemale;
     private ButtonGroup btngGender;
     private JTable tblEmployees;
     private DefaultTableModel tableModel;
     private JButton btnAdd, btnUpdate, btnDelete, btnClear, btnSearch;
 
-    private final EmployeeSql employeeSql = new EmployeeSql();
-    private final ShiftSql shiftSql = new ShiftSql();
-    private final EmployeeShiftSql employeeShiftSql = new EmployeeShiftSql();
-    private List<String> employeeNameList = new ArrayList<>();
-    private List<String> roleList = new ArrayList<>();
-
-    private String currentSelectedRawId = "";
-
+    // ==================== TAB PHÂN CA ====================
     private JComboBox<EmployeeOption> cbShiftEmployee;
     private JComboBox<ShiftOption> cbWorkShift;
     private JComboBox<String> cbAssignmentStatus;
-    private JTextField txtWorkDate;
+    private JTextField txtWorkFromDate;
+    private JTextField txtWorkToDate;
+    private JTextField txtShiftFilterFromDate;
+    private JTextField txtShiftFilterToDate;
     private JTextArea txtAssignmentNote;
+    private ShiftTimelinePanel shiftTimelinePanel;
     private JLabel lblSelectedShiftEmployeeName;
     private JLabel lblSelectedShiftEmployeeId;
     private JLabel lblSelectedShiftEmployeeType;
-    private JTable tblShiftAssignments;
-    private DefaultTableModel shiftTableModel;
     private JTextField txtShiftKeyword;
-    private JTextField txtShiftFilterDate;
     private JComboBox<String> cbShiftEmployeeTypeFilter;
     private JComboBox<ShiftOption> cbShiftFilter;
     private JComboBox<String> cbShiftStatusFilter;
     private JButton btnAddAssignment;
     private JButton btnUpdateAssignment;
     private JButton btnCancelAssignment;
+    private JButton btnDeleteAssignment;
     private JButton btnClearAssignment;
     private JButton btnApplyShiftFilter;
     private JButton btnResetShiftFilter;
+
+    // ==================== BUSINESS LAYER ====================
+    private final EmployeeSql employeeSql = new EmployeeSql();
+    private final ShiftSql shiftSql = new ShiftSql();
+    private final EmployeeShiftSql employeeShiftSql = new EmployeeShiftSql();
+    private List<String> employeeNameList = new ArrayList<>();
+    private List<String> roleList = new ArrayList<>();
+    private String currentSelectedRawId = "";
     private List<Employee> assignableEmployees = new ArrayList<>();
     private List<Shift> shiftList = new ArrayList<>();
     private List<EmployeeShift> currentShiftAssignments = new ArrayList<>();
     private String selectedAssignmentId = "";
+    private TimelineBlock selectedTimelineBlock;
     private final SimpleDateFormat shiftTimeFormat = new SimpleDateFormat("HH:mm");
+    private static final DateTimeFormatter UI_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     // Model column indexes
-    // Bảng hiện có thêm cột Chi nhánh ở vị trí 2,
-    // nên toàn bộ index phía sau phải dịch sang phải 1 cột.
     private static final int COL_ID = 0;
     private static final int COL_NAME = 1;
     private static final int COL_STORE = 2;
@@ -128,24 +132,6 @@ public class EmployeeView extends JPanel {
         setupRealtimeSync();
     }
 
-    private void setupEmployeeTableColumnWidth() {
-        if (tblEmployees == null) {
-            return;
-        }
-
-        tblEmployees.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
-
-        tblEmployees.getColumnModel().getColumn(0).setPreferredWidth(95);   // Mã NV
-        tblEmployees.getColumnModel().getColumn(1).setPreferredWidth(160);  // Tên
-        tblEmployees.getColumnModel().getColumn(2).setPreferredWidth(155);  // Chi nhánh
-        tblEmployees.getColumnModel().getColumn(3).setPreferredWidth(115);  // SĐT
-        tblEmployees.getColumnModel().getColumn(4).setPreferredWidth(230);  // Email
-        tblEmployees.getColumnModel().getColumn(5).setPreferredWidth(120);  // Cấp tài khoản
-        tblEmployees.getColumnModel().getColumn(6).setPreferredWidth(120);  // Hoạt động
-        tblEmployees.getColumnModel().getColumn(7).setPreferredWidth(150);  // Chức vụ
-        tblEmployees.getColumnModel().getColumn(8).setPreferredWidth(80);   // Giới tính
-    }
-
     private void setupRealtimeSync() {
         EventBus.subscribe(AppDataChangedEvent.class, e -> {
             if (e.getType() == AppEventType.EMPLOYEES
@@ -157,114 +143,30 @@ public class EmployeeView extends JPanel {
 
     private void refreshAllData() {
         SwingUtilities.invokeLater(() -> {
-            // --- THÊM ĐOẠN NÀY ĐỂ TẢI DANH SÁCH CHI NHÁNH TỪ DATABASE VÀO COMBOBOX ---
             if (cbStoreForm != null) {
                 cbStoreForm.removeAllItems();
                 listStores = StoresSql.getInstance().selectAll();
 
                 for (Store s : listStores) {
                     String storeLabel = s.getStoreName();
-
                     if (storeLabel == null || storeLabel.trim().isEmpty()) {
                         storeLabel = s.getAddress();
                     }
-
                     if (storeLabel == null || storeLabel.trim().isEmpty()) {
                         storeLabel = s.getStoreId();
                     }
-
                     cbStoreForm.addItem(storeLabel + " (" + s.getStoreId() + ")");
                 }
 
                 cbStoreForm.setSelectedIndex(-1);
                 applyStoreScopeForManager();
             }
-            // -----------------------------------------------------------------------
 
             loadDataToTable();
             loadAutoCompleteData();
             loadShiftComboboxData();
             loadShiftAssignments();
         });
-    }
-
-    private void loadAutoCompleteData() {
-        if (cbSearch == null) {
-            return;
-        }
-
-        employeeNameList.clear();
-        cbSearch.removeAllItems();
-        cbSearch.addItem("");
-
-        try {
-            String currentRole = getCurrentUserRole();
-            String storeId = getCurrentStoreId();
-
-            List<Employee> list;
-
-            if (SessionManager.isStoreManager()) {
-                list = employeeSql.getAllNhanVien(currentRole, storeId);
-            } else {
-                list = employeeSql.getAllNhanVien(currentRole, null);
-            }
-
-            for (Employee e : list) {
-                if (e.getEmployeeName() != null && !e.getEmployeeName().isEmpty()) {
-                    employeeNameList.add(e.getEmployeeName());
-                    cbSearch.addItem(e.getEmployeeName());
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void selectStoreComboByStoreId(String storeId) {
-        if (cbStoreForm == null || storeId == null || storeId.trim().isEmpty()) {
-            return;
-        }
-
-        for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
-            String item = String.valueOf(cbStoreForm.getItemAt(i));
-
-            if (item.contains("(" + storeId + ")") || item.endsWith(storeId + ")")) {
-                cbStoreForm.setSelectedIndex(i);
-                return;
-            }
-        }
-    }
-
-    private void applyStoreScopeForManager() {
-        if (!SessionManager.isStoreManager()) {
-            if (cbStoreForm != null) {
-                cbStoreForm.setEnabled(true);
-            }
-            return;
-        }
-
-        String storeId = getCurrentStoreId();
-
-        if (storeId == null || storeId.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
-                    "Chưa phân chi nhánh",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
-            if (cbStoreForm != null) {
-                cbStoreForm.setEnabled(false);
-            }
-            return;
-        }
-
-        selectStoreComboByStoreId(storeId);
-
-        // Manager không được đổi chi nhánh
-        if (cbStoreForm != null) {
-            cbStoreForm.setEnabled(false);
-        }
     }
 
     private void showAccessDenied() {
@@ -281,6 +183,7 @@ public class EmployeeView extends JPanel {
         add(message, BorderLayout.CENTER);
     }
 
+    // ==================== UI INITIALIZATION ====================
     private void initUI() {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setOpaque(false);
@@ -302,9 +205,24 @@ public class EmployeeView extends JPanel {
         headerPanel.add(titlePanel, BorderLayout.WEST);
         add(headerPanel, BorderLayout.NORTH);
 
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setOpaque(false);
+        tabbedPane.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        tabbedPane.setForeground(textDark);
+        tabbedPane.addTab("Hồ sơ nhân viên", createEmployeeProfileTab());
+        tabbedPane.addTab("Phân ca", createShiftAssignmentTab());
+        tabbedPane.setUI(new UnderlineTabbedPaneUI(primaryOrange, borderGray));
+
+        add(tabbedPane, BorderLayout.CENTER);
+    }
+
+    // ==================== TAB 1: HỒ SƠ NHÂN VIÊN ====================
+    private JPanel createEmployeeProfileTab() {
         JPanel profilePanel = new JPanel(new BorderLayout(0, 18));
         profilePanel.setOpaque(false);
 
+        // Tool panel (Search box)
         JPanel toolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
         toolPanel.setOpaque(false);
 
@@ -328,11 +246,21 @@ public class EmployeeView extends JPanel {
 
         profilePanel.add(toolPanel, BorderLayout.NORTH);
 
+        // Center panel (Form + Table)
         JPanel centerPanel = new JPanel(new BorderLayout(25, 0));
         centerPanel.setOpaque(false);
 
+        centerPanel.add(createEmployeeFormPanel(), BorderLayout.WEST);
+        centerPanel.add(createEmployeeListPanel(), BorderLayout.CENTER);
+
+        profilePanel.add(centerPanel, BorderLayout.CENTER);
+
+        return profilePanel;
+    }
+
+    private JPanel createEmployeeFormPanel() {
         RoundedPanel formCard = new RoundedPanel(20, cardWhite);
-        formCard.setPreferredSize(new Dimension(360, 0));
+        formCard.setPreferredSize(new Dimension(360, 560));
         formCard.setLayout(new GridBagLayout());
         formCard.setBorder(new EmptyBorder(25, 25, 25, 25));
 
@@ -340,23 +268,21 @@ public class EmployeeView extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
         gbc.gridx = 0;
+        gbc.anchor = GridBagConstraints.NORTH;
 
         txtId = createTextField("Mã tự động...");
         txtId.setEnabled(false);
 
         txtName = createTextField("Nhập tên...");
 
-        // --- THÊM KHỞI TẠO COMBOBOX CHI NHÁNH TẠI ĐÂY ---
         cbStoreForm = new JComboBox<>();
         cbStoreForm.setPreferredSize(new Dimension(280, 38));
         cbStoreForm.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbStoreForm.setBackground(Color.WHITE);
-        // -----------------------------------------------
 
         txtPhone = createTextField("Nhập số điện thoại...");
         txtEmail = createTextField("Nhập email...");
 
-        // --- ĐÃ SỬA: KHỞI TẠO COMBOBOX CHỨC VỤ LIỀN MẠCH (BƯỚC 1) ---
         cbRole = new JComboBox<>();
         cbRole.setPreferredSize(new Dimension(280, 38));
         cbRole.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -364,8 +290,7 @@ public class EmployeeView extends JPanel {
         for (String r : roleList) {
             cbRole.addItem(r);
         }
-        cbRole.setSelectedIndex(-1); // Đặt trạng thái ban đầu là trống
-        // -------------------------------------------------------------
+        cbRole.setSelectedIndex(-1);
 
         rdoMale = new JRadioButton("Nam");
         rdoFemale = new JRadioButton("Nữ");
@@ -388,10 +313,8 @@ public class EmployeeView extends JPanel {
         formCard.add(createLabel("Tên nhân viên (*)"), addGbc(gbc, y++, 5));
         formCard.add(txtName, addGbc(gbc, y++, 15));
 
-        // --- THÊM HIỂN THỊ COMBOBOX CHI NHÁNH LÊN FORM ---
         formCard.add(createLabel("Chi nhánh làm việc (*)"), addGbc(gbc, y++, 5));
         formCard.add(cbStoreForm, addGbc(gbc, y++, 15));
-        // -------------------------------------------------
 
         formCard.add(createLabel("Số điện thoại (*)"), addGbc(gbc, y++, 5));
         formCard.add(txtPhone, addGbc(gbc, y++, 15));
@@ -421,6 +344,17 @@ public class EmployeeView extends JPanel {
         gbc.gridy = y++;
         formCard.add(btnGrid, gbc);
 
+        GridBagConstraints formGlueGbc = new GridBagConstraints();
+        formGlueGbc.gridx = 0;
+        formGlueGbc.gridy = y;
+        formGlueGbc.weighty = 1.0;
+        formGlueGbc.fill = GridBagConstraints.VERTICAL;
+        formCard.add(Box.createVerticalGlue(), formGlueGbc);
+
+        return formCard;
+    }
+
+    private JPanel createEmployeeListPanel() {
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -429,7 +363,7 @@ public class EmployeeView extends JPanel {
                 new Object[]{
                     "Mã NV",
                     "Tên nhân viên",
-                    "Chi nhánh", // <-- ĐÃ BỔ SUNG CỘT CHI NHÁNH VÀO BẢNG
+                    "Chi nhánh",
                     "Số ĐT",
                     "Email",
                     "Cấp tài khoản",
@@ -447,11 +381,9 @@ public class EmployeeView extends JPanel {
         };
 
         tblEmployees = new JTable(tableModel);
-
-        // Ẩn cột RawId (Bây giờ RawId đã bị đẩy xuống vị trí số 9 do thêm cột Chi nhánh)
         tblEmployees.removeColumn(tblEmployees.getColumnModel().getColumn(9));
 
-        setupTableStyle();
+        setupEmployeeTableStyle();
 
         JScrollPane scrollPane = new JScrollPane(tblEmployees);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -459,23 +391,56 @@ public class EmployeeView extends JPanel {
 
         tableCard.add(scrollPane, BorderLayout.CENTER);
 
-        centerPanel.add(formCard, BorderLayout.WEST);
-        centerPanel.add(tableCard, BorderLayout.CENTER);
-
-        profilePanel.add(centerPanel, BorderLayout.CENTER);
-
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.setOpaque(false);
-        tabbedPane.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
-        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        tabbedPane.setForeground(textDark);
-        tabbedPane.addTab("Hồ sơ nhân viên", profilePanel);
-        tabbedPane.addTab("Phân ca", createShiftAssignmentTab());
-        tabbedPane.setUI(new UnderlineTabbedPaneUI(primaryOrange, borderGray));
-
-        add(tabbedPane, BorderLayout.CENTER);
+        return tableCard;
     }
 
+    private void setupEmployeeTableStyle() {
+        tblEmployees.setRowHeight(34);
+        tblEmployees.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        tblEmployees.setShowVerticalLines(false);
+        tblEmployees.setShowHorizontalLines(false);
+        tblEmployees.setSelectionBackground(new Color(237, 242, 255));
+        tblEmployees.setSelectionForeground(textDark);
+        tblEmployees.getTableHeader().setReorderingAllowed(false);
+        tblEmployees.setFillsViewportHeight(true);
+        tblEmployees.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+
+        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
+        headerRenderer.setBackground(bgLight);
+        headerRenderer.setForeground(Color.BLACK);
+        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        headerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        headerRenderer.setBorder(BorderFactory.createEmptyBorder(7, 5, 7, 5));
+
+        for (int i = 0; i < tblEmployees.getColumnModel().getColumnCount(); i++) {
+            tblEmployees.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
+        }
+
+        UnifiedEmployeeRenderer renderer = new UnifiedEmployeeRenderer();
+        for (int i = 0; i < tblEmployees.getColumnCount(); i++) {
+            tblEmployees.getColumnModel().getColumn(i).setCellRenderer(renderer);
+        }
+
+        setupEmployeeTableColumnWidth();
+    }
+
+    private void setupEmployeeTableColumnWidth() {
+        if (tblEmployees == null) {
+            return;
+        }
+
+        tblEmployees.getColumnModel().getColumn(0).setPreferredWidth(95);
+        tblEmployees.getColumnModel().getColumn(1).setPreferredWidth(160);
+        tblEmployees.getColumnModel().getColumn(2).setPreferredWidth(155);
+        tblEmployees.getColumnModel().getColumn(3).setPreferredWidth(115);
+        tblEmployees.getColumnModel().getColumn(4).setPreferredWidth(230);
+        tblEmployees.getColumnModel().getColumn(5).setPreferredWidth(120);
+        tblEmployees.getColumnModel().getColumn(6).setPreferredWidth(120);
+        tblEmployees.getColumnModel().getColumn(7).setPreferredWidth(150);
+        tblEmployees.getColumnModel().getColumn(8).setPreferredWidth(80);
+    }
+
+    // ==================== TAB 2: PHÂN CA ====================
     private JPanel createShiftAssignmentTab() {
         JPanel root = new JPanel(new BorderLayout(0, 18));
         root.setOpaque(false);
@@ -506,65 +471,97 @@ public class EmployeeView extends JPanel {
 
     private JPanel createShiftFilterPanel() {
         RoundedPanel filterCard = new RoundedPanel(18, cardWhite);
-        filterCard.setLayout(new GridBagLayout());
-        filterCard.setBorder(new EmptyBorder(18, 18, 18, 18));
+        filterCard.setLayout(new BorderLayout(10, 8));
+        filterCard.setBorder(new EmptyBorder(12, 14, 12, 14));
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+
+        JLabel title = new JLabel("Bộ lọc phân ca");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        title.setForeground(textDark);
+
+        JLabel hint = new JLabel("Lọc theo khoảng ngày, loại nhân viên, ca làm việc và trạng thái");
+        hint.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        hint.setForeground(new Color(107, 119, 140));
+
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 2));
+        titleBox.setOpaque(false);
+        titleBox.add(title);
+        titleBox.add(hint);
+        top.add(titleBox, BorderLayout.WEST);
 
         txtShiftKeyword = createTextField("Tìm theo tên hoặc mã nhân viên...");
-        txtShiftKeyword.setPreferredSize(new Dimension(220, 38));
+        txtShiftKeyword.setPreferredSize(new Dimension(190, 34));
 
-        txtShiftFilterDate = createTextField("yyyy-MM-dd");
-        txtShiftFilterDate.setPreferredSize(new Dimension(140, 38));
+        txtShiftFilterFromDate = createDateField(LocalDate.now());
+        txtShiftFilterFromDate.setPreferredSize(new Dimension(150, 34));
+
+        txtShiftFilterToDate = createDateField(LocalDate.now());
+        txtShiftFilterToDate.setPreferredSize(new Dimension(150, 34));
 
         cbShiftEmployeeTypeFilter = new JComboBox<>(new String[]{
             "Tất cả", "Nhân viên kho", "Nhân viên sale - thu ngân"
         });
         stylePlainCombo(cbShiftEmployeeTypeFilter);
+        cbShiftEmployeeTypeFilter.setPreferredSize(new Dimension(165, 34));
 
         cbShiftFilter = new JComboBox<>();
         stylePlainCombo(cbShiftFilter);
+        cbShiftFilter.setPreferredSize(new Dimension(165, 34));
 
         cbShiftStatusFilter = new JComboBox<>(new String[]{
             "Tất cả trạng thái", "ASSIGNED", "COMPLETED", "CANCELED"
         });
         stylePlainCombo(cbShiftStatusFilter);
+        cbShiftStatusFilter.setPreferredSize(new Dimension(165, 34));
+
+        JPanel fields = new JPanel(new GridLayout(2, 3, 10, 7));
+        fields.setOpaque(false);
+        fields.add(createNotionFilterField("Tìm nhân viên", txtShiftKeyword));
+        fields.add(createNotionFilterField("Từ ngày", txtShiftFilterFromDate));
+        fields.add(createNotionFilterField("Đến ngày", txtShiftFilterToDate));
+        fields.add(createNotionFilterField("Loại nhân viên", cbShiftEmployeeTypeFilter));
+        fields.add(createNotionFilterField("Ca làm việc", cbShiftFilter));
+        fields.add(createNotionFilterField("Trạng thái", cbShiftStatusFilter));
 
         btnApplyShiftFilter = createCustomButton("Lọc", primaryOrange, Color.WHITE, null);
         btnResetShiftFilter = createCustomButton("Đặt lại", new Color(235, 239, 245), textDark, null);
-        btnApplyShiftFilter.setPreferredSize(new Dimension(86, 38));
-        btnResetShiftFilter.setPreferredSize(new Dimension(96, 38));
+        btnApplyShiftFilter.setPreferredSize(new Dimension(86, 36));
+        btnResetShiftFilter.setPreferredSize(new Dimension(86, 36));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(0, 0, 6, 12);
-        gbc.weightx = 1.0;
-
-        addFilterField(filterCard, gbc, 0, "Tìm nhân viên", txtShiftKeyword);
-        addFilterField(filterCard, gbc, 1, "Ngày làm việc", txtShiftFilterDate);
-        addFilterField(filterCard, gbc, 2, "Loại nhân viên", cbShiftEmployeeTypeFilter);
-        addFilterField(filterCard, gbc, 3, "Ca làm việc", cbShiftFilter);
-        addFilterField(filterCard, gbc, 4, "Trạng thái", cbShiftStatusFilter);
-
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 20));
+        JPanel buttonPanel = new JPanel(new GridLayout(2, 1, 0, 7));
         buttonPanel.setOpaque(false);
         buttonPanel.add(btnApplyShiftFilter);
         buttonPanel.add(btnResetShiftFilter);
-        gbc.gridx = 5;
-        gbc.weightx = 0;
-        gbc.insets = new Insets(0, 0, 0, 0);
-        filterCard.add(buttonPanel, gbc);
+
+        JPanel center = new JPanel(new BorderLayout(10, 0));
+        center.setOpaque(false);
+        center.add(fields, BorderLayout.CENTER);
+        center.add(buttonPanel, BorderLayout.EAST);
+
+        filterCard.add(top, BorderLayout.NORTH);
+        filterCard.add(center, BorderLayout.CENTER);
 
         return filterCard;
     }
 
-    private void addFilterField(JPanel parent, GridBagConstraints gbc, int x, String label, JComponent field) {
+    private JPanel createNotionFilterField(String label, JComponent field) {
         JPanel wrapper = new JPanel(new BorderLayout(0, 6));
-        wrapper.setOpaque(false);
-        wrapper.add(createLabel(label), BorderLayout.NORTH);
-        wrapper.add(field, BorderLayout.CENTER);
+        wrapper.setOpaque(true);
+        wrapper.setBackground(new Color(255, 251, 247));
+        wrapper.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(new Color(255, 210, 180), 10),
+                new EmptyBorder(7, 10, 7, 10)
+        ));
 
-        gbc.gridx = x;
-        parent.add(wrapper, gbc);
+        JLabel lbl = createLabel(label);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lbl.setForeground(new Color(179, 82, 24));
+
+        wrapper.add(lbl, BorderLayout.NORTH);
+        wrapper.add(field, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private JPanel createShiftFormPanel() {
@@ -579,10 +576,12 @@ public class EmployeeView extends JPanel {
         lblSelectedShiftEmployeeName = new JLabel("Chưa chọn nhân viên");
         lblSelectedShiftEmployeeName.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblSelectedShiftEmployeeName.setForeground(textDark);
+
         lblSelectedShiftEmployeeId = new JLabel("");
         lblSelectedShiftEmployeeId.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSelectedShiftEmployeeId.setForeground(new Color(107, 119, 140));
         lblSelectedShiftEmployeeId.setVisible(false);
+
         lblSelectedShiftEmployeeType = new JLabel("Loại nhân viên: —");
         lblSelectedShiftEmployeeType.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSelectedShiftEmployeeType.setForeground(new Color(107, 119, 140));
@@ -603,8 +602,11 @@ public class EmployeeView extends JPanel {
         cbWorkShift = new JComboBox<>();
         stylePlainCombo(cbWorkShift);
 
-        txtWorkDate = createTextField("yyyy-MM-dd");
-        txtWorkDate.setText(LocalDate.now().toString());
+        txtWorkFromDate = createDateField(LocalDate.now());
+        txtWorkFromDate.setPreferredSize(new Dimension(280, 42));
+
+        txtWorkToDate = createDateField(LocalDate.now());
+        txtWorkToDate.setPreferredSize(new Dimension(280, 42));
 
         cbAssignmentStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
         stylePlainCombo(cbAssignmentStatus);
@@ -620,14 +622,17 @@ public class EmployeeView extends JPanel {
         btnAddAssignment = createCustomButton("Thêm phân ca", primaryOrange, Color.WHITE, null);
         btnUpdateAssignment = createCustomButton("Cập nhật", primaryBlue, Color.WHITE, null);
         btnCancelAssignment = createCustomButton("Hủy phân ca", offlineRed, Color.WHITE, null);
+        btnDeleteAssignment = createCustomButton("Xóa lịch", new Color(185, 28, 28), Color.WHITE, null);
         btnClearAssignment = createCustomButton("Làm mới", new Color(148, 163, 184), Color.WHITE, null);
 
-        JPanel buttons = new JPanel(new GridLayout(2, 2, 10, 10));
+        JPanel buttons = new JPanel(new GridLayout(3, 2, 10, 10));
         buttons.setOpaque(false);
         buttons.add(btnAddAssignment);
         buttons.add(btnUpdateAssignment);
         buttons.add(btnCancelAssignment);
+        buttons.add(btnDeleteAssignment);
         buttons.add(btnClearAssignment);
+        buttons.add(Box.createHorizontalStrut(1));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
@@ -641,8 +646,10 @@ public class EmployeeView extends JPanel {
         card.add(cbShiftEmployee, addGbc(gbc, y++, 12));
         card.add(createLabel("Ca làm việc (*)"), addGbc(gbc, y++, 5));
         card.add(cbWorkShift, addGbc(gbc, y++, 12));
-        card.add(createLabel("Ngày làm việc (*)"), addGbc(gbc, y++, 5));
-        card.add(txtWorkDate, addGbc(gbc, y++, 12));
+        card.add(createLabel("Từ ngày (*)"), addGbc(gbc, y++, 5));
+        card.add(txtWorkFromDate, addGbc(gbc, y++, 12));
+        card.add(createLabel("Đến ngày (*)"), addGbc(gbc, y++, 5));
+        card.add(txtWorkToDate, addGbc(gbc, y++, 12));
         card.add(createLabel("Trạng thái (*)"), addGbc(gbc, y++, 5));
         card.add(cbAssignmentStatus, addGbc(gbc, y++, 12));
         card.add(createLabel("Ghi chú"), addGbc(gbc, y++, 5));
@@ -657,114 +664,84 @@ public class EmployeeView extends JPanel {
 
     private JPanel createShiftListPanel() {
         RoundedPanel card = new RoundedPanel(18, cardWhite);
-        card.setLayout(new BorderLayout());
+        card.setLayout(new BorderLayout(0, 10));
         card.setBorder(new EmptyBorder(14, 14, 14, 14));
 
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        JLabel title = new JLabel("Danh sách phân ca");
+
+        JLabel title = new JLabel("Lịch phân ca dạng timeline");
         title.setFont(new Font("Segoe UI", Font.BOLD, 16));
         title.setForeground(textDark);
-        header.add(title);
 
-        shiftTableModel = new DefaultTableModel(new Object[]{
-            "Mã phân ca", "Nhân viên", "Loại nhân viên", "Ngày làm việc",
-            "Tên ca", "Giờ bắt đầu", "Giờ kết thúc", "Trạng thái", "Ghi chú"
-        }, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
+        JLabel hint = new JLabel("Kéo timeline bằng chuột để xem nhiều ngày, bấm block để xem chi tiết, bấm ô trống để tạo ca");
+        hint.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        hint.setForeground(new Color(107, 119, 140));
 
-        tblShiftAssignments = new JTable(shiftTableModel) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                if (getRowCount() == 0) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                    g2.setColor(textDark);
-                    g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
-                    String line1 = "Chưa có phân ca nào";
-                    int x1 = (getWidth() - g2.getFontMetrics().stringWidth(line1)) / 2;
-                    int y1 = Math.max(70, getHeight() / 2 - 8);
-                    g2.drawString(line1, x1, y1);
-                    g2.setColor(new Color(107, 119, 140));
-                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-                    String line2 = "Chọn nhân viên và thêm ca làm việc để bắt đầu.";
-                    int x2 = (getWidth() - g2.getFontMetrics().stringWidth(line2)) / 2;
-                    g2.drawString(line2, x2, y1 + 24);
-                    g2.dispose();
-                }
-            }
-        };
-        setupShiftTableStyle();
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 2));
+        titleBox.setOpaque(false);
+        titleBox.add(title);
+        titleBox.add(hint);
 
-        JScrollPane scrollPane = new JScrollPane(tblShiftAssignments);
+        JPanel legend = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        legend.setOpaque(false);
+        legend.add(createLegendDot("Ca sáng", new Color(46, 204, 113)));
+        legend.add(createLegendDot("Ca chiều", new Color(52, 152, 219)));
+        legend.add(createLegendDot("Ca tối", new Color(155, 89, 182)));
+        legend.add(createLegendDot("Full time", new Color(96, 125, 139)));
+        legend.add(createLegendDot("Đã hủy", offlineRed));
+
+        header.add(titleBox, BorderLayout.WEST);
+        header.add(legend, BorderLayout.EAST);
+
+        shiftTimelinePanel = new ShiftTimelinePanel();
+        shiftTimelinePanel.setAssignments(currentShiftAssignments);
+
+        JScrollPane scrollPane = new JScrollPane(shiftTimelinePanel);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(24);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(18);
 
         card.add(header, BorderLayout.NORTH);
         card.add(scrollPane, BorderLayout.CENTER);
         return card;
     }
 
-    private void stylePlainCombo(JComboBox<?> combo) {
-        combo.setPreferredSize(new Dimension(180, 38));
-        combo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        combo.setBackground(Color.WHITE);
-        combo.setBorder(new RoundBorder(borderGray, 8));
+    private JComponent createLegendDot(String text, Color color) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        panel.setOpaque(false);
+
+        JLabel dot = new JLabel("●");
+        dot.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        dot.setForeground(color);
+
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        label.setForeground(new Color(107, 119, 140));
+
+        panel.add(dot);
+        panel.add(label);
+        return panel;
     }
 
-    private void setupShiftTableStyle() {
-        tblShiftAssignments.setRowHeight(44);
-        tblShiftAssignments.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        tblShiftAssignments.setShowVerticalLines(true);
-        tblShiftAssignments.setShowHorizontalLines(true);
-        tblShiftAssignments.setGridColor(new Color(235, 239, 245));
-        tblShiftAssignments.setSelectionBackground(new Color(237, 242, 255));
-        tblShiftAssignments.setSelectionForeground(textDark);
-        tblShiftAssignments.getTableHeader().setReorderingAllowed(false);
-        tblShiftAssignments.setFillsViewportHeight(true);
-        tblShiftAssignments.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-
-        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
-        headerRenderer.setBackground(new Color(248, 250, 252));
-        headerRenderer.setForeground(textDark);
-        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        headerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 6, 10, 6));
-
-        for (int i = 0; i < tblShiftAssignments.getColumnModel().getColumnCount(); i++) {
-            tblShiftAssignments.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
-            tblShiftAssignments.getColumnModel().getColumn(i).setCellRenderer(new ShiftAssignmentRenderer());
-        }
-
-        int[] widths = {105, 170, 160, 120, 100, 100, 100, 110, 220};
-        for (int i = 0; i < widths.length; i++) {
-            tblShiftAssignments.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
-        }
-    }
-
+    // ==================== EVENT HANDLERS ====================
     private void initEvents() {
         tblEmployees.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 int row = tblEmployees.getSelectedRow();
-
                 if (row < 0) {
                     return;
                 }
 
                 int modelRow = tblEmployees.convertRowIndexToModel(row);
-
                 String role = String.valueOf(tableModel.getValueAt(modelRow, COL_ROLE));
 
-                if (role.contains("R_ADMIN_ALL")
-                        || role.contains("R_STORE_MNG")
-                        || role.contains("ADMIN")
-                        || role.contains("MNG")) {
+                if (role.contains("R_ADMIN_ALL") || role.contains("R_STORE_MNG")
+                        || role.contains("ADMIN") || role.contains("MNG")) {
                     JOptionPane.showMessageDialog(
                             EmployeeView.this,
                             "⚠️ Bạn không có quyền thao tác trên hồ sơ cấp quản lý!"
@@ -776,26 +753,21 @@ public class EmployeeView extends JPanel {
 
                 currentSelectedRawId = String.valueOf(tableModel.getValueAt(modelRow, COL_RAW_ID));
                 txtId.setText(maskSensitiveInfo(currentSelectedRawId));
-
                 txtName.setText(String.valueOf(tableModel.getValueAt(modelRow, COL_NAME)));
 
                 String storeNameInTable = String.valueOf(tableModel.getValueAt(modelRow, COL_STORE));
-
                 if (SessionManager.isStoreManager()) {
                     selectStoreComboByStoreId(getCurrentStoreId());
                     cbStoreForm.setEnabled(false);
                 } else {
                     cbStoreForm.setSelectedIndex(-1);
-
                     for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
                         String item = String.valueOf(cbStoreForm.getItemAt(i));
-
                         if (item.contains(storeNameInTable)) {
                             cbStoreForm.setSelectedIndex(i);
                             break;
                         }
                     }
-
                     cbStoreForm.setEnabled(true);
                 }
 
@@ -805,7 +777,6 @@ public class EmployeeView extends JPanel {
                 String accountStatus = normalizeAccountStatus(
                         String.valueOf(tableModel.getValueAt(modelRow, COL_ACCOUNT_STATUS))
                 );
-
                 boolean isActivated = accountStatus.trim().equalsIgnoreCase("Đã cấp");
 
                 if (isActivated) {
@@ -824,415 +795,11 @@ public class EmployeeView extends JPanel {
             }
         });
 
-        btnAdd.addActionListener(e -> {
-            Employee emp = getEmployeeFromForm();
-
-            if (emp == null) {
-                return;
-            }
-
-            if (SessionManager.isStoreManager()) {
-                emp.setStoreId(getCurrentStoreId());
-            }
-
-            if (isEmailDuplicate(emp.getEmail(), null)) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Email này đã được sử dụng cho một nhân viên khác!",
-                        "Trùng lặp dữ liệu",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                txtEmail.requestFocus();
-                return;
-            }
-
-            if (isPhoneDuplicate(emp.getPhone(), null)) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Số điện thoại này đã được đăng ký cho người khác!",
-                        "Trùng lặp dữ liệu",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                txtPhone.requestFocus();
-                return;
-            }
-
-            emp.setEmployeeId("EMP" + System.currentTimeMillis());
-
-            if (employeeSql.insert(emp) > 0) {
-                SyncVersionDao.bumpVersion("EMPLOYEES");
-                RealtimeClient.send("EMPLOYEES_CHANGED");
-
-                try {
-                    new ActivationTokenService().issueToken(emp.getEmployeeId());
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                String actualToken = emp.getEmployeeId();
-
-                String sqlToken = "SELECT token "
-                        + "FROM (SELECT token FROM ACTIVATION_TOKENS "
-                        + "      WHERE employee_id = ? "
-                        + "      ORDER BY created_at DESC) "
-                        + "WHERE ROWNUM = 1";
-
-                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
-
-                    ps.setString(1, emp.getEmployeeId());
-
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) {
-                            actualToken = rs.getString("token");
-                        }
-                    }
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                final String email = emp.getEmail();
-                final String name = emp.getEmployeeName();
-                final String code = actualToken;
-
-                new Thread(() -> {
-                    boolean ok = business.service.EmailService.sendActivationEmail(email, name, code);
-
-                    SwingUtilities.invokeLater(() -> {
-                        if (ok) {
-                            JOptionPane.showMessageDialog(
-                                    this,
-                                    "Thành công! Mã kích hoạt đã gửi tới mail: " + email
-                            );
-                        } else {
-                            JOptionPane.showMessageDialog(
-                                    this,
-                                    "Hồ sơ đã lưu nhưng gửi mail thất bại.",
-                                    "Lỗi Email",
-                                    JOptionPane.WARNING_MESSAGE
-                            );
-                        }
-                    });
-                }).start();
-
-                refreshAllData();
-                clearForm();
-            }
-        });
-
-        btnUpdate.addActionListener(e -> {
-            String displayedId = txtId.getText();
-
-            if (displayedId == null || displayedId.trim().isEmpty() || displayedId.startsWith("Mã")) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để cập nhật!");
-                return;
-            }
-
-            String idToUpdate = currentSelectedRawId;
-
-            if (idToUpdate == null || idToUpdate.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Không tìm thấy mã nhân viên gốc để cập nhật!");
-                return;
-            }
-
-            Employee emp = getEmployeeFromForm();
-
-            if (emp == null) {
-                return;
-            }
-
-            String oldEmail = "";
-            String accStatus = "";
-
-            try {
-                List<Employee> list = employeeSql.selectAll();
-
-                for (Employee ex : list) {
-                    if (ex.getEmployeeId() != null && ex.getEmployeeId().equals(idToUpdate)) {
-                        oldEmail = ex.getEmail() != null ? ex.getEmail() : "";
-                        accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : "";
-                        break;
-                    }
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-
-            boolean isActivated = accStatus.equalsIgnoreCase("Đã cấp");
-            boolean emailChanged = !oldEmail.equalsIgnoreCase(emp.getEmail());
-
-            if (emailChanged && isActivated) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Tài khoản của nhân viên này ĐÃ ĐƯỢC CẤP!\n"
-                        + "Nghiêm cấm thay đổi Email để bảo mật.",
-                        "Bảo mật tài khoản",
-                        JOptionPane.ERROR_MESSAGE
-                );
-                txtEmail.setText(oldEmail);
-                return;
-            }
-
-            if (isEmailDuplicate(emp.getEmail(), idToUpdate)) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Email này đã bị trùng với một nhân viên khác!",
-                        "Trùng lặp dữ liệu",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                txtEmail.requestFocus();
-                return;
-            }
-
-            if (isPhoneDuplicate(emp.getPhone(), idToUpdate)) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Số điện thoại này đã bị trùng với một nhân viên khác!",
-                        "Trùng lặp dữ liệu",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                txtPhone.requestFocus();
-                return;
-            }
-
-            String oldRole = getEmployeeRoleById(idToUpdate);
-
-            emp.setEmployeeId(idToUpdate);
-
-            if (SessionManager.isStoreManager()) {
-                emp.setStoreId(getCurrentStoreId());
-            }
-
-            String newRole = emp.getRoleId();
-
-            String oldRoleSafe = oldRole == null ? "" : oldRole.trim();
-            String newRoleSafe = newRole == null ? "" : newRole.trim();
-
-            boolean roleChanged = !oldRoleSafe.equalsIgnoreCase(newRoleSafe);
-
-            int updateRows;
-
-            if (SessionManager.isStoreManager()) {
-                updateRows = employeeSql.updateInStore(emp, getCurrentStoreId());
-            } else {
-                updateRows = employeeSql.update(emp);
-            }
-
-            if (updateRows <= 0) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Cập nhật thất bại hoặc bạn không có quyền thao tác nhân viên ngoài chi nhánh!",
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE
-                );
-                return;
-            }
-
-            /*
-         * Nếu nhân viên đã có tài khoản và role bị đổi:
-         * - Đồng bộ role sang ACCOUNT_ASSIGN_ROLE.
-         * - Bắn ACCOUNT_SECURITY_CHANGED để máy nhân viên đang đăng nhập bị logout.
-             */
-            if (roleChanged && isActivated) {
-                boolean roleSynced = business.sql.rbac.AccountSql.getInstance()
-                        .updateAccountRoleByEmployeeId(idToUpdate, newRoleSafe);
-
-                if (!roleSynced) {
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Hồ sơ nhân viên đã cập nhật nhưng đồng bộ quyền tài khoản thất bại.\n"
-                            + "Vui lòng kiểm tra lại bảng ACCOUNT_ASSIGN_ROLE.",
-                            "Lỗi đồng bộ quyền",
-                            JOptionPane.WARNING_MESSAGE
-                    );
-
-                    refreshAllData();
-                    return;
-                }
-
-                touchAccountSecurityByEmployeeId(idToUpdate);
-                business.service.AccountService.notifyAccountSecurityChanged("EMPLOYEE_ROLE_UPDATED");
-
-            } else {
-                /*
-             * Nếu không đổi role, hoặc nhân viên chưa cấp tài khoản,
-             * chỉ cần refresh realtime danh sách nhân viên.
-                 */
-                RealtimeClient.send("EMPLOYEES_CHANGED");
-            }
-
-            if (emailChanged && !isActivated) {
-                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(
-                        "UPDATE USERS SET email = ? WHERE user_id = ?"
-                )) {
-
-                    ps.setString(1, emp.getEmail());
-                    ps.setString(2, emp.getEmployeeId());
-                    ps.executeUpdate();
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                try {
-                    new ActivationTokenService().issueToken(emp.getEmployeeId());
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                String actualToken = emp.getEmployeeId();
-
-                String sqlToken = "SELECT token "
-                        + "FROM (SELECT token FROM ACTIVATION_TOKENS "
-                        + "      WHERE employee_id = ? "
-                        + "      ORDER BY created_at DESC) "
-                        + "WHERE ROWNUM = 1";
-
-                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
-
-                    ps.setString(1, emp.getEmployeeId());
-
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) {
-                            actualToken = rs.getString("token");
-                        }
-                    }
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-
-                final String emailToSend = emp.getEmail();
-                final String nameToSend = emp.getEmployeeName();
-                final String codeToSend = actualToken;
-
-                new Thread(() -> {
-                    boolean ok = business.service.EmailService.sendActivationEmail(
-                            emailToSend,
-                            nameToSend,
-                            codeToSend
-                    );
-
-                    SwingUtilities.invokeLater(() -> {
-                        if (ok) {
-                            JOptionPane.showMessageDialog(
-                                    this,
-                                    "Đã cập nhật hồ sơ và gửi lại Mã Kích Hoạt mới tới:\n"
-                                    + emailToSend
-                            );
-                        } else {
-                            JOptionPane.showMessageDialog(
-                                    this,
-                                    "Cập nhật thành công nhưng gửi mail thất bại!",
-                                    "Lỗi",
-                                    JOptionPane.WARNING_MESSAGE
-                            );
-                        }
-                    });
-                }).start();
-
-            } else {
-                JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
-            }
-
-            refreshAllData();
-            clearForm();
-        });
-
-        btnDelete.addActionListener(e -> {
-            if (currentSelectedRawId == null || currentSelectedRawId.trim().isEmpty()) {
-                return;
-            }
-
-            if (JOptionPane.showConfirmDialog(
-                    this,
-                    "Xác nhận xóa hồ sơ này?",
-                    "Xác nhận",
-                    JOptionPane.YES_NO_OPTION
-            ) == JOptionPane.YES_OPTION) {
-
-                int deleteRows;
-
-                if (SessionManager.isStoreManager()) {
-                    deleteRows = employeeSql.deleteInStore(currentSelectedRawId, getCurrentStoreId());
-                } else {
-                    deleteRows = employeeSql.delete(currentSelectedRawId);
-                }
-
-                if (deleteRows > 0) {
-                    RealtimeClient.send("EMPLOYEES_CHANGED");
-                    refreshAllData();
-                    clearForm();
-                } else {
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Xóa thất bại hoặc bạn không có quyền xóa nhân viên ngoài chi nhánh!",
-                            "Không có quyền",
-                            JOptionPane.WARNING_MESSAGE
-                    );
-                }
-            }
-        });
-
+        btnAdd.addActionListener(e -> handleAddEmployee());
+        btnUpdate.addActionListener(e -> handleUpdateEmployee());
+        btnDelete.addActionListener(e -> handleDeleteEmployee());
         btnClear.addActionListener(e -> clearForm());
-
-        btnSearch.addActionListener(e -> {
-            String kw = ((JTextField) cbSearch.getEditor().getEditorComponent())
-                    .getText()
-                    .trim()
-                    .toLowerCase();
-
-            String currentRole = getCurrentUserRole();
-            String storeId = getCurrentStoreId();
-
-            List<Employee> list;
-
-            if (SessionManager.isStoreManager()) {
-                if (storeId == null || storeId.trim().isEmpty()) {
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
-                            "Chưa phân chi nhánh",
-                            JOptionPane.WARNING_MESSAGE
-                    );
-                    updateTable(new ArrayList<>());
-                    return;
-                }
-
-                list = employeeSql.getAllNhanVien(currentRole, storeId);
-            } else {
-                list = employeeSql.getAllNhanVien(currentRole, null);
-            }
-
-            if (kw.isEmpty()) {
-                updateTable(list);
-                return;
-            }
-
-            List<Employee> filtered = new ArrayList<>();
-
-            for (Employee emp : list) {
-                String id = emp.getEmployeeId() != null ? emp.getEmployeeId().toLowerCase() : "";
-                String name = emp.getEmployeeName() != null ? emp.getEmployeeName().toLowerCase() : "";
-                String phone = emp.getPhone() != null ? emp.getPhone().toLowerCase() : "";
-                String email = emp.getEmail() != null ? emp.getEmail().toLowerCase() : "";
-                String role = emp.getRole() != null ? emp.getRole().toLowerCase() : "";
-                String roleId = emp.getRoleId() != null ? emp.getRoleId().toLowerCase() : "";
-                String storeName = emp.getStoreName() != null ? emp.getStoreName().toLowerCase() : "";
-
-                if (id.contains(kw)
-                        || name.contains(kw)
-                        || phone.contains(kw)
-                        || email.contains(kw)
-                        || role.contains(kw)
-                        || roleId.contains(kw)
-                        || storeName.contains(kw)) {
-                    filtered.add(emp);
-                }
-            }
-
-            updateTable(filtered);
-        });
+        btnSearch.addActionListener(e -> handleSearchEmployee());
 
         initShiftEvents();
     }
@@ -1246,7 +813,8 @@ public class EmployeeView extends JPanel {
         btnApplyShiftFilter.addActionListener(e -> loadShiftAssignments());
         btnResetShiftFilter.addActionListener(e -> {
             txtShiftKeyword.setText("");
-            txtShiftFilterDate.setText("");
+            txtShiftFilterFromDate.setText(formatUiDate(LocalDate.now()));
+            txtShiftFilterToDate.setText(formatUiDate(LocalDate.now()));
             cbShiftEmployeeTypeFilter.setSelectedIndex(0);
             cbShiftStatusFilter.setSelectedIndex(0);
             if (cbShiftFilter.getItemCount() > 0) {
@@ -1258,27 +826,326 @@ public class EmployeeView extends JPanel {
         btnAddAssignment.addActionListener(e -> saveShiftAssignment(false));
         btnUpdateAssignment.addActionListener(e -> saveShiftAssignment(true));
         btnCancelAssignment.addActionListener(e -> cancelShiftAssignment());
+        btnDeleteAssignment.addActionListener(e -> deleteShiftAssignment());
         btnClearAssignment.addActionListener(e -> {
             clearShiftForm();
             loadShiftComboboxData();
             loadShiftAssignments();
         });
 
-        tblShiftAssignments.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                int row = tblShiftAssignments.getSelectedRow();
-                if (row < 0) {
-                    return;
+        if (shiftTimelinePanel != null) {
+            shiftTimelinePanel.setSelectionCallback(block -> {
+                selectedTimelineBlock = block;
+                if (block != null && block.getPrimary() != null) {
+                    fillShiftForm(block);
+                    showShiftDetailDialog(block);
                 }
-                int modelRow = tblShiftAssignments.convertRowIndexToModel(row);
-                if (modelRow >= 0 && modelRow < currentShiftAssignments.size()) {
-                    fillShiftForm(currentShiftAssignments.get(modelRow));
-                }
-            }
-        });
+            });
+        }
     }
 
+    // ==================== EMPLOYEE CRUD OPERATIONS ====================
+    private void handleAddEmployee() {
+        Employee emp = getEmployeeFromForm();
+        if (emp == null) {
+            return;
+        }
+
+        if (SessionManager.isStoreManager()) {
+            emp.setStoreId(getCurrentStoreId());
+        }
+
+        if (isEmailDuplicate(emp.getEmail(), null)) {
+            JOptionPane.showMessageDialog(this, "Email này đã được sử dụng cho một nhân viên khác!",
+                    "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+            txtEmail.requestFocus();
+            return;
+        }
+
+        if (isPhoneDuplicate(emp.getPhone(), null)) {
+            JOptionPane.showMessageDialog(this, "Số điện thoại này đã được đăng ký cho người khác!",
+                    "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+            txtPhone.requestFocus();
+            return;
+        }
+
+        emp.setEmployeeId("EMP" + System.currentTimeMillis());
+
+        if (employeeSql.insert(emp) > 0) {
+            SyncVersionDao.bumpVersion("EMPLOYEES");
+            RealtimeClient.send("EMPLOYEES_CHANGED");
+
+            try {
+                new ActivationTokenService().issueToken(emp.getEmployeeId());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            String actualToken = emp.getEmployeeId();
+            String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS "
+                    + "WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
+
+            try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
+                ps.setString(1, emp.getEmployeeId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        actualToken = rs.getString("token");
+                    }
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            final String email = emp.getEmail();
+            final String name = emp.getEmployeeName();
+            final String code = actualToken;
+
+            new Thread(() -> {
+                boolean ok = business.service.EmailService.sendActivationEmail(email, name, code);
+                SwingUtilities.invokeLater(() -> {
+                    if (ok) {
+                        JOptionPane.showMessageDialog(this, "Thành công! Mã kích hoạt đã gửi tới mail: " + email);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Hồ sơ đã lưu nhưng gửi mail thất bại.",
+                                "Lỗi Email", JOptionPane.WARNING_MESSAGE);
+                    }
+                });
+            }).start();
+
+            refreshAllData();
+            clearForm();
+        }
+    }
+
+    private void handleUpdateEmployee() {
+        String displayedId = txtId.getText();
+        if (displayedId == null || displayedId.trim().isEmpty() || displayedId.startsWith("Mã")) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để cập nhật!");
+            return;
+        }
+
+        String idToUpdate = currentSelectedRawId;
+        if (idToUpdate == null || idToUpdate.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Không tìm thấy mã nhân viên gốc để cập nhật!");
+            return;
+        }
+
+        Employee emp = getEmployeeFromForm();
+        if (emp == null) {
+            return;
+        }
+
+        String oldEmail = "";
+        String accStatus = "";
+
+        try {
+            List<Employee> list = employeeSql.selectAll();
+            for (Employee ex : list) {
+                if (ex.getEmployeeId() != null && ex.getEmployeeId().equals(idToUpdate)) {
+                    oldEmail = ex.getEmail() != null ? ex.getEmail() : "";
+                    accStatus = ex.getAccountStatus() != null ? ex.getAccountStatus().trim() : "";
+                    break;
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        boolean isActivated = accStatus.equalsIgnoreCase("Đã cấp");
+        boolean emailChanged = !oldEmail.equalsIgnoreCase(emp.getEmail());
+
+        if (emailChanged && isActivated) {
+            JOptionPane.showMessageDialog(this,
+                    "Tài khoản của nhân viên này ĐÃ ĐƯỢC CẤP!\nNghiêm cấm thay đổi Email để bảo mật.",
+                    "Bảo mật tài khoản", JOptionPane.ERROR_MESSAGE);
+            txtEmail.setText(oldEmail);
+            return;
+        }
+
+        if (isEmailDuplicate(emp.getEmail(), idToUpdate)) {
+            JOptionPane.showMessageDialog(this, "Email này đã bị trùng với một nhân viên khác!",
+                    "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+            txtEmail.requestFocus();
+            return;
+        }
+
+        if (isPhoneDuplicate(emp.getPhone(), idToUpdate)) {
+            JOptionPane.showMessageDialog(this, "Số điện thoại này đã bị trùng với một nhân viên khác!",
+                    "Trùng lặp dữ liệu", JOptionPane.WARNING_MESSAGE);
+            txtPhone.requestFocus();
+            return;
+        }
+
+        String oldRole = getEmployeeRoleById(idToUpdate);
+        emp.setEmployeeId(idToUpdate);
+
+        if (SessionManager.isStoreManager()) {
+            emp.setStoreId(getCurrentStoreId());
+        }
+
+        String newRole = emp.getRoleId();
+        String oldRoleSafe = oldRole == null ? "" : oldRole.trim();
+        String newRoleSafe = newRole == null ? "" : newRole.trim();
+        boolean roleChanged = !oldRoleSafe.equalsIgnoreCase(newRoleSafe);
+
+        int updateRows;
+        if (SessionManager.isStoreManager()) {
+            updateRows = employeeSql.updateInStore(emp, getCurrentStoreId());
+        } else {
+            updateRows = employeeSql.update(emp);
+        }
+
+        if (updateRows <= 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Cập nhật thất bại hoặc bạn không có quyền thao tác nhân viên ngoài chi nhánh!",
+                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (roleChanged && isActivated) {
+            boolean roleSynced = business.sql.rbac.AccountSql.getInstance()
+                    .updateAccountRoleByEmployeeId(idToUpdate, newRoleSafe);
+
+            if (!roleSynced) {
+                JOptionPane.showMessageDialog(this,
+                        "Hồ sơ nhân viên đã cập nhật nhưng đồng bộ quyền tài khoản thất bại.\n"
+                        + "Vui lòng kiểm tra lại bảng ACCOUNT_ASSIGN_ROLE.",
+                        "Lỗi đồng bộ quyền", JOptionPane.WARNING_MESSAGE);
+                refreshAllData();
+                return;
+            }
+
+            touchAccountSecurityByEmployeeId(idToUpdate);
+            business.service.AccountService.notifyAccountSecurityChanged("EMPLOYEE_ROLE_UPDATED");
+        } else {
+            RealtimeClient.send("EMPLOYEES_CHANGED");
+        }
+
+        if (emailChanged && !isActivated) {
+            try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("UPDATE USERS SET email = ? WHERE user_id = ?")) {
+                ps.setString(1, emp.getEmail());
+                ps.setString(2, emp.getEmployeeId());
+                ps.executeUpdate();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            try {
+                new ActivationTokenService().issueToken(emp.getEmployeeId());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            String actualToken = emp.getEmployeeId();
+            String sqlToken = "SELECT token FROM (SELECT token FROM ACTIVATION_TOKENS "
+                    + "WHERE employee_id = ? ORDER BY created_at DESC) WHERE ROWNUM = 1";
+
+            try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sqlToken)) {
+                ps.setString(1, emp.getEmployeeId());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        actualToken = rs.getString("token");
+                    }
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            final String emailToSend = emp.getEmail();
+            final String nameToSend = emp.getEmployeeName();
+            final String codeToSend = actualToken;
+
+            new Thread(() -> {
+                boolean ok = business.service.EmailService.sendActivationEmail(emailToSend, nameToSend, codeToSend);
+                SwingUtilities.invokeLater(() -> {
+                    if (ok) {
+                        JOptionPane.showMessageDialog(this,
+                                "Đã cập nhật hồ sơ và gửi lại Mã Kích Hoạt mới tới:\n" + emailToSend);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Cập nhật thành công nhưng gửi mail thất bại!",
+                                "Lỗi", JOptionPane.WARNING_MESSAGE);
+                    }
+                });
+            }).start();
+        } else {
+            JOptionPane.showMessageDialog(this, "Cập nhật hồ sơ thành công!");
+        }
+
+        refreshAllData();
+        clearForm();
+    }
+
+    private void handleDeleteEmployee() {
+        if (currentSelectedRawId == null || currentSelectedRawId.trim().isEmpty()) {
+            return;
+        }
+
+        if (JOptionPane.showConfirmDialog(this, "Xác nhận xóa hồ sơ này?", "Xác nhận",
+                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+
+            int deleteRows;
+            if (SessionManager.isStoreManager()) {
+                deleteRows = employeeSql.deleteInStore(currentSelectedRawId, getCurrentStoreId());
+            } else {
+                deleteRows = employeeSql.delete(currentSelectedRawId);
+            }
+
+            if (deleteRows > 0) {
+                RealtimeClient.send("EMPLOYEES_CHANGED");
+                refreshAllData();
+                clearForm();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Xóa thất bại hoặc bạn không có quyền xóa nhân viên ngoài chi nhánh!",
+                        "Không có quyền", JOptionPane.WARNING_MESSAGE);
+            }
+        }
+    }
+
+    private void handleSearchEmployee() {
+        String kw = ((JTextField) cbSearch.getEditor().getEditorComponent()).getText().trim().toLowerCase();
+        String currentRole = getCurrentUserRole();
+        String storeId = getCurrentStoreId();
+
+        List<Employee> list;
+        if (SessionManager.isStoreManager()) {
+            if (storeId == null || storeId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                        "Chưa phân chi nhánh", JOptionPane.WARNING_MESSAGE);
+                updateTable(new ArrayList<>());
+                return;
+            }
+            list = employeeSql.getAllNhanVien(currentRole, storeId);
+        } else {
+            list = employeeSql.getAllNhanVien(currentRole, null);
+        }
+
+        if (kw.isEmpty()) {
+            updateTable(list);
+            return;
+        }
+
+        List<Employee> filtered = new ArrayList<>();
+        for (Employee emp : list) {
+            String id = emp.getEmployeeId() != null ? emp.getEmployeeId().toLowerCase() : "";
+            String name = emp.getEmployeeName() != null ? emp.getEmployeeName().toLowerCase() : "";
+            String phone = emp.getPhone() != null ? emp.getPhone().toLowerCase() : "";
+            String email = emp.getEmail() != null ? emp.getEmail().toLowerCase() : "";
+            String role = emp.getRole() != null ? emp.getRole().toLowerCase() : "";
+            String roleId = emp.getRoleId() != null ? emp.getRoleId().toLowerCase() : "";
+            String storeName = emp.getStoreName() != null ? emp.getStoreName().toLowerCase() : "";
+
+            if (id.contains(kw) || name.contains(kw) || phone.contains(kw)
+                    || email.contains(kw) || role.contains(kw) || roleId.contains(kw) || storeName.contains(kw)) {
+                filtered.add(emp);
+            }
+        }
+
+        updateTable(filtered);
+    }
+
+    // ==================== SHIFT ASSIGNMENT OPERATIONS ====================
     private void loadShiftComboboxData() {
         if (cbShiftEmployee == null || cbWorkShift == null) {
             return;
@@ -1296,6 +1163,7 @@ public class EmployeeView extends JPanel {
         } else {
             assignableEmployees = employeeSql.getAllNhanVien(currentRole, null);
         }
+
         cbShiftEmployee.removeAllItems();
         for (Employee emp : assignableEmployees) {
             if (isShiftAssignableRole(emp.getRoleId())) {
@@ -1316,6 +1184,7 @@ public class EmployeeView extends JPanel {
         restoreEmployeeSelection(selectedEmployee);
         restoreShiftSelection(cbWorkShift, selectedWorkShift);
         restoreShiftSelection(cbShiftFilter, selectedFilterShift);
+
         if (cbShiftEmployee.getSelectedIndex() < 0 && cbShiftEmployee.getItemCount() > 0) {
             cbShiftEmployee.setSelectedIndex(0);
         }
@@ -1323,11 +1192,19 @@ public class EmployeeView extends JPanel {
     }
 
     private void loadShiftAssignments() {
-        if (shiftTableModel == null) {
+        Date filterFromDate = parseOptionalSqlDate(
+                txtShiftFilterFromDate != null ? txtShiftFilterFromDate.getText().trim() : ""
+        );
+        Date filterToDate = parseOptionalSqlDate(
+                txtShiftFilterToDate != null ? txtShiftFilterToDate.getText().trim() : ""
+        );
+
+        if (filterFromDate != null && filterToDate != null && filterFromDate.after(filterToDate)) {
+            JOptionPane.showMessageDialog(this, "Từ ngày không được lớn hơn Đến ngày.",
+                    "Khoảng ngày không hợp lệ", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        Date filterDate = parseOptionalSqlDate(txtShiftFilterDate != null ? txtShiftFilterDate.getText().trim() : "");
         String employeeTypeFilter = getEmployeeTypeFilterCode();
         ShiftOption filterShift = cbShiftFilter != null ? (ShiftOption) cbShiftFilter.getSelectedItem() : null;
         String shiftId = filterShift != null && !filterShift.all ? filterShift.shift.getShiftId() : "";
@@ -1338,7 +1215,8 @@ public class EmployeeView extends JPanel {
 
         currentShiftAssignments = employeeShiftSql.selectAssignments(
                 txtShiftKeyword != null ? txtShiftKeyword.getText().trim() : "",
-                filterDate,
+                filterFromDate,
+                filterToDate,
                 employeeTypeFilter,
                 shiftId,
                 status
@@ -1346,7 +1224,6 @@ public class EmployeeView extends JPanel {
 
         if (SessionManager.isStoreManager()) {
             String storeId = getCurrentStoreId();
-
             List<String> allowedEmployeeIds = new ArrayList<>();
             List<Employee> employeesInStore = employeeSql.getAllNhanVien(getCurrentUserRole(), storeId);
 
@@ -1356,65 +1233,195 @@ public class EmployeeView extends JPanel {
 
             currentShiftAssignments.removeIf(item -> !allowedEmployeeIds.contains(item.getEmployeeId()));
         }
-        shiftTableModel.setRowCount(0);
-        for (EmployeeShift item : currentShiftAssignments) {
-            shiftTableModel.addRow(new Object[]{
-                item.getAssignmentId(),
-                item.getEmployeeName(),
-                item.getEmployeeType(),
-                item.getWorkDate(),
-                item.getShiftName(),
-                item.getStartTimeText(),
-                item.getEndTimeText(),
-                item.getStatus(),
-                item.getNote() == null ? "" : item.getNote()
-            });
-        }
-        if (tblShiftAssignments != null) {
-            tblShiftAssignments.repaint();
+
+        if (shiftTimelinePanel != null) {
+            LocalDate displayFrom = filterFromDate != null ? filterFromDate.toLocalDate() : LocalDate.now();
+            LocalDate displayTo = filterToDate != null ? filterToDate.toLocalDate() : displayFrom;
+            shiftTimelinePanel.setDisplayRange(displayFrom, displayTo);
+            shiftTimelinePanel.setAssignments(currentShiftAssignments);
         }
     }
 
     private void saveShiftAssignment(boolean update) {
-        EmployeeShift item = getShiftAssignmentFromForm();
-        if (item == null) {
-            return;
-        }
-
         if (update) {
-            if (selectedAssignmentId == null || selectedAssignmentId.isBlank()) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn một phân ca trong bảng để cập nhật.");
+            List<String> oldIds = new ArrayList<>();
+
+            if (selectedTimelineBlock != null && !selectedTimelineBlock.getAssignmentIds().isEmpty()) {
+                oldIds.addAll(selectedTimelineBlock.getAssignmentIds());
+            } else if (selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
+                oldIds.add(selectedAssignmentId);
+            }
+
+            if (oldIds.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn một lịch phân ca trên timeline để cập nhật.");
                 return;
             }
-            item.setAssignmentId(selectedAssignmentId);
-        } else {
-            item.setAssignmentId("PC" + System.currentTimeMillis());
-        }
 
-        if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(), item.getWorkDate(),
-                update ? item.getAssignmentId() : null)) {
-            JOptionPane.showMessageDialog(
+            EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
+            ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
+            LocalDate from = parseUiDate(txtWorkFromDate != null ? txtWorkFromDate.getText() : "");
+            LocalDate to = parseUiDate(txtWorkToDate != null ? txtWorkToDate.getText() : "");
+            String status = cbAssignmentStatus == null ? "ASSIGNED" : String.valueOf(cbAssignmentStatus.getSelectedItem());
+            String note = txtAssignmentNote == null ? "" : txtAssignmentNote.getText().trim();
+
+            boolean ok = replaceShiftAssignmentsFromValues(
                     this,
-                    "Nhân viên này đã có phân ca cùng ngày và cùng ca làm việc.",
-                    "Trùng phân ca",
-                    JOptionPane.WARNING_MESSAGE
+                    oldIds,
+                    employeeOption,
+                    shiftOption,
+                    from,
+                    to,
+                    status,
+                    note,
+                    "Cập nhật lịch phân ca"
             );
+
+            if (ok) {
+                clearShiftForm();
+                loadShiftAssignments();
+            }
             return;
         }
 
-        int rows = update ? employeeShiftSql.update(item) : employeeShiftSql.insert(item);
-        if (rows > 0) {
-            JOptionPane.showMessageDialog(this, update ? "Cập nhật phân ca thành công." : "Thêm phân ca thành công.");
-            clearShiftForm();
-            loadShiftAssignments();
-        } else {
-            JOptionPane.showMessageDialog(
-                    this,
-                    update ? "Cập nhật phân ca thất bại. Vui lòng kiểm tra database." : "Thêm phân ca thất bại. Vui lòng kiểm tra database.",
-                    "Lỗi database",
-                    JOptionPane.ERROR_MESSAGE
-            );
+        List<EmployeeShift> items = getShiftAssignmentsFromFormRange();
+        if (items.isEmpty()) {
+            return;
         }
+
+        int success = 0;
+        int duplicate = 0;
+        int failed = 0;
+
+        for (EmployeeShift item : items) {
+            if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(),
+                    item.getWorkDate(), null)) {
+                duplicate++;
+                continue;
+            }
+
+            int rows = employeeShiftSql.insert(item);
+            if (rows > 0) {
+                success++;
+            } else {
+                failed++;
+            }
+        }
+
+        JOptionPane.showMessageDialog(this,
+                "Kết quả phân ca:\n"
+                + "- Thêm thành công: " + success + "\n"
+                + "- Bỏ qua do trùng: " + duplicate + "\n"
+                + "- Thất bại: " + failed,
+                "Hoàn tất phân ca", JOptionPane.INFORMATION_MESSAGE);
+
+        clearShiftForm();
+        loadShiftAssignments();
+    }
+
+    private boolean replaceShiftAssignmentsFromValues(
+            Component parent,
+            List<String> oldAssignmentIds,
+            EmployeeOption employeeOption,
+            ShiftOption shiftOption,
+            LocalDate from,
+            LocalDate to,
+            String status,
+            String note,
+            String title
+    ) {
+        Component dialogParent = parent == null ? this : parent;
+
+        if (employeeOption == null || employeeOption.employee == null) {
+            JOptionPane.showMessageDialog(dialogParent, "Vui lòng chọn nhân viên.");
+            return false;
+        }
+
+        if (shiftOption == null || shiftOption.shift == null || shiftOption.all) {
+            JOptionPane.showMessageDialog(dialogParent, "Vui lòng chọn ca làm việc.");
+            return false;
+        }
+
+        if (from == null || to == null) {
+            JOptionPane.showMessageDialog(
+                    dialogParent,
+                    "Ngày không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy.",
+                    "Lỗi định dạng ngày",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return false;
+        }
+
+        if (from.isAfter(to)) {
+            JOptionPane.showMessageDialog(
+                    dialogParent,
+                    "Từ ngày không được lớn hơn Đến ngày.",
+                    "Khoảng ngày không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return false;
+        }
+
+        List<String> oldIds = oldAssignmentIds == null ? new ArrayList<>() : new ArrayList<>(oldAssignmentIds);
+
+        int confirm = JOptionPane.showConfirmDialog(
+                dialogParent,
+                "Cập nhật lịch này sẽ thay thế lịch cũ trên gantt bằng thông tin mới đang nhập.\n"
+                + "Bạn có chắc muốn tiếp tục không?",
+                title == null ? "Cập nhật lịch phân ca" : title,
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return false;
+        }
+
+        int removed = 0;
+        if (!oldIds.isEmpty()) {
+            removed = oldIds.size() == 1
+                    ? employeeShiftSql.delete(oldIds.get(0))
+                    : employeeShiftSql.deleteMany(oldIds);
+        }
+
+        int success = 0;
+        int duplicate = 0;
+        int failed = 0;
+        int sequence = 0;
+
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            EmployeeShift item = new EmployeeShift();
+            item.setAssignmentId("PC" + System.currentTimeMillis() + "_UPD_" + (++sequence));
+            item.setEmployeeId(employeeOption.employee.getEmployeeId());
+            item.setShiftId(shiftOption.shift.getShiftId());
+            item.setWorkDate(Date.valueOf(d));
+            item.setStatus(status == null || status.isBlank() ? "ASSIGNED" : status);
+            item.setNote(note == null ? "" : note.trim());
+
+            if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(), item.getWorkDate(), null)) {
+                duplicate++;
+                continue;
+            }
+
+            int rows = employeeShiftSql.insert(item);
+            if (rows > 0) {
+                success++;
+            } else {
+                failed++;
+            }
+        }
+
+        JOptionPane.showMessageDialog(
+                dialogParent,
+                "Kết quả cập nhật lịch:\n"
+                + "- Lịch cũ đã xóa mềm: " + removed + "\n"
+                + "- Thêm lịch mới thành công: " + success + "\n"
+                + "- Bỏ qua do trùng: " + duplicate + "\n"
+                + "- Thất bại: " + failed,
+                title == null ? "Cập nhật lịch phân ca" : title,
+                success > 0 ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE
+        );
+
+        return success > 0;
     }
 
     private void cancelShiftAssignment() {
@@ -1423,12 +1430,8 @@ public class EmployeeView extends JPanel {
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Xác nhận hủy phân ca đang chọn?",
-                "Hủy phân ca",
-                JOptionPane.YES_NO_OPTION
-        );
+        int confirm = JOptionPane.showConfirmDialog(this, "Xác nhận hủy phân ca đang chọn?",
+                "Hủy phân ca", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) {
             return;
         }
@@ -1442,10 +1445,77 @@ public class EmployeeView extends JPanel {
         }
     }
 
+    private void deleteShiftAssignment() {
+        if (selectedTimelineBlock == null && (selectedAssignmentId == null || selectedAssignmentId.isBlank())) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn lịch phân ca cần xóa trên timeline.",
+                    "Chưa chọn lịch",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        List<String> idsToDelete = new ArrayList<>();
+
+        if (selectedTimelineBlock != null && !selectedTimelineBlock.getAssignmentIds().isEmpty()) {
+            idsToDelete.addAll(selectedTimelineBlock.getAssignmentIds());
+        } else if (selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
+            idsToDelete.add(selectedAssignmentId);
+        }
+
+        String message;
+        if (idsToDelete.size() > 1) {
+            message = "Block này gồm " + idsToDelete.size() + " ngày liên tiếp.\n"
+                    + "Bạn có chắc muốn xóa toàn bộ lịch trong block này khỏi gantt không?\n\n"
+                    + "Lưu ý: Xóa lịch sẽ ẩn khỏi timeline, khác với Hủy phân ca.";
+        } else {
+            message = "Bạn có chắc muốn xóa lịch phân ca đang chọn khỏi gantt không?\n\n"
+                    + "Lưu ý: Xóa lịch sẽ ẩn khỏi timeline, khác với Hủy phân ca.";
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                message,
+                "Xóa lịch phân ca",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        int deleted;
+        if (idsToDelete.size() == 1) {
+            deleted = employeeShiftSql.delete(idsToDelete.get(0));
+        } else {
+            deleted = employeeShiftSql.deleteMany(idsToDelete);
+        }
+
+        if (deleted > 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Đã xóa " + deleted + " lịch phân ca khỏi gantt.",
+                    "Xóa lịch thành công",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            clearShiftForm();
+            loadShiftAssignments();
+        } else {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Xóa lịch thất bại. Vui lòng kiểm tra database.",
+                    "Lỗi database",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
     private EmployeeShift getShiftAssignmentFromForm() {
         EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
         ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
-        Date workDate = parseRequiredSqlDate(txtWorkDate != null ? txtWorkDate.getText().trim() : "");
+        Date workDate = parseRequiredSqlDate(txtWorkFromDate != null ? txtWorkFromDate.getText().trim() : "");
 
         if (employeeOption == null) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên cần phân ca.");
@@ -1468,26 +1538,257 @@ public class EmployeeView extends JPanel {
         return item;
     }
 
+    private List<EmployeeShift> getShiftAssignmentsFromFormRange() {
+        List<EmployeeShift> result = new ArrayList<>();
+
+        EmployeeOption employeeOption = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
+        ShiftOption shiftOption = cbWorkShift != null ? (ShiftOption) cbWorkShift.getSelectedItem() : null;
+        Date fromDate = parseRequiredSqlDate(txtWorkFromDate != null ? txtWorkFromDate.getText().trim() : "");
+        Date toDate = parseRequiredSqlDate(txtWorkToDate != null ? txtWorkToDate.getText().trim() : "");
+
+        if (employeeOption == null) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên cần phân ca.");
+            return result;
+        }
+        if (shiftOption == null || shiftOption.all) {
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn ca làm việc.");
+            return result;
+        }
+        if (fromDate == null || toDate == null) {
+            return result;
+        }
+
+        if (fromDate.after(toDate)) {
+            JOptionPane.showMessageDialog(this, "Từ ngày không được lớn hơn Đến ngày.",
+                    "Khoảng ngày không hợp lệ", JOptionPane.WARNING_MESSAGE);
+            return result;
+        }
+
+        LocalDate start = fromDate.toLocalDate();
+        LocalDate end = toDate.toLocalDate();
+        int sequence = 0;
+
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            EmployeeShift item = new EmployeeShift();
+            item.setAssignmentId("PC" + System.currentTimeMillis() + "_" + (++sequence));
+            item.setEmployeeId(employeeOption.employee.getEmployeeId());
+            item.setShiftId(shiftOption.shift.getShiftId());
+            item.setWorkDate(Date.valueOf(d));
+            item.setStatus(String.valueOf(cbAssignmentStatus.getSelectedItem()));
+            item.setNote(txtAssignmentNote == null ? "" : txtAssignmentNote.getText().trim());
+            result.add(item);
+        }
+
+        return result;
+    }
+
+    private void showShiftDetailDialog(EmployeeShift item) {
+        if (item == null) {
+            return;
+        }
+
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this),
+                "Chi tiết ca làm việc", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(560, 430);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel root = new JPanel(new BorderLayout(0, 14));
+        root.setBackground(Color.WHITE);
+        root.setBorder(new EmptyBorder(22, 24, 20, 24));
+
+        JPanel header = new JPanel(new BorderLayout(12, 0));
+        header.setOpaque(false);
+
+        JLabel title = new JLabel(item.getShiftName() == null ? "Ca làm việc" : item.getShiftName());
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(textDark);
+
+        JLabel sub = new JLabel((item.getEmployeeName() == null ? "—" : item.getEmployeeName())
+                + " • " + (item.getWorkDate() == null ? "—" : formatUiDate(item.getWorkDate().toLocalDate())));
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        sub.setForeground(new Color(107, 119, 140));
+
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 3));
+        titleBox.setOpaque(false);
+        titleBox.add(title);
+        titleBox.add(sub);
+
+        JLabel badge = new JLabel(normalizeShiftStatusForView(item.getStatus()), SwingConstants.CENTER);
+        badge.setOpaque(true);
+        badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        badge.setForeground(Color.WHITE);
+        badge.setBackground(getShiftStatusColor(item.getStatus()));
+        badge.setBorder(new EmptyBorder(8, 14, 8, 14));
+
+        header.add(titleBox, BorderLayout.WEST);
+        header.add(badge, BorderLayout.EAST);
+
+        String[][] rows = new String[][]{
+            {"Mã phân ca", safeDetail(item.getAssignmentId())},
+            {"Nhân viên", safeDetail(item.getEmployeeName())},
+            {"Loại nhân viên", safeDetail(item.getEmployeeType())},
+            {"Ngày làm việc", item.getWorkDate() == null ? "—" : formatUiDate(item.getWorkDate().toLocalDate())},
+            {"Ca làm việc", safeDetail(item.getShiftName())},
+            {"Thời gian", safeDetail(item.getStartTimeText()) + " - " + safeDetail(item.getEndTimeText())},
+            {"Trạng thái", normalizeShiftStatusForView(item.getStatus())},
+            {"Ghi chú", safeDetail(item.getNote())}
+        };
+
+        JTable detailTable = new JTable(new DefaultTableModel(rows, new String[]{"Thông tin", "Giá trị"}) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        });
+        detailTable.setRowHeight(34);
+        detailTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        detailTable.setShowHorizontalLines(true);
+        detailTable.setShowVerticalLines(false);
+        detailTable.setGridColor(new Color(226, 232, 240));
+        detailTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        detailTable.getTableHeader().setBackground(new Color(248, 250, 252));
+        detailTable.getTableHeader().setForeground(textDark);
+        detailTable.getColumnModel().getColumn(0).setPreferredWidth(150);
+        detailTable.getColumnModel().getColumn(1).setPreferredWidth(330);
+
+        detailTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setBorder(new EmptyBorder(0, 12, 0, 12));
+                setFont(new Font("Segoe UI", column == 0 ? Font.BOLD : Font.PLAIN, 13));
+                setForeground(column == 0 ? new Color(43, 54, 116) : textDark);
+                setBackground(row % 2 == 0 ? Color.WHITE : new Color(249, 251, 253));
+                return this;
+            }
+        });
+
+        JScrollPane tableScroll = new JScrollPane(detailTable);
+        tableScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 12));
+        tableScroll.getViewport().setBackground(Color.WHITE);
+
+        JButton btnEdit = createCustomButton("Đưa lên form", primaryBlue, Color.WHITE, null);
+        JButton btnClose = createCustomButton("Đóng", new Color(235, 239, 245), textDark, null);
+        btnEdit.setPreferredSize(new Dimension(130, 40));
+        btnClose.setPreferredSize(new Dimension(100, 40));
+
+        btnEdit.addActionListener(e -> {
+            fillShiftForm(item);
+            dialog.dispose();
+        });
+        btnClose.addActionListener(e -> dialog.dispose());
+
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        footer.setOpaque(false);
+        footer.add(btnEdit);
+        footer.add(btnClose);
+
+        root.add(header, BorderLayout.NORTH);
+        root.add(tableScroll, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.setVisible(true);
+    }
+
     private void fillShiftForm(EmployeeShift item) {
+        if (item == null) {
+            return;
+        }
+
         selectedAssignmentId = item.getAssignmentId();
         selectEmployeeOption(item.getEmployeeId());
         selectShiftOption(cbWorkShift, item.getShiftId());
-        txtWorkDate.setText(item.getWorkDate() == null ? "" : item.getWorkDate().toString());
-        cbAssignmentStatus.setSelectedItem(item.getStatus());
+
+        String d = item.getWorkDate() == null ? "" : formatUiDate(item.getWorkDate().toLocalDate());
+        txtWorkFromDate.setText(d);
+        txtWorkToDate.setText(d);
+        cbAssignmentStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
         txtAssignmentNote.setText(item.getNote() == null ? "" : item.getNote());
+        updateSelectedShiftEmployeeCard();
+    }
+
+    private void fillShiftForm(TimelineBlock block) {
+        if (block == null || block.getPrimary() == null) {
+            return;
+        }
+
+        selectedTimelineBlock = block;
+
+        EmployeeShift item = block.getPrimary();
+        selectedAssignmentId = item.getAssignmentId();
+
+        selectEmployeeOption(item.getEmployeeId());
+        selectShiftOption(cbWorkShift, item.getShiftId());
+
+        txtWorkFromDate.setText(block.startDate == null ? "" : formatUiDate(block.startDate));
+        txtWorkToDate.setText(block.endDate == null ? "" : formatUiDate(block.endDate));
+        cbAssignmentStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
+        txtAssignmentNote.setText(item.getNote() == null ? "" : item.getNote());
+
+        updateSelectedShiftEmployeeCard();
+    }
+
+    private void syncShiftFormFromValues(
+            EmployeeOption employeeOption,
+            ShiftOption shiftOption,
+            LocalDate from,
+            LocalDate to,
+            String status,
+            String note,
+            boolean clearSelection
+    ) {
+        if (clearSelection) {
+            selectedAssignmentId = "";
+            selectedTimelineBlock = null;
+            if (shiftTimelinePanel != null) {
+                shiftTimelinePanel.clearSelectedAssignment();
+            }
+        }
+
+        if (employeeOption != null && employeeOption.employee != null) {
+            selectEmployeeOption(employeeOption.employee.getEmployeeId());
+        }
+
+        if (shiftOption != null && shiftOption.shift != null) {
+            selectShiftOption(cbWorkShift, shiftOption.shift.getShiftId());
+        }
+
+        if (txtWorkFromDate != null && from != null) {
+            txtWorkFromDate.setText(formatUiDate(from));
+        }
+
+        if (txtWorkToDate != null && to != null) {
+            txtWorkToDate.setText(formatUiDate(to));
+        }
+
+        if (cbAssignmentStatus != null) {
+            cbAssignmentStatus.setSelectedItem(status == null || status.isBlank() ? "ASSIGNED" : status);
+        }
+
+        if (txtAssignmentNote != null) {
+            txtAssignmentNote.setText(note == null ? "" : note);
+        }
+
         updateSelectedShiftEmployeeCard();
     }
 
     private void clearShiftForm() {
         selectedAssignmentId = "";
+        selectedTimelineBlock = null;
         if (cbShiftEmployee != null) {
             cbShiftEmployee.setSelectedIndex(cbShiftEmployee.getItemCount() > 0 ? 0 : -1);
         }
         if (cbWorkShift != null) {
             cbWorkShift.setSelectedIndex(cbWorkShift.getItemCount() > 0 ? 0 : -1);
         }
-        if (txtWorkDate != null) {
-            txtWorkDate.setText(LocalDate.now().toString());
+        if (txtWorkFromDate != null) {
+            txtWorkFromDate.setText(formatUiDate(LocalDate.now()));
+        }
+        if (txtWorkToDate != null) {
+            txtWorkToDate.setText(formatUiDate(LocalDate.now()));
         }
         if (cbAssignmentStatus != null) {
             cbAssignmentStatus.setSelectedItem("ASSIGNED");
@@ -1495,8 +1796,8 @@ public class EmployeeView extends JPanel {
         if (txtAssignmentNote != null) {
             txtAssignmentNote.setText("");
         }
-        if (tblShiftAssignments != null) {
-            tblShiftAssignments.clearSelection();
+        if (shiftTimelinePanel != null) {
+            shiftTimelinePanel.clearSelectedAssignment();
         }
         updateSelectedShiftEmployeeCard();
     }
@@ -1505,6 +1806,7 @@ public class EmployeeView extends JPanel {
         if (lblSelectedShiftEmployeeName == null) {
             return;
         }
+
         EmployeeOption option = cbShiftEmployee != null ? (EmployeeOption) cbShiftEmployee.getSelectedItem() : null;
         if (option == null) {
             lblSelectedShiftEmployeeName.setText("Chưa chọn nhân viên");
@@ -1519,39 +1821,633 @@ public class EmployeeView extends JPanel {
         lblSelectedShiftEmployeeType.setText("Loại nhân viên: " + getEmployeeTypeLabel(emp.getRoleId()));
     }
 
-    private Date parseRequiredSqlDate(String value) {
-        if (value == null || value.isBlank()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập ngày làm việc theo định dạng yyyy-MM-dd.");
-            return null;
+    private void prepareNewShiftFromTimelineCell(String employeeId, LocalDate date, int clickedHour) {
+        if (employeeId == null || date == null) {
+            return;
         }
-        try {
-            return Date.valueOf(LocalDate.parse(value.trim()));
-        } catch (Exception ex) {
+
+        selectedAssignmentId = "";
+        selectEmployeeOption(employeeId);
+        if (txtWorkFromDate != null) {
+            txtWorkFromDate.setText(formatUiDate(date));
+        }
+        if (txtWorkToDate != null) {
+            txtWorkToDate.setText(formatUiDate(date));
+        }
+        if (cbAssignmentStatus != null) {
+            cbAssignmentStatus.setSelectedItem("ASSIGNED");
+        }
+        if (txtAssignmentNote != null && txtAssignmentNote.getText().trim().isEmpty()) {
+            txtAssignmentNote.setText("");
+        }
+        selectBestShiftByClickedHour(clickedHour);
+        updateSelectedShiftEmployeeCard();
+        if (shiftTimelinePanel != null) {
+            shiftTimelinePanel.clearSelectedAssignment();
+        }
+
+        if (cbWorkShift != null) {
+            cbWorkShift.requestFocusInWindow();
+        }
+    }
+
+    private void showNewShiftDialogFromTimelineCell(String employeeId, LocalDate date, int clickedHour) {
+        if (employeeId == null || date == null) {
+            return;
+        }
+
+        prepareNewShiftFromTimelineCell(employeeId, date, clickedHour);
+
+        JDialog dialog = new JDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Thêm lịch làm việc",
+                Dialog.ModalityType.APPLICATION_MODAL
+        );
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(780, 700);
+        dialog.setMinimumSize(new Dimension(720, 640));
+        dialog.setLocationRelativeTo(this);
+
+        JPanel root = new JPanel(new BorderLayout(0, 16));
+        root.setBackground(Color.WHITE);
+        root.setBorder(new EmptyBorder(24, 28, 24, 28));
+
+        JPanel header = new JPanel(new BorderLayout(12, 0));
+        header.setOpaque(false);
+
+        JLabel title = new JLabel("Thêm lịch làm việc mới");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setForeground(textDark);
+
+        JLabel sub = new JLabel("Tạo phân ca trực tiếp từ ô timeline vừa chọn. Thông tin sẽ đồng bộ với form bên trái.");
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        sub.setForeground(new Color(107, 119, 140));
+
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 4));
+        titleBox.setOpaque(false);
+        titleBox.add(title);
+        titleBox.add(sub);
+        header.add(titleBox, BorderLayout.WEST);
+
+        JComboBox<EmployeeOption> dlgEmployee = new JComboBox<>();
+        for (Employee emp : assignableEmployees) {
+            if (emp != null && isShiftAssignableRole(emp.getRoleId())) {
+                dlgEmployee.addItem(new EmployeeOption(emp));
+            }
+        }
+        stylePlainCombo(dlgEmployee);
+        selectEmployeeOptionInCombo(dlgEmployee, employeeId);
+
+        JComboBox<ShiftOption> dlgShift = new JComboBox<>();
+        for (Shift shift : shiftList) {
+            dlgShift.addItem(new ShiftOption(shift, false));
+        }
+        stylePlainCombo(dlgShift);
+        selectBestShiftByClickedHour(dlgShift, clickedHour);
+
+        JTextField dlgFromDate = createDateField(date);
+        JTextField dlgToDate = createDateField(date);
+        dlgFromDate.setPreferredSize(new Dimension(300, 42));
+        dlgToDate.setPreferredSize(new Dimension(300, 42));
+
+        JComboBox<String> dlgStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
+        stylePlainCombo(dlgStatus);
+        dlgStatus.setSelectedItem("ASSIGNED");
+
+        JTextArea dlgNote = new JTextArea(6, 24);
+        dlgNote.setLineWrap(true);
+        dlgNote.setWrapStyleWord(true);
+        dlgNote.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        dlgNote.setBorder(new EmptyBorder(10, 12, 10, 12));
+        JScrollPane noteScroll = new JScrollPane(dlgNote);
+        noteScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 10));
+        noteScroll.getViewport().setBackground(Color.WHITE);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        int y = 0;
+
+        form.add(createDialogField("Nhân viên (*)", dlgEmployee), addGbc(gbc, y++, 12));
+        form.add(createDialogField("Ca làm việc (*)", dlgShift), addGbc(gbc, y++, 12));
+
+        JPanel dateRow = new JPanel(new GridLayout(1, 2, 14, 0));
+        dateRow.setOpaque(false);
+        dateRow.add(createDialogField("Từ ngày (*)", dlgFromDate));
+        dateRow.add(createDialogField("Đến ngày (*)", dlgToDate));
+        form.add(dateRow, addGbc(gbc, y++, 12));
+
+        form.add(createDialogField("Trạng thái (*)", dlgStatus), addGbc(gbc, y++, 12));
+        form.add(createDialogField("Ghi chú", noteScroll), addGbc(gbc, y++, 0));
+
+        JButton btnSave = createCustomButton("Thêm lịch", primaryOrange, Color.WHITE, null);
+        JButton btnCancel = createCustomButton("Đóng", new Color(235, 239, 245), textDark, null);
+        btnSave.setPreferredSize(new Dimension(140, 44));
+        btnCancel.setPreferredSize(new Dimension(110, 44));
+
+        btnSave.addActionListener(e -> {
+            EmployeeOption employeeOption = (EmployeeOption) dlgEmployee.getSelectedItem();
+            ShiftOption shiftOption = (ShiftOption) dlgShift.getSelectedItem();
+
+            if (employeeOption == null || employeeOption.employee == null) {
+                JOptionPane.showMessageDialog(dialog, "Vui lòng chọn nhân viên.");
+                return;
+            }
+            if (shiftOption == null || shiftOption.shift == null || shiftOption.all) {
+                JOptionPane.showMessageDialog(dialog, "Vui lòng chọn ca làm việc.");
+                return;
+            }
+
+            LocalDate from = parseUiDate(dlgFromDate.getText());
+            LocalDate to = parseUiDate(dlgToDate.getText());
+
+            if (from == null || to == null) {
+                JOptionPane.showMessageDialog(
+                        dialog,
+                        "Ngày không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy.",
+                        "Lỗi định dạng ngày",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            if (from.isAfter(to)) {
+                JOptionPane.showMessageDialog(
+                        dialog,
+                        "Từ ngày không được lớn hơn Đến ngày.",
+                        "Khoảng ngày không hợp lệ",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            int success = 0;
+            int duplicate = 0;
+            int failed = 0;
+            int sequence = 0;
+
+            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+                EmployeeShift item = new EmployeeShift();
+                item.setAssignmentId("PC" + System.currentTimeMillis() + "_DLG_" + (++sequence));
+                item.setEmployeeId(employeeOption.employee.getEmployeeId());
+                item.setShiftId(shiftOption.shift.getShiftId());
+                item.setWorkDate(Date.valueOf(d));
+                item.setStatus(String.valueOf(dlgStatus.getSelectedItem()));
+                item.setNote(dlgNote.getText() == null ? "" : dlgNote.getText().trim());
+
+                if (employeeShiftSql.existsDuplicate(item.getEmployeeId(), item.getShiftId(), item.getWorkDate(), null)) {
+                    duplicate++;
+                    continue;
+                }
+
+                int rows = employeeShiftSql.insert(item);
+                if (rows > 0) {
+                    success++;
+                } else {
+                    failed++;
+                }
+            }
+
             JOptionPane.showMessageDialog(
-                    this,
-                    "Ngày làm việc không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.",
-                    "Lỗi định dạng",
-                    JOptionPane.WARNING_MESSAGE
+                    dialog,
+                    "Kết quả thêm lịch:\n"
+                    + "- Thêm thành công: " + success + "\n"
+                    + "- Bỏ qua do trùng: " + duplicate + "\n"
+                    + "- Thất bại: " + failed,
+                    "Hoàn tất",
+                    JOptionPane.INFORMATION_MESSAGE
             );
+
+            if (success > 0) {
+                syncShiftFormFromValues(
+                        employeeOption,
+                        shiftOption,
+                        from,
+                        to,
+                        String.valueOf(dlgStatus.getSelectedItem()),
+                        dlgNote.getText() == null ? "" : dlgNote.getText().trim(),
+                        true
+                );
+                loadShiftAssignments();
+                dialog.dispose();
+            }
+        });
+
+        btnCancel.addActionListener(e -> dialog.dispose());
+
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        footer.setOpaque(false);
+        footer.add(btnSave);
+        footer.add(btnCancel);
+
+        root.add(header, BorderLayout.NORTH);
+        root.add(form, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.setVisible(true);
+    }
+
+    private JPanel createDialogField(String label, JComponent field) {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 6));
+        wrapper.setOpaque(false);
+
+        JLabel lbl = createLabel(label);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lbl.setForeground(textDark);
+
+        wrapper.add(lbl, BorderLayout.NORTH);
+        wrapper.add(field, BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private void selectEmployeeOptionInCombo(JComboBox<EmployeeOption> combo, String employeeId) {
+        if (combo == null || employeeId == null) {
+            return;
+        }
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            EmployeeOption option = combo.getItemAt(i);
+            if (option != null && option.employee != null
+                    && employeeId.equals(option.employee.getEmployeeId())) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private void selectShiftOptionInCombo(JComboBox<ShiftOption> combo, String shiftId) {
+        if (combo == null || shiftId == null) {
+            return;
+        }
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            ShiftOption option = combo.getItemAt(i);
+            if (option != null && !option.all && option.shift != null
+                    && shiftId.equals(option.shift.getShiftId())) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private void selectBestShiftByClickedHour(JComboBox<ShiftOption> combo, int clickedHour) {
+        if (combo == null || combo.getItemCount() == 0) {
+            return;
+        }
+
+        int targetMinutes = Math.max(0, Math.min(23, clickedHour)) * 60;
+        int fallbackIndex = -1;
+
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            ShiftOption option = combo.getItemAt(i);
+            if (option == null || option.all || option.shift == null) {
+                continue;
+            }
+
+            if (fallbackIndex < 0) {
+                fallbackIndex = i;
+            }
+
+            String shiftId = option.shift.getShiftId() == null ? "" : option.shift.getShiftId().toUpperCase();
+            String shiftName = option.shift.getShiftName() == null ? "" : option.shift.getShiftName().toLowerCase();
+            if (shiftId.contains("FULL") || shiftName.contains("full")) {
+                continue;
+            }
+
+            int start = minutesOf(option.shift.getStartTime());
+            int end = minutesOf(option.shift.getEndTime());
+
+            boolean match;
+            if (start <= end) {
+                match = targetMinutes >= start && targetMinutes < end;
+            } else {
+                match = targetMinutes >= start || targetMinutes < end;
+            }
+
+            if (match) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+
+        if (fallbackIndex >= 0) {
+            combo.setSelectedIndex(fallbackIndex);
+        }
+    }
+
+    private void selectBestShiftByClickedHour(int clickedHour) {
+        if (cbWorkShift == null || cbWorkShift.getItemCount() == 0) {
+            return;
+        }
+
+        int targetMinutes = Math.max(0, Math.min(23, clickedHour)) * 60;
+        int fallbackIndex = -1;
+
+        for (int i = 0; i < cbWorkShift.getItemCount(); i++) {
+            ShiftOption option = cbWorkShift.getItemAt(i);
+            if (option == null || option.all || option.shift == null) {
+                continue;
+            }
+
+            if (fallbackIndex < 0) {
+                fallbackIndex = i;
+            }
+
+            String shiftId = option.shift.getShiftId() == null ? "" : option.shift.getShiftId().toUpperCase();
+            String shiftName = option.shift.getShiftName() == null ? "" : option.shift.getShiftName().toLowerCase();
+            if (shiftId.contains("FULL") || shiftName.contains("full")) {
+                continue;
+            }
+
+            int start = minutesOf(option.shift.getStartTime());
+            int end = minutesOf(option.shift.getEndTime());
+
+            boolean match;
+            if (start <= end) {
+                match = targetMinutes >= start && targetMinutes < end;
+            } else {
+                match = targetMinutes >= start || targetMinutes < end;
+            }
+
+            if (match) {
+                cbWorkShift.setSelectedIndex(i);
+                return;
+            }
+        }
+
+        if (fallbackIndex >= 0) {
+            cbWorkShift.setSelectedIndex(fallbackIndex);
+        }
+    }
+
+    // ==================== UTILITY METHODS ====================
+    private void applyStoreScopeForManager() {
+        if (!SessionManager.isStoreManager()) {
+            if (cbStoreForm != null) {
+                cbStoreForm.setEnabled(true);
+            }
+            return;
+        }
+
+        String storeId = getCurrentStoreId();
+        if (storeId == null || storeId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                    "Chưa phân chi nhánh", JOptionPane.WARNING_MESSAGE);
+            if (cbStoreForm != null) {
+                cbStoreForm.setEnabled(false);
+            }
+            return;
+        }
+
+        selectStoreComboByStoreId(storeId);
+        if (cbStoreForm != null) {
+            cbStoreForm.setEnabled(false);
+        }
+    }
+
+    private void selectStoreComboByStoreId(String storeId) {
+        if (cbStoreForm == null || storeId == null || storeId.trim().isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < cbStoreForm.getItemCount(); i++) {
+            String item = String.valueOf(cbStoreForm.getItemAt(i));
+            if (item.contains("(" + storeId + ")") || item.endsWith(storeId + ")")) {
+                cbStoreForm.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    private void loadAutoCompleteData() {
+        if (cbSearch == null) {
+            return;
+        }
+
+        employeeNameList.clear();
+        cbSearch.removeAllItems();
+        cbSearch.addItem("");
+
+        try {
+            String currentRole = getCurrentUserRole();
+            String storeId = getCurrentStoreId();
+
+            List<Employee> list;
+            if (SessionManager.isStoreManager()) {
+                list = employeeSql.getAllNhanVien(currentRole, storeId);
+            } else {
+                list = employeeSql.getAllNhanVien(currentRole, null);
+            }
+
+            for (Employee e : list) {
+                if (e.getEmployeeName() != null && !e.getEmployeeName().isEmpty()) {
+                    employeeNameList.add(e.getEmployeeName());
+                    cbSearch.addItem(e.getEmployeeName());
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void clearForm() {
+        txtId.setText("");
+        txtName.setText("");
+        txtPhone.setText("");
+        txtEmail.setText("");
+        txtEmail.setEnabled(true);
+        txtEmail.setToolTipText(null);
+
+        currentSelectedRawId = "";
+
+        btngGender.clearSelection();
+        tblEmployees.clearSelection();
+
+        ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
+
+        if (cbStoreForm != null) {
+            if (SessionManager.isStoreManager()) {
+                selectStoreComboByStoreId(getCurrentStoreId());
+                cbStoreForm.setEnabled(false);
+            } else {
+                cbStoreForm.setSelectedIndex(-1);
+                cbStoreForm.setEnabled(true);
+            }
+        }
+
+        if (cbRole != null) {
+            cbRole.setSelectedIndex(-1);
+        }
+    }
+
+    private void loadDataToTable() {
+        String currentRole = getCurrentUserRole();
+        String storeId = getCurrentStoreId();
+
+        if (SessionManager.isStoreManager()) {
+            if (storeId == null || storeId.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
+                        "Chưa phân chi nhánh", JOptionPane.WARNING_MESSAGE);
+                updateTable(new ArrayList<>());
+                return;
+            }
+            updateTable(employeeSql.getAllNhanVien(currentRole, storeId));
+        } else {
+            updateTable(employeeSql.getAllNhanVien(currentRole, null));
+        }
+    }
+
+    private void updateTable(List<Employee> list) {
+        tableModel.setRowCount(0);
+        if (list == null) {
+            return;
+        }
+
+        for (Employee emp : list) {
+            String storeName = safeCell(emp.getStoreName());
+            if ("—".equals(storeName) || storeName.trim().isEmpty()) {
+                storeName = "Chưa phân";
+            }
+
+            tableModel.addRow(new Object[]{
+                maskSensitiveInfo(emp.getEmployeeId()),
+                safeCell(emp.getEmployeeName()),
+                storeName,
+                safeCell(emp.getPhone()),
+                safeCell(emp.getEmail()),
+                normalizeAccountStatus(emp.getAccountStatus()),
+                formatOnlineStatus(emp),
+                safeCell(emp.getRoleId()),
+                safeCell(emp.getGender()),
+                emp.getEmployeeId()
+            });
+        }
+    }
+
+    private Employee getEmployeeFromForm() {
+        String name = txtName.getText().trim();
+        String phone = txtPhone.getText().trim();
+        String email = txtEmail.getText().trim().toLowerCase();
+        String gender = rdoMale.isSelected() ? "Nam" : (rdoFemale.isSelected() ? "Nữ" : "");
+
+        String role = "";
+        if (cbRole.getSelectedIndex() >= 0) {
+            role = cbRole.getSelectedItem().toString().trim().toUpperCase();
+        }
+
+        String storeId = "";
+        if (SessionManager.isStoreManager()) {
+            storeId = getCurrentStoreId();
+        } else {
+            if (cbStoreForm.getSelectedIndex() >= 0 && cbStoreForm.getSelectedItem() != null) {
+                storeId = extractStoreIdFromComboText(cbStoreForm.getSelectedItem().toString());
+            }
+        }
+
+        if (name.isEmpty() || phone.isEmpty() || email.isEmpty() || gender.isEmpty()
+                || role.isEmpty() || storeId == null || storeId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Vui lòng điền đầy đủ thông tin cá nhân, chức vụ và chi nhánh (*)");
             return null;
         }
+
+        if (!role.equals("R_STAFF_SALE") && !role.equals("R_STAFF_VIEW_PROD")) {
+            JOptionPane.showMessageDialog(this,
+                    "Phân quyền không hợp lệ!\nQuản lý chỉ được phép cấp quyền:\n- R_STAFF_SALE\n- R_STAFF_VIEW_PROD",
+                    "Cảnh báo bảo mật", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+
+        if (!isValidEmail(email)) {
+            JOptionPane.showMessageDialog(this, "Email không hợp lệ!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+            txtEmail.requestFocus();
+            return null;
+        }
+
+        if (!isValidPhone(phone)) {
+            JOptionPane.showMessageDialog(this, "Số điện thoại không hợp lệ!",
+                    "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+            txtPhone.requestFocus();
+            return null;
+        }
+
+        Employee e = new Employee();
+        e.setEmployeeName(name);
+        e.setPhone(phone);
+        e.setEmail(email);
+        e.setGender(gender);
+        e.setRole(role);
+        e.setRoleId(role);
+        e.setStoreId(storeId.trim());
+        return e;
+    }
+
+    private String extractStoreIdFromComboText(String selectedStore) {
+        if (selectedStore == null || selectedStore.trim().isEmpty()) {
+            return "";
+        }
+
+        int open = selectedStore.lastIndexOf("(");
+        int close = selectedStore.lastIndexOf(")");
+
+        if (open >= 0 && close > open) {
+            return selectedStore.substring(open + 1, close).trim();
+        }
+
+        return selectedStore.trim();
+    }
+
+    private Date parseRequiredSqlDate(String value) {
+        LocalDate parsed = parseUiDate(value);
+        if (parsed == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Vui lòng nhập ngày theo định dạng dd/MM/yyyy. Ví dụ: 25/05/2026.",
+                    "Lỗi định dạng ngày", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        return Date.valueOf(parsed);
     }
 
     private Date parseOptionalSqlDate(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        try {
-            return Date.valueOf(LocalDate.parse(value.trim()));
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Ngày lọc không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.",
-                    "Lỗi định dạng",
-                    JOptionPane.WARNING_MESSAGE
-            );
+
+        LocalDate parsed = parseUiDate(value);
+        if (parsed == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Ngày lọc không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy. Ví dụ: 25/05/2026.",
+                    "Lỗi định dạng ngày", JOptionPane.WARNING_MESSAGE);
             return null;
         }
+        return Date.valueOf(parsed);
+    }
+
+    private String formatUiDate(LocalDate date) {
+        return date == null ? "" : UI_DATE_FORMAT.format(date);
+    }
+
+    private LocalDate parseUiDate(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        String text = value.trim();
+        try {
+            return LocalDate.parse(text, UI_DATE_FORMAT);
+        } catch (Exception ignored) {
+        }
+
+        try {
+            return LocalDate.parse(text);
+        } catch (Exception ignored) {
+        }
+
+        return null;
     }
 
     private boolean isShiftAssignableRole(String roleId) {
@@ -1571,6 +2467,7 @@ public class EmployeeView extends JPanel {
         if (cbShiftEmployeeTypeFilter == null) {
             return "ALL";
         }
+
         int index = cbShiftEmployeeTypeFilter.getSelectedIndex();
         if (index == 1) {
             return "WAREHOUSE";
@@ -1597,6 +2494,7 @@ public class EmployeeView extends JPanel {
         if (employeeId == null || cbShiftEmployee == null) {
             return;
         }
+
         for (int i = 0; i < cbShiftEmployee.getItemCount(); i++) {
             EmployeeOption option = cbShiftEmployee.getItemAt(i);
             if (employeeId.equals(option.employee.getEmployeeId())) {
@@ -1610,6 +2508,7 @@ public class EmployeeView extends JPanel {
         if (shiftId == null || combo == null) {
             return;
         }
+
         for (int i = 0; i < combo.getItemCount(); i++) {
             ShiftOption option = combo.getItemAt(i);
             if (!option.all && option.shift != null && shiftId.equals(option.shift.getShiftId())) {
@@ -1619,173 +2518,327 @@ public class EmployeeView extends JPanel {
         }
     }
 
-    private String formatShiftTime(java.util.Date value) {
-        return value == null ? "--:--" : shiftTimeFormat.format(value);
-    }
-
-    private Employee getEmployeeFromForm() {
-        String name = txtName.getText().trim();
-        String phone = txtPhone.getText().trim();
-        String email = txtEmail.getText().trim().toLowerCase();
-
-        String gender = rdoMale.isSelected()
-                ? "Nam"
-                : (rdoFemale.isSelected() ? "Nữ" : "");
-
-        String role = "";
-        if (cbRole.getSelectedIndex() >= 0) {
-            role = cbRole.getSelectedItem().toString().trim().toUpperCase();
+    private int minutesOf(java.util.Date value) {
+        if (value == null) {
+            return 0;
         }
 
-        String storeId = "";
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTime(value);
+        return cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+    }
 
-        if (SessionManager.isStoreManager()) {
-            storeId = getCurrentStoreId();
-        } else {
-            if (cbStoreForm.getSelectedIndex() >= 0 && cbStoreForm.getSelectedItem() != null) {
-                storeId = extractStoreIdFromComboText(cbStoreForm.getSelectedItem().toString());
+    private String safeCell(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "—";
+        }
+        return value.trim();
+    }
+
+    private void showShiftDetailDialog(TimelineBlock block) {
+        if (block == null || block.getPrimary() == null) {
+            return;
+        }
+
+        selectedTimelineBlock = block;
+        fillShiftForm(block);
+
+        EmployeeShift item = block.getPrimary();
+
+        JDialog dialog = new JDialog(
+                SwingUtilities.getWindowAncestor(this),
+                "Chi tiết / cập nhật ca làm việc",
+                Dialog.ModalityType.APPLICATION_MODAL
+        );
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(860, 720);
+        dialog.setMinimumSize(new Dimension(800, 660));
+        dialog.setLocationRelativeTo(this);
+
+        JPanel root = new JPanel(new BorderLayout(0, 16));
+        root.setBackground(Color.WHITE);
+        root.setBorder(new EmptyBorder(24, 28, 24, 28));
+
+        JPanel header = new JPanel(new BorderLayout(12, 0));
+        header.setOpaque(false);
+
+        JLabel title = new JLabel(item.getShiftName() == null ? "Ca làm việc" : item.getShiftName());
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setForeground(textDark);
+
+        String dateRange = formatUiDate(block.startDate)
+                + (block.startDate.equals(block.endDate) ? "" : " - " + formatUiDate(block.endDate));
+        JLabel sub = new JLabel((item.getEmployeeName() == null ? "—" : item.getEmployeeName()) + " • " + dateRange
+                + " • " + block.getDayCount() + " ngày");
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        sub.setForeground(new Color(107, 119, 140));
+
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 4));
+        titleBox.setOpaque(false);
+        titleBox.add(title);
+        titleBox.add(sub);
+
+        JLabel badge = new JLabel(normalizeShiftStatusForView(item.getStatus()), SwingConstants.CENTER);
+        badge.setOpaque(true);
+        badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        badge.setForeground(Color.WHITE);
+        badge.setBackground(getShiftStatusColor(item.getStatus()));
+        badge.setBorder(new EmptyBorder(8, 14, 8, 14));
+
+        header.add(titleBox, BorderLayout.WEST);
+        header.add(badge, BorderLayout.EAST);
+
+        JComboBox<EmployeeOption> dlgEmployee = new JComboBox<>();
+        for (Employee emp : assignableEmployees) {
+            if (emp != null && isShiftAssignableRole(emp.getRoleId())) {
+                dlgEmployee.addItem(new EmployeeOption(emp));
             }
         }
+        stylePlainCombo(dlgEmployee);
+        selectEmployeeOptionInCombo(dlgEmployee, item.getEmployeeId());
 
-        if (name.isEmpty()
-                || phone.isEmpty()
-                || email.isEmpty()
-                || gender.isEmpty()
-                || role.isEmpty()
-                || storeId == null
-                || storeId.trim().isEmpty()) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Vui lòng điền đầy đủ thông tin cá nhân, chức vụ và chi nhánh (*)"
-            );
-            return null;
+        JComboBox<ShiftOption> dlgShift = new JComboBox<>();
+        for (Shift shift : shiftList) {
+            dlgShift.addItem(new ShiftOption(shift, false));
         }
+        stylePlainCombo(dlgShift);
+        selectShiftOptionInCombo(dlgShift, item.getShiftId());
 
-        if (!role.equals("R_STAFF_SALE") && !role.equals("R_STAFF_VIEW_PROD")) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Phân quyền không hợp lệ!\n"
-                    + "Quản lý chỉ được phép cấp quyền:\n"
-                    + "- R_STAFF_SALE\n"
-                    + "- R_STAFF_VIEW_PROD",
-                    "Cảnh báo bảo mật",
-                    JOptionPane.WARNING_MESSAGE
-            );
-            return null;
-        }
+        JTextField dlgFromDate = createDateField(block.startDate);
+        JTextField dlgToDate = createDateField(block.endDate);
+        dlgFromDate.setPreferredSize(new Dimension(300, 42));
+        dlgToDate.setPreferredSize(new Dimension(300, 42));
 
-        if (!isValidEmail(email)) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Email không hợp lệ!",
-                    "Lỗi định dạng",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            txtEmail.requestFocus();
-            return null;
-        }
+        JComboBox<String> dlgStatus = new JComboBox<>(new String[]{"ASSIGNED", "COMPLETED", "CANCELED"});
+        stylePlainCombo(dlgStatus);
+        dlgStatus.setSelectedItem(item.getStatus() == null ? "ASSIGNED" : item.getStatus());
 
-        if (!isValidPhone(phone)) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Số điện thoại không hợp lệ!",
-                    "Lỗi định dạng",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            txtPhone.requestFocus();
-            return null;
-        }
+        JTextArea dlgNote = new JTextArea(5, 24);
+        dlgNote.setLineWrap(true);
+        dlgNote.setWrapStyleWord(true);
+        dlgNote.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        dlgNote.setText(item.getNote() == null ? "" : item.getNote());
+        dlgNote.setBorder(new EmptyBorder(10, 12, 10, 12));
+        JScrollPane noteScroll = new JScrollPane(dlgNote);
+        noteScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 10));
+        noteScroll.getViewport().setBackground(Color.WHITE);
 
-        Employee e = new Employee();
-        e.setEmployeeName(name);
-        e.setPhone(phone);
-        e.setEmail(email);
-        e.setGender(gender);
-        e.setRole(role);
-        e.setRoleId(role);
+        String ids = block.getAssignmentIdsText();
+        String[][] rows = new String[][]{
+            {"Mã phân ca", ids},
+            {"Nhân viên hiện tại", safeDetail(item.getEmployeeName())},
+            {"Loại nhân viên", safeDetail(item.getEmployeeType())},
+            {"Từ ngày", formatUiDate(block.startDate)},
+            {"Đến ngày", formatUiDate(block.endDate)},
+            {"Số ngày được gom", String.valueOf(block.getDayCount())},
+            {"Thời gian", safeDetail(item.getStartTimeText()) + " - " + safeDetail(item.getEndTimeText())}
+        };
 
-        // Quan trọng: Manager luôn bị ép store_id theo session
-        e.setStoreId(storeId.trim());
-
-        return e;
-    }
-
-    private String extractStoreIdFromComboText(String selectedStore) {
-        if (selectedStore == null || selectedStore.trim().isEmpty()) {
-            return "";
-        }
-
-        int open = selectedStore.lastIndexOf("(");
-        int close = selectedStore.lastIndexOf(")");
-
-        if (open >= 0 && close > open) {
-            return selectedStore.substring(open + 1, close).trim();
-        }
-
-        return selectedStore.trim();
-    }
-
-    private void clearForm() {
-        txtId.setText("");
-        txtName.setText("");
-        txtPhone.setText("");
-        txtEmail.setText("");
-        txtEmail.setEnabled(true);
-        txtEmail.setToolTipText(null);
-
-        currentSelectedRawId = "";
-
-        btngGender.clearSelection();
-        tblEmployees.clearSelection();
-
-        ((JTextField) cbSearch.getEditor().getEditorComponent()).setText("");
-
-        // --- BỔ SUNG: Xóa lựa chọn Chi nhánh ---
-        if (cbStoreForm != null) {
-            if (SessionManager.isStoreManager()) {
-                selectStoreComboByStoreId(getCurrentStoreId());
-                cbStoreForm.setEnabled(false);
-            } else {
-                cbStoreForm.setSelectedIndex(-1);
-                cbStoreForm.setEnabled(true);
+        JTable detailTable = new JTable(new DefaultTableModel(rows, new String[]{"Thông tin", "Giá trị"}) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
             }
-        }
+        });
+        detailTable.setRowHeight(32);
+        detailTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        detailTable.setShowHorizontalLines(true);
+        detailTable.setShowVerticalLines(false);
+        detailTable.setGridColor(new Color(226, 232, 240));
+        detailTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        detailTable.getTableHeader().setBackground(new Color(248, 250, 252));
+        detailTable.getTableHeader().setForeground(textDark);
+        detailTable.getColumnModel().getColumn(0).setPreferredWidth(170);
+        detailTable.getColumnModel().getColumn(1).setPreferredWidth(420);
 
-        // --- ĐÃ SỬA THEO BƯỚC 4: Reset ComboBox Chức vụ liền mạch ---
-        if (cbRole != null) {
-            cbRole.setSelectedIndex(-1);
-        }
-        // -----------------------------------------------------------
+        detailTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setBorder(new EmptyBorder(0, 12, 0, 12));
+                setFont(new Font("Segoe UI", column == 0 ? Font.BOLD : Font.PLAIN, 13));
+                setForeground(column == 0 ? new Color(43, 54, 116) : textDark);
+                setBackground(row % 2 == 0 ? Color.WHITE : new Color(249, 251, 253));
+                return this;
+            }
+        });
+
+        JScrollPane tableScroll = new JScrollPane(detailTable);
+        tableScroll.setBorder(new RoundBorder(new Color(210, 218, 230), 12));
+        tableScroll.getViewport().setBackground(Color.WHITE);
+
+        JPanel editForm = new JPanel(new GridBagLayout());
+        editForm.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        int y = 0;
+
+        editForm.add(createDialogField("Nhân viên (*)", dlgEmployee), addGbc(gbc, y++, 10));
+        editForm.add(createDialogField("Ca làm việc (*)", dlgShift), addGbc(gbc, y++, 10));
+
+        JPanel dateRow = new JPanel(new GridLayout(1, 2, 14, 0));
+        dateRow.setOpaque(false);
+        dateRow.add(createDialogField("Từ ngày (*)", dlgFromDate));
+        dateRow.add(createDialogField("Đến ngày (*)", dlgToDate));
+        editForm.add(dateRow, addGbc(gbc, y++, 10));
+
+        editForm.add(createDialogField("Trạng thái (*)", dlgStatus), addGbc(gbc, y++, 10));
+        editForm.add(createDialogField("Ghi chú", noteScroll), addGbc(gbc, y++, 0));
+
+        JPanel center = new JPanel(new GridLayout(1, 2, 16, 0));
+        center.setOpaque(false);
+        center.add(tableScroll);
+        center.add(editForm);
+
+        JButton btnUpdateSchedule = createCustomButton("Cập nhật lịch", primaryBlue, Color.WHITE, null);
+        JButton btnDelete = createCustomButton("Xóa lịch", new Color(185, 28, 28), Color.WHITE, null);
+        JButton btnClose = createCustomButton("Đóng", new Color(235, 239, 245), textDark, null);
+        btnUpdateSchedule.setPreferredSize(new Dimension(140, 42));
+        btnDelete.setPreferredSize(new Dimension(110, 42));
+        btnClose.setPreferredSize(new Dimension(100, 42));
+
+        btnUpdateSchedule.addActionListener(e -> {
+            EmployeeOption employeeOption = (EmployeeOption) dlgEmployee.getSelectedItem();
+            ShiftOption shiftOption = (ShiftOption) dlgShift.getSelectedItem();
+            LocalDate from = parseUiDate(dlgFromDate.getText());
+            LocalDate to = parseUiDate(dlgToDate.getText());
+            String status = String.valueOf(dlgStatus.getSelectedItem());
+            String note = dlgNote.getText() == null ? "" : dlgNote.getText().trim();
+
+            boolean ok = replaceShiftAssignmentsFromValues(
+                    dialog,
+                    block.getAssignmentIds(),
+                    employeeOption,
+                    shiftOption,
+                    from,
+                    to,
+                    status,
+                    note,
+                    "Cập nhật lịch phân ca"
+            );
+
+            if (ok) {
+                syncShiftFormFromValues(employeeOption, shiftOption, from, to, status, note, true);
+                loadShiftAssignments();
+                dialog.dispose();
+            }
+        });
+
+        btnDelete.addActionListener(e -> {
+            selectedTimelineBlock = block;
+            fillShiftForm(block);
+            dialog.dispose();
+            deleteShiftAssignment();
+        });
+
+        btnClose.addActionListener(e -> dialog.dispose());
+
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        footer.setOpaque(false);
+        footer.add(btnUpdateSchedule);
+        footer.add(btnDelete);
+        footer.add(btnClose);
+
+        root.add(header, BorderLayout.NORTH);
+        root.add(center, BorderLayout.CENTER);
+        root.add(footer, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.setVisible(true);
     }
 
-    private void loadDataToTable() {
-        String currentRole = getCurrentUserRole();
-        String storeId = getCurrentStoreId();
+    private String safeDetail(String value) {
+        return value == null || value.trim().isEmpty() ? "—" : value.trim();
+    }
 
-        if (SessionManager.isStoreManager()) {
-            if (storeId == null || storeId.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Tài khoản quản lý chưa được phân chi nhánh. Vui lòng liên hệ Admin.",
-                        "Chưa phân chi nhánh",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                updateTable(new ArrayList<>());
-                return;
-            }
-
-            updateTable(employeeSql.getAllNhanVien(currentRole, storeId));
-        } else {
-            updateTable(employeeSql.getAllNhanVien(currentRole, null));
+    private String normalizeAccountStatus(String status) {
+        if (status == null) {
+            return "Chưa cấp";
         }
+
+        String value = status.trim();
+        if (value.isEmpty() || value.equals("—") || value.equalsIgnoreCase("N/A")
+                || value.equalsIgnoreCase("null")) {
+            return "Chưa cấp";
+        }
+        return value;
+    }
+
+    private String normalizeShiftStatusForView(String status) {
+        if (status == null || status.trim().isEmpty()) {
+            return "Đã phân";
+        }
+        if ("ASSIGNED".equalsIgnoreCase(status)) {
+            return "Đã phân";
+        }
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            return "Hoàn thành";
+        }
+        if ("CANCELED".equalsIgnoreCase(status)) {
+            return "Đã hủy";
+        }
+        return status;
+    }
+
+    private Color getShiftStatusColor(String status) {
+        if ("CANCELED".equalsIgnoreCase(status)) {
+            return offlineRed;
+        }
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            return primaryBlue;
+        }
+        return successGreen;
+    }
+
+    private String formatOnlineStatus(Employee emp) {
+        if (emp == null) {
+            return "—";
+        }
+
+        String status = emp.getOnlineStatus();
+        if (status == null || status.trim().isEmpty()) {
+            return "—";
+        }
+
+        status = status.trim();
+        if ("ONLINE".equalsIgnoreCase(status)) {
+            int count = emp.getActiveSessions();
+            if (count > 1) {
+                return "Online (" + count + ")";
+            }
+            return "Online";
+        }
+        if ("OFFLINE".equalsIgnoreCase(status)) {
+            return "Offline";
+        }
+        if ("N/A".equalsIgnoreCase(status)) {
+            return "—";
+        }
+        return status;
+    }
+
+    private String maskSensitiveInfo(String info) {
+        if (info == null || info.isEmpty()) {
+            return "Chưa có dữ liệu";
+        }
+
+        if (info.length() > 6) {
+            String visiblePart = info.substring(0, 6);
+            StringBuilder hiddenPart = new StringBuilder();
+            for (int i = 6; i < info.length(); i++) {
+                hiddenPart.append("*");
+            }
+            return visiblePart + hiddenPart;
+        }
+        return info;
     }
 
     private String getCurrentUserRole() {
         try {
-            model.account.Account currentUser
-                    = business.service.SessionManager.getCurrentUser();
-
+            model.account.Account currentUser = business.service.SessionManager.getCurrentUser();
             if (currentUser == null) {
                 return "";
             }
@@ -1793,19 +2846,15 @@ public class EmployeeView extends JPanel {
             if (currentUser.getRoleId() != null && !currentUser.getRoleId().trim().isEmpty()) {
                 return currentUser.getRoleId();
             }
-
             if (currentUser.getRoleValue() != null && !currentUser.getRoleValue().trim().isEmpty()) {
                 return currentUser.getRoleValue();
             }
-
             if (currentUser.getRole() != null && !currentUser.getRole().trim().isEmpty()) {
                 return currentUser.getRole();
             }
-
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-
         return "";
     }
 
@@ -1818,173 +2867,103 @@ public class EmployeeView extends JPanel {
         }
     }
 
-    private String safeCell(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return "—";
-        }
-        return value.trim();
-    }
-
-    private String normalizeAccountStatus(String status) {
-        if (status == null) {
-            return "Chưa cấp";
-        }
-
-        String value = status.trim();
-
-        if (value.isEmpty()
-                || value.equals("—")
-                || value.equalsIgnoreCase("N/A")
-                || value.equalsIgnoreCase("null")) {
-            return "Chưa cấp";
-        }
-
-        return value;
-    }
-
-//    private String formatRoleName(String roleId) {
-//        if (roleId == null) {
-//            return "—";
-//        }
-//
-//        switch (roleId) {
-//            case "R_ADMIN_ALL":
-//                return "Admin hệ thống";
-//            case "R_STORE_MNG":
-//                return "Quản lý cửa hàng";
-//            case "R_STAFF_SALE":
-//                return "Nhân viên bán hàng";
-//            case "R_STAFF_VIEW_PROD":
-//                return "Nhân viên xem sản phẩm";
-//            default:
-//                return roleId;
-//        }
-//    }
-    private void updateTable(List<Employee> list) {
-        tableModel.setRowCount(0);
-
-        if (list == null) {
+    private void touchAccountSecurityByEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
             return;
         }
 
-        for (Employee emp : list) {
-            String storeName = safeCell(emp.getStoreName());
-            if ("—".equals(storeName) || storeName.trim().isEmpty()) {
-                storeName = "Chưa phân";
+        String sql = "UPDATE ACCOUNTS SET UPDATED_AT = CURRENT_TIMESTAMP "
+                + "WHERE USER_ID = ? AND NVL(IS_DELETED, 0) = 0";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, employeeId.trim());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] touchAccountSecurityByEmployeeId error: " + e.getMessage());
+        }
+    }
+
+    private String getEmployeeRoleById(String employeeId) {
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = "SELECT role_id FROM EMPLOYEES WHERE employee_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, employeeId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("role_id");
+                }
             }
-
-            tableModel.addRow(new Object[]{
-                maskSensitiveInfo(emp.getEmployeeId()),
-                safeCell(emp.getEmployeeName()),
-                storeName,
-                safeCell(emp.getPhone()),
-                safeCell(emp.getEmail()),
-                normalizeAccountStatus(emp.getAccountStatus()),
-                formatOnlineStatus(emp),
-                safeCell(emp.getRoleId()),
-                safeCell(emp.getGender()),
-                emp.getEmployeeId()
-            });
+        } catch (Exception e) {
+            System.err.println("[EmployeeView] getEmployeeRoleById error: " + e.getMessage());
         }
+        return null;
     }
 
-    private String formatOnlineStatus(Employee emp) {
-        if (emp == null) {
-            return "—";
+    private boolean isValidEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return false;
         }
 
-        String status = emp.getOnlineStatus();
-
-        if (status == null || status.trim().isEmpty()) {
-            return "—";
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        if (!email.matches(emailRegex)) {
+            return false;
         }
 
-        status = status.trim();
+        return email.endsWith("@gmail.com") || email.endsWith("@gm.uit.edu.vn");
+    }
 
-        if ("ONLINE".equalsIgnoreCase(status)) {
-            int count = emp.getActiveSessions();
+    private boolean isEmailDuplicate(String email, String excludeEmpId) {
+        return employeeSql.existsByEmailGlobal(email, excludeEmpId);
+    }
 
-            if (count > 1) {
-                return "Online (" + count + ")";
+    private boolean isValidPhone(String phone) {
+        return phone != null && !phone.isEmpty() && phone.matches("^(0)(3|5|7|8|9)[0-9]{8}$");
+    }
+
+    private boolean isPhoneDuplicate(String phone, String excludeEmpId) {
+        try {
+            List<Employee> list = employeeSql.selectAll();
+            for (Employee e : list) {
+                if (e.getPhone() != null && e.getPhone().equals(phone)) {
+                    if (excludeEmpId != null && e.getEmployeeId().equals(excludeEmpId)) {
+                        continue;
+                    }
+                    return true;
+                }
             }
-
-            return "Online";
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
-
-        if ("OFFLINE".equalsIgnoreCase(status)) {
-            return "Offline";
-        }
-
-        if ("N/A".equalsIgnoreCase(status)) {
-            return "—";
-        }
-
-        return status;
+        return false;
     }
 
-    private String maskSensitiveInfo(String info) {
-        if (info == null || info.isEmpty()) {
-            return "Chưa có dữ liệu";
-        }
-
-        if (info.length() > 6) {
-            String visiblePart = info.substring(0, 6);
-
-            StringBuilder hiddenPart = new StringBuilder();
-            for (int i = 6; i < info.length(); i++) {
-                hiddenPart.append("*");
-            }
-
-            return visiblePart + hiddenPart;
-        }
-
-        return info;
+    private String formatShiftTime(java.util.Date value) {
+        return value == null ? "--:--" : shiftTimeFormat.format(value);
     }
 
-    private int getRoleRank(String role) {
-        if (role == null) {
-            return 3;
-        }
-
-        if (role.contains("ADMIN")) {
-            return 1;
-        }
-
-        if (role.contains("MNG")) {
-            return 2;
-        }
-
-        return 3;
-    }
-
-    private void styleComboBox(JComboBox<String> cb, String placeholder) {
-        cb.setPreferredSize(new Dimension(280, 38));
-        cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        cb.setBackground(Color.WHITE);
-        cb.setEditable(true);
-
-        JTextField editor = (JTextField) cb.getEditor().getEditorComponent();
-        editor.putClientProperty("JTextField.placeholderText", placeholder);
-        editor.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(borderGray, 8),
-                new EmptyBorder(5, 5, 5, 5)
-        ));
+    // ==================== UI COMPONENT CREATORS ====================
+    private void stylePlainCombo(JComboBox<?> combo) {
+        combo.setPreferredSize(new Dimension(180, 38));
+        combo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        combo.setBackground(Color.WHITE);
+        combo.setBorder(new RoundBorder(borderGray, 8));
     }
 
     private void styleSearchBox(JComboBox<String> cb) {
         cb.setEditable(true);
         cb.setBorder(null);
         cb.setBackground(Color.WHITE);
-
-        ((JTextField) cb.getEditor().getEditorComponent())
-                .setBorder(new EmptyBorder(0, 5, 0, 5));
+        ((JTextField) cb.getEditor().getEditorComponent()).setBorder(new EmptyBorder(0, 5, 0, 5));
     }
 
     private JLabel createLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lbl.setForeground(textDark);
-
         return lbl;
     }
 
@@ -1997,7 +2976,6 @@ public class EmployeeView extends JPanel {
                 new RoundBorder(borderGray, 8),
                 new EmptyBorder(5, 10, 5, 10)
         ));
-
         return txt;
     }
 
@@ -2005,9 +2983,7 @@ public class EmployeeView extends JPanel {
         JButton btn = new JButton(t);
 
         if (icon != null) {
-            btn.setIcon(new ImageIcon(
-                    icon.getImage().getScaledInstance(18, 18, Image.SCALE_SMOOTH)
-            ));
+            btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(18, 18, Image.SCALE_SMOOTH)));
         }
 
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -2023,14 +2999,9 @@ public class EmployeeView extends JPanel {
             @Override
             public void paint(Graphics g, JComponent c) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(
-                        RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON
-                );
-
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(c.getBackground());
                 g2.fillRoundRect(0, 0, c.getWidth(), c.getHeight(), 25, 25);
-
                 super.paint(g2, c);
                 g2.dispose();
             }
@@ -2039,42 +3010,147 @@ public class EmployeeView extends JPanel {
         return btn;
     }
 
-    private void setupTableStyle() {
-        tblEmployees.setRowHeight(38);
-        tblEmployees.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        tblEmployees.setShowVerticalLines(false);
-        tblEmployees.setShowHorizontalLines(false);
-        tblEmployees.setSelectionBackground(new Color(237, 242, 255));
-        tblEmployees.setSelectionForeground(textDark);
-        tblEmployees.getTableHeader().setReorderingAllowed(false);
-        tblEmployees.setFillsViewportHeight(true);
-
-        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
-        headerRenderer.setBackground(bgLight);
-        headerRenderer.setForeground(Color.BLACK);
-        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        headerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
-
-        for (int i = 0; i < tblEmployees.getColumnModel().getColumnCount(); i++) {
-            tblEmployees.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
-        }
-
-        UnifiedEmployeeRenderer renderer = new UnifiedEmployeeRenderer();
-
-        for (int i = 0; i < tblEmployees.getColumnCount(); i++) {
-            tblEmployees.getColumnModel().getColumn(i).setCellRenderer(renderer);
-        }
-
-        setupEmployeeTableColumnWidth();
-    }
-
     private GridBagConstraints addGbc(GridBagConstraints gbc, int y, int b) {
         gbc.gridy = y;
         gbc.insets = new Insets(0, 0, b, 0);
         return gbc;
     }
 
+    private JTextField createDateField(LocalDate initialDate) {
+        CalendarDateField field = new CalendarDateField();
+        field.setText(formatUiDate(initialDate));
+        field.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        field.setBackground(Color.WHITE);
+        field.setForeground(textDark);
+        field.setCaretColor(textDark);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(new Color(185, 196, 213), 8),
+                new EmptyBorder(0, 10, 0, 34)
+        ));
+        return field;
+    }
+
+    private void showCalendarPopup(JTextField target) {
+        LocalDate base = parseUiDate(target.getText());
+        if (base == null) {
+            base = LocalDate.now();
+        }
+
+        JPopupMenu popup = new JPopupMenu();
+        popup.setBorder(new RoundBorder(new Color(185, 196, 213), 10));
+        popup.add(createCalendarPanel(target, popup, YearMonth.from(base)));
+        popup.show(target, 0, target.getHeight() + 2);
+    }
+
+    private JPanel createCalendarPanel(JTextField target, JPopupMenu popup, YearMonth month) {
+        JPanel root = new JPanel(new BorderLayout(0, 8));
+        root.setBackground(Color.WHITE);
+        root.setPreferredSize(new Dimension(270, 255));
+        root.setBorder(new EmptyBorder(12, 12, 12, 12));
+
+        JPanel header = new JPanel(new BorderLayout(8, 0));
+        header.setOpaque(false);
+
+        JButton prev = new JButton("‹");
+        JButton next = new JButton("›");
+        styleCalendarButton(prev);
+        styleCalendarButton(next);
+        prev.setPreferredSize(new Dimension(34, 30));
+        next.setPreferredSize(new Dimension(34, 30));
+
+        JLabel title = new JLabel("Tháng " + month.getMonthValue() + " / " + month.getYear(), SwingConstants.CENTER);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        title.setForeground(textDark);
+
+        header.add(prev, BorderLayout.WEST);
+        header.add(title, BorderLayout.CENTER);
+        header.add(next, BorderLayout.EAST);
+
+        JPanel grid = new JPanel(new GridLayout(7, 7, 4, 4));
+        grid.setOpaque(false);
+
+        String[] names = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+        for (String n : names) {
+            JLabel l = new JLabel(n, SwingConstants.CENTER);
+            l.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            l.setForeground(n.equals("CN") ? offlineRed : new Color(84, 101, 130));
+            grid.add(l);
+        }
+
+        int firstDay = month.atDay(1).getDayOfWeek().getValue();
+        int daysInMonth = month.lengthOfMonth();
+        int cellsBefore = firstDay - 1;
+        int day = 1;
+
+        for (int cell = 0; cell < 42; cell++) {
+            if (cell < cellsBefore || day > daysInMonth) {
+                JLabel blank = new JLabel("");
+                grid.add(blank);
+                continue;
+            }
+
+            LocalDate date = month.atDay(day++);
+            JButton btn = new JButton(String.valueOf(date.getDayOfMonth()));
+            styleCalendarDayButton(btn);
+
+            if (date.equals(LocalDate.now())) {
+                btn.setForeground(primaryOrange);
+                btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                btn.setBorder(new RoundBorder(primaryOrange, 8));
+                btn.setBorderPainted(true);
+            }
+
+            btn.addActionListener(e -> {
+                target.setText(formatUiDate(date));
+                popup.setVisible(false);
+            });
+            grid.add(btn);
+        }
+
+        prev.addActionListener(e -> {
+            popup.removeAll();
+            popup.add(createCalendarPanel(target, popup, month.minusMonths(1)));
+            popup.pack();
+            popup.revalidate();
+            popup.repaint();
+        });
+
+        next.addActionListener(e -> {
+            popup.removeAll();
+            popup.add(createCalendarPanel(target, popup, month.plusMonths(1)));
+            popup.pack();
+            popup.revalidate();
+            popup.repaint();
+        });
+
+        root.add(header, BorderLayout.NORTH);
+        root.add(grid, BorderLayout.CENTER);
+        return root;
+    }
+
+    private void styleCalendarDayButton(JButton btn) {
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setOpaque(true);
+        btn.setBackground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        btn.setForeground(textDark);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setMargin(new Insets(0, 0, 0, 0));
+    }
+
+    private void styleCalendarButton(JButton btn) {
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 17));
+        btn.setForeground(textDark);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setMargin(new Insets(0, 0, 0, 0));
+    }
+
+    // ==================== INNER CLASSES ====================
     class RoundedPanel extends JPanel {
 
         private int r;
@@ -2089,14 +3165,9 @@ public class EmployeeView extends JPanel {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(bg);
             g2.fillRoundRect(0, 0, getWidth(), getHeight(), r, r);
-
             g2.dispose();
         }
     }
@@ -2114,15 +3185,10 @@ public class EmployeeView extends JPanel {
         @Override
         public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(this.c);
             g2.setStroke(new BasicStroke(1.2f));
             g2.drawRoundRect(x, y, w - 1, h - 1, r, r);
-
             g2.dispose();
         }
 
@@ -2137,136 +3203,24 @@ public class EmployeeView extends JPanel {
         }
     }
 
-    private boolean isValidEmail(String email) {
-        if (email == null || email.isEmpty()) {
-            return false;
-        }
-
-        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
-
-        if (!email.matches(emailRegex)) {
-            return false;
-        }
-
-        return email.endsWith("@gmail.com") || email.endsWith("@gm.uit.edu.vn");
-    }
-
-    private boolean isEmailDuplicate(String email, String excludeEmpId) {
-        return employeeSql.existsByEmailGlobal(email, excludeEmpId);
-    }
-
-    private void touchAccountSecurityByEmployeeId(String employeeId) {
-        if (employeeId == null || employeeId.trim().isEmpty()) {
-            return;
-        }
-
-        String sql = """
-        UPDATE ACCOUNTS
-        SET UPDATED_AT = CURRENT_TIMESTAMP
-        WHERE USER_ID = ?
-          AND NVL(IS_DELETED, 0) = 0
-    """;
-
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setString(1, employeeId.trim());
-            ps.executeUpdate();
-
-        } catch (Exception e) {
-            System.err.println("[EmployeeView] touchAccountSecurityByEmployeeId error: " + e.getMessage());
-        }
-    }
-
-    private String getEmployeeRoleById(String employeeId) {
-        if (employeeId == null || employeeId.trim().isEmpty()) {
-            return null;
-        }
-
-        String sql = """
-        SELECT role_id
-        FROM EMPLOYEES
-        WHERE employee_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
-
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setString(1, employeeId.trim());
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("role_id");
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("[EmployeeView] getEmployeeRoleById error: " + e.getMessage());
-        }
-
-        return null;
-    }
-
-    private boolean isValidPhone(String phone) {
-        return phone != null
-                && !phone.isEmpty()
-                && phone.matches("^(0)(3|5|7|8|9)[0-9]{8}$");
-    }
-
-    private boolean isPhoneDuplicate(String phone, String excludeEmpId) {
-        try {
-            List<Employee> list = employeeSql.selectAll();
-
-            for (Employee e : list) {
-                if (e.getPhone() != null && e.getPhone().equals(phone)) {
-                    if (excludeEmpId != null && e.getEmployeeId().equals(excludeEmpId)) {
-                        continue;
-                    }
-
-                    return true;
-                }
-            }
-
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        return false;
-    }
-
     class UnifiedEmployeeRenderer extends DefaultTableCellRenderer {
 
         private final Color currentUserBg = new Color(225, 245, 233);
         private final Color managerBg = new Color(230, 245, 233);
-        private final Color adminBg = new Color(255, 235, 238);
         private final Color zebraBg = new Color(249, 251, 253);
         private final Color normalBg = Color.WHITE;
         private final Color selectedBg = new Color(212, 230, 241);
-        private final Color onlineGreen = new Color(39, 174, 96);
-        private final Color offlineRed = new Color(231, 76, 60);
 
         @Override
-        public Component getTableCellRendererComponent(
-                JTable table,
-                Object value,
-                boolean isSelected,
-                boolean hasFocus,
-                int row,
-                int column
-        ) {
-            super.getTableCellRendererComponent(
-                    table,
-                    value,
-                    isSelected,
-                    hasFocus,
-                    row,
-                    column
-            );
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                boolean hasFocus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
             int modelRow = table.convertRowIndexToModel(row);
             int modelColumn = table.convertColumnIndexToModel(column);
 
             setOpaque(true);
-            setFont(new Font("Segoe UI", Font.BOLD, 14));
+            setFont(new Font("Segoe UI", Font.BOLD, 13));
             setHorizontalAlignment(JLabel.CENTER);
 
             String roleDisplay = String.valueOf(table.getModel().getValueAt(modelRow, COL_ROLE));
@@ -2274,51 +3228,35 @@ public class EmployeeView extends JPanel {
 
             String currentUserId = "";
             try {
-                model.account.Account currentUser
-                        = business.service.SessionManager.getCurrentUser();
-
+                model.account.Account currentUser = business.service.SessionManager.getCurrentUser();
                 if (currentUser != null && currentUser.getUserId() != null) {
                     currentUserId = currentUser.getUserId();
                 }
             } catch (Exception ignored) {
             }
 
-            boolean isCurrentUserRow
-                    = currentUserId != null
-                    && !currentUserId.trim().isEmpty()
+            boolean isCurrentUserRow = currentUserId != null && !currentUserId.trim().isEmpty()
                     && currentUserId.equalsIgnoreCase(employeeId);
-
-            boolean isAdminRow
-                    = roleDisplay.contains("R_ADMIN_ALL")
-                    || roleDisplay.toLowerCase().contains("admin");
-
-            boolean isManagerRow
-                    = roleDisplay.contains("R_STORE_MNG")
-                    || roleDisplay.contains("MNG")
+            boolean isManagerRow = roleDisplay.contains("R_STORE_MNG") || roleDisplay.contains("MNG")
                     || roleDisplay.toLowerCase().contains("quản lý");
 
             if (isSelected) {
                 setBackground(selectedBg);
                 setForeground(textDark);
             } else if (isCurrentUserRow && isManagerRow) {
-                // Manager hiện tại đang đăng nhập
                 setBackground(currentUserBg);
                 setForeground(new Color(0, 120, 70));
             } else if (isManagerRow) {
-                // Các dòng Manager khác
                 setBackground(managerBg);
                 setForeground(new Color(25, 135, 84));
             } else {
-                // Admin và Staff giữ màu bình thường
                 setBackground(row % 2 == 0 ? normalBg : zebraBg);
                 setForeground(Color.BLACK);
             }
 
             if (modelColumn == COL_ONLINE_STATUS) {
                 String status = value == null ? "—" : value.toString().trim();
-
-                setFont(new Font("Segoe UI", Font.BOLD, 13));
-
+                setFont(new Font("Segoe UI", Font.BOLD, 12));
                 String normalized = status.toLowerCase();
 
                 if (normalized.startsWith("online")) {
@@ -2336,6 +3274,725 @@ public class EmployeeView extends JPanel {
             }
 
             return this;
+        }
+    }
+
+    private class CalendarDateField extends JTextField {
+
+        private final int iconWidth = 30;
+
+        CalendarDateField() {
+            setCursor(Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR));
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getX() >= getWidth() - iconWidth) {
+                        showCalendarPopup(CalendarDateField.this);
+                    }
+                }
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int x = getWidth() - iconWidth;
+            int y = 6;
+            int w = 18;
+            int h = 18;
+            int cx = x + 5;
+
+            g2.setColor(new Color(245, 247, 250));
+            g2.fillRoundRect(x, 1, iconWidth - 2, getHeight() - 3, 8, 8);
+            g2.setColor(new Color(178, 188, 204));
+            g2.drawLine(x, 7, x, getHeight() - 7);
+
+            g2.setColor(new Color(95, 111, 135));
+            g2.drawRoundRect(cx, y + 2, w, h - 2, 4, 4);
+            g2.fillRect(cx, y + 5, w + 1, 4);
+            g2.setColor(Color.WHITE);
+            g2.drawLine(cx + 4, y + 9, cx + w - 4, y + 9);
+            g2.setColor(new Color(95, 111, 135));
+            g2.fillRect(cx + 4, y, 3, 5);
+            g2.fillRect(cx + w - 7, y, 3, 5);
+            g2.dispose();
+        }
+    }
+
+    private static class TimelineCell {
+
+        private final String employeeId;
+        private final LocalDate date;
+        private final int hour;
+
+        private TimelineCell(String employeeId, LocalDate date, int hour) {
+            this.employeeId = employeeId;
+            this.date = date;
+            this.hour = hour;
+        }
+    }
+
+    private class TimelineBlock {
+
+        private final List<EmployeeShift> sourceAssignments = new ArrayList<>();
+        private EmployeeShift primary;
+        private String employeeId;
+        private String shiftId;
+        private String status;
+        private String startTimeText;
+        private String endTimeText;
+        private LocalDate startDate;
+        private LocalDate endDate;
+        private int startMinutes;
+        private int endMinutes;
+        private boolean fullTime;
+
+        TimelineBlock(EmployeeShift item) {
+            this.primary = item;
+            this.employeeId = item.getEmployeeId();
+            this.shiftId = item.getShiftId();
+            this.status = item.getStatus() == null ? "ASSIGNED" : item.getStatus();
+            this.startTimeText = item.getStartTimeText();
+            this.endTimeText = item.getEndTimeText();
+            this.startDate = item.getWorkDate().toLocalDate();
+            this.endDate = this.startDate;
+            this.startMinutes = parseMinutesForBlock(item.getStartTimeText(), 0);
+            this.endMinutes = parseMinutesForBlock(item.getEndTimeText(), 24 * 60);
+            this.fullTime = isFullTimeShiftForMerge(item);
+            this.sourceAssignments.add(item);
+        }
+
+        boolean canMerge(EmployeeShift next) {
+            if (next == null || next.getWorkDate() == null) {
+                return false;
+            }
+            String nextStatus = next.getStatus() == null ? "ASSIGNED" : next.getStatus();
+            return safeEquals(employeeId, next.getEmployeeId())
+                    && safeEquals(shiftId, next.getShiftId())
+                    && safeEquals(status, nextStatus)
+                    && safeEquals(startTimeText, next.getStartTimeText())
+                    && safeEquals(endTimeText, next.getEndTimeText())
+                    && next.getWorkDate().toLocalDate().equals(endDate.plusDays(1));
+        }
+
+        void merge(EmployeeShift next) {
+            sourceAssignments.add(next);
+            endDate = next.getWorkDate().toLocalDate();
+        }
+
+        EmployeeShift getPrimary() {
+            return primary;
+        }
+
+        int getDayCount() {
+            return sourceAssignments.size();
+        }
+
+        List<String> getAssignmentIds() {
+            List<String> ids = new ArrayList<>();
+            for (EmployeeShift item : sourceAssignments) {
+                if (item.getAssignmentId() != null && !item.getAssignmentId().isBlank()) {
+                    ids.add(item.getAssignmentId());
+                }
+            }
+            return ids;
+        }
+
+        String getAssignmentIdsText() {
+            List<String> ids = getAssignmentIds();
+            if (ids.isEmpty()) {
+                return "—";
+            }
+            if (ids.size() == 1) {
+                return ids.get(0);
+            }
+            String joined = String.join(", ", ids);
+            if (joined.length() > 95) {
+                return joined.substring(0, 95) + "...";
+            }
+            return joined;
+        }
+    }
+
+    private int parseMinutesForBlock(String time, int fallback) {
+        if (time == null || time.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            String[] parts = time.trim().split(":");
+            int h = Integer.parseInt(parts[0]);
+            int m = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return Math.max(0, Math.min(24 * 60, h * 60 + m));
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private boolean isFullTimeShiftForMerge(EmployeeShift item) {
+        if (item == null) {
+            return false;
+        }
+        String id = item.getShiftId() == null ? "" : item.getShiftId().toUpperCase();
+        String name = item.getShiftName() == null ? "" : item.getShiftName().toLowerCase();
+        return id.contains("FULL") || name.contains("full") || name.contains("toàn thời gian");
+    }
+
+    private boolean safeEquals(String a, String b) {
+        if (a == null) {
+            return b == null;
+        }
+        return a.equalsIgnoreCase(b == null ? "" : b);
+    }
+
+    class ShiftTimelinePanel extends JPanel {
+
+        private final int nameColWidth = 230;
+        private final int dayWidth = 250;
+        private final int headerHeight = 70;
+        private final int rowHeight = 68;
+        private final int blockHeight = 42;
+
+        private List<EmployeeShift> assignments = new ArrayList<>();
+        private List<LocalDate> visibleDates = new ArrayList<>();
+        private List<String> visibleEmployeeKeys = new ArrayList<>();
+        private Map<String, String> employeeDisplayNames = new HashMap<>();
+        private Map<String, String> employeeTypes = new HashMap<>();
+        private Map<Rectangle, TimelineBlock> hitBoxes = new HashMap<>();
+        private List<TimelineBlock> timelineBlocks = new ArrayList<>();
+        private TimelineBlock selectedBlock;
+        private EmployeeShift selectedAssignment;
+        private java.util.function.Consumer<TimelineBlock> selectionCallback;
+        private Point dragStartPoint;
+        private Point dragStartViewPosition;
+        private boolean draggingTimeline = false;
+        private LocalDate forcedMinDate;
+        private LocalDate forcedMaxDate;
+
+        ShiftTimelinePanel() {
+            setBackground(Color.WHITE);
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            setAssignments(new ArrayList<>());
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    dragStartPoint = e.getPoint();
+                    draggingTimeline = false;
+                    JViewport viewport = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, ShiftTimelinePanel.this);
+                    if (viewport != null) {
+                        dragStartViewPosition = viewport.getViewPosition();
+                    }
+                    setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                }
+
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (draggingTimeline) {
+                        return;
+                    }
+
+                    for (Map.Entry<Rectangle, TimelineBlock> entry : hitBoxes.entrySet()) {
+                        if (entry.getKey().contains(e.getPoint())) {
+                            selectedBlock = entry.getValue();
+                            selectedAssignment = selectedBlock == null ? null : selectedBlock.getPrimary();
+                            if (selectionCallback != null) {
+                                selectionCallback.accept(selectedBlock);
+                            }
+                            repaint();
+                            return;
+                        }
+                    }
+
+                    TimelineCell cell = locateEmptyTimelineCell(e.getPoint());
+                    if (cell != null) {
+                        showNewShiftDialogFromTimelineCell(cell.employeeId, cell.date, cell.hour);
+                    }
+                }
+            });
+
+            addMouseMotionListener(new MouseMotionAdapter() {
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    JViewport viewport = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, ShiftTimelinePanel.this);
+                    if (viewport == null || dragStartPoint == null || dragStartViewPosition == null) {
+                        return;
+                    }
+
+                    int dx = e.getX() - dragStartPoint.x;
+                    int dy = e.getY() - dragStartPoint.y;
+                    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+                        draggingTimeline = true;
+                    }
+
+                    Point newPos = new Point(
+                            dragStartViewPosition.x - dx,
+                            dragStartViewPosition.y - dy
+                    );
+
+                    newPos.x = Math.max(0, Math.min(newPos.x, getWidth() - viewport.getWidth()));
+                    newPos.y = Math.max(0, Math.min(newPos.y, getHeight() - viewport.getHeight()));
+                    viewport.setViewPosition(newPos);
+                }
+            });
+        }
+
+        private TimelineCell locateEmptyTimelineCell(Point point) {
+            if (point == null || point.y < headerHeight || point.x < nameColWidth) {
+                return null;
+            }
+
+            int row = (point.y - headerHeight) / rowHeight;
+            int dateIndex = (point.x - nameColWidth) / dayWidth;
+            if (row < 0 || row >= visibleEmployeeKeys.size() || dateIndex < 0 || dateIndex >= visibleDates.size()) {
+                return null;
+            }
+
+            int localX = point.x - (nameColWidth + dateIndex * dayWidth);
+            int hour = (int) Math.floor((localX / (double) dayWidth) * 24.0);
+            hour = Math.max(0, Math.min(23, hour));
+            return new TimelineCell(visibleEmployeeKeys.get(row), visibleDates.get(dateIndex), hour);
+        }
+
+        void setSelectionCallback(java.util.function.Consumer<TimelineBlock> selectionCallback) {
+            this.selectionCallback = selectionCallback;
+        }
+
+        void setDisplayRange(LocalDate fromDate, LocalDate toDate) {
+            if (fromDate == null && toDate == null) {
+                forcedMinDate = null;
+                forcedMaxDate = null;
+                return;
+            }
+
+            if (fromDate == null) {
+                fromDate = toDate;
+            }
+            if (toDate == null) {
+                toDate = fromDate;
+            }
+
+            if (fromDate.isAfter(toDate)) {
+                LocalDate tmp = fromDate;
+                fromDate = toDate;
+                toDate = tmp;
+            }
+
+            forcedMinDate = fromDate;
+            forcedMaxDate = toDate;
+        }
+
+        void clearSelectedAssignment() {
+            selectedAssignment = null;
+            selectedBlock = null;
+            repaint();
+        }
+
+        void setAssignments(List<EmployeeShift> data) {
+            assignments = data == null ? new ArrayList<>() : new ArrayList<>(data);
+            buildTimelineIndex();
+            timelineBlocks = buildTimelineBlocks(assignments);
+            revalidate();
+            repaint();
+        }
+
+        private void buildTimelineIndex() {
+            visibleDates.clear();
+            visibleEmployeeKeys.clear();
+            employeeDisplayNames.clear();
+            employeeTypes.clear();
+
+            LocalDate minDate = null;
+            LocalDate maxDate = null;
+
+            for (EmployeeShift item : assignments) {
+                if (item.getWorkDate() == null) {
+                    continue;
+                }
+
+                LocalDate d = item.getWorkDate().toLocalDate();
+                if (minDate == null || d.isBefore(minDate)) {
+                    minDate = d;
+                }
+                if (maxDate == null || d.isAfter(maxDate)) {
+                    maxDate = d;
+                }
+
+                String employeeId = item.getEmployeeId() == null ? "UNKNOWN" : item.getEmployeeId();
+                if (!visibleEmployeeKeys.contains(employeeId)) {
+                    visibleEmployeeKeys.add(employeeId);
+                    employeeDisplayNames.put(employeeId, item.getEmployeeName() == null ? employeeId : item.getEmployeeName());
+                    employeeTypes.put(employeeId, item.getEmployeeType() == null ? "" : item.getEmployeeType());
+                }
+            }
+
+            for (Employee emp : assignableEmployees) {
+                if (emp == null || emp.getEmployeeId() == null || emp.getEmployeeId().trim().isEmpty()) {
+                    continue;
+                }
+                if (!isShiftAssignableRole(emp.getRoleId())) {
+                    continue;
+                }
+                String employeeId = emp.getEmployeeId();
+                if (!visibleEmployeeKeys.contains(employeeId)) {
+                    visibleEmployeeKeys.add(employeeId);
+                    employeeDisplayNames.put(employeeId, emp.getEmployeeName() == null ? employeeId : emp.getEmployeeName());
+                    employeeTypes.put(employeeId, getEmployeeTypeLabel(emp.getRoleId()));
+                }
+            }
+
+            if (forcedMinDate != null || forcedMaxDate != null) {
+                LocalDate forcedFrom = forcedMinDate != null ? forcedMinDate : forcedMaxDate;
+                LocalDate forcedTo = forcedMaxDate != null ? forcedMaxDate : forcedFrom;
+
+                if (minDate == null || forcedFrom.isBefore(minDate)) {
+                    minDate = forcedFrom;
+                }
+                if (maxDate == null || forcedTo.isAfter(maxDate)) {
+                    maxDate = forcedTo;
+                }
+            }
+
+            if (minDate == null || maxDate == null) {
+                LocalDate today = LocalDate.now();
+                minDate = today;
+                maxDate = today;
+            }
+
+            for (LocalDate d = minDate; !d.isAfter(maxDate); d = d.plusDays(1)) {
+                visibleDates.add(d);
+            }
+
+            int width = nameColWidth + Math.max(visibleDates.size(), 1) * dayWidth + 60;
+            int height = headerHeight + Math.max(visibleEmployeeKeys.size(), 4) * rowHeight + 80;
+            setPreferredSize(new Dimension(width, height));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            hitBoxes.clear();
+
+            paintHeader(g2);
+            paintRows(g2);
+            paintAssignments(g2);
+            paintEmptyState(g2);
+
+            g2.dispose();
+        }
+
+        private void paintHeader(Graphics2D g2) {
+            g2.setColor(new Color(248, 250, 252));
+            g2.fillRoundRect(0, 0, getWidth() - 1, headerHeight, 18, 18);
+            g2.setStroke(new BasicStroke(2.4f));
+            g2.setColor(new Color(111, 127, 150));
+            g2.drawLine(0, headerHeight - 1, getWidth(), headerHeight - 1);
+
+            g2.setColor(textDark);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            g2.drawString("Nhân viên", 22, 30);
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            g2.setColor(new Color(107, 119, 140));
+            g2.drawString("Lịch làm việc theo ngày / giờ", 22, 54);
+
+            for (int i = 0; i < visibleDates.size(); i++) {
+                int x = nameColWidth + i * dayWidth;
+                LocalDate d = visibleDates.get(i);
+
+                g2.setStroke(new BasicStroke(2.1f));
+                g2.setColor(new Color(111, 127, 150));
+                g2.drawLine(x, 0, x, headerHeight + Math.max(visibleEmployeeKeys.size(), 4) * rowHeight);
+
+                g2.setColor(textDark);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                g2.drawString(d.toString(), x + 12, 28);
+
+                g2.setColor(new Color(107, 119, 140));
+                g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                g2.drawString("00h", x + 12, 54);
+                g2.drawString("08h", x + dayWidth / 3 - 8, 54);
+                g2.drawString("16h", x + dayWidth * 2 / 3 - 8, 54);
+                g2.drawString("24h", x + dayWidth - 38, 54);
+            }
+        }
+
+        private void paintRows(Graphics2D g2) {
+            int rowCount = Math.max(visibleEmployeeKeys.size(), 4);
+            for (int row = 0; row < rowCount; row++) {
+                int y = headerHeight + row * rowHeight;
+
+                g2.setColor(row % 2 == 0 ? Color.WHITE : new Color(249, 251, 253));
+                g2.fillRect(0, y, getWidth(), rowHeight);
+
+                g2.setStroke(new BasicStroke(2.1f));
+                g2.setColor(new Color(111, 127, 150));
+                g2.drawLine(0, y + rowHeight - 1, getWidth(), y + rowHeight - 1);
+
+                if (row < visibleEmployeeKeys.size()) {
+                    String employeeId = visibleEmployeeKeys.get(row);
+                    String name = employeeDisplayNames.getOrDefault(employeeId, employeeId);
+                    String type = employeeTypes.getOrDefault(employeeId, "");
+
+                    g2.setColor(textDark);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                    g2.drawString(name, 20, y + 32);
+
+                    g2.setColor(new Color(107, 119, 140));
+                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                    g2.drawString(type, 20, y + 52);
+                }
+
+                for (int i = 0; i < visibleDates.size(); i++) {
+                    int x = nameColWidth + i * dayWidth;
+                    g2.setStroke(new BasicStroke(1.7f));
+                    g2.setColor(new Color(136, 151, 174));
+                    g2.drawLine(x + dayWidth / 3, y + 10, x + dayWidth / 3, y + rowHeight - 10);
+                    g2.drawLine(x + dayWidth * 2 / 3, y + 10, x + dayWidth * 2 / 3, y + rowHeight - 10);
+                }
+            }
+        }
+
+        private void paintAssignments(Graphics2D g2) {
+            for (TimelineBlock block : timelineBlocks) {
+                EmployeeShift item = block.getPrimary();
+                if (item == null || block.startDate == null || block.endDate == null) {
+                    continue;
+                }
+
+                int row = visibleEmployeeKeys.indexOf(item.getEmployeeId());
+                int startDateIndex = visibleDates.indexOf(block.startDate);
+                int endDateIndex = visibleDates.indexOf(block.endDate);
+                if (row < 0 || startDateIndex < 0) {
+                    continue;
+                }
+                if (endDateIndex < 0) {
+                    endDateIndex = startDateIndex;
+                }
+
+                int startDayX = nameColWidth + startDateIndex * dayWidth;
+                int endDayX = nameColWidth + endDateIndex * dayWidth;
+                int rowY = headerHeight + row * rowHeight;
+
+                boolean overnight = block.startMinutes > block.endMinutes;
+                boolean fullTime = block.fullTime;
+
+                int blockX;
+                int blockW;
+                if (fullTime && block.getDayCount() > 1) {
+                    blockX = startDayX + 8;
+                    blockW = Math.max(44, (endDayX + dayWidth - 8) - blockX);
+                } else if (block.getDayCount() > 1 && overnight) {
+                    blockX = startDayX + minuteToX(block.startMinutes);
+                    blockW = Math.max(44, (endDayX + dayWidth + minuteToX(block.endMinutes)) - blockX);
+                } else if (block.getDayCount() > 1) {
+                    blockX = startDayX + minuteToX(block.startMinutes);
+                    blockW = Math.max(44, (endDayX + minuteToX(block.endMinutes)) - blockX);
+                } else if (fullTime) {
+                    blockX = startDayX + 8;
+                    blockW = dayWidth - 16;
+                } else if (overnight) {
+                    blockX = startDayX + minuteToX(block.startMinutes);
+                    blockW = Math.max(34, (dayWidth - 12) - minuteToX(block.startMinutes));
+                } else {
+                    blockX = startDayX + minuteToX(block.startMinutes);
+                    blockW = Math.max(34, minuteToX(block.endMinutes) - minuteToX(block.startMinutes));
+                }
+
+                int blockY = rowY + (rowHeight - blockHeight) / 2;
+                Rectangle rect = new Rectangle(blockX, blockY, blockW, blockHeight);
+                hitBoxes.put(rect, block);
+
+                Color color = getShiftColor(item);
+                boolean selected = selectedBlock != null && selectedBlock == block;
+                if (!selected && selectedAssignment != null && selectedAssignment.getAssignmentId() != null) {
+                    for (String id : block.getAssignmentIds()) {
+                        if (selectedAssignment.getAssignmentId().equals(id)) {
+                            selected = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (selected) {
+                    g2.setColor(new Color(255, 193, 7));
+                    g2.fillRoundRect(rect.x - 4, rect.y - 4, rect.width + 8, rect.height + 8, 18, 18);
+                }
+
+                g2.setColor(new Color(0, 0, 0, 34));
+                g2.fillRoundRect(rect.x + 3, rect.y + 4, rect.width, rect.height, 14, 14);
+                g2.setColor(color);
+                g2.fillRoundRect(rect.x, rect.y, rect.width, rect.height, 14, 14);
+                g2.setStroke(new BasicStroke(3.2f));
+                g2.setColor(new Color(28, 39, 56, 125));
+                g2.drawRoundRect(rect.x, rect.y, rect.width, rect.height, 14, 14);
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.setColor(new Color(255, 255, 255, 165));
+                g2.drawRoundRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, 12, 12);
+
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                String label = item.getShiftName() == null ? item.getShiftId() : item.getShiftName();
+                String time = safeTime(item.getStartTimeText()) + " - " + safeTime(item.getEndTimeText());
+                if (block.getDayCount() > 1) {
+                    time = formatUiDate(block.startDate) + " - " + formatUiDate(block.endDate) + " • " + time;
+                }
+                drawClippedString(g2, label, rect.x + 10, rect.y + 18, rect.width - 18);
+                g2.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+                drawClippedString(g2, time, rect.x + 10, rect.y + 33, rect.width - 18);
+
+                if (overnight && !fullTime) {
+                    g2.setColor(new Color(107, 119, 140));
+                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                    int noteX = Math.min(startDayX + dayWidth - 70, rect.x + rect.width + 4);
+                    g2.drawString("qua ngày", noteX, rect.y + 24);
+                }
+            }
+        }
+
+        private List<TimelineBlock> buildTimelineBlocks(List<EmployeeShift> source) {
+            List<EmployeeShift> sorted = new ArrayList<>();
+            if (source != null) {
+                for (EmployeeShift item : source) {
+                    if (item != null && item.getWorkDate() != null) {
+                        sorted.add(item);
+                    }
+                }
+            }
+
+            sorted.sort((a, b) -> {
+                int c = String.valueOf(a.getEmployeeId()).compareToIgnoreCase(String.valueOf(b.getEmployeeId()));
+                if (c != 0) {
+                    return c;
+                }
+                c = String.valueOf(a.getShiftId()).compareToIgnoreCase(String.valueOf(b.getShiftId()));
+                if (c != 0) {
+                    return c;
+                }
+                c = String.valueOf(a.getStatus()).compareToIgnoreCase(String.valueOf(b.getStatus()));
+                if (c != 0) {
+                    return c;
+                }
+                c = String.valueOf(a.getStartTimeText()).compareToIgnoreCase(String.valueOf(b.getStartTimeText()));
+                if (c != 0) {
+                    return c;
+                }
+                c = String.valueOf(a.getEndTimeText()).compareToIgnoreCase(String.valueOf(b.getEndTimeText()));
+                if (c != 0) {
+                    return c;
+                }
+                return a.getWorkDate().compareTo(b.getWorkDate());
+            });
+
+            List<TimelineBlock> blocks = new ArrayList<>();
+            TimelineBlock current = null;
+            for (EmployeeShift item : sorted) {
+                if (current != null && current.canMerge(item)) {
+                    current.merge(item);
+                } else {
+                    current = new TimelineBlock(item);
+                    blocks.add(current);
+                }
+            }
+            return blocks;
+        }
+
+        private void paintEmptyState(Graphics2D g2) {
+            if (!assignments.isEmpty()) {
+                return;
+            }
+
+            int cx = Math.max(nameColWidth + 180, getWidth() / 2);
+            int cy = Math.max(headerHeight + 120, getHeight() / 2);
+
+            g2.setColor(textDark);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            String line1 = "Chưa có phân ca trong khoảng ngày này";
+            g2.drawString(line1, cx - g2.getFontMetrics().stringWidth(line1) / 2, cy);
+
+            g2.setColor(new Color(107, 119, 140));
+            g2.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            String line2 = "Bấm vào ô trống trên timeline để thêm lịch trực tiếp.";
+            g2.drawString(line2, cx - g2.getFontMetrics().stringWidth(line2) / 2, cy + 26);
+        }
+
+        private int minuteToX(int minutes) {
+            int clamped = Math.max(0, Math.min(24 * 60, minutes));
+            return 8 + (int) Math.round((dayWidth - 16) * (clamped / (double) (24 * 60)));
+        }
+
+        private int parseMinutes(String time, int fallback) {
+            if (time == null || time.trim().isEmpty()) {
+                return fallback;
+            }
+
+            try {
+                String[] parts = time.trim().split(":");
+                int h = Integer.parseInt(parts[0]);
+                int m = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+                if (h == 24) {
+                    return 24 * 60;
+                }
+                return Math.max(0, Math.min(24 * 60, h * 60 + m));
+            } catch (Exception ignored) {
+                return fallback;
+            }
+        }
+
+        private boolean isFullTimeShift(EmployeeShift item) {
+            String id = item.getShiftId() == null ? "" : item.getShiftId().toUpperCase();
+            String name = item.getShiftName() == null ? "" : item.getShiftName().toLowerCase();
+            return id.contains("FULL") || name.contains("full");
+        }
+
+        private Color getShiftColor(EmployeeShift item) {
+            String status = item.getStatus() == null ? "" : item.getStatus();
+            if ("CANCELED".equalsIgnoreCase(status)) {
+                return offlineRed;
+            }
+
+            String id = item.getShiftId() == null ? "" : item.getShiftId().toUpperCase();
+            String name = item.getShiftName() == null ? "" : item.getShiftName().toLowerCase();
+
+            if (id.contains("FULL") || name.contains("full")) {
+                return new Color(72, 99, 112);
+            }
+            if (id.contains("MORNING") || name.contains("sáng") || name.contains("sang")) {
+                return new Color(22, 163, 74);
+            }
+            if (id.contains("AFTERNOON") || name.contains("chiều") || name.contains("chieu")) {
+                return new Color(37, 99, 235);
+            }
+            if (id.contains("NIGHT") || name.contains("tối") || name.contains("toi")) {
+                return new Color(124, 58, 237);
+            }
+            return primaryOrange;
+        }
+
+        private String safeTime(String value) {
+            return value == null || value.isBlank() ? "--:--" : value;
+        }
+
+        private void drawClippedString(Graphics2D g2, String text, int x, int y, int maxWidth) {
+            if (text == null) {
+                text = "";
+            }
+            FontMetrics fm = g2.getFontMetrics();
+            String value = text;
+            while (fm.stringWidth(value) > maxWidth && value.length() > 3) {
+                value = value.substring(0, value.length() - 4) + "...";
+            }
+            g2.drawString(value, x, y);
         }
     }
 

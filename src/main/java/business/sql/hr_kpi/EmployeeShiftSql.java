@@ -13,22 +13,24 @@ import model.employee.EmployeeShift;
 
 public class EmployeeShiftSql {
 
+    private static final String TABLE_NAME = "EMPLOYEE_SHIFT_ASSIGNMENTS";
+
     public EmployeeShiftSql() {
         ensureStorage();
+        migrateLegacyEmployeeShiftsIfExists();
     }
 
     public int insert(EmployeeShift item) {
-        String sql = "INSERT INTO EMPLOYEE_SHIFTS "
+        String sql = "INSERT INTO " + TABLE_NAME + " "
                 + "(assignment_id, employee_id, shift_id, work_date, status, note, is_deleted) "
                 + "VALUES (?, ?, ?, ?, ?, ?, 0)";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, item.getAssignmentId());
             ps.setString(2, item.getEmployeeId());
             ps.setString(3, item.getShiftId());
             ps.setDate(4, item.getWorkDate());
-            ps.setString(5, item.getStatus());
+            ps.setString(5, item.getStatus() == null || item.getStatus().isBlank() ? "ASSIGNED" : item.getStatus());
             ps.setString(6, item.getNote());
             return ps.executeUpdate();
         } catch (SQLException e) {
@@ -38,16 +40,15 @@ public class EmployeeShiftSql {
     }
 
     public int update(EmployeeShift item) {
-        String sql = "UPDATE EMPLOYEE_SHIFTS "
+        String sql = "UPDATE " + TABLE_NAME + " "
                 + "SET employee_id = ?, shift_id = ?, work_date = ?, status = ?, note = ?, updated_at = SYSTIMESTAMP "
                 + "WHERE assignment_id = ? AND NVL(is_deleted, 0) = 0";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, item.getEmployeeId());
             ps.setString(2, item.getShiftId());
             ps.setDate(3, item.getWorkDate());
-            ps.setString(4, item.getStatus());
+            ps.setString(4, item.getStatus() == null || item.getStatus().isBlank() ? "ASSIGNED" : item.getStatus());
             ps.setString(5, item.getNote());
             ps.setString(6, item.getAssignmentId());
             return ps.executeUpdate();
@@ -58,12 +59,11 @@ public class EmployeeShiftSql {
     }
 
     public int cancel(String assignmentId) {
-        String sql = "UPDATE EMPLOYEE_SHIFTS "
+        String sql = "UPDATE " + TABLE_NAME + " "
                 + "SET status = 'CANCELED', updated_at = SYSTIMESTAMP "
                 + "WHERE assignment_id = ? AND NVL(is_deleted, 0) = 0";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, assignmentId);
             return ps.executeUpdate();
         } catch (SQLException e) {
@@ -72,9 +72,51 @@ public class EmployeeShiftSql {
         }
     }
 
+    public int delete(String assignmentId) {
+        String sql = "UPDATE " + TABLE_NAME + " "
+                + "SET is_deleted = 1, updated_at = SYSTIMESTAMP "
+                + "WHERE assignment_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, assignmentId);
+            return ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public int deleteMany(List<String> assignmentIds) {
+        if (assignmentIds == null || assignmentIds.isEmpty()) {
+            return 0;
+        }
+
+        String sql = "UPDATE " + TABLE_NAME + " "
+                + "SET is_deleted = 1, updated_at = SYSTIMESTAMP "
+                + "WHERE assignment_id = ? AND NVL(is_deleted, 0) = 0";
+
+        int total = 0;
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            for (String id : assignmentIds) {
+                if (id == null || id.trim().isEmpty()) {
+                    continue;
+                }
+                ps.setString(1, id.trim());
+                total += ps.executeUpdate();
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return total;
+    }
+
     public boolean existsDuplicate(String employeeId, String shiftId, Date workDate, String excludeAssignmentId) {
         StringBuilder sql = new StringBuilder();
-        sql.append("SELECT COUNT(*) FROM EMPLOYEE_SHIFTS ");
+        sql.append("SELECT COUNT(*) FROM ").append(TABLE_NAME).append(" ");
         sql.append("WHERE employee_id = ? AND shift_id = ? AND TRUNC(work_date) = TRUNC(?) ");
         sql.append("AND NVL(is_deleted, 0) = 0 AND NVL(status, 'ASSIGNED') <> 'CANCELED' ");
 
@@ -82,8 +124,7 @@ public class EmployeeShiftSql {
             sql.append("AND assignment_id <> ? ");
         }
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql.toString())) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             ps.setString(1, employeeId);
             ps.setString(2, shiftId);
             ps.setDate(3, workDate);
@@ -99,7 +140,14 @@ public class EmployeeShiftSql {
         }
     }
 
+    // Giữ hàm cũ để không làm vỡ các nơi đang gọi theo 1 ngày.
     public List<EmployeeShift> selectAssignments(String keyword, Date workDate, String employeeType,
+            String shiftId, String status) {
+        return selectAssignments(keyword, workDate, workDate, employeeType, shiftId, status);
+    }
+
+    // Hàm mới: lọc theo khoảng ngày FromDate - ToDate để vẽ timeline.
+    public List<EmployeeShift> selectAssignments(String keyword, Date fromDate, Date toDate, String employeeType,
             String shiftId, String status) {
         List<EmployeeShift> result = new ArrayList<>();
         List<Object> params = new ArrayList<>();
@@ -110,7 +158,7 @@ public class EmployeeShiftSql {
         sql.append("TO_CHAR(s.start_time, 'HH24:MI') AS start_time_text, ");
         sql.append("TO_CHAR(s.end_time, 'HH24:MI') AS end_time_text, ");
         sql.append("NVL(es.status, 'ASSIGNED') AS status, es.note ");
-        sql.append("FROM EMPLOYEE_SHIFTS es ");
+        sql.append("FROM ").append(TABLE_NAME).append(" es ");
         sql.append("JOIN EMPLOYEES e ON es.employee_id = e.employee_id ");
         sql.append("JOIN SHIFTS s ON es.shift_id = s.shift_id ");
         sql.append("WHERE NVL(es.is_deleted, 0) = 0 ");
@@ -125,9 +173,14 @@ public class EmployeeShiftSql {
             params.add(pattern);
         }
 
-        if (workDate != null) {
-            sql.append("AND TRUNC(es.work_date) = TRUNC(?) ");
-            params.add(workDate);
+        if (fromDate != null) {
+            sql.append("AND TRUNC(es.work_date) >= TRUNC(?) ");
+            params.add(fromDate);
+        }
+
+        if (toDate != null) {
+            sql.append("AND TRUNC(es.work_date) <= TRUNC(?) ");
+            params.add(toDate);
         }
 
         if (employeeType != null && !employeeType.isBlank() && !"ALL".equals(employeeType)) {
@@ -148,10 +201,9 @@ public class EmployeeShiftSql {
             params.add(status);
         }
 
-        sql.append("ORDER BY es.work_date DESC, s.start_time ASC, e.employee_name ASC");
+        sql.append("ORDER BY es.work_date ASC, e.employee_name ASC, s.start_time ASC");
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql.toString())) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             for (int i = 0; i < params.size(); i++) {
                 Object value = params.get(i);
                 if (value instanceof Date dateValue) {
@@ -197,27 +249,61 @@ public class EmployeeShiftSql {
     }
 
     private void ensureStorage() {
-        String createSql = "CREATE TABLE EMPLOYEE_SHIFTS ("
+        String createSql = "CREATE TABLE " + TABLE_NAME + " ("
                 + "assignment_id VARCHAR2(50) PRIMARY KEY, "
                 + "employee_id VARCHAR2(50) NOT NULL, "
                 + "shift_id VARCHAR2(50) NOT NULL, "
                 + "work_date DATE NOT NULL, "
-                + "status VARCHAR2(20) DEFAULT 'ASSIGNED' NOT NULL, "
+                + "status VARCHAR2(30) DEFAULT 'ASSIGNED' NOT NULL, "
                 + "note NVARCHAR2(500), "
                 + "is_deleted NUMBER(1) DEFAULT 0, "
                 + "created_at TIMESTAMP DEFAULT SYSTIMESTAMP, "
                 + "updated_at TIMESTAMP, "
-                + "CONSTRAINT FK_EMP_SHIFT_EMP FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id), "
-                + "CONSTRAINT FK_EMP_SHIFT_SHIFT FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)"
+                + "CONSTRAINT FK_ESA_EMPLOYEE FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id), "
+                + "CONSTRAINT FK_ESA_SHIFT FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)"
                 + ")";
 
-        try (Connection con = DatabaseConnection.getConnection();
-             Statement st = con.createStatement()) {
+        try (Connection con = DatabaseConnection.getConnection(); Statement st = con.createStatement()) {
             st.executeUpdate(createSql);
         } catch (SQLException e) {
             if (e.getErrorCode() != 955) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    private void migrateLegacyEmployeeShiftsIfExists() {
+        if (!tableExists("EMPLOYEE_SHIFTS")) {
+            return;
+        }
+
+        String sql = "INSERT INTO " + TABLE_NAME + " "
+                + "(assignment_id, employee_id, shift_id, work_date, status, note, is_deleted, created_at, updated_at) "
+                + "SELECT old.assignment_id, old.employee_id, old.shift_id, old.work_date, "
+                + "       NVL(old.status, 'ASSIGNED'), old.note, NVL(old.is_deleted, 0), "
+                + "       NVL(old.created_at, SYSTIMESTAMP), old.updated_at "
+                + "FROM EMPLOYEE_SHIFTS old "
+                + "WHERE NOT EXISTS ( "
+                + "    SELECT 1 FROM " + TABLE_NAME + " cur "
+                + "    WHERE cur.assignment_id = old.assignment_id "
+                + ")";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("[EmployeeShiftSql] migrateLegacyEmployeeShiftsIfExists error: " + e.getMessage());
+        }
+    }
+
+    private boolean tableExists(String tableName) {
+        String sql = "SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME = UPPER(?)";
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            return false;
         }
     }
 }
