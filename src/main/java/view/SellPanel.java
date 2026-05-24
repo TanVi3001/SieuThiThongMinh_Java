@@ -66,6 +66,12 @@ public class SellPanel extends JPanel {
 
     private JTable tblProducts;
     private DefaultTableModel modProducts;
+    private JPanel pnlProductPreview;
+    private JLabel lblPreviewImage;
+    private JLabel lblPreviewName;
+    private JLabel lblPreviewPrice;
+    private JLabel lblPreviewStock;
+    private JLabel lblPreviewCategory;
 
     private JTable tblCart;
     private DefaultTableModel modCart;
@@ -312,8 +318,75 @@ public class SellPanel extends JPanel {
         pnlProductsBody.add(wrapTable(tblProducts), "table");
         productsCardLayout.show(pnlProductsBody, "loading");
 
-        pnl.add(pnlProductsBody, BorderLayout.CENTER);
+        JPanel centerWrap = new JPanel(new BorderLayout(0, 10));
+        centerWrap.setOpaque(false);
+        centerWrap.add(pnlProductsBody, BorderLayout.CENTER);
+        centerWrap.add(buildProductPreviewPanel(), BorderLayout.SOUTH);
+
+        pnl.add(centerWrap, BorderLayout.CENTER);
         return pnl;
+    }
+
+    private void updateProductPreviewByProductId(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            clearProductPreview();
+            return;
+        }
+
+        Product p = allProducts.stream()
+                .filter(x -> x.getProductId() != null && x.getProductId().equals(productId))
+                .findFirst()
+                .orElse(null);
+
+        if (p == null) {
+            clearProductPreview();
+            return;
+        }
+
+        lblPreviewName.setText(p.getProductName() != null ? p.getProductName() : productId);
+        lblPreviewPrice.setText("Giá bán: " + moneyFormat.format(p.getBasePrice()));
+        lblPreviewStock.setText("Kho: " + p.getQuantity());
+        lblPreviewCategory.setText("Loại: " + (p.getCategoryId() == null ? "—" : p.getCategoryId()));
+
+        lblPreviewImage.setIcon(null);
+        lblPreviewImage.setText("Ảnh");
+
+        try {
+            ImageIcon icon = loadProductImageIcon(p.getImagePath(), 88, 72);
+
+            if (icon != null) {
+                lblPreviewImage.setIcon(icon);
+                lblPreviewImage.setText("");
+            } else {
+                lblPreviewImage.setText("Chưa có ảnh");
+            }
+        } catch (Exception e) {
+            lblPreviewImage.setIcon(null);
+            lblPreviewImage.setText("Không tải được ảnh");
+        }
+    }
+
+    private void clearProductPreview() {
+        if (lblPreviewImage != null) {
+            lblPreviewImage.setIcon(null);
+            lblPreviewImage.setText("Ảnh");
+        }
+
+        if (lblPreviewName != null) {
+            lblPreviewName.setText("Chọn sản phẩm để xem ảnh");
+        }
+
+        if (lblPreviewPrice != null) {
+            lblPreviewPrice.setText("Giá bán: —");
+        }
+
+        if (lblPreviewStock != null) {
+            lblPreviewStock.setText("Kho: —");
+        }
+
+        if (lblPreviewCategory != null) {
+            lblPreviewCategory.setText("Loại: —");
+        }
     }
 
     private JPanel buildCartPanel() {
@@ -331,12 +404,13 @@ public class SellPanel extends JPanel {
         JPanel pnlActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         pnlActions.setOpaque(false);
 
+        // Spinner và nút Thêm sẽ được đặt ở preview sản phẩm bên trái.
+// Header giỏ hàng chỉ giữ thao tác với giỏ.
         spnQtyAdd = new JSpinner(new SpinnerNumberModel(1, 1, 999, 1));
-        spnQtyAdd.setPreferredSize(new Dimension(65, 34));
 
         btnAdd = new RoundedButton("Thêm");
         styleButton(btnAdd, PRIMARY_BLUE);
-        btnAdd.setPreferredSize(new Dimension(85, 34));
+        btnAdd.setVisible(false);
 
         btnRemove = new RoundedButton("Xóa");
         styleButton(btnRemove, new Color(149, 165, 166));
@@ -346,16 +420,8 @@ public class SellPanel extends JPanel {
         styleButton(btnCancel, DANGER_RED);
         btnCancel.setPreferredSize(new Dimension(80, 34));
 
-        JLabel lblSl = new JLabel("SL:");
-        lblSl.setFont(new Font("Segoe UI", Font.BOLD, 12));
-
-        pnlActions.add(lblSl);
-        pnlActions.add(spnQtyAdd);
-        pnlActions.add(btnAdd);
-        pnlActions.add(new JSeparator(SwingConstants.VERTICAL));
         pnlActions.add(btnRemove);
         pnlActions.add(btnCancel);
-
         JPanel headerWrap = new JPanel(new BorderLayout(0, 8));
         headerWrap.setOpaque(false);
         headerWrap.add(header, BorderLayout.NORTH);
@@ -631,6 +697,135 @@ public class SellPanel extends JPanel {
         });
     }
 
+    private ImageIcon loadProductImageIcon(String imageNameOrPath, int width, int height) {
+        if (imageNameOrPath == null || imageNameOrPath.trim().isEmpty()) {
+            return null;
+        }
+
+        String path = imageNameOrPath.trim().replace("\\", "/");
+
+        try {
+            java.net.URL url = getClass().getClassLoader().getResource("view/image/" + path);
+
+            if (url != null) {
+                Image img = new ImageIcon(url)
+                        .getImage()
+                        .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                return new ImageIcon(img);
+            }
+
+            java.io.File file = new java.io.File(path);
+
+            if (!file.exists()) {
+                file = new java.io.File("src/main/resources/view/image/" + path);
+            }
+
+            if (file.exists()) {
+                Image img = new ImageIcon(file.getAbsolutePath())
+                        .getImage()
+                        .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                return new ImageIcon(img);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    private JPanel buildProductPreviewPanel() {
+        pnlProductPreview = new JPanel(new BorderLayout(12, 0));
+        pnlProductPreview.setOpaque(true);
+        pnlProductPreview.setBackground(new Color(248, 250, 252));
+        pnlProductPreview.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_GRAY),
+                new EmptyBorder(10, 12, 10, 12)
+        ));
+        pnlProductPreview.setPreferredSize(new Dimension(0, 112));
+
+        lblPreviewImage = new JLabel("Ảnh", SwingConstants.CENTER);
+        lblPreviewImage.setPreferredSize(new Dimension(105, 88));
+        lblPreviewImage.setOpaque(true);
+        lblPreviewImage.setBackground(Color.WHITE);
+        lblPreviewImage.setForeground(TEXT_GRAY);
+        lblPreviewImage.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblPreviewImage.setBorder(BorderFactory.createLineBorder(new Color(225, 230, 235)));
+
+        JPanel info = new JPanel();
+        info.setOpaque(false);
+        info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
+
+        lblPreviewName = new JLabel("Chọn sản phẩm để xem ảnh");
+        lblPreviewName.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblPreviewName.setForeground(TEXT_DARK);
+
+        lblPreviewPrice = new JLabel("Giá bán: —");
+        lblPreviewPrice.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblPreviewPrice.setForeground(PRIMARY_BLUE);
+
+        lblPreviewStock = new JLabel("Kho: —");
+        lblPreviewStock.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblPreviewStock.setForeground(TEXT_GRAY);
+
+        lblPreviewCategory = new JLabel("Loại: —");
+        lblPreviewCategory.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblPreviewCategory.setForeground(TEXT_GRAY);
+
+        info.add(lblPreviewName);
+        info.add(Box.createVerticalStrut(6));
+        info.add(lblPreviewPrice);
+        info.add(Box.createVerticalStrut(3));
+        info.add(lblPreviewStock);
+        info.add(Box.createVerticalStrut(3));
+        info.add(lblPreviewCategory);
+
+        JPanel actionPanel = new JPanel(new GridBagLayout());
+        actionPanel.setOpaque(false);
+        actionPanel.setPreferredSize(new Dimension(210, 0));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 4, 3, 4);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        JLabel lblQty = new JLabel("SL:");
+        lblQty.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblQty.setForeground(TEXT_DARK);
+
+        // Dùng lại spinner global để addSelectedProductToCart() vẫn lấy đúng số lượng
+        if (spnQtyAdd == null) {
+            spnQtyAdd = new JSpinner(new SpinnerNumberModel(1, 1, 999, 1));
+        }
+        spnQtyAdd.setPreferredSize(new Dimension(70, 34));
+
+        RoundedButton btnAddPreview = new RoundedButton("Thêm vào giỏ");
+        styleButton(btnAddPreview, PRIMARY_BLUE);
+        btnAddPreview.setPreferredSize(new Dimension(130, 36));
+        btnAddPreview.addActionListener(e -> addSelectedProductToCart());
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        actionPanel.add(lblQty, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.weightx = 1;
+        actionPanel.add(spnQtyAdd, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1;
+        actionPanel.add(btnAddPreview, gbc);
+
+        pnlProductPreview.add(lblPreviewImage, BorderLayout.WEST);
+        pnlProductPreview.add(info, BorderLayout.CENTER);
+        pnlProductPreview.add(actionPanel, BorderLayout.EAST);
+
+        return pnlProductPreview;
+    }
+
     private JPanel createSectionHeader(String title, String subtitle, ImageIcon icon) {
         JPanel header = new JPanel(new BorderLayout(10, 4));
         header.setOpaque(false);
@@ -792,7 +987,32 @@ public class SellPanel extends JPanel {
             }
         });
 
-        btnAdd.addActionListener(e -> addSelectedProductToCart());
+        tblProducts.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) {
+                return;
+            }
+
+            int viewRow = tblProducts.getSelectedRow();
+
+            if (viewRow < 0) {
+                clearProductPreview();
+                return;
+            }
+
+            int modelRow = tblProducts.convertRowIndexToModel(viewRow);
+
+            if (modelRow < 0 || modelRow >= modProducts.getRowCount()) {
+                clearProductPreview();
+                return;
+            }
+
+            String productId = String.valueOf(modProducts.getValueAt(modelRow, 0));
+            updateProductPreviewByProductId(productId);
+        });
+
+        if (btnAdd != null) {
+            btnAdd.addActionListener(e -> addSelectedProductToCart());
+        }
         btnRemove.addActionListener(e -> {
             int[] selectedRows = tblCart.getSelectedRows();
             if (selectedRows.length == 0) {
@@ -1476,8 +1696,13 @@ public class SellPanel extends JPanel {
             protected void done() {
                 try {
                     allProducts = get();
+
                     refreshSearchSuggestions(productSearchKeyword);
                     applyProductFilter(productSearchKeyword);
+
+                    // Reset preview sau khi reload danh sách sản phẩm
+                    clearProductPreview();
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
 
@@ -1491,6 +1716,8 @@ public class SellPanel extends JPanel {
                     if (productsCardLayout != null && pnlProductsBody != null) {
                         productsCardLayout.show(pnlProductsBody, "table");
                     }
+
+                    clearProductPreview();
                 }
             }
         }.execute();
@@ -1628,7 +1855,7 @@ public class SellPanel extends JPanel {
         // Chốt lại tiền ngay trước khi thanh toán để đảm bảo đã tính đúng
         // giảm giá thành viên + giảm giá chương trình theo khách/voucher hiện tại.
         calculateTotal();
- 
+
         paymentProcessing = true;
         paymentJustSucceeded = false;
 
