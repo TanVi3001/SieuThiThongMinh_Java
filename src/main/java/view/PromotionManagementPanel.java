@@ -3,6 +3,9 @@ package view;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
+import business.sql.prod_inventory.ProductsSql;
+import model.product.Product;
+import javax.swing.ListSelectionModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -62,14 +65,31 @@ public class PromotionManagementPanel extends JPanel {
     private JDateChooser dtpTuNgay;
     private JDateChooser dtpDenNgay;
     private JComboBox<String> cbChiNhanh;
-    // [REMOVED] cbSanPham has been completely removed to prevent duplicated filtering logic
-    private JComboBox<String> cbLoaiSanPham;
+    private JList<ProductOption> listProducts;
+    private DefaultListModel<ProductOption> productListModel;
+    private JSpinner spinMinOrderAmount;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnDeactivate, btnPreview;
     private JLabel lblFormTitle;
     private JLabel lblFormHint;
 
     private boolean isEditMode = false;
+
+    private static class ProductOption {
+
+        String productId;
+        String productName;
+
+        ProductOption(String productId, String productName) {
+            this.productId = productId;
+            this.productName = productName;
+        }
+
+        @Override
+        public String toString() {
+            return productId + " - " + productName;
+        }
+    }
 
     public PromotionManagementPanel() {
         setLayout(new BorderLayout(0, 22));
@@ -237,7 +257,7 @@ public class PromotionManagementPanel extends JPanel {
 
     private JPanel createRightPanel() {
         RoundedPanel card = new RoundedPanel(20, white);
-        card.setPreferredSize(new Dimension(430, 0));
+        card.setPreferredSize(new Dimension(470, 0));
         card.setLayout(new BorderLayout(0, 18));
         card.setBorder(new EmptyBorder(24, 24, 22, 24));
 
@@ -286,15 +306,15 @@ public class PromotionManagementPanel extends JPanel {
         addSection(form, g, y++, "2. Thời gian áp dụng");
         JPanel timeRow = new JPanel(new GridLayout(1, 2, 10, 0));
         timeRow.setOpaque(false);
-        
+
         dtpTuNgay = new JDateChooser();
         dtpTuNgay.setDateFormatString("yyyy-MM-dd");
         dtpTuNgay.setPreferredSize(new Dimension(0, 40));
-        
+
         dtpDenNgay = new JDateChooser();
         dtpDenNgay.setDateFormatString("yyyy-MM-dd");
         dtpDenNgay.setPreferredSize(new Dimension(0, 40));
-        
+
         timeRow.add(fieldPanel("Từ ngày", dtpTuNgay));
         timeRow.add(fieldPanel("Đến ngày", dtpDenNgay));
         addComponent(form, g, y++, timeRow, 14);
@@ -313,14 +333,31 @@ public class PromotionManagementPanel extends JPanel {
         y += 2;
 
         // Lấy danh sách Loại sản phẩm động hiện có thông qua CategoriesSql
-        cbLoaiSanPham = new JComboBox<>();
-        cbLoaiSanPham.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        cbLoaiSanPham.setPreferredSize(new Dimension(0, 40));
-        cbLoaiSanPham.addItem("Tất cả loại sản phẩm");
-        for (Category cat : CategoriesSql.getInstance().selectAll()) {
-            cbLoaiSanPham.addItem(cat.getCategoryName());
+        spinMinOrderAmount = new JSpinner(new SpinnerNumberModel(100000, 0, 999999999, 10000));
+        spinMinOrderAmount.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        spinMinOrderAmount.setPreferredSize(new Dimension(0, 40));
+        addField(form, g, y, "Đơn tối thiểu để áp dụng", spinMinOrderAmount);
+        y += 2;
+
+        productListModel = new DefaultListModel<>();
+        listProducts = new JList<>(productListModel);
+        listProducts.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        listProducts.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        listProducts.setVisibleRowCount(6);
+
+        try {
+            for (Product p : ProductsSql.getInstance().selectAll()) {
+                if (p.getProductId() != null && p.getProductName() != null) {
+                    productListModel.addElement(new ProductOption(p.getProductId(), p.getProductName()));
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
-        addField(form, g, y, "Áp dụng cho loại sản phẩm", cbLoaiSanPham);
+
+        JScrollPane productScroll = new JScrollPane(listProducts);
+        productScroll.setPreferredSize(new Dimension(0, 120));
+        addField(form, g, y, "Áp dụng cho sản phẩm", productScroll);
         y += 2;
 
         addSection(form, g, y++, "4. Trạng thái chương trình");
@@ -330,7 +367,7 @@ public class PromotionManagementPanel extends JPanel {
         JPanel actions = new JPanel(new GridLayout(2, 2, 10, 10));
         actions.setOpaque(false);
         btnClear = createButton("Làm mới", new Color(235, 238, 244), text, IconHelper.refresh(18));
-        btnPreview = createButton("Xem trước", softBlue, blue, null); 
+        btnPreview = createButton("Xem trước", softBlue, blue, null);
         btnDeactivate = createButton("Tạm ngưng", red, Color.WHITE, IconHelper.delete(18));
         btnSave = createButton("Lưu", blue, Color.WHITE, IconHelper.edit(18));
         actions.add(btnClear);
@@ -387,9 +424,17 @@ public class PromotionManagementPanel extends JPanel {
         btnSave.addActionListener(e -> savePromo());
 
         txtSearch.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { doSearch(); }
-            public void removeUpdate(DocumentEvent e) { doSearch(); }
-            public void changedUpdate(DocumentEvent e) { doSearch(); }
+            public void insertUpdate(DocumentEvent e) {
+                doSearch();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                doSearch();
+            }
+
+            public void changedUpdate(DocumentEvent e) {
+                doSearch();
+            }
         });
         cbFilterStatus.addActionListener(e -> doSearch());
 
@@ -423,11 +468,17 @@ public class PromotionManagementPanel extends JPanel {
         dtpTuNgay.setDate(null);
         dtpDenNgay.setDate(null);
         cbChiNhanh.setSelectedIndex(0);
-        cbLoaiSanPham.setSelectedIndex(0);
         cbTrangThai.setSelectedIndex(0);
         tblPromos.clearSelection();
         lblFormTitle.setText("Cấu Hình Khuyến Mãi");
         lblFormHint.setText("Bấm Thêm để nhập chương trình mới");
+        if (spinMinOrderAmount != null) {
+            spinMinOrderAmount.setValue(100000);
+        }
+
+        if (listProducts != null) {
+            listProducts.clearSelection();
+        }
     }
 
     private void loadPromoData(String keyword, String statusFilter) {
@@ -435,7 +486,7 @@ public class PromotionManagementPanel extends JPanel {
         int total = 0, active = 0, ended = 0, paused = 0;
 
         String sql = "SELECT p.promotion_id AS makm, p.promotion_name AS tenkm, "
-                + "NVL(p.discount_amount, 0) AS phantramgiam, "
+                + "NVL(p.discount_percent, NVL(p.discount_amount, 0)) AS phantramgiam, "
                 + "TO_CHAR(c.start_date, 'YYYY-MM-DD') AS tungay, "
                 + "TO_CHAR(c.end_date, 'YYYY-MM-DD') AS denngay, "
                 + "NVL(p.status, '" + STATUS_ACTIVE + "') AS trangthai "
@@ -449,8 +500,7 @@ public class PromotionManagementPanel extends JPanel {
         }
         sql += "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, "%" + keyword + "%");
             ps.setString(2, "%" + keyword + "%");
@@ -462,17 +512,21 @@ public class PromotionManagementPanel extends JPanel {
                 while (rs.next()) {
                     String trangThai = rs.getString("trangthai");
                     tableModel.addRow(new Object[]{
-                            rs.getString("makm"),
-                            rs.getString("tenkm"),
-                            rs.getInt("phantramgiam") + "%",
-                            rs.getString("tungay"),
-                            rs.getString("denngay"),
-                            trangThai
+                        rs.getString("makm"),
+                        rs.getString("tenkm"),
+                        rs.getInt("phantramgiam") + "%",
+                        rs.getString("tungay"),
+                        rs.getString("denngay"),
+                        trangThai
                     });
                     total++;
-                    if (STATUS_ACTIVE.equals(trangThai)) active++;
-                    else if (STATUS_ENDED.equals(trangThai)) ended++;
-                    else if (STATUS_PAUSED.equals(trangThai)) paused++;
+                    if (STATUS_ACTIVE.equals(trangThai)) {
+                        active++;
+                    } else if (STATUS_ENDED.equals(trangThai)) {
+                        ended++;
+                    } else if (STATUS_PAUSED.equals(trangThai)) {
+                        paused++;
+                    }
                 }
             }
 
@@ -486,7 +540,9 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     private void loadPromoDetailsToForm(String maKM) {
-        String sql = "SELECT p.promotion_name, NVL(p.discount_amount, 0) AS discount_amount, "
+        String sql = "SELECT p.promotion_name, "
+                + "NVL(p.discount_percent, NVL(p.discount_amount, 0)) AS discount_amount, "
+                + "NVL(p.min_order_amount, 100000) AS min_order_amount, "
                 + "TO_CHAR(c.start_date, 'YYYY-MM-DD') AS start_date, "
                 + "TO_CHAR(c.end_date, 'YYYY-MM-DD') AS end_date, "
                 + "NVL(p.status, '" + STATUS_ACTIVE + "') AS status "
@@ -494,13 +550,17 @@ public class PromotionManagementPanel extends JPanel {
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE p.promotion_id = ? AND NVL(p.is_deleted, 0) = 0";
 
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maKM);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     txtTenKM.setText(rs.getString("promotion_name"));
                     spinGiamGia.setValue(rs.getInt("discount_amount"));
+
+                    if (spinMinOrderAmount != null) {
+                        spinMinOrderAmount.setValue(rs.getInt("min_order_amount"));
+                    }
+
                     cbTrangThai.setSelectedItem(rs.getString("status"));
 
                     java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
@@ -528,6 +588,8 @@ public class PromotionManagementPanel extends JPanel {
                         dtpDenNgay.setDate(null);
                         System.err.println("Lỗi phân tích Đến ngày: " + ex.getMessage());
                     }
+
+                    loadPromotionProductsSelection(maKM);
                 }
             }
         } catch (Exception e) {
@@ -539,12 +601,44 @@ public class PromotionManagementPanel extends JPanel {
         String ma = txtMaKM.getText().trim();
         String ten = txtTenKM.getText().trim();
         int giam = (int) spinGiamGia.getValue();
+        int minOrderAmount = ((Number) spinMinOrderAmount.getValue()).intValue();
+
+        List<ProductOption> selectedProducts = listProducts.getSelectedValuesList();
+        if (selectedProducts == null || selectedProducts.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn ít nhất 1 sản phẩm áp dụng khuyến mãi.",
+                    "Thiếu sản phẩm áp dụng",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (giam <= 0 || giam > 30) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Mức giảm nên từ 1% đến 30% để tránh lỗ.",
+                    "Mức giảm không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (minOrderAmount < 100000) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Đơn tối thiểu nên từ 100.000đ trở lên để tránh khuyến mãi quá thấp gây lỗ.",
+                    "Đơn tối thiểu chưa hợp lý",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
         String trangThai = cbTrangThai.getSelectedItem().toString();
 
         java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
         String tuNgay = "";
         String denNgay = "";
-        
+
         if (dtpTuNgay.getDate() != null) {
             tuNgay = sdf.format(dtpTuNgay.getDate());
         }
@@ -563,30 +657,39 @@ public class PromotionManagementPanel extends JPanel {
             upsertCampaign(con, campaignId, ten, tuNgay, denNgay);
 
             if (isEditMode) {
-                String sql = "UPDATE PROMOTIONS SET promotion_name = ?, campaign_id = ?, discount_amount = ?, status = ? "
+                String sql = "UPDATE PROMOTIONS "
+                        + "SET promotion_name = ?, campaign_id = ?, discount_amount = ?, discount_percent = ?, "
+                        + "    min_order_amount = ?, status = ? "
                         + "WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
                 try (PreparedStatement ps = con.prepareStatement(sql)) {
                     ps.setString(1, ten);
                     ps.setString(2, campaignId);
                     ps.setInt(3, giam);
-                    ps.setString(4, trangThai);
-                    ps.setString(5, ma);
+                    ps.setInt(4, giam);
+                    ps.setInt(5, minOrderAmount);
+                    ps.setString(6, trangThai);
+                    ps.setString(7, ma);
                     ps.executeUpdate();
                 }
                 JOptionPane.showMessageDialog(this, "Cập nhật Khuyến mãi thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             } else {
-                String sql = "INSERT INTO PROMOTIONS (promotion_id, promotion_name, campaign_id, status, discount_amount, is_deleted) "
-                        + "VALUES (?, ?, ?, ?, ?, 0)";
+                String sql = "INSERT INTO PROMOTIONS "
+                        + "(promotion_id, promotion_name, campaign_id, status, discount_amount, discount_percent, min_order_amount, is_deleted) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
                 try (PreparedStatement ps = con.prepareStatement(sql)) {
                     ps.setString(1, ma);
                     ps.setString(2, ten);
                     ps.setString(3, campaignId);
                     ps.setString(4, trangThai);
                     ps.setInt(5, giam);
+                    ps.setInt(6, giam);
+                    ps.setInt(7, minOrderAmount);
                     ps.executeUpdate();
                 }
                 JOptionPane.showMessageDialog(this, "Đã tạo Khuyến mãi mới thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             }
+
+            savePromotionProducts(con, ma, selectedProducts);
 
             business.service.AuditLogService.logAction(isEditMode ? "CẬP NHẬT" : "THÊM MỚI", "PROMOTIONS", ma, "", "Tên CT: " + ten + " (-" + giam + "%)", "Cập nhật chiến dịch KM");
             clearForm();
@@ -617,6 +720,83 @@ public class PromotionManagementPanel extends JPanel {
         }
     }
 
+    private void savePromotionProducts(Connection con, String promotionId, List<ProductOption> selectedProducts) throws Exception {
+        String deleteSql = "DELETE FROM PROMOTION_PRODUCTS WHERE promotion_id = ?";
+        try (PreparedStatement ps = con.prepareStatement(deleteSql)) {
+            ps.setString(1, promotionId);
+            ps.executeUpdate();
+        }
+
+        String insertSql = "INSERT INTO PROMOTION_PRODUCTS (promotion_id, product_id, is_deleted) VALUES (?, ?, 0)";
+        try (PreparedStatement ps = con.prepareStatement(insertSql)) {
+            for (ProductOption p : selectedProducts) {
+                ps.setString(1, promotionId);
+                ps.setString(2, p.productId);
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+    }
+
+    private void loadPromotionProductsSelection(String promotionId) {
+        if (listProducts == null || productListModel == null) {
+            return;
+        }
+
+        java.util.Set<String> selectedIds = new java.util.HashSet<>();
+        String sql = "SELECT product_id FROM PROMOTION_PRODUCTS WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, promotionId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    selectedIds.add(rs.getString("product_id"));
+                }
+            }
+
+            java.util.List<Integer> indices = new java.util.ArrayList<>();
+            for (int i = 0; i < productListModel.size(); i++) {
+                ProductOption opt = productListModel.getElementAt(i);
+                if (selectedIds.contains(opt.productId)) {
+                    indices.add(i);
+                }
+            }
+
+            int[] selected = indices.stream().mapToInt(Integer::intValue).toArray();
+            listProducts.setSelectedIndices(selected);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String getSelectedProductPreviewText() {
+        if (listProducts == null) {
+            return "-";
+        }
+
+        List<ProductOption> selectedProducts = listProducts.getSelectedValuesList();
+
+        if (selectedProducts == null || selectedProducts.isEmpty()) {
+            return "-";
+        }
+
+        if (selectedProducts.size() <= 3) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < selectedProducts.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(selectedProducts.get(i).productId);
+            }
+            return sb.toString();
+        }
+
+        return selectedProducts.size() + " sản phẩm";
+    }
+
     private String buildCampaignId(String promotionId) {
         String id = "CAMP_" + promotionId;
         return id.length() <= 50 ? id : promotionId.substring(0, Math.min(50, promotionId.length()));
@@ -630,11 +810,12 @@ public class PromotionManagementPanel extends JPanel {
         }
 
         int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn tạm ngưng khuyến mãi này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
 
         String sql = "UPDATE PROMOTIONS SET status = ? WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
-        try (Connection con = common.db.DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, STATUS_PAUSED);
             ps.setString(2, ma);
             ps.executeUpdate();
@@ -657,9 +838,10 @@ public class PromotionManagementPanel extends JPanel {
                 + "Mức giảm: " + spinGiamGia.getValue() + "%\n"
                 + "Thời gian: " + strTuNgay + " đến " + strDenNgay + "\n"
                 + "Chi nhánh: " + cbChiNhanh.getSelectedItem() + "\n"
-                + "Loại sản phẩm: " + cbLoaiSanPham.getSelectedItem() + "\n"
+                + "Sản phẩm áp dụng: " + getSelectedProductPreviewText() + "\n"
+                + "Đơn tối thiểu: " + spinMinOrderAmount.getValue() + " đ\n"
                 + "Trạng thái: " + cbTrangThai.getSelectedItem();
-                
+
         JOptionPane.showMessageDialog(this, message, "Xem trước khuyến mãi", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -817,6 +999,7 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     class RoundedPanel extends JPanel {
+
         private final int radius;
         private final Color backgroundColor;
 

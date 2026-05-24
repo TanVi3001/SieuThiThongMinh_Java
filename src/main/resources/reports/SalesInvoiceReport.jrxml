@@ -68,7 +68,14 @@ WITH order_lines AS (
         NVL(p.product_name, TO_NCHAR(od.product_id)) AS product_name,
         NVL(od.quantity, 0) AS quantity,
         NVL(od.unit_price, 0) AS unit_price,
-        NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total
+        NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total,
+        NVL(od.program_discount_percent, 0) AS line_discount_percent,
+        NVL(od.program_discount_amount, 0) AS line_discount_amount,
+        NVL(
+            od.line_net_total,
+            NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0)
+            - NVL(od.program_discount_amount, 0)
+        ) AS line_net_total
     FROM ORDER_DETAILS od
     LEFT JOIN PRODUCTS p
         ON od.product_id = p.product_id
@@ -119,32 +126,15 @@ SELECT
 
     NVL(ot.order_subtotal_amount, 0) AS subtotal_amount,
     NVL(ot.order_subtotal_amount, 0) AS order_subtotal_amount,
-    GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0) AS discount_amount,
-    GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0) AS order_discount_amount,
 
-/*
-    Fix bug dồn giảm giá:
-    - Nếu Java truyền MEMBER_DISCOUNT_AMOUNT thì dùng đúng số đó.
-    - Nếu Java truyền PROGRAM_DISCOUNT_AMOUNT thì dùng đúng số đó.
-    - Nếu mở lại report từ màn khác không truyền param thì fallback:
-        member = subtotal - total
-        program = 0
-      Vì cột % giảm / Sau giảm chỉ dành cho chương trình, không được tự dồn giảm thành viên vào chương trình.
-*/
-    CASE
-        WHEN $P{MEMBER_DISCOUNT_AMOUNT} IS NOT NULL THEN
-            $P{MEMBER_DISCOUNT_AMOUNT}
-        WHEN $P{PROGRAM_DISCOUNT_AMOUNT} IS NOT NULL THEN
-            GREATEST(
-                GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0)
-                - NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0),
-                0
-            )
-        ELSE
-            GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0)
-    END AS member_discount_amount,
+    NVL(o.member_discount_amount, NVL($P{MEMBER_DISCOUNT_AMOUNT}, 0)) AS member_discount_amount,
+    NVL(o.program_discount_amount, NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)) AS program_discount_amount,
 
-    NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0) AS program_discount_amount,
+    NVL(o.member_discount_amount, NVL($P{MEMBER_DISCOUNT_AMOUNT}, 0))
+    + NVL(o.program_discount_amount, NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)) AS discount_amount,
+
+    NVL(o.member_discount_amount, NVL($P{MEMBER_DISCOUNT_AMOUNT}, 0))
+    + NVL(o.program_discount_amount, NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)) AS order_discount_amount,
 
     NVL(o.total_amount, 0) AS total_amount,
 
@@ -154,43 +144,9 @@ SELECT
     ol.quantity,
     ol.unit_price,
     ol.line_total,
-
-    /*
-        Các cột % giảm / Sau giảm ở bảng chi tiết chỉ phản ánh GIẢM GIÁ CHƯƠNG TRÌNH.
-        Giảm giá thành viên là giảm cấp hóa đơn, không phân bổ xuống từng dòng sản phẩm.
-    */
-    ROUND(
-        CASE
-            WHEN NVL(ot.order_subtotal_amount, 0) > 0 THEN
-                (ol.line_total / ot.order_subtotal_amount)
-                * NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)
-            ELSE 0
-        END,
-        0
-    ) AS line_discount_amount,
-
-    ROUND(
-        CASE
-            WHEN NVL(ol.line_total, 0) > 0 AND NVL(ot.order_subtotal_amount, 0) > 0 THEN
-                (
-                    (ol.line_total / ot.order_subtotal_amount)
-                    * NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)
-                ) / ol.line_total * 100
-            ELSE 0
-        END,
-        2
-    ) AS line_discount_percent,
-
-    ROUND(
-        CASE
-            WHEN NVL(ot.order_subtotal_amount, 0) > 0 THEN
-                ol.line_total
-                - (ol.line_total / ot.order_subtotal_amount)
-                * NVL($P{PROGRAM_DISCOUNT_AMOUNT}, 0)
-            ELSE ol.line_total
-        END,
-        0
-    ) AS line_net_total
+    ol.line_discount_amount,
+    ol.line_discount_percent,
+    ol.line_net_total
 
 FROM ORDERS o
 
