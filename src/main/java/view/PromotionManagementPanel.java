@@ -18,6 +18,10 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.Collections;
+import java.util.Objects;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
@@ -34,7 +38,7 @@ public class PromotionManagementPanel extends JPanel {
     private static final String STATUS_ACTIVE = "Đang diễn ra";
     private static final String STATUS_UPCOMING = "Sắp diễn ra";
     private static final String STATUS_ENDED = "Đã kết thúc";
-    private static final String STATUS_PAUSED = "Tạm ngưng / Kết thúc";
+    private static final String STATUS_PAUSED = "Tạm ngưng";
 
     private static final String BRANCH_ALL = "Tất cả chi nhánh";
 
@@ -65,8 +69,15 @@ public class PromotionManagementPanel extends JPanel {
     private JDateChooser dtpTuNgay;
     private JDateChooser dtpDenNgay;
     private JComboBox<String> cbChiNhanh;
-    private JList<ProductOption> listProducts;
-    private DefaultListModel<ProductOption> productListModel;
+    private JComboBox<ProductOption> cbProductSearch;
+    private DefaultComboBoxModel<ProductOption> productComboModel;
+
+    private JTable tblPromoProducts;
+    private DefaultTableModel promoProductModel;
+
+    private java.util.List<ProductOption> allProductOptions = new java.util.ArrayList<>();
+    private boolean updatingProductCombo = false;
+    private Timer productSearchFilterTimer;
     private JSpinner spinMinOrderAmount;
     private JComboBox<String> cbTrangThai;
     private JButton btnSave, btnClear, btnDeactivate, btnPreview;
@@ -88,6 +99,37 @@ public class PromotionManagementPanel extends JPanel {
         @Override
         public String toString() {
             return productId + " - " + productName;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            if (!(obj instanceof ProductOption other)) {
+                return false;
+            }
+
+            return Objects.equals(productId, other.productId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(productId);
+        }
+    }
+
+    private static class PromotionProductOption {
+
+        String productId;
+        String productName;
+        double discountPercent;
+
+        PromotionProductOption(String productId, String productName, double discountPercent) {
+            this.productId = productId;
+            this.productName = productName;
+            this.discountPercent = discountPercent;
         }
     }
 
@@ -339,25 +381,166 @@ public class PromotionManagementPanel extends JPanel {
         addField(form, g, y, "Đơn tối thiểu để áp dụng", spinMinOrderAmount);
         y += 2;
 
-        productListModel = new DefaultListModel<>();
-        listProducts = new JList<>(productListModel);
-        listProducts.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        listProducts.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        listProducts.setVisibleRowCount(6);
+        loadProductOptionsForAutocomplete();
 
-        try {
-            for (Product p : ProductsSql.getInstance().selectAll()) {
-                if (p.getProductId() != null && p.getProductName() != null) {
-                    productListModel.addElement(new ProductOption(p.getProductId(), p.getProductName()));
+        cbProductSearch = new JComboBox<>(productComboModel);
+        cbProductSearch.setEditable(true);
+        cbProductSearch.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        cbProductSearch.setPreferredSize(new Dimension(0, 38));
+        cbProductSearch.setMaximumRowCount(8);
+        cbProductSearch.setPrototypeDisplayValue(new ProductOption("SP000000", "Tên sản phẩm mẫu để canh chiều rộng"));
+
+        cbProductSearch.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list,
+                        value,
+                        index,
+                        isSelected,
+                        cellHasFocus
+                );
+
+                label.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                label.setBorder(new EmptyBorder(6, 8, 6, 8));
+                label.setText(value == null ? "" : value.toString());
+                return label;
+            }
+        });
+
+        JTextField productEditor = (JTextField) cbProductSearch.getEditor().getEditorComponent();
+        productEditor.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        productEditor.putClientProperty("JTextField.placeholderText", "Nhập mã hoặc tên sản phẩm...");
+
+        productSearchFilterTimer = new Timer(180, e -> filterProductCombo());
+        productSearchFilterTimer.setRepeats(false);
+
+        productEditor.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                scheduleProductComboFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                scheduleProductComboFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                scheduleProductComboFilter();
+            }
+        });
+
+        productEditor.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    ProductOption opt = resolveProductFromSearchInput();
+
+                    if (opt != null) {
+                        addProductToPromotionList(opt);
+                        clearProductSearchEditor();
+                        e.consume();
+                    }
                 }
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
+        });
+
+        JButton btnAddProduct = createButton("Thêm SP", blue, Color.WHITE, null);
+        btnAddProduct.setPreferredSize(new Dimension(95, 38));
+        btnAddProduct.addActionListener(e -> {
+            ProductOption opt = resolveProductFromSearchInput();
+
+            if (opt != null) {
+                addProductToPromotionList(opt);
+                clearProductSearchEditor();
+                productEditor.requestFocusInWindow();
+            } else {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Vui lòng nhập/chọn sản phẩm cần áp dụng.",
+                        "Chưa chọn sản phẩm",
+                        JOptionPane.WARNING_MESSAGE
+                );
+            }
+        });
+
+        JPanel productSearchPanel = new JPanel(new BorderLayout(8, 0));
+        productSearchPanel.setOpaque(false);
+        productSearchPanel.add(cbProductSearch, BorderLayout.CENTER);
+        productSearchPanel.add(btnAddProduct, BorderLayout.EAST);
+
+        promoProductModel = new DefaultTableModel(
+                new Object[]{"Mã SP", "Tên sản phẩm", "Giảm (%)"}, 0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 2;
+            }
+        };
+
+        tblPromoProducts = new JTable(promoProductModel);
+        tblPromoProducts.setRowHeight(28);
+        tblPromoProducts.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        tblPromoProducts.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        tblPromoProducts.setShowHorizontalLines(true);
+        tblPromoProducts.setShowVerticalLines(false);
+        tblPromoProducts.setGridColor(border);
+        tblPromoProducts.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+
+        if (tblPromoProducts.getTableHeader() != null) {
+            tblPromoProducts.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+            tblPromoProducts.getTableHeader().setBackground(new Color(243, 246, 250));
         }
 
-        JScrollPane productScroll = new JScrollPane(listProducts);
-        productScroll.setPreferredSize(new Dimension(0, 120));
-        addField(form, g, y, "Áp dụng cho sản phẩm", productScroll);
+        tblPromoProducts.getColumnModel().getColumn(0).setPreferredWidth(80);
+        tblPromoProducts.getColumnModel().getColumn(1).setPreferredWidth(220);
+        tblPromoProducts.getColumnModel().getColumn(2).setPreferredWidth(70);
+
+        tblPromoProducts.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    removeSelectedPromotionProduct();
+                }
+            }
+        });
+
+        tblPromoProducts.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_DELETE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                    removeSelectedPromotionProduct();
+                }
+            }
+        });
+
+        JScrollPane selectedProductScroll = new JScrollPane(tblPromoProducts);
+        selectedProductScroll.setPreferredSize(new Dimension(0, 130));
+        selectedProductScroll.setMinimumSize(new Dimension(0, 110));
+        selectedProductScroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        JLabel selectedHint = new JLabel("Sửa % từng dòng. Double click hoặc Delete để xoá sản phẩm.");
+        selectedHint.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        selectedHint.setForeground(muted);
+
+        JPanel productApplyPanel = new JPanel();
+        productApplyPanel.setOpaque(false);
+        productApplyPanel.setLayout(new BoxLayout(productApplyPanel, BoxLayout.Y_AXIS));
+        productApplyPanel.add(productSearchPanel);
+        productApplyPanel.add(Box.createVerticalStrut(6));
+        productApplyPanel.add(selectedProductScroll);
+        productApplyPanel.add(Box.createVerticalStrut(4));
+        productApplyPanel.add(selectedHint);
+
+        addField(form, g, y, "Áp dụng cho sản phẩm", productApplyPanel);
         y += 2;
 
         addSection(form, g, y++, "4. Trạng thái chương trình");
@@ -375,8 +558,16 @@ public class PromotionManagementPanel extends JPanel {
         actions.add(btnDeactivate);
         actions.add(btnSave);
 
+        JScrollPane formScroll = new JScrollPane(form);
+        formScroll.setBorder(null);
+        formScroll.setOpaque(false);
+        formScroll.getViewport().setOpaque(false);
+        formScroll.getVerticalScrollBar().setUnitIncrement(16);
+        formScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        formScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+
         card.add(header, BorderLayout.NORTH);
-        card.add(form, BorderLayout.CENTER);
+        card.add(formScroll, BorderLayout.CENTER);
         card.add(actions, BorderLayout.SOUTH);
         return card;
     }
@@ -476,57 +667,151 @@ public class PromotionManagementPanel extends JPanel {
             spinMinOrderAmount.setValue(100000);
         }
 
-        if (listProducts != null) {
-            listProducts.clearSelection();
+        if (promoProductModel != null) {
+            promoProductModel.setRowCount(0);
         }
+
+        clearProductSearchEditor();
+    }
+
+    private String normalizeDbStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.trim().isEmpty()) {
+            return STATUS_ACTIVE;
+        }
+
+        String status = rawStatus.trim();
+
+        if ("Tạm ngưng / Kết thúc".equals(status)) {
+            return STATUS_PAUSED;
+        }
+
+        if (STATUS_ACTIVE.equals(status)
+                || STATUS_UPCOMING.equals(status)
+                || STATUS_ENDED.equals(status)
+                || STATUS_PAUSED.equals(status)) {
+            return status;
+        }
+
+        return STATUS_ACTIVE;
+    }
+
+    private int statusPriority(String status) {
+        String normalized = normalizeDbStatus(status);
+
+        if (STATUS_ACTIVE.equals(normalized)) {
+            return 1;
+        }
+
+        if (STATUS_UPCOMING.equals(normalized)) {
+            return 2;
+        }
+
+        if (STATUS_ENDED.equals(normalized)) {
+            return 3;
+        }
+
+        if (STATUS_PAUSED.equals(normalized)) {
+            return 4;
+        }
+
+        return 5;
     }
 
     private void loadPromoData(String keyword, String statusFilter) {
         tableModel.setRowCount(0);
         int total = 0, active = 0, ended = 0, paused = 0;
 
-        String sql = "SELECT p.promotion_id AS makm, p.promotion_name AS tenkm, "
+        class PromoRow {
+
+            String ma;
+            String ten;
+            int giam;
+            String tuNgay;
+            String denNgay;
+            String trangThai;
+        }
+
+        List<PromoRow> rows = new ArrayList<>();
+
+        /*
+         * FIX ORA-12704:
+         * Không dùng NVL(p.status, 'chuỗi tiếng Việt') hoặc CASE p.status WHEN '...'
+         * trong SQL nữa. Một số DB đang lưu STATUS/PROMOTION_NAME bằng charset khác
+         * nên so sánh literal tiếng Việt trực tiếp trong SQL dễ lỗi character set mismatch.
+         * Lọc trạng thái và sắp xếp ưu tiên được làm ở Java.
+         */
+        String sql = "SELECT p.promotion_id AS makm, "
+                + "TO_CHAR(p.promotion_name) AS tenkm, "
                 + "NVL(p.discount_percent, NVL(p.discount_amount, 0)) AS phantramgiam, "
                 + "TO_CHAR(c.start_date, 'YYYY-MM-DD') AS tungay, "
                 + "TO_CHAR(c.end_date, 'YYYY-MM-DD') AS denngay, "
-                + "NVL(p.status, '" + STATUS_ACTIVE + "') AS trangthai "
+                + "TO_CHAR(p.status) AS trangthai "
                 + "FROM PROMOTIONS p "
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE NVL(p.is_deleted, 0) = 0 "
-                + "AND (LOWER(p.promotion_id) LIKE LOWER(?) OR LOWER(p.promotion_name) LIKE LOWER(?)) ";
-
-        if (!STATUS_ALL.equals(statusFilter)) {
-            sql += "AND p.status = ? ";
-        }
-        sql += "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
+                + "AND (LOWER(TO_CHAR(p.promotion_id)) LIKE LOWER(?) "
+                + "OR LOWER(TO_CHAR(p.promotion_name)) LIKE LOWER(?)) "
+                + "ORDER BY c.start_date DESC NULLS LAST, p.promotion_id DESC";
 
         try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, "%" + keyword + "%");
             ps.setString(2, "%" + keyword + "%");
-            if (!STATUS_ALL.equals(statusFilter)) {
-                ps.setString(3, statusFilter);
-            }
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String trangThai = rs.getString("trangthai");
-                    tableModel.addRow(new Object[]{
-                        rs.getString("makm"),
-                        rs.getString("tenkm"),
-                        rs.getInt("phantramgiam") + "%",
-                        rs.getString("tungay"),
-                        rs.getString("denngay"),
-                        trangThai
-                    });
-                    total++;
-                    if (STATUS_ACTIVE.equals(trangThai)) {
-                        active++;
-                    } else if (STATUS_ENDED.equals(trangThai)) {
-                        ended++;
-                    } else if (STATUS_PAUSED.equals(trangThai)) {
-                        paused++;
+                    String trangThai = normalizeDbStatus(rs.getString("trangthai"));
+
+                    if (!STATUS_ALL.equals(statusFilter) && !statusFilter.equals(trangThai)) {
+                        continue;
                     }
+
+                    PromoRow row = new PromoRow();
+                    row.ma = rs.getString("makm");
+                    row.ten = rs.getString("tenkm");
+                    row.giam = rs.getInt("phantramgiam");
+                    row.tuNgay = rs.getString("tungay");
+                    row.denNgay = rs.getString("denngay");
+                    row.trangThai = trangThai;
+                    rows.add(row);
+                }
+            }
+
+            rows.sort((a, b) -> {
+                int byStatus = Integer.compare(statusPriority(a.trangThai), statusPriority(b.trangThai));
+                if (byStatus != 0) {
+                    return byStatus;
+                }
+
+                String aDate = a.tuNgay == null ? "" : a.tuNgay;
+                String bDate = b.tuNgay == null ? "" : b.tuNgay;
+                int byDateDesc = bDate.compareTo(aDate);
+                if (byDateDesc != 0) {
+                    return byDateDesc;
+                }
+
+                String aId = a.ma == null ? "" : a.ma;
+                String bId = b.ma == null ? "" : b.ma;
+                return bId.compareTo(aId);
+            });
+
+            for (PromoRow row : rows) {
+                tableModel.addRow(new Object[]{
+                    row.ma,
+                    row.ten,
+                    row.giam + "%",
+                    row.tuNgay,
+                    row.denNgay,
+                    row.trangThai
+                });
+
+                total++;
+                if (STATUS_ACTIVE.equals(row.trangThai)) {
+                    active++;
+                } else if (STATUS_ENDED.equals(row.trangThai)) {
+                    ended++;
+                } else if (STATUS_PAUSED.equals(row.trangThai)) {
+                    paused++;
                 }
             }
 
@@ -534,8 +819,10 @@ public class PromotionManagementPanel extends JPanel {
             lblActivePromos.setText(String.valueOf(active));
             lblEndedPromos.setText(String.valueOf(ended));
             lblPausedPromos.setText(String.valueOf(paused));
+
         } catch (Exception e) {
             System.err.println("Lỗi tải danh sách Khuyến mãi: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -545,7 +832,7 @@ public class PromotionManagementPanel extends JPanel {
                 + "NVL(p.min_order_amount, 100000) AS min_order_amount, "
                 + "TO_CHAR(c.start_date, 'YYYY-MM-DD') AS start_date, "
                 + "TO_CHAR(c.end_date, 'YYYY-MM-DD') AS end_date, "
-                + "NVL(p.status, '" + STATUS_ACTIVE + "') AS status "
+                + "TO_CHAR(p.status) AS status "
                 + "FROM PROMOTIONS p "
                 + "LEFT JOIN PROMOTION_CAMPAIGNS c ON p.campaign_id = c.campaign_id "
                 + "WHERE p.promotion_id = ? AND NVL(p.is_deleted, 0) = 0";
@@ -561,7 +848,7 @@ public class PromotionManagementPanel extends JPanel {
                         spinMinOrderAmount.setValue(rs.getInt("min_order_amount"));
                     }
 
-                    cbTrangThai.setSelectedItem(rs.getString("status"));
+                    cbTrangThai.setSelectedItem(normalizeDbStatus(rs.getString("status")));
 
                     java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
 
@@ -597,17 +884,74 @@ public class PromotionManagementPanel extends JPanel {
         }
     }
 
+    /**
+     * Chuẩn hóa trạng thái theo ngày áp dụng. - Nếu ngày bắt đầu > hôm nay:
+     * không cho lưu "Đang diễn ra", tự chuyển thành "Sắp diễn ra". - Nếu ngày
+     * kết thúc < hôm nay: không cho lưu "Đang diễn ra" hoặc "Sắp diễn ra", tự
+     * chuyển "Đã kết thúc". - Nếu đang trong thời gian áp dụng mà chọn "Sắp
+     * diễn ra": tự chuyển "Đang diễn ra". - "Tạm ngưng" và "Đã kết thúc" là
+     * trạng thái chủ động nên được giữ lại.
+     */
+    private String normalizePromotionStatusByDate(String requestedStatus) {
+        String status = requestedStatus == null || requestedStatus.trim().isEmpty()
+                ? STATUS_ACTIVE
+                : requestedStatus.trim();
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate startDate = toLocalDate(dtpTuNgay.getDate());
+        java.time.LocalDate endDate = toLocalDate(dtpDenNgay.getDate());
+
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ngày kết thúc không được nhỏ hơn ngày bắt đầu.",
+                    "Ngày áp dụng không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return status;
+        }
+
+        if (STATUS_PAUSED.equals(status) || STATUS_ENDED.equals(status)) {
+            return status;
+        }
+
+        if (startDate != null && today.isBefore(startDate)) {
+            return STATUS_UPCOMING;
+        }
+
+        if (endDate != null && today.isAfter(endDate)) {
+            return STATUS_ENDED;
+        }
+
+        if (STATUS_UPCOMING.equals(status)) {
+            return STATUS_ACTIVE;
+        }
+
+        return status;
+    }
+
+    private java.time.LocalDate toLocalDate(java.util.Date date) {
+        if (date == null) {
+            return null;
+        }
+
+        return date.toInstant()
+                .atZone(java.time.ZoneId.systemDefault())
+                .toLocalDate();
+    }
+
     private void savePromo() {
         String ma = txtMaKM.getText().trim();
         String ten = txtTenKM.getText().trim();
         int giam = (int) spinGiamGia.getValue();
         int minOrderAmount = ((Number) spinMinOrderAmount.getValue()).intValue();
 
-        List<ProductOption> selectedProducts = listProducts.getSelectedValuesList();
+        List<PromotionProductOption> selectedProducts = getPromotionSelectedProducts();
+
         if (selectedProducts == null || selectedProducts.isEmpty()) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Vui lòng chọn ít nhất 1 sản phẩm áp dụng khuyến mãi.",
+                    "Vui lòng thêm ít nhất 1 sản phẩm áp dụng khuyến mãi.",
                     "Thiếu sản phẩm áp dụng",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -617,11 +961,23 @@ public class PromotionManagementPanel extends JPanel {
         if (giam <= 0 || giam > 30) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Mức giảm nên từ 1% đến 30% để tránh lỗ.",
+                    "Mức giảm mặc định nên từ 1% đến 30% để tránh lỗ.",
                     "Mức giảm không hợp lệ",
                     JOptionPane.WARNING_MESSAGE
             );
             return;
+        }
+
+        for (PromotionProductOption p : selectedProducts) {
+            if (p.discountPercent <= 0 || p.discountPercent > 30) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Mức giảm của sản phẩm " + p.productId + " phải từ 1% đến 30%.",
+                        "Mức giảm sản phẩm không hợp lệ",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
         }
 
         if (minOrderAmount < 100000) {
@@ -633,7 +989,10 @@ public class PromotionManagementPanel extends JPanel {
             );
             return;
         }
-        String trangThai = cbTrangThai.getSelectedItem().toString();
+
+        String requestedTrangThai = cbTrangThai.getSelectedItem() == null
+                ? STATUS_ACTIVE
+                : cbTrangThai.getSelectedItem().toString();
 
         java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
         String tuNgay = "";
@@ -642,61 +1001,125 @@ public class PromotionManagementPanel extends JPanel {
         if (dtpTuNgay.getDate() != null) {
             tuNgay = sdf.format(dtpTuNgay.getDate());
         }
+
         if (dtpDenNgay.getDate() != null) {
             denNgay = sdf.format(dtpDenNgay.getDate());
         }
 
-        if (ma.isEmpty() || ten.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập mã và tên Khuyến mãi!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+        java.time.LocalDate startDateForValidate = toLocalDate(dtpTuNgay.getDate());
+        java.time.LocalDate endDateForValidate = toLocalDate(dtpDenNgay.getDate());
+
+        if (startDateForValidate != null && endDateForValidate != null && endDateForValidate.isBefore(startDateForValidate)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ngày kết thúc không được nhỏ hơn ngày bắt đầu.",
+                    "Ngày áp dụng không hợp lệ",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
+        }
+
+        if (ma.isEmpty() || ten.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng nhập mã và tên Khuyến mãi!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        String trangThai = normalizePromotionStatusByDate(requestedTrangThai);
+
+        if (!trangThai.equals(requestedTrangThai)) {
+            cbTrangThai.setSelectedItem(trangThai);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Trạng thái đã được tự động chỉnh thành: " + trangThai
+                    + "\nDo ngày áp dụng hiện tại không phù hợp với trạng thái bạn chọn.",
+                    "Tự động chỉnh trạng thái",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
         }
 
         String campaignId = buildCampaignId(ma);
 
         try (Connection con = common.db.DatabaseConnection.getConnection()) {
-            upsertCampaign(con, campaignId, ten, tuNgay, denNgay);
+            con.setAutoCommit(false);
 
-            if (isEditMode) {
-                String sql = "UPDATE PROMOTIONS "
-                        + "SET promotion_name = ?, campaign_id = ?, discount_amount = ?, discount_percent = ?, "
-                        + "    min_order_amount = ?, status = ? "
-                        + "WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
-                try (PreparedStatement ps = con.prepareStatement(sql)) {
-                    ps.setString(1, ten);
-                    ps.setString(2, campaignId);
-                    ps.setInt(3, giam);
-                    ps.setInt(4, giam);
-                    ps.setInt(5, minOrderAmount);
-                    ps.setString(6, trangThai);
-                    ps.setString(7, ma);
-                    ps.executeUpdate();
+            try {
+                upsertCampaign(con, campaignId, ten, tuNgay, denNgay);
+
+                if (isEditMode) {
+                    String sql = "UPDATE PROMOTIONS "
+                            + "SET promotion_name = ?, campaign_id = ?, discount_amount = ?, discount_percent = ?, "
+                            + "    min_order_amount = ?, status = ? "
+                            + "WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
+
+                    try (PreparedStatement ps = con.prepareStatement(sql)) {
+                        ps.setString(1, ten);
+                        ps.setString(2, campaignId);
+                        ps.setInt(3, giam);
+                        ps.setInt(4, giam);
+                        ps.setInt(5, minOrderAmount);
+                        ps.setString(6, trangThai);
+                        ps.setString(7, ma);
+                        ps.executeUpdate();
+                    }
+                } else {
+                    String sql = "INSERT INTO PROMOTIONS "
+                            + "(promotion_id, promotion_name, campaign_id, status, discount_amount, discount_percent, min_order_amount, is_deleted) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
+
+                    try (PreparedStatement ps = con.prepareStatement(sql)) {
+                        ps.setString(1, ma);
+                        ps.setString(2, ten);
+                        ps.setString(3, campaignId);
+                        ps.setString(4, trangThai);
+                        ps.setInt(5, giam);
+                        ps.setInt(6, giam);
+                        ps.setInt(7, minOrderAmount);
+                        ps.executeUpdate();
+                    }
                 }
-                JOptionPane.showMessageDialog(this, "Cập nhật Khuyến mãi thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                String sql = "INSERT INTO PROMOTIONS "
-                        + "(promotion_id, promotion_name, campaign_id, status, discount_amount, discount_percent, min_order_amount, is_deleted) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
-                try (PreparedStatement ps = con.prepareStatement(sql)) {
-                    ps.setString(1, ma);
-                    ps.setString(2, ten);
-                    ps.setString(3, campaignId);
-                    ps.setString(4, trangThai);
-                    ps.setInt(5, giam);
-                    ps.setInt(6, giam);
-                    ps.setInt(7, minOrderAmount);
-                    ps.executeUpdate();
-                }
-                JOptionPane.showMessageDialog(this, "Đã tạo Khuyến mãi mới thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+
+                savePromotionProducts(con, ma, selectedProducts);
+                con.commit();
+
+            } catch (Exception ex) {
+                con.rollback();
+                throw ex;
+            } finally {
+                con.setAutoCommit(true);
             }
 
-            savePromotionProducts(con, ma, selectedProducts);
+            JOptionPane.showMessageDialog(
+                    this,
+                    isEditMode ? "Cập nhật Khuyến mãi thành công!" : "Đã tạo Khuyến mãi mới thành công!",
+                    "Thành công",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
 
-            business.service.AuditLogService.logAction(isEditMode ? "CẬP NHẬT" : "THÊM MỚI", "PROMOTIONS", ma, "", "Tên CT: " + ten + " (-" + giam + "%)", "Cập nhật chiến dịch KM");
+            business.service.AuditLogService.logAction(
+                    isEditMode ? "CẬP NHẬT" : "THÊM MỚI",
+                    "PROMOTIONS",
+                    ma,
+                    "",
+                    "Tên CT: " + ten + " (-" + giam + "%)",
+                    "Cập nhật chiến dịch KM"
+            );
+
             clearForm();
             doSearch();
             EventBus.publish(new AppDataChangedEvent(AppEventType.STORE_INFO, "PROMO_UPDATED"));
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Lỗi lưu Khuyến mãi: " + e.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Lỗi lưu Khuyến mãi: " + e.getMessage(),
+                    "Lỗi DB",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -720,52 +1143,74 @@ public class PromotionManagementPanel extends JPanel {
         }
     }
 
-    private void savePromotionProducts(Connection con, String promotionId, List<ProductOption> selectedProducts) throws Exception {
+    private void savePromotionProducts(
+            Connection con,
+            String promotionId,
+            List<PromotionProductOption> selectedProducts
+    ) throws Exception {
         String deleteSql = "DELETE FROM PROMOTION_PRODUCTS WHERE promotion_id = ?";
+
         try (PreparedStatement ps = con.prepareStatement(deleteSql)) {
             ps.setString(1, promotionId);
             ps.executeUpdate();
         }
 
-        String insertSql = "INSERT INTO PROMOTION_PRODUCTS (promotion_id, product_id, is_deleted) VALUES (?, ?, 0)";
+        String insertSql = """
+            INSERT INTO PROMOTION_PRODUCTS (
+                promotion_id,
+                product_id,
+                discount_percent,
+                is_deleted
+            )
+            VALUES (?, ?, ?, 0)
+        """;
+
         try (PreparedStatement ps = con.prepareStatement(insertSql)) {
-            for (ProductOption p : selectedProducts) {
+            for (PromotionProductOption p : selectedProducts) {
                 ps.setString(1, promotionId);
                 ps.setString(2, p.productId);
+                ps.setDouble(3, p.discountPercent);
                 ps.addBatch();
             }
+
             ps.executeBatch();
         }
     }
 
     private void loadPromotionProductsSelection(String promotionId) {
-        if (listProducts == null || productListModel == null) {
+        if (promoProductModel == null) {
             return;
         }
 
-        java.util.Set<String> selectedIds = new java.util.HashSet<>();
-        String sql = "SELECT product_id FROM PROMOTION_PRODUCTS WHERE promotion_id = ? AND NVL(is_deleted, 0) = 0";
+        promoProductModel.setRowCount(0);
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        String sql = """
+            SELECT
+                pp.product_id,
+                NVL(p.product_name, pp.product_id) AS product_name,
+                NVL(pp.discount_percent, 0) AS discount_percent
+            FROM PROMOTION_PRODUCTS pp
+            LEFT JOIN PRODUCTS p
+                ON p.product_id = pp.product_id
+               AND NVL(p.is_deleted, 0) = 0
+            WHERE pp.promotion_id = ?
+              AND NVL(pp.is_deleted, 0) = 0
+            ORDER BY pp.product_id
+        """;
 
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, promotionId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    selectedIds.add(rs.getString("product_id"));
+                    promoProductModel.addRow(new Object[]{
+                        rs.getString("product_id"),
+                        rs.getString("product_name"),
+                        rs.getDouble("discount_percent")
+                    });
                 }
             }
-
-            java.util.List<Integer> indices = new java.util.ArrayList<>();
-            for (int i = 0; i < productListModel.size(); i++) {
-                ProductOption opt = productListModel.getElementAt(i);
-                if (selectedIds.contains(opt.productId)) {
-                    indices.add(i);
-                }
-            }
-
-            int[] selected = indices.stream().mapToInt(Integer::intValue).toArray();
-            listProducts.setSelectedIndices(selected);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -773,11 +1218,7 @@ public class PromotionManagementPanel extends JPanel {
     }
 
     private String getSelectedProductPreviewText() {
-        if (listProducts == null) {
-            return "-";
-        }
-
-        List<ProductOption> selectedProducts = listProducts.getSelectedValuesList();
+        List<PromotionProductOption> selectedProducts = getPromotionSelectedProducts();
 
         if (selectedProducts == null || selectedProducts.isEmpty()) {
             return "-";
@@ -785,16 +1226,272 @@ public class PromotionManagementPanel extends JPanel {
 
         if (selectedProducts.size() <= 3) {
             StringBuilder sb = new StringBuilder();
+
             for (int i = 0; i < selectedProducts.size(); i++) {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                sb.append(selectedProducts.get(i).productId);
+
+                PromotionProductOption p = selectedProducts.get(i);
+                sb.append(p.productId)
+                        .append(" - ")
+                        .append(new java.text.DecimalFormat("#,##0.##").format(p.discountPercent))
+                        .append("%");
             }
+
             return sb.toString();
         }
 
         return selectedProducts.size() + " sản phẩm";
+    }
+
+    private void loadProductOptionsForAutocomplete() {
+        allProductOptions = new java.util.ArrayList<>();
+        productComboModel = new DefaultComboBoxModel<>();
+
+        java.util.Map<String, ProductOption> uniqueById = new java.util.LinkedHashMap<>();
+
+        try {
+            for (Product p : ProductsSql.getInstance().selectAll()) {
+                if (p == null || p.getProductId() == null || p.getProductName() == null) {
+                    continue;
+                }
+
+                String productId = p.getProductId().trim();
+                String productName = p.getProductName().trim();
+
+                if (productId.isEmpty() || productName.isEmpty()) {
+                    continue;
+                }
+
+                // ProductsSql.selectAll() có thể trả trùng sản phẩm theo chi nhánh/tồn kho.
+                // Dedupe theo PRODUCT_ID để autocomplete không bị lặp.
+                uniqueById.putIfAbsent(productId, new ProductOption(productId, productName));
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        allProductOptions.addAll(uniqueById.values());
+        allProductOptions.sort(java.util.Comparator.comparing(o -> o.productId));
+
+        refillProductComboWithDefaultItems();
+    }
+
+    private void refillProductComboWithDefaultItems() {
+        if (productComboModel == null) {
+            return;
+        }
+
+        productComboModel.removeAllElements();
+        int limit = Math.min(25, allProductOptions.size());
+        for (int i = 0; i < limit; i++) {
+            productComboModel.addElement(allProductOptions.get(i));
+        }
+    }
+
+    private void scheduleProductComboFilter() {
+        if (updatingProductCombo) {
+            return;
+        }
+
+        if (productSearchFilterTimer != null) {
+            productSearchFilterTimer.restart();
+        } else {
+            SwingUtilities.invokeLater(this::filterProductCombo);
+        }
+    }
+
+    private void filterProductCombo() {
+        if (cbProductSearch == null || productComboModel == null) {
+            return;
+        }
+
+        if (updatingProductCombo) {
+            return;
+        }
+
+        JTextField editor = (JTextField) cbProductSearch.getEditor().getEditorComponent();
+        String keyword = editor.getText();
+        String normalizedKeyword = normalizeSearchText(keyword);
+
+        updatingProductCombo = true;
+
+        try {
+            productComboModel.removeAllElements();
+
+            int count = 0;
+            for (ProductOption opt : allProductOptions) {
+                String haystack = normalizeSearchText(opt.productId + " " + opt.productName);
+
+                if (normalizedKeyword.isEmpty() || haystack.contains(normalizedKeyword)) {
+                    productComboModel.addElement(opt);
+                    count++;
+                }
+
+                // Giới hạn kết quả để combo không lag khi danh sách nhiều sản phẩm.
+                if (count >= 25) {
+                    break;
+                }
+            }
+
+            editor.setText(keyword);
+            editor.setCaretPosition(editor.getText().length());
+
+        } finally {
+            updatingProductCombo = false;
+        }
+
+        if (cbProductSearch.isShowing()) {
+            if (!normalizedKeyword.isEmpty() && productComboModel.getSize() > 0) {
+                cbProductSearch.showPopup();
+            } else {
+                cbProductSearch.hidePopup();
+            }
+        }
+    }
+
+    private ProductOption resolveProductFromSearchInput() {
+        if (cbProductSearch == null) {
+            return null;
+        }
+
+        Object selected = cbProductSearch.getSelectedItem();
+        if (selected instanceof ProductOption opt) {
+            return opt;
+        }
+
+        JTextField editor = (JTextField) cbProductSearch.getEditor().getEditorComponent();
+        String input = editor.getText();
+        String normalizedInput = normalizeSearchText(input);
+
+        if (normalizedInput.isEmpty()) {
+            return null;
+        }
+
+        for (ProductOption opt : allProductOptions) {
+            if (normalizeSearchText(opt.productId).equals(normalizedInput)
+                    || normalizeSearchText(opt.toString()).equals(normalizedInput)) {
+                return opt;
+            }
+        }
+
+        if (productComboModel != null && productComboModel.getSize() == 1) {
+            return productComboModel.getElementAt(0);
+        }
+
+        return null;
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String s = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD);
+        s = s.replaceAll("\\p{M}", "");
+        s = s.replace('đ', 'd').replace('Đ', 'D');
+        return s.toLowerCase().trim();
+    }
+
+    private void addProductToPromotionList(ProductOption opt) {
+        if (opt == null || opt.productId == null || opt.productId.trim().isEmpty()) {
+            return;
+        }
+
+        if (promoProductModel == null || tblPromoProducts == null) {
+            return;
+        }
+
+        for (int i = 0; i < promoProductModel.getRowCount(); i++) {
+            String existedId = String.valueOf(promoProductModel.getValueAt(i, 0));
+
+            if (opt.productId.equals(existedId)) {
+                tblPromoProducts.setRowSelectionInterval(i, i);
+                tblPromoProducts.scrollRectToVisible(tblPromoProducts.getCellRect(i, 0, true));
+                return;
+            }
+        }
+
+        int defaultDiscount = ((Number) spinGiamGia.getValue()).intValue();
+
+        promoProductModel.addRow(new Object[]{
+            opt.productId,
+            opt.productName,
+            defaultDiscount
+        });
+
+        int last = promoProductModel.getRowCount() - 1;
+        tblPromoProducts.setRowSelectionInterval(last, last);
+        tblPromoProducts.scrollRectToVisible(tblPromoProducts.getCellRect(last, 0, true));
+    }
+
+    private void removeSelectedPromotionProduct() {
+        if (tblPromoProducts == null || promoProductModel == null) {
+            return;
+        }
+
+        int row = tblPromoProducts.getSelectedRow();
+
+        if (row >= 0) {
+            int modelRow = tblPromoProducts.convertRowIndexToModel(row);
+
+            if (modelRow >= 0 && modelRow < promoProductModel.getRowCount()) {
+                promoProductModel.removeRow(modelRow);
+            }
+        }
+    }
+
+    private List<PromotionProductOption> getPromotionSelectedProducts() {
+        List<PromotionProductOption> result = new ArrayList<>();
+
+        if (promoProductModel == null) {
+            return result;
+        }
+
+        if (tblPromoProducts != null && tblPromoProducts.isEditing()) {
+            try {
+                tblPromoProducts.getCellEditor().stopCellEditing();
+            } catch (Exception ignored) {
+            }
+        }
+
+        for (int i = 0; i < promoProductModel.getRowCount(); i++) {
+            String productId = String.valueOf(promoProductModel.getValueAt(i, 0)).trim();
+            String productName = String.valueOf(promoProductModel.getValueAt(i, 1)).trim();
+
+            double discount = 0.0;
+
+            try {
+                discount = Double.parseDouble(String.valueOf(promoProductModel.getValueAt(i, 2)).trim());
+            } catch (Exception ignored) {
+            }
+
+            if (!productId.isEmpty()) {
+                result.add(new PromotionProductOption(productId, productName, discount));
+            }
+        }
+
+        return result;
+    }
+
+    private void clearProductSearchEditor() {
+        if (cbProductSearch == null) {
+            return;
+        }
+
+        updatingProductCombo = true;
+
+        try {
+            cbProductSearch.setSelectedItem(null);
+            JTextField editor = (JTextField) cbProductSearch.getEditor().getEditorComponent();
+            editor.setText("");
+            refillProductComboWithDefaultItems();
+            cbProductSearch.hidePopup();
+        } catch (Exception ignored) {
+        } finally {
+            updatingProductCombo = false;
+        }
     }
 
     private String buildCampaignId(String promotionId) {
