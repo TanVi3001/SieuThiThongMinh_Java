@@ -1370,9 +1370,9 @@ public class SellPanel extends JPanel {
         btnCancel.setEnabled(false);
         btnRemove.setEnabled(false);
 
-        String emp = "EMP_DEFAULT";
+        String emp = SessionManager.getCurrentEmployeeId();
         model.account.Account a = SessionManager.getCurrentUser();
-        if (a != null) {
+        if ((emp == null || emp.isBlank()) && a != null) {
             emp = (a.getUserId() != null && !a.getUserId().isBlank()) ? a.getUserId() : a.getAccountId();
         }
 

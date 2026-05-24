@@ -98,7 +98,7 @@ public class AccountSql implements SqlInterface<Account> {
 
     public Account selectByUsername(String username) {
         Account acc = null;
-        String sql = "SELECT a.account_id, a.username, a.password, a.is_deleted, "
+        String sql = "SELECT a.account_id, a.user_id, a.username, a.password, a.is_deleted, "
                 + "       COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value "
                 + "FROM ACCOUNTS a "
                 + "LEFT JOIN ACCOUNT_ASSIGN_ROLE aar "
@@ -120,6 +120,7 @@ public class AccountSql implements SqlInterface<Account> {
                             rs.getString("role_value"),
                             rs.getInt("is_deleted")
                     );
+                    acc.setUserId(rs.getString("user_id"));
                 }
             }
         } catch (SQLException e) {

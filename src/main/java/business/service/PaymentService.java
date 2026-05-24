@@ -22,6 +22,7 @@ public class PaymentService {
 
         try {
             String storeId = requireStoreId(hoaDon);
+            requireEmployeeId(hoaDon);
             assertWritableStore(storeId);
 
             con = DatabaseConnection.getConnection();
@@ -225,6 +226,7 @@ public class PaymentService {
                  PreparedStatement psCheckStock = con.prepareStatement(checkStockSql)) {
 
                 String storeId = requireStoreId(order);
+                requireEmployeeId(order);
                 assertWritableStore(storeId);
                 order.setStoreId(storeId);
                 if (order.getStatus() == null || order.getStatus().isBlank()) {
@@ -294,6 +296,18 @@ public class PaymentService {
             throw new SQLException("Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.");
         }
         return storeId.trim();
+    }
+
+    private static String requireEmployeeId(Order order) throws SQLException {
+        String employeeId = order != null ? order.getEmployeeId() : null;
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            employeeId = SessionManager.getCurrentEmployeeId();
+        }
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            throw new SQLException("Không xác định được mã nhân viên hiện tại. Vui lòng đăng nhập lại bằng tài khoản nhân viên.");
+        }
+        order.setEmployeeId(employeeId.trim());
+        return employeeId.trim();
     }
 
     private static void assertWritableStore(String storeId) throws SQLException {
