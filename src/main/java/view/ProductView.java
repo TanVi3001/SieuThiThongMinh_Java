@@ -51,6 +51,11 @@ public class ProductView extends JPanel {
     private final Color textDark = new Color(43, 54, 116);
     private final Color textGray = new Color(163, 174, 208);
     private final Color borderGray = new Color(230, 235, 241);
+    private static final int TABLE_IMAGE_WIDTH = 110;
+    private static final int TABLE_IMAGE_HEIGHT = 80;
+
+    private static final int DETAIL_IMAGE_WIDTH = 190;
+    private static final int DETAIL_IMAGE_HEIGHT = 145;
 
     private JTextField txtName, txtPrice, txtQuantity;
     private JComboBox<String> cbCategory, cbSearch;
@@ -380,11 +385,17 @@ public class ProductView extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã SP", "Tên sản phẩm", "Giá", "Số lượng", "Loại SP", "Ảnh"}, 0) {
+        /*
+         * Layout bảng theo phong cách mẫu cũ:
+         * Mã SP | Ảnh SP | Tên sản phẩm | SL trong kho | Giá bán | Loại hàng
+         */
+        tableModel = new DefaultTableModel(new Object[]{
+            "Mã SP", "Ảnh SP", "Tên sản phẩm", "SL trong kho", "Giá bán", "Loại hàng"
+        }, 0) {
             @Override
             public Class<?> getColumnClass(int col) {
-                if (col == 5) {
-                    return ImageIcon.class; // cột Ảnh
+                if (col == 1) {
+                    return ImageIcon.class;
                 }
                 return Object.class;
             }
@@ -394,36 +405,71 @@ public class ProductView extends JPanel {
                 return false;
             }
         };
-        tblProducts = new JTable(tableModel);
-        tblProducts.setRowHeight(35);
-        tblProducts.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        tblProducts.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
-        tblProducts.getTableHeader().setBackground(bgLight);
-        tblProducts.getTableHeader().setReorderingAllowed(false);
-        tblProducts.setShowVerticalLines(false);
-        tblProducts.setSelectionBackground(new Color(237, 242, 255));
-        tblProducts.setSelectionForeground(textDark);
-        tblProducts.setRowHeight(60); // tăng chiều cao hàng cho ảnh
 
-        tblProducts.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+        tblProducts = new JTable(tableModel);
+        tblProducts.setRowHeight(96);
+        tblProducts.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        tblProducts.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        tblProducts.getTableHeader().setBackground(new Color(0, 105, 92));
+        tblProducts.getTableHeader().setForeground(Color.WHITE);
+        tblProducts.getTableHeader().setPreferredSize(new Dimension(0, 42));
+        tblProducts.getTableHeader().setReorderingAllowed(false);
+        tblProducts.setShowHorizontalLines(true);
+        tblProducts.setShowVerticalLines(false);
+        tblProducts.setGridColor(new Color(225, 225, 225));
+        tblProducts.setIntercellSpacing(new Dimension(0, 1));
+        tblProducts.setSelectionBackground(new Color(232, 245, 255));
+        tblProducts.setSelectionForeground(textDark);
+        tblProducts.setFillsViewportHeight(true);
+        tblProducts.setAutoCreateRowSorter(true);
+
+        tblProducts.getColumnModel().getColumn(0).setPreferredWidth(110); // Mã SP
+        tblProducts.getColumnModel().getColumn(1).setPreferredWidth(150); // Ảnh SP
+        tblProducts.getColumnModel().getColumn(2).setPreferredWidth(300); // Tên sản phẩm
+        tblProducts.getColumnModel().getColumn(3).setPreferredWidth(130); // SL trong kho
+        tblProducts.getColumnModel().getColumn(4).setPreferredWidth(130); // Giá bán
+        tblProducts.getColumnModel().getColumn(5).setPreferredWidth(150); // Loại hàng
+
+        tblProducts.getColumnModel().getColumn(1).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+            public Component getTableCellRendererComponent(
+                    JTable table,
+                    Object value,
+                    boolean isSelected,
+                    boolean hasFocus,
+                    int row,
+                    int column
+            ) {
+                JPanel panel = new JPanel(new GridBagLayout());
+                panel.setOpaque(true);
+
+                if (isSelected) {
+                    panel.setBackground(table.getSelectionBackground());
+                } else {
+                    panel.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 249, 250));
+                }
+
                 JLabel lbl = new JLabel();
                 lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon imageIcon) {
+                lbl.setVerticalAlignment(SwingConstants.CENTER);
+
+                if (value instanceof ImageIcon imageIcon) {
                     lbl.setIcon(imageIcon);
+                    lbl.setText("");
                 } else {
                     lbl.setText("—");
+                    lbl.setFont(new Font("Segoe UI", Font.BOLD, 16));
                     lbl.setForeground(textGray);
                 }
-                return lbl;
+
+                panel.add(lbl);
+                return panel;
             }
         });
-        tblProducts.getColumnModel().getColumn(5).setPreferredWidth(80);
 
-        // Cột "Loại SP" (index 4) hiển thị icon + text
+        // Cột "Loại hàng" hiển thị icon + text.
         tblProducts.getColumnModel()
-                .getColumn(4)
+                .getColumn(5)
                 .setCellRenderer(new view.components.CategoryTableRenderer(20));
 
         applyStockRowRenderer();
@@ -1111,6 +1157,49 @@ public class ProductView extends JPanel {
         };
     }
 
+    private ImageIcon loadProductImageIcon(String imageNameOrPath) {
+        return loadProductImageIcon(imageNameOrPath, TABLE_IMAGE_WIDTH, TABLE_IMAGE_HEIGHT);
+    }
+
+    private ImageIcon loadProductImageIcon(String imageNameOrPath, int width, int height) {
+        if (imageNameOrPath == null || imageNameOrPath.trim().isEmpty()) {
+            return null;
+        }
+
+        String path = imageNameOrPath.trim().replace("\\", "/");
+
+        try {
+            // DB lưu: products/a.png
+            // Java tìm: src/main/resources/view/image/products/a.png
+            java.net.URL url = getClass().getClassLoader().getResource("view/image/" + path);
+
+            if (url != null) {
+                Image img = new ImageIcon(url)
+                        .getImage()
+                        .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                return new ImageIcon(img);
+            }
+
+            File file = new File(path);
+
+            if (!file.exists()) {
+                file = new File("src/main/resources/view/image/" + path);
+            }
+
+            if (file.exists()) {
+                Image img = new ImageIcon(file.getAbsolutePath())
+                        .getImage()
+                        .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                return new ImageIcon(img);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
     private void applyStockRowRenderer() {
         DefaultTableCellRenderer stockRenderer = new DefaultTableCellRenderer() {
             @Override
@@ -1144,12 +1233,20 @@ public class ProductView extends JPanel {
                     c.setBackground(new Color(255, 246, 220));
                     c.setForeground(new Color(150, 95, 0));
                 } else {
-                    c.setBackground(Color.WHITE);
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 249, 250));
                     c.setForeground(Color.BLACK);
                 }
 
                 if (c instanceof JLabel lbl) {
                     lbl.setHorizontalAlignment(SwingConstants.CENTER);
+                    lbl.setVerticalAlignment(SwingConstants.CENTER);
+
+                    if (column == 2) {
+                        lbl.setHorizontalAlignment(SwingConstants.LEFT);
+                        lbl.setBorder(new EmptyBorder(0, 16, 0, 8));
+                    } else {
+                        lbl.setBorder(new EmptyBorder(0, 6, 0, 6));
+                    }
                 }
 
                 return c;
@@ -1157,12 +1254,15 @@ public class ProductView extends JPanel {
         };
 
         for (int i = 0; i < tblProducts.getColumnCount(); i++) {
-            if (i != 5) {
+            // Không đè renderer cột ảnh và cột loại hàng.
+            if (i != 1 && i != 5) {
                 tblProducts.getColumnModel().getColumn(i).setCellRenderer(stockRenderer);
             }
         }
 
-        tblProducts.getColumnModel().getColumn(4).setCellRenderer(new view.components.CategoryTableRenderer(20));
+        tblProducts.getColumnModel()
+                .getColumn(5)
+                .setCellRenderer(new view.components.CategoryTableRenderer(20));
     }
 
     private void applyProductRolePermission() {
@@ -1584,7 +1684,7 @@ public class ProductView extends JPanel {
         int modelRow = tblProducts.convertRowIndexToModel(row);
 
         String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
-        String productName = String.valueOf(tableModel.getValueAt(modelRow, 1));
+        String productName = String.valueOf(tableModel.getValueAt(modelRow, 2));
         int quantity = parseIntSafe(tableModel.getValueAt(modelRow, 3));
 
         if (quantity > 20) {
@@ -1894,7 +1994,7 @@ public class ProductView extends JPanel {
 
         int modelRow = tblProducts.convertRowIndexToModel(row);
         String id = tblProducts.getModel().getValueAt(modelRow, 0).toString().trim();
-        String name = tblProducts.getModel().getValueAt(modelRow, 1).toString().trim();
+        String name = tblProducts.getModel().getValueAt(modelRow, 2).toString().trim();
 
         int confirm = JOptionPane.showConfirmDialog(
                 this,
@@ -2019,6 +2119,7 @@ public class ProductView extends JPanel {
 
     private void tblProductsMouseClicked(MouseEvent evt) {
         int row = tblProducts.getSelectedRow();
+
         if (row < 0) {
             return;
         }
@@ -2026,56 +2127,74 @@ public class ProductView extends JPanel {
         int modelRow = tblProducts.convertRowIndexToModel(row);
 
         String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
-        String productName = String.valueOf(tableModel.getValueAt(modelRow, 1));
-        String price = String.valueOf(tableModel.getValueAt(modelRow, 2));
+        Object imageObj = tableModel.getValueAt(modelRow, 1);
+        String productName = String.valueOf(tableModel.getValueAt(modelRow, 2));
         String quantityText = String.valueOf(tableModel.getValueAt(modelRow, 3));
-        String categoryId = String.valueOf(tableModel.getValueAt(modelRow, 4));
+        String price = String.valueOf(tableModel.getValueAt(modelRow, 4));
+        String categoryId = String.valueOf(tableModel.getValueAt(modelRow, 5));
 
         int quantity = 0;
+
         try {
             quantity = Integer.parseInt(quantityText.trim());
         } catch (Exception ignored) {
         }
 
+        Product selected = ProductsSql.getInstance().findById(productId);
+
+        ImageIcon detailImage = null;
+
+        if (selected != null && selected.getImagePath() != null && !selected.getImagePath().trim().isEmpty()) {
+            selectedImagePath = selected.getImagePath().trim();
+            detailImage = loadProductImageIcon(selectedImagePath, DETAIL_IMAGE_WIDTH, DETAIL_IMAGE_HEIGHT);
+        } else {
+            selectedImagePath = null;
+        }
+
+        if (detailImage == null && imageObj instanceof ImageIcon img) {
+            detailImage = img;
+        }
+
         if (AuthorizationService.isStoreManager() || AuthorizationService.isCashier()) {
             if (evt.getClickCount() == 2) {
-                showProductDetailDialog(productId, productName, price, quantity, categoryId);
+                showProductDetailDialog(productId, productName, price, quantity, categoryId, detailImage);
             }
             return;
         }
 
         txtName.setText(productName);
-        txtPrice.setText(price);
+        txtPrice.setText(price.replace("VND", "").replace("VNĐ", "").trim());
         txtQuantity.setText(quantityText);
 
         JTextField editor = (JTextField) cbCategory.getEditor().getEditorComponent();
         editor.setText(categoryId);
 
-        Product selected = ProductsSql.getInstance().findById(productId);
-        if (selected != null && selected.getImagePath() != null && !selected.getImagePath().isEmpty()) {
-            selectedImagePath = selected.getImagePath();
-            try {
-                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + selectedImagePath);
-                if (imgUrl != null) {
-                    ImageIcon icon = new ImageIcon(new ImageIcon(imgUrl).getImage().getScaledInstance(180, 120, java.awt.Image.SCALE_SMOOTH));
-                    lblImagePreview.setIcon(icon);
-                    lblImagePreview.setText("");
-                } else {
-                    lblImagePreview.setIcon(null);
-                    lblImagePreview.setText("Không tìm thấy ảnh");
-                }
-            } catch (Exception e) {
+        if (lblImagePreview != null) {
+            if (detailImage != null) {
+                Image img = detailImage.getImage()
+                        .getScaledInstance(180, 120, Image.SCALE_SMOOTH);
+                lblImagePreview.setIcon(new ImageIcon(img));
+                lblImagePreview.setText("");
+            } else {
                 lblImagePreview.setIcon(null);
-                lblImagePreview.setText("Không tải được ảnh");
+                lblImagePreview.setText("Chưa có ảnh");
             }
-        } else {
-            selectedImagePath = null;
-            lblImagePreview.setIcon(null);
-            lblImagePreview.setText("Chưa có ảnh");
+        }
+
+        if (evt.getClickCount() == 2) {
+            showProductDetailDialog(productId, productName, price, quantity, categoryId, detailImage);
         }
     }
+    
 
-    private void showProductDetailDialog(String productId, String productName, String price, int quantity, String categoryId) {
+    private void showProductDetailDialog(
+            String productId,
+            String productName,
+            String price,
+            int quantity,
+            String categoryId,
+            ImageIcon productImage
+    ) {
         String status;
         Color statusColor;
 
@@ -2090,15 +2209,52 @@ public class ProductView extends JPanel {
             statusColor = new Color(25, 135, 84);
         }
 
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Chi tiết sản phẩm", true);
-        dialog.setSize(460, 360);
+        JDialog dialog = new JDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this),
+                "Chi tiết sản phẩm",
+                true
+        );
+
+        dialog.setSize(620, 430);
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout());
         dialog.getContentPane().setBackground(bgLight);
 
-        RoundedPanel card = new RoundedPanel(20, Color.WHITE);
-        card.setLayout(new GridBagLayout());
-        card.setBorder(new EmptyBorder(25, 30, 25, 30));
+        RoundedPanel card = new RoundedPanel(22, Color.WHITE);
+        card.setLayout(new BorderLayout(24, 0));
+        card.setBorder(new EmptyBorder(28, 30, 24, 30));
+
+        JPanel imagePanel = new JPanel(new BorderLayout());
+        imagePanel.setOpaque(false);
+        imagePanel.setPreferredSize(new Dimension(220, 260));
+
+        JLabel imgLabel = new JLabel("", SwingConstants.CENTER);
+        imgLabel.setPreferredSize(new Dimension(210, 170));
+        imgLabel.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(borderGray, 18),
+                new EmptyBorder(10, 10, 10, 10)
+        ));
+
+        if (productImage != null) {
+            Image scaled = productImage.getImage()
+                    .getScaledInstance(DETAIL_IMAGE_WIDTH, DETAIL_IMAGE_HEIGHT, Image.SCALE_SMOOTH);
+            imgLabel.setIcon(new ImageIcon(scaled));
+            imgLabel.setText("");
+        } else {
+            imgLabel.setText("Chưa có ảnh");
+            imgLabel.setFont(new Font("Segoe UI", Font.ITALIC, 14));
+            imgLabel.setForeground(textGray);
+        }
+
+        JLabel imageCaption = new JLabel(productId, SwingConstants.CENTER);
+        imageCaption.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        imageCaption.setForeground(primaryBlue);
+
+        imagePanel.add(imgLabel, BorderLayout.CENTER);
+        imagePanel.add(imageCaption, BorderLayout.SOUTH);
+
+        JPanel infoPanel = new JPanel(new GridBagLayout());
+        infoPanel.setOpaque(false);
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -2107,36 +2263,40 @@ public class ProductView extends JPanel {
         gbc.gridx = 0;
 
         JLabel title = new JLabel("Chi tiết sản phẩm");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
         title.setForeground(textDark);
         gbc.gridy = 0;
-        card.add(title, gbc);
+        infoPanel.add(title, gbc);
 
         gbc.gridy++;
-        card.add(detailLine("Mã sản phẩm", productId), gbc);
+        infoPanel.add(detailLine("Mã sản phẩm", productId), gbc);
 
         gbc.gridy++;
-        card.add(detailLine("Tên sản phẩm", productName), gbc);
+        infoPanel.add(detailLine("Tên sản phẩm", productName), gbc);
 
         gbc.gridy++;
-        card.add(detailLine("Giá bán", price), gbc);
+        infoPanel.add(detailLine("Giá bán", price), gbc);
 
         gbc.gridy++;
-        card.add(detailLine("Số lượng tồn", String.valueOf(quantity)), gbc);
+        infoPanel.add(detailLine("Số lượng tồn", String.valueOf(quantity)), gbc);
 
         gbc.gridy++;
-        card.add(detailLine("Loại sản phẩm", categoryId), gbc);
+        infoPanel.add(detailLine("Loại sản phẩm", categoryId), gbc);
 
         gbc.gridy++;
         JLabel statusLabel = new JLabel("Trạng thái: " + status);
-        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         statusLabel.setForeground(statusColor);
-        card.add(statusLabel, gbc);
+        infoPanel.add(statusLabel, gbc);
+
+        card.add(imagePanel, BorderLayout.WEST);
+        card.add(infoPanel, BorderLayout.CENTER);
 
         JButton btnClose = createCustomButton("Đóng", new Color(165, 177, 194), Color.WHITE, null);
+        btnClose.setPreferredSize(new Dimension(140, 45));
         btnClose.addActionListener(e -> dialog.dispose());
 
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 12));
         bottom.setOpaque(false);
         bottom.add(btnClose);
 
@@ -2165,14 +2325,19 @@ public class ProductView extends JPanel {
     private List<Map<String, Object>> getAllProductsFromTable() {
         List<Map<String, Object>> list = new ArrayList<>();
         int rowCount = tblProducts.getRowCount();
-        for (int i = 0; i < rowCount; i++) {
+
+        for (int viewRow = 0; viewRow < rowCount; viewRow++) {
+            int modelRow = tblProducts.convertRowIndexToModel(viewRow);
+
             Map<String, Object> row = new HashMap<>();
-            row.put("productId", tblProducts.getValueAt(i, 0));
-            row.put("productName", tblProducts.getValueAt(i, 1));
-            row.put("price", tblProducts.getValueAt(i, 2));
-            row.put("quantity", tblProducts.getValueAt(i, 3));
+            row.put("productId", tableModel.getValueAt(modelRow, 0));
+            row.put("productName", tableModel.getValueAt(modelRow, 2));
+            row.put("quantity", tableModel.getValueAt(modelRow, 3));
+            row.put("price", tableModel.getValueAt(modelRow, 4));
+            row.put("categoryId", tableModel.getValueAt(modelRow, 5));
             list.add(row);
         }
+
         return list;
     }
 
@@ -2269,27 +2434,15 @@ public class ProductView extends JPanel {
         }
 
         for (Product p : list) {
-            ImageIcon thumb = null;
-
-            if (p.getImagePath() != null && !p.getImagePath().isEmpty()) {
-                java.net.URL imgUrl = getClass().getClassLoader().getResource("view/image/" + p.getImagePath());
-
-                if (imgUrl != null) {
-                    thumb = new ImageIcon(
-                            new ImageIcon(imgUrl)
-                                    .getImage()
-                                    .getScaledInstance(60, 45, java.awt.Image.SCALE_SMOOTH)
-                    );
-                }
-            }
+            ImageIcon thumb = loadProductImageIcon(p.getImagePath());
 
             Object[] row = {
                 p.getProductId(),
+                thumb,
                 p.getProductName(),
-                p.getBasePrice(),
                 p.getQuantity(),
-                p.getCategoryId(),
-                thumb
+                p.getBasePrice(),
+                p.getCategoryId()
             };
 
             tableModel.addRow(row);
@@ -2373,7 +2526,8 @@ public class ProductView extends JPanel {
         dialog.getContentPane().setBackground(bgLight);
 
         int selectedRow = tblProducts.getSelectedRow();
-        String productName = tblProducts.getValueAt(selectedRow, 1).toString();
+        int selectedModelRow = tblProducts.convertRowIndexToModel(selectedRow);
+        String productName = String.valueOf(tableModel.getValueAt(selectedModelRow, 2));
 
         JLabel lblTitle = new JLabel("Cấu hình quy đổi: " + productName + " (" + productId + ")");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));

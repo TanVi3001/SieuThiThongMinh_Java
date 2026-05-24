@@ -15,6 +15,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ProductImportService {
@@ -36,18 +38,23 @@ public class ProductImportService {
 
     /**
      * Giữ lại hàm cũ để các màn hình đang gọi importProductCSV(...) không bị
-     * lỗi. Nhưng bên trong sẽ chạy flow mới: import CSV + tạo phiếu nhập.
+     * lỗi. Bên trong chạy flow mới: import CSV + tạo phiếu nhập.
      */
     public void importProductCSV(String filePath, Consumer<Integer> progressCallback) {
         importProductCSVWithReceipt(filePath, progressCallback);
     }
 
     /**
-     * Flow: 1. Lấy store_id từ session hiện tại. 2. Tạo PURCHASE_RECEIPTS theo
-     * store_id đó. 3. Đọc CSV. 4. Tạo/cập nhật PRODUCTS master. 5. Cộng
-     * INVENTORY theo product_id + store_id. 6. Active STORE_PRODUCTS theo
-     * product_id + store_id. 7. Ghi PURCHASE_RECEIPT_DETAILS. 8. Ghi
-     * INVENTORY_TRANSACTIONS.
+     * Hỗ trợ các format CSV:
+     *
+     * 1) Format cũ: product_name,base_price,quantity,category_id
+     *
+     * 2) Format có ảnh: product_name,base_price,quantity,category_id,image_path
+     *
+     * 3) Format đầy đủ:
+     * product_name,base_price,quantity,category_id,image_path,import_price,supplier_id,vat_rate
+     *
+     * image_path nên lưu dạng tương đối: products/mi_hao_hao_tom_chua_cay.png
      */
     public ImportResult importProductCSVWithReceipt(String filePath, Consumer<Integer> progressCallback) {
         File file = new File(filePath);
@@ -95,6 +102,10 @@ public class ProductImportService {
             FETCH FIRST 1 ROWS ONLY
         """;
 
+        /*
+         * YÊU CẦU DB:
+         * ALTER TABLE PRODUCTS ADD image_path VARCHAR2(255);
+         */
         String sqlInsertProduct = """
             INSERT INTO PRODUCTS (
                 product_id,
@@ -103,57 +114,67 @@ public class ProductImportService {
                 category_id,
                 supplier_id,
                 base_unit_id,
+                image_path,
                 is_deleted
             )
-            VALUES (?, ?, ?, ?, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
         """;
 
+        /*
+         * Fix lỗi chính:
+         * File cũ chỉ UPDATE base_price/category/supplier nhưng code lại set thêm imagePath.
+         * Điều đó làm import bị lỗi từng dòng và thành công = 0.
+         */
         String sqlUpdateProduct = """
             UPDATE PRODUCTS
             SET base_price = ?,
                 category_id = ?,
-                supplier_id = ?
+                supplier_id = ?,
+                image_path = CASE
+                    WHEN ? IS NULL OR TRIM(?) = '' THEN image_path
+                    ELSE ?
+                END
             WHERE product_id = ?
               AND NVL(is_deleted, 0) = 0
         """;
 
         String sqlUpsertInventory = """
-    MERGE INTO INVENTORY inv
-    USING (
-        SELECT ? AS product_id,
-               ? AS store_id,
-               ? AS quantity,
-               ? AS unit
-        FROM dual
-    ) src
-    ON (
-        inv.product_id = src.product_id
-        AND inv.store_id = src.store_id
-    )
-    WHEN MATCHED THEN
-        UPDATE SET
-            inv.quantity = NVL(inv.quantity, 0) + src.quantity,
-            inv.unit = src.unit,
-            inv.last_updated = SYSDATE,
-            inv.is_deleted = 0
-    WHEN NOT MATCHED THEN
-        INSERT (
-            product_id,
-            store_id,
-            quantity,
-            unit,
-            last_updated,
-            is_deleted
-        )
-        VALUES (
-            src.product_id,
-            src.store_id,
-            src.quantity,
-            src.unit,
-            SYSDATE,
-            0
-        )
-""";
+            MERGE INTO INVENTORY inv
+            USING (
+                SELECT ? AS product_id,
+                       ? AS store_id,
+                       ? AS quantity,
+                       ? AS unit
+                FROM dual
+            ) src
+            ON (
+                inv.product_id = src.product_id
+                AND inv.store_id = src.store_id
+            )
+            WHEN MATCHED THEN
+                UPDATE SET
+                    inv.quantity = NVL(inv.quantity, 0) + src.quantity,
+                    inv.unit = src.unit,
+                    inv.last_updated = SYSDATE,
+                    inv.is_deleted = 0
+            WHEN NOT MATCHED THEN
+                INSERT (
+                    product_id,
+                    store_id,
+                    quantity,
+                    unit,
+                    last_updated,
+                    is_deleted
+                )
+                VALUES (
+                    src.product_id,
+                    src.store_id,
+                    src.quantity,
+                    src.unit,
+                    SYSDATE,
+                    0
+                )
+        """;
 
         String sqlUpsertStoreProduct = """
             MERGE INTO STORE_PRODUCTS sp
@@ -299,7 +320,7 @@ public class ProductImportService {
 
                         if (!isValidBasicRow(row)) {
                             result.skippedRows++;
-                            System.err.println("Bỏ qua dòng CSV không hợp lệ: " + line);
+                            System.err.println("[IMPORT CSV] Bỏ qua dòng không hợp lệ: " + line);
                             continue;
                         }
 
@@ -321,7 +342,7 @@ public class ProductImportService {
                             );
                         } catch (IllegalArgumentException invalidPrice) {
                             result.skippedRows++;
-                            System.err.println("Bỏ qua dòng CSV vì sai logic giá: " + row.productName);
+                            System.err.println("[IMPORT CSV] Bỏ qua vì sai logic giá: " + row.productName);
                             System.err.println(invalidPrice.getMessage());
                             continue;
                         }
@@ -335,7 +356,7 @@ public class ProductImportService {
 
                         if (productId == null || productId.isBlank()) {
                             result.skippedRows++;
-                            System.err.println("Không lấy được product_id cho dòng: " + line);
+                            System.err.println("[IMPORT CSV] Không lấy được product_id cho dòng: " + line);
                             continue;
                         }
 
@@ -401,7 +422,7 @@ public class ProductImportService {
 
                     } catch (Exception rowEx) {
                         result.skippedRows++;
-                        System.err.println("Lỗi xử lý dòng CSV: " + line);
+                        System.err.println("[IMPORT CSV] Lỗi xử lý dòng: " + line);
                         rowEx.printStackTrace();
                     }
                 }
@@ -422,12 +443,12 @@ public class ProductImportService {
                     progressCallback.accept(100);
                 }
 
-                System.out.println("Import CSV hoàn tất.");
-                System.out.println("Chi nhánh nhập: " + currentStoreId);
-                System.out.println("Mã phiếu nhập: " + result.receiptId);
-                System.out.println("Tổng dòng: " + result.totalRows);
-                System.out.println("Thành công: " + result.successRows);
-                System.out.println("Bỏ qua: " + result.skippedRows);
+                System.out.println("[IMPORT CSV] Hoàn tất.");
+                System.out.println("[IMPORT CSV] Chi nhánh nhập: " + currentStoreId);
+                System.out.println("[IMPORT CSV] Mã phiếu nhập: " + result.receiptId);
+                System.out.println("[IMPORT CSV] Tổng dòng: " + result.totalRows);
+                System.out.println("[IMPORT CSV] Thành công: " + result.successRows);
+                System.out.println("[IMPORT CSV] Bỏ qua: " + result.skippedRows);
 
                 return result;
 
@@ -480,7 +501,10 @@ public class ProductImportService {
             psUpdateProduct.setBigDecimal(1, row.salePrice);
             psUpdateProduct.setString(2, row.categoryId);
             psUpdateProduct.setString(3, row.supplierId);
-            psUpdateProduct.setString(4, productId);
+            psUpdateProduct.setString(4, row.imagePath);
+            psUpdateProduct.setString(5, row.imagePath);
+            psUpdateProduct.setString(6, row.imagePath);
+            psUpdateProduct.setString(7, productId);
             psUpdateProduct.executeUpdate();
 
             return productId;
@@ -494,6 +518,7 @@ public class ProductImportService {
         psInsertProduct.setString(4, row.categoryId);
         psInsertProduct.setString(5, row.supplierId);
         psInsertProduct.setString(6, DEFAULT_UNIT_ID);
+        psInsertProduct.setString(7, row.imagePath);
         psInsertProduct.executeUpdate();
 
         return productId;
@@ -574,48 +599,177 @@ public class ProductImportService {
     }
 
     private CsvProductRow parseCsvRow(String line) {
-        String[] data = line.split(",", -1);
+        List<String> data = splitCsvLine(line);
 
-        if (data.length < 4) {
+        if (data.size() < 4) {
             throw new IllegalArgumentException(
-                    "CSV phải có ít nhất 4 cột: product_name,sale_price,quantity,category_id"
+                    "CSV phải có ít nhất 4 cột: product_name,base_price,quantity,category_id"
             );
         }
 
         CsvProductRow row = new CsvProductRow();
 
-        String productName = clean(data[0]);
-        String salePriceRaw = clean(data[1]);
-        String quantityRaw = clean(data[2]);
-        String categoryId = clean(data[3]);
+        row.productName = clean(data.get(0));
+        row.salePrice = parseMoney(clean(data.get(1)));
+        row.quantity = Integer.parseInt(clean(data.get(2)));
 
-        row.productName = productName;
-        row.salePrice = parseMoney(salePriceRaw);
-        row.quantity = Integer.parseInt(quantityRaw);
+        String categoryId = clean(data.get(3));
         row.categoryId = categoryId.isEmpty() ? "CAT001" : categoryId;
 
-        if (data.length >= 5) {
-            String importPriceRaw = clean(data[4]);
-            if (!importPriceRaw.isEmpty()) {
-                row.importPriceBeforeVat = parseMoney(importPriceRaw);
+        /*
+         * data[4] có thể là image_path hoặc import_price.
+         * Ví dụ:
+         * products/mi_hao_hao_tom_chua_cay.png
+         * hoặc
+         * 3500
+         */
+        if (data.size() >= 5) {
+            String col5 = clean(data.get(4));
+
+            if (!col5.isEmpty()) {
+                if (looksLikeImagePath(col5)) {
+                    row.imagePath = normalizeImagePath(col5);
+                } else {
+                    row.importPriceBeforeVat = parseMoney(col5);
+                }
             }
         }
 
-        if (data.length >= 6) {
-            String supplierId = clean(data[5]);
-            row.supplierId = supplierId.isEmpty() ? DEFAULT_SUPPLIER_ID : supplierId;
-        } else {
+        if (data.size() >= 6) {
+            String col6 = clean(data.get(5));
+
+            if (!col6.isEmpty()) {
+                if (looksLikeImagePath(col6)) {
+                    row.imagePath = normalizeImagePath(col6);
+                } else if (looksLikeSupplierId(col6)) {
+                    row.supplierId = col6;
+                } else {
+                    row.importPriceBeforeVat = parseMoney(col6);
+                }
+            }
+        }
+
+        if (data.size() >= 7) {
+            String col7 = clean(data.get(6));
+
+            if (!col7.isEmpty()) {
+                if (looksLikeSupplierId(col7)) {
+                    row.supplierId = col7;
+                } else {
+                    row.vatRate = parseMoney(col7.replace("%", ""));
+                }
+            }
+        }
+
+        if (data.size() >= 8) {
+            String col8 = clean(data.get(7));
+
+            if (!col8.isEmpty()) {
+                row.vatRate = parseMoney(col8.replace("%", ""));
+            }
+        }
+
+        if (row.supplierId == null || row.supplierId.trim().isEmpty()) {
             row.supplierId = DEFAULT_SUPPLIER_ID;
         }
 
-        if (data.length >= 7) {
-            String vatRaw = clean(data[6]).replace("%", "");
-            if (!vatRaw.isEmpty()) {
-                row.vatRate = parseMoney(vatRaw);
+        return row;
+    }
+
+    /**
+     * Parser CSV đơn giản nhưng có hỗ trợ dấu ngoặc kép. Tránh lỗi nếu tên sản
+     * phẩm có dấu phẩy trong tương lai.
+     */
+    private List<String> splitCsvLine(String line) {
+        List<String> result = new ArrayList<>();
+
+        if (line == null) {
+            return result;
+        }
+
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char ch = line.charAt(i);
+
+            if (ch == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (ch == ',' && !inQuotes) {
+                result.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(ch);
             }
         }
 
-        return row;
+        result.add(current.toString());
+        return result;
+    }
+
+    private boolean looksLikeImagePath(String value) {
+        if (value == null) {
+            return false;
+        }
+
+        String s = value.trim().toLowerCase();
+
+        return s.endsWith(".png")
+                || s.endsWith(".jpg")
+                || s.endsWith(".jpeg")
+                || s.endsWith(".gif")
+                || s.startsWith("products/")
+                || s.contains("/products/")
+                || s.contains("view/image/");
+    }
+
+    private String normalizeImagePath(String imagePath) {
+        if (imagePath == null) {
+            return null;
+        }
+
+        String s = imagePath.trim()
+                .replace("\\", "/")
+                .replace("\"", "");
+
+        if (s.isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Nếu CSV chỉ ghi ten_file.png thì tự đưa vào thư mục products/.
+         */
+        if (!s.contains("/")) {
+            s = "products/" + s;
+        }
+
+        /*
+         * Nếu CSV ghi:
+         * src/main/resources/view/image/products/a.png
+         * thì cắt còn:
+         * products/a.png
+         */
+        String marker = "view/image/";
+        int idx = s.indexOf(marker);
+        if (idx >= 0) {
+            s = s.substring(idx + marker.length());
+        }
+
+        return s;
+    }
+
+    private boolean looksLikeSupplierId(String value) {
+        if (value == null) {
+            return false;
+        }
+
+        String s = value.trim().toUpperCase();
+        return s.startsWith("SUP");
     }
 
     private BigDecimal parseMoney(String raw) {
@@ -641,7 +795,8 @@ public class ProductImportService {
                 || s.contains("tên")
                 || s.contains("ten")
                 || s.contains("gia")
-                || s.contains("price");
+                || s.contains("price")
+                || s.contains("image_path");
     }
 
     private int countDataLines(File file) {
@@ -710,6 +865,7 @@ public class ProductImportService {
         BigDecimal salePrice;
         int quantity;
         String categoryId;
+        String imagePath;
         BigDecimal importPriceBeforeVat;
         String supplierId = DEFAULT_SUPPLIER_ID;
         BigDecimal vatRate;
