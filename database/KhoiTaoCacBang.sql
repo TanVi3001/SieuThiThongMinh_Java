@@ -703,5 +703,51 @@ CREATE INDEX IDX_INV_TRANS_RECEIPT ON INVENTORY_TRANSACTIONS(receipt_id);
 CREATE INDEX IDX_INV_TRANS_STORE_TIME ON INVENTORY_TRANSACTIONS(store_id, created_at);
 
 
+<<<<<<< HEAD
 
 select * from SHIFTS
+=======
+COMMIT;
+
+
+-- Thêm bảng để phục vụ phân ca
+CREATE TABLE EMPLOYEE_SHIFT_ASSIGNMENTS (
+    assignment_id VARCHAR2(50) PRIMARY KEY,
+    employee_id   VARCHAR2(50) NOT NULL,
+    shift_id      VARCHAR2(50) NOT NULL,
+    work_date     DATE NOT NULL,
+    status        VARCHAR2(30) DEFAULT 'ASSIGNED',
+    note          NVARCHAR2(255),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_deleted    NUMBER(1) DEFAULT 0,
+
+    CONSTRAINT FK_ESA_EMPLOYEE
+        FOREIGN KEY (employee_id) REFERENCES EMPLOYEES(employee_id),
+
+    CONSTRAINT FK_ESA_SHIFT
+        FOREIGN KEY (shift_id) REFERENCES SHIFTS(shift_id)
+);
+
+
+ALTER TABLE EMPLOYEE_SHIFT_ASSIGNMENTS ADD start_date DATE;
+ALTER TABLE EMPLOYEE_SHIFT_ASSIGNMENTS ADD end_date DATE;
+
+
+INSERT INTO SHIFTS (
+    shift_id,
+    shift_name,
+    start_time,
+    end_time,
+    is_deleted
+)
+VALUES (
+    'SHIFT_FULLTIME',
+    N'Full time',
+    TO_DATE('2026-05-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS'),
+    TO_DATE('2026-05-01 23:59:59', 'YYYY-MM-DD HH24:MI:SS'),
+    0
+);
+
+COMMIT;
+>>>>>>> 54783c365721204fb69f273bc5d81ab10fa26167
