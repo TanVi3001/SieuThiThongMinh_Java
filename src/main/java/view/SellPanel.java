@@ -29,6 +29,7 @@ import java.awt.datatransfer.*;
 import java.awt.event.*;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class SellPanel extends JPanel {
@@ -97,6 +98,11 @@ public class SellPanel extends JPanel {
     private List<Product> allProducts = new ArrayList<>();
     private Customer selectedCustomer;
     private double finalAmountToPay = 0;
+    private double currentSubTotalAmount = 0.0;
+    private double currentMemberDiscountAmount = 0.0;
+    private double currentProgramDiscountAmount = 0.0;
+    private double lastPaidMemberDiscountAmount = 0.0;
+    private double lastPaidProgramDiscountAmount = 0.0;
     private String productSearchKeyword = "";
 
     private KpiEvaluation currentKpiEval = new KpiEvaluation();
@@ -787,7 +793,9 @@ public class SellPanel extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2 && tblProducts.getSelectedRow() >= 0) {
-                    addToCart(tblProducts.getValueAt(tblProducts.getSelectedRow(), 0).toString(), getQtyToAdd());
+                    int viewRow = tblProducts.getSelectedRow();
+                    int modelRow = tblProducts.convertRowIndexToModel(viewRow);
+                    addToCart(tblProducts.getValueAt(modelRow, 0).toString(), getQtyToAdd());
                     spnQtyAdd.setValue(1);
                 }
             }
@@ -800,9 +808,15 @@ public class SellPanel extends JPanel {
                 JOptionPane.showMessageDialog(this, "Vui lòng chọn sản phẩm trong giỏ để xóa!");
                 return;
             }
+            int[] modelRows = Arrays.stream(selectedRows)
+                    .map(tblCart::convertRowIndexToModel)
+                    .sorted()
+                    .toArray();
             isUpdatingCart = true;
-            for (int i = selectedRows.length - 1; i >= 0; i--) {
-                modCart.removeRow(selectedRows[i]);
+            for (int i = modelRows.length - 1; i >= 0; i--) {
+                if (modelRows[i] >= 0 && modelRows[i] < modCart.getRowCount()) {
+                    modCart.removeRow(modelRows[i]);
+                }
             }
             isUpdatingCart = false;
             calculateTotal();
@@ -866,7 +880,8 @@ public class SellPanel extends JPanel {
                 if (selectedRows.length > 0) {
                     StringBuilder productIds = new StringBuilder();
                     for (int i = 0; i < selectedRows.length; i++) {
-                        String pId = table.getValueAt(selectedRows[i], 0).toString();
+                        int modelRow = table.convertRowIndexToModel(selectedRows[i]);
+                        String pId = table.getValueAt(modelRow, 0).toString();
                         productIds.append(pId);
                         if (i < selectedRows.length - 1) {
                             productIds.append(",");
@@ -920,7 +935,8 @@ public class SellPanel extends JPanel {
         int[] selectedRows = tblProducts.getSelectedRows();
         if (selectedRows.length > 0) {
             for (int i = 0; i < selectedRows.length; i++) {
-                String pId = tblProducts.getValueAt(selectedRows[i], 0).toString();
+                int modelRow = tblProducts.convertRowIndexToModel(selectedRows[i]);
+                String pId = tblProducts.getValueAt(modelRow, 0).toString();
                 addToCart(pId, getQtyToAdd());
             }
             spnQtyAdd.setValue(1);
@@ -1134,13 +1150,84 @@ public class SellPanel extends JPanel {
         validateCartAgainstDatabase();
     }
 
+    private double getSelectedCustomerDiscountRate() {
+        if (selectedCustomer == null) {
+            return 0.0;
+        }
+
+        // Ưu tiên hàm trong model Customer nếu object đã được load đủ rank.
+        try {
+            double rate = selectedCustomer.getDiscountRate();
+            if (rate > 0) {
+                return rate;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Fallback 1: đọc trực tiếp rank nếu có.
+        String rank = null;
+        try {
+            rank = selectedCustomer.getMemberRank();
+        } catch (Exception ignored) {
+        }
+
+        if (rank != null) {
+            String normalizedRank = normalizeVietnamese(rank).toLowerCase().trim();
+            if (normalizedRank.equals("kim cuong")) {
+                return 0.12;
+            }
+            if (normalizedRank.equals("vang")) {
+                return 0.08;
+            }
+            if (normalizedRank.equals("bac")) {
+                return 0.05;
+            }
+            if (normalizedRank.equals("dong")) {
+                return 0.02;
+            }
+        }
+
+        // Fallback 2: suy theo tổng chi trong trường hợp CustomersSql chỉ trả totalSpending.
+        // Các mốc này khớp với bảng khách hàng hiện tại của đồ án:
+        // 50M+ = Vàng, 10M+ = Bạc, 1M+ = Đồng, 100M+ = Kim cương.
+        try {
+            double spend = selectedCustomer.getTotalSpending();
+            if (spend >= 100_000_000) {
+                return 0.12;
+            }
+            if (spend >= 50_000_000) {
+                return 0.08;
+            }
+            if (spend >= 10_000_000) {
+                return 0.05;
+            }
+            if (spend >= 1_000_000) {
+                return 0.02;
+            }
+        } catch (Exception ignored) {
+        }
+
+        return 0.0;
+    }
+
+    private String normalizeVietnamese(String input) {
+        if (input == null) {
+            return "";
+        }
+        String s = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD);
+        s = s.replaceAll("\\p{M}", "");
+        s = s.replace('đ', 'd').replace('Đ', 'D');
+        return s;
+    }
+
     private void calculateTotal() {
         if (lblSubTotal == null || lblTotalPay == null) {
             return;
         }
 
-        double subTotal = 0;
-        double totalDiscount = 0;
+        double subTotal = 0.0;
+        double memberDiscount = 0.0;
+        double programDiscount = 0.0;
 
         String selectedPromo = (cboKhuyenMai.getSelectedItem() != null)
                 ? cboKhuyenMai.getSelectedItem().toString()
@@ -1148,34 +1235,91 @@ public class SellPanel extends JPanel {
 
         double currentPromoRate = getPromoRateFromString(selectedPromo);
 
+        // 1) Tính thành tiền gốc
         for (int i = 0; i < modCart.getRowCount(); i++) {
-
-            double lineTotal
-                    = Double.parseDouble(modCart.getValueAt(i, 4).toString());
-
-            String pId = modCart.getValueAt(i, 0).toString();
-
-            Product p = allProducts.stream()
-                    .filter(x -> x.getProductId().equals(pId))
-                    .findFirst()
-                    .orElse(null);
-
-            if (p != null && isEligibleForPromotion(p, selectedPromo)) {
-                totalDiscount += lineTotal * (currentPromoRate / 100.0);
-            }
-
+            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
             subTotal += lineTotal;
         }
 
-        finalAmountToPay = subTotal - totalDiscount;
+        // 2) Giảm giá thành viên: lấy đúng hạng khách hàng đang chọn.
+        // Có fallback theo rank/tổng chi để tránh trường hợp Customer.getDiscountRate()
+        // trả 0 do object chưa được set đủ memberRank từ DB.
+        if (selectedCustomer != null && subTotal > 0) {
+            double memberRate = getSelectedCustomerDiscountRate();
+            if (memberRate > 0) {
+                memberDiscount = subTotal * memberRate;
+            }
+        }
+
+        // 3) Giảm giá chương trình/voucher: tính riêng, không cộng dồn vào giảm thành viên
+        if (currentPromoRate > 0) {
+            for (int i = 0; i < modCart.getRowCount(); i++) {
+                double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+                String pId = modCart.getValueAt(i, 0).toString();
+
+                Product p = allProducts.stream()
+                        .filter(x -> x.getProductId().equals(pId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (p != null && isEligibleForPromotion(p, selectedPromo)) {
+                    programDiscount += lineTotal * (currentPromoRate / 100.0);
+                }
+            }
+        }
+
+        // 4) Chặn tổng giảm vượt quá thành tiền
+        double totalDiscount = memberDiscount + programDiscount;
+        if (totalDiscount > subTotal) {
+            double overflow = totalDiscount - subTotal;
+            if (programDiscount >= overflow) {
+                programDiscount -= overflow;
+            } else {
+                overflow -= programDiscount;
+                programDiscount = 0;
+                memberDiscount = Math.max(0, memberDiscount - overflow);
+            }
+            totalDiscount = memberDiscount + programDiscount;
+        }
+
+        currentSubTotalAmount = roundMoney(subTotal);
+        currentMemberDiscountAmount = roundMoney(memberDiscount);
+        currentProgramDiscountAmount = roundMoney(programDiscount);
+        finalAmountToPay = roundMoney(subTotal - totalDiscount);
 
         // UPDATE UI
-        lblSubTotal.setText(moneyFormat.format(subTotal));
-        lblDiscount.setText(moneyFormat.format(totalDiscount));
+        lblSubTotal.setText(moneyFormat.format(currentSubTotalAmount));
+        lblDiscount.setText(moneyFormat.format(currentMemberDiscountAmount + currentProgramDiscountAmount));
         lblTotalPay.setText(moneyFormat.format(finalAmountToPay));
         lblCartEmptyHint.setText("Tổng cộng: " + moneyFormat.format(finalAmountToPay));
 
         btnPay.setEnabled(modCart.getRowCount() > 0);
+    }
+
+    private double parseMoneyObject(Object value) {
+        if (value == null) {
+            return 0.0;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            String s = value.toString()
+                    .replace("đ", "")
+                    .replace(",", "")
+                    .replace(".", "")
+                    .trim();
+            if (s.isEmpty()) {
+                return 0.0;
+            }
+            return Double.parseDouble(s);
+        } catch (Exception ex) {
+            return 0.0;
+        }
+    }
+
+    private double roundMoney(double value) {
+        return Math.round(value);
     }
 
     private void updateKpiMiniPanel() {
@@ -1425,6 +1569,10 @@ public class SellPanel extends JPanel {
             return;
         }
 
+        // Chốt lại tiền ngay trước khi thanh toán để đảm bảo đã tính đúng
+        // giảm giá thành viên + giảm giá chương trình theo khách/voucher hiện tại.
+        calculateTotal();
+
         paymentProcessing = true;
         paymentJustSucceeded = false;
 
@@ -1448,6 +1596,10 @@ public class SellPanel extends JPanel {
                 : "PM_CASH";
 
         String oId = "HD" + System.nanoTime();
+
+        // Lưu lại số giảm giá riêng cho report trước khi clear cart/reset khách hàng
+        lastPaidMemberDiscountAmount = currentMemberDiscountAmount;
+        lastPaidProgramDiscountAmount = currentProgramDiscountAmount;
 
         Order o = new Order();
         o.setOrderId(oId);
@@ -1568,6 +1720,8 @@ public class SellPanel extends JPanel {
         try {
             java.util.HashMap<String, Object> params = new java.util.HashMap<>();
             params.put("ORDER_ID", orderId.trim());
+            params.put("MEMBER_DISCOUNT_AMOUNT", java.math.BigDecimal.valueOf(lastPaidMemberDiscountAmount));
+            params.put("PROGRAM_DISCOUNT_AMOUNT", java.math.BigDecimal.valueOf(lastPaidProgramDiscountAmount));
 
             try {
                 String storeId = SessionManager.getCurrentStoreId();

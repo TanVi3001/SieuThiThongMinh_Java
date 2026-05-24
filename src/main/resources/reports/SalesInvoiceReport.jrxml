@@ -31,8 +31,56 @@
         <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
     </parameter>
 
+    <!-- QR chuyển khoản MB Bank / VietQR -->
+    <parameter name="PAYMENT_ACCOUNT_NO" class="java.lang.String">
+        <defaultValueExpression><![CDATA["5427350031952"]]></defaultValueExpression>
+    </parameter>
+
+    <parameter name="PAYMENT_BANK_BIN" class="java.lang.String">
+        <defaultValueExpression><![CDATA["970422"]]></defaultValueExpression>
+    </parameter>
+
+    <parameter name="PAYMENT_ACCOUNT_NAME" class="java.lang.String">
+        <defaultValueExpression><![CDATA["HE THONG SIEU THI THONG MINH"]]></defaultValueExpression>
+    </parameter>
+
+    <!--
+        Hai parameter này dùng khi Java truyền được số giảm giá tách riêng.
+        Nếu không truyền, report sẽ KHÔNG tự suy đoán theo rank để tránh dồn sai:
+        - MEMBER_DISCOUNT_AMOUNT mặc định 0
+        - PROGRAM_DISCOUNT_AMOUNT mặc định = Thành tiền - Tổng cộng
+    -->
+    <parameter name="MEMBER_DISCOUNT_AMOUNT" class="java.math.BigDecimal">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+
+    <parameter name="PROGRAM_DISCOUNT_AMOUNT" class="java.math.BigDecimal">
+        <defaultValueExpression><![CDATA[null]]></defaultValueExpression>
+    </parameter>
+
     <queryString language="SQL">
         <![CDATA[
+WITH order_lines AS (
+    SELECT
+        od.order_detail_id,
+        od.order_id,
+        od.product_id,
+        NVL(p.product_name, TO_NCHAR(od.product_id)) AS product_name,
+        NVL(od.quantity, 0) AS quantity,
+        NVL(od.unit_price, 0) AS unit_price,
+        NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total
+    FROM ORDER_DETAILS od
+    LEFT JOIN PRODUCTS p
+        ON od.product_id = p.product_id
+    WHERE NVL(od.is_deleted, 0) = 0
+),
+order_totals AS (
+    SELECT
+        order_id,
+        SUM(line_total) AS order_subtotal_amount
+    FROM order_lines
+    GROUP BY order_id
+)
 SELECT
     o.order_id,
     o.order_date,
@@ -44,9 +92,12 @@ SELECT
 
     NVL(e.employee_name, TO_NCHAR(o.employee_id)) AS cashier_name,
 
+    TO_CHAR(o.payment_method_id) AS payment_method_code,
+
     CASE
         WHEN o.payment_method_id IS NULL THEN N'Chưa xác định'
         WHEN UPPER(o.payment_method_id) LIKE '%CASH%' THEN N'Tiền mặt'
+        WHEN UPPER(o.payment_method_id) LIKE '%TRANSFER%' THEN N'Chuyển khoản'
         WHEN UPPER(o.payment_method_id) LIKE '%BANK%' THEN N'Chuyển khoản'
         WHEN UPPER(o.payment_method_id) LIKE '%QR%' THEN N'QR/Chuyển khoản'
         ELSE TO_NCHAR(o.payment_method_id)
@@ -66,25 +117,68 @@ SELECT
 
     NVL(o.note, N'') AS note,
 
-    CAST(0 AS NUMBER(15, 2)) AS discount_amount,
-    NVL(o.total_amount, 0) AS subtotal_amount,
+    NVL(ot.order_subtotal_amount, 0) AS subtotal_amount,
+    NVL(ot.order_subtotal_amount, 0) AS order_subtotal_amount,
+    GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0) AS discount_amount,
+    GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0) AS order_discount_amount,
+
+    -- Tách giảm giá theo dữ liệu hiện có.
+    -- Lưu ý: report KHÔNG tự suy đoán giảm giá thành viên theo rank,
+    -- vì như vậy sẽ nhầm voucher/chương trình thành giảm giá thành viên.
+    -- Nếu Java truyền MEMBER_DISCOUNT_AMOUNT / PROGRAM_DISCOUNT_AMOUNT thì report dùng giá trị đó.
+    -- Nếu không truyền, mặc định giảm thành viên = 0, giảm chương trình = Thành tiền - Tổng cộng.
+    CAST(0 AS NUMBER(15, 2)) AS member_discount_amount,
+    GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0) AS program_discount_amount,
+
     NVL(o.total_amount, 0) AS total_amount,
 
-    od.order_detail_id,
-    od.product_id,
-    NVL(p.product_name, TO_NCHAR(od.product_id)) AS product_name,
-    NVL(od.quantity, 0) AS quantity,
-    NVL(od.unit_price, 0) AS unit_price,
-    NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total
+    ol.order_detail_id,
+    ol.product_id,
+    ol.product_name,
+    ol.quantity,
+    ol.unit_price,
+    ol.line_total,
+
+    ROUND(
+        CASE
+            WHEN NVL(ot.order_subtotal_amount, 0) > 0 THEN
+                (ol.line_total / ot.order_subtotal_amount)
+                * GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0)
+            ELSE 0
+        END,
+        0
+    ) AS line_discount_amount,
+
+    ROUND(
+        CASE
+            WHEN NVL(ol.line_total, 0) > 0 AND NVL(ot.order_subtotal_amount, 0) > 0 THEN
+                (
+                    (ol.line_total / ot.order_subtotal_amount)
+                    * GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0)
+                ) / ol.line_total * 100
+            ELSE 0
+        END,
+        2
+    ) AS line_discount_percent,
+
+    ROUND(
+        CASE
+            WHEN NVL(ot.order_subtotal_amount, 0) > 0 THEN
+                ol.line_total
+                - (ol.line_total / ot.order_subtotal_amount)
+                * GREATEST(NVL(ot.order_subtotal_amount, 0) - NVL(o.total_amount, 0), 0)
+            ELSE ol.line_total
+        END,
+        0
+    ) AS line_net_total
 
 FROM ORDERS o
 
-JOIN ORDER_DETAILS od
-    ON o.order_id = od.order_id
-   AND NVL(od.is_deleted, 0) = 0
+JOIN order_lines ol
+    ON o.order_id = ol.order_id
 
-LEFT JOIN PRODUCTS p
-    ON od.product_id = p.product_id
+LEFT JOIN order_totals ot
+    ON o.order_id = ot.order_id
 
 LEFT JOIN CUSTOMERS c
     ON o.customer_id = c.customer_id
@@ -102,7 +196,7 @@ WHERE o.order_id = $P{ORDER_ID}
       OR TRIM(o.store_id) = TRIM($P{STORE_ID})
   )
 
-ORDER BY od.order_detail_id
+ORDER BY ol.order_detail_id
         ]]>
     </queryString>
 
@@ -113,6 +207,7 @@ ORDER BY od.order_detail_id
     <field name="store_address" class="java.lang.String" />
     <field name="store_phone" class="java.lang.String" />
     <field name="cashier_name" class="java.lang.String" />
+    <field name="payment_method_code" class="java.lang.String" />
     <field name="payment_method_name" class="java.lang.String" />
     <field name="customer_name" class="java.lang.String" />
     <field name="customer_id" class="java.lang.String" />
@@ -129,6 +224,13 @@ ORDER BY od.order_detail_id
     <field name="quantity" class="java.math.BigDecimal" />
     <field name="unit_price" class="java.math.BigDecimal" />
     <field name="line_total" class="java.math.BigDecimal" />
+    <field name="order_subtotal_amount" class="java.math.BigDecimal" />
+    <field name="order_discount_amount" class="java.math.BigDecimal" />
+    <field name="member_discount_amount" class="java.math.BigDecimal" />
+    <field name="program_discount_amount" class="java.math.BigDecimal" />
+    <field name="line_discount_amount" class="java.math.BigDecimal" />
+    <field name="line_discount_percent" class="java.math.BigDecimal" />
+    <field name="line_net_total" class="java.math.BigDecimal" />
 
     <variable name="LineSubtotal" class="java.math.BigDecimal" calculation="Sum">
         <variableExpression><![CDATA[$F{line_total}]]></variableExpression>
@@ -349,30 +451,82 @@ ORDER BY od.order_detail_id
 
     <columnHeader>
         <band height="28" splitType="Stretch">
+            <!-- BẢNG KHÔNG CÓ GIẢM GIÁ: ẩn % giảm và Sau giảm -->
             <staticText>
-                <reportElement style="TableHeader" x="0" y="0" width="245" height="26" />
+                <reportElement style="TableHeader" x="0" y="0" width="245" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <box leftPadding="8" />
                 <textElement verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
-
             <staticText>
-                <reportElement style="TableHeader" x="245" y="0" width="60" height="26" />
+                <reportElement style="TableHeader" x="245" y="0" width="60" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[SL]]></text>
             </staticText>
-
             <staticText>
-                <reportElement style="TableHeader" x="305" y="0" width="105" height="26" />
+                <reportElement style="TableHeader" x="305" y="0" width="105" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Right" verticalAlignment="Middle" />
-                <text><![CDATA[Đơn giá]]></text>
+                <text><![CDATA[Giá SP]]></text>
             </staticText>
-
             <staticText>
-                <reportElement style="TableHeader" x="410" y="0" width="125" height="26" />
+                <reportElement style="TableHeader" x="410" y="0" width="125" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <box rightPadding="8" />
                 <textElement textAlignment="Right" verticalAlignment="Middle" />
                 <text><![CDATA[Thành tiền]]></text>
+            </staticText>
+
+            <!-- BẢNG CÓ GIẢM GIÁ: hiện % giảm và Sau giảm -->
+            <staticText>
+                <reportElement style="TableHeader" x="0" y="0" width="185" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="8" />
+                <textElement verticalAlignment="Middle" />
+                <text><![CDATA[Sản phẩm]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="185" y="0" width="70" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Giá SP]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="255" y="0" width="35" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[SL]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="290" y="0" width="90" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Thành tiền]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="380" y="0" width="60" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[% giảm]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="440" y="0" width="95" height="26">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <text><![CDATA[Sau giảm]]></text>
             </staticText>
         </band>
     </columnHeader>
@@ -386,29 +540,80 @@ ORDER BY od.order_detail_id
                 </graphicElement>
             </rectangle>
 
+            <!-- DÒNG KHÔNG GIẢM GIÁ -->
             <textField isBlankWhenNull="true" textAdjust="StretchHeight">
-                <reportElement style="TableCell" x="0" y="5" width="245" height="16" />
+                <reportElement style="TableCell" x="0" y="5" width="245" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <box leftPadding="8" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
-
             <textField pattern="#,##0">
-                <reportElement style="TableCell" x="245" y="5" width="60" height="16" />
+                <reportElement style="TableCell" x="245" y="5" width="60" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Center" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
-
             <textField pattern="#,##0">
-                <reportElement style="Money" x="305" y="5" width="105" height="16" />
+                <reportElement style="Money" x="305" y="5" width="105" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
-
             <textField pattern="#,##0">
-                <reportElement style="Money" x="410" y="5" width="125" height="16" />
+                <reportElement style="Money" x="410" y="5" width="125" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <box rightPadding="8" />
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
+            </textField>
+
+            <!-- DÒNG CÓ GIẢM GIÁ -->
+            <textField isBlankWhenNull="true" textAdjust="StretchHeight">
+                <reportElement style="TableCell" x="0" y="5" width="185" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="8" />
+                <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="185" y="5" width="70" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="TableCell" x="255" y="5" width="35" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="290" y="5" width="90" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.##'%'">
+                <reportElement style="TableCell" x="380" y="5" width="60" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA[$F{line_discount_percent} == null ? java.math.BigDecimal.ZERO : $F{line_discount_percent}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="440" y="5" width="95" height="16">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <box rightPadding="8" />
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[$F{line_net_total}]]></textFieldExpression>
             </textField>
         </band>
     </detail>
@@ -436,7 +641,7 @@ ORDER BY od.order_detail_id
     </pageFooter>
 
     <summary>
-        <band height="150" splitType="Stretch">
+        <band height="350" splitType="Stretch">
             <staticText>
                 <reportElement style="SmallMuted" x="0" y="12" width="300" height="14" />
                 <text><![CDATA[Cảm ơn quý khách đã mua hàng!]]></text>
@@ -457,44 +662,44 @@ ORDER BY od.order_detail_id
                 <textFieldExpression><![CDATA[$F{note} == null || $F{note}.trim().isEmpty() ? "" : "Ghi chú: " + $F{note}]]></textFieldExpression>
             </textField>
 
+            <!-- KHÔNG CÓ GIẢM GIÁ: ô tổng tiền nhỏ gọn -->
             <rectangle radius="8">
-                <reportElement x="315" y="10" width="220" height="115" backcolor="#F8FAFC" />
+                <reportElement x="315" y="10" width="220" height="92" backcolor="#F8FAFC">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <graphicElement>
                     <pen lineWidth="0.5" lineColor="#CBD5E1" />
                 </graphicElement>
             </rectangle>
 
             <staticText>
-                <reportElement style="Label" x="335" y="26" width="80" height="14" />
+                <reportElement style="Label" x="335" y="25" width="95" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
 
             <textField pattern="#,##0">
-                <reportElement style="Money" x="425" y="26" width="90" height="14" />
+                <reportElement style="Money" x="430" y="25" width="85" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Right" />
-                <textFieldExpression><![CDATA[$V{LineSubtotal} == null ? java.math.BigDecimal.ZERO : $V{LineSubtotal}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement style="Label" x="335" y="48" width="80" height="14" />
-                <text><![CDATA[Giảm giá]]></text>
-            </staticText>
-
-            <textField pattern="#,##0">
-                <reportElement style="Money" x="425" y="48" width="90" height="14" />
-                <textElement textAlignment="Right" />
-                <textFieldExpression><![CDATA[$F{discount_amount} == null ? java.math.BigDecimal.ZERO : $F{discount_amount}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$F{order_subtotal_amount} == null ? java.math.BigDecimal.ZERO : $F{order_subtotal_amount}]]></textFieldExpression>
             </textField>
 
             <line>
-                <reportElement x="335" y="70" width="180" height="1" />
+                <reportElement x="335" y="52" width="180" height="1">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <graphicElement>
                     <pen lineWidth="0.75" lineColor="#CBD5E1" />
                 </graphicElement>
             </line>
 
             <staticText>
-                <reportElement x="335" y="82" width="85" height="20" forecolor="#0F766E" />
+                <reportElement x="335" y="66" width="85" height="20" forecolor="#0F766E">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
                 <textElement verticalAlignment="Middle">
                     <font size="12" isBold="true" />
                 </textElement>
@@ -502,7 +707,101 @@ ORDER BY od.order_detail_id
             </staticText>
 
             <textField pattern="#,##0">
-                <reportElement x="420" y="82" width="95" height="20" forecolor="#0F766E" />
+                <reportElement x="420" y="66" width="95" height="20" forecolor="#0F766E">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} == null || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="13" isBold="true" />
+                </textElement>
+                <textFieldExpression><![CDATA[$F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}]]></textFieldExpression>
+            </textField>
+
+            <!-- CÓ GIẢM GIÁ: luôn hiện đủ 2 dòng thành viên và chương trình để dễ đối soát -->
+            <rectangle radius="8">
+                <reportElement x="315" y="10" width="220" height="135" backcolor="#F8FAFC">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#CBD5E1" />
+                </graphicElement>
+            </rectangle>
+
+            <staticText>
+                <reportElement style="Label" x="335" y="24" width="95" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <text><![CDATA[Thành tiền]]></text>
+            </staticText>
+
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="430" y="24" width="85" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[$F{order_subtotal_amount} == null ? java.math.BigDecimal.ZERO : $F{order_subtotal_amount}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="Label" x="335" y="44" width="110" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <text><![CDATA[Giảm giá thành viên]]></text>
+            </staticText>
+
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="445" y="44" width="70" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[$P{MEMBER_DISCOUNT_AMOUNT} != null ? $P{MEMBER_DISCOUNT_AMOUNT} : ($F{member_discount_amount} == null ? java.math.BigDecimal.ZERO : $F{member_discount_amount})]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="Label" x="335" y="64" width="110" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <text><![CDATA[Giảm giá chương trình]]></text>
+            </staticText>
+
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="445" y="64" width="70" height="14">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" />
+                <textFieldExpression><![CDATA[
+$P{PROGRAM_DISCOUNT_AMOUNT} != null
+? $P{PROGRAM_DISCOUNT_AMOUNT}
+: (
+    ($F{order_discount_amount} == null ? java.math.BigDecimal.ZERO : $F{order_discount_amount})
+    .subtract($P{MEMBER_DISCOUNT_AMOUNT} != null ? $P{MEMBER_DISCOUNT_AMOUNT} : ($F{member_discount_amount} == null ? java.math.BigDecimal.ZERO : $F{member_discount_amount}))
+    .max(java.math.BigDecimal.ZERO)
+  )
+]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="335" y="88" width="180" height="1">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.75" lineColor="#CBD5E1" />
+                </graphicElement>
+            </line>
+
+            <staticText>
+                <reportElement x="335" y="102" width="85" height="20" forecolor="#0F766E">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
+                <textElement verticalAlignment="Middle">
+                    <font size="12" isBold="true" />
+                </textElement>
+                <text><![CDATA[TỔNG CỘNG]]></text>
+            </staticText>
+
+            <textField pattern="#,##0">
+                <reportElement x="420" y="102" width="95" height="20" forecolor="#0F766E">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Right" verticalAlignment="Middle">
                     <font size="13" isBold="true" />
                 </textElement>
@@ -510,10 +809,58 @@ ORDER BY od.order_detail_id
             </textField>
 
             <staticText>
-                <reportElement style="SmallMuted" x="452" y="106" width="63" height="10" />
+                <reportElement style="SmallMuted" x="452" y="126" width="63" height="10">
+                    <printWhenExpression><![CDATA[$F{order_discount_amount} != null && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0]]></printWhenExpression>
+                </reportElement>
                 <textElement textAlignment="Right" />
                 <text><![CDATA[VND]]></text>
             </staticText>
+
+            <staticText>
+                <reportElement style="Label" x="0" y="150" width="535" height="18"
+                    forecolor="#0F766E" isRemoveLineWhenBlank="true">
+                    <printWhenExpression><![CDATA[$F{payment_method_code} != null && !$F{payment_method_code}.toUpperCase().contains("CASH") && ($F{payment_method_code}.toUpperCase().contains("TRANSFER") || $F{payment_method_code}.toUpperCase().contains("BANK") || $F{payment_method_code}.toUpperCase().contains("QR"))]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="true" />
+                </textElement>
+                <text><![CDATA[QUÉT QR ĐỂ CHUYỂN KHOẢN]]></text>
+            </staticText>
+
+            <image scaleImage="RetainShape" onErrorType="Blank">
+                <reportElement x="197" y="172" width="140" height="140" isRemoveLineWhenBlank="true">
+                    <printWhenExpression><![CDATA[$F{payment_method_code} != null && !$F{payment_method_code}.toUpperCase().contains("CASH") && ($F{payment_method_code}.toUpperCase().contains("TRANSFER") || $F{payment_method_code}.toUpperCase().contains("BANK") || $F{payment_method_code}.toUpperCase().contains("QR"))]]></printWhenExpression>
+                </reportElement>
+                <imageExpression><![CDATA[
+"https://img.vietqr.io/image/"
++ $P{PAYMENT_BANK_BIN}
++ "-"
++ $P{PAYMENT_ACCOUNT_NO}
++ "-compact.png?amount="
++ ($F{total_amount} == null ? "0" : $F{total_amount}.setScale(0, java.math.RoundingMode.HALF_UP).toPlainString())
++ "&addInfo=HD%20"
++ $F{order_id}
++ "&accountName=HE%20THONG%20SIEU%20THI%20THONG%20MINH"
+]]></imageExpression>
+            </image>
+
+            <textField isBlankWhenNull="true">
+                <reportElement style="SmallMuted" x="0" y="318" width="535" height="14"
+                    isRemoveLineWhenBlank="true">
+                    <printWhenExpression><![CDATA[$F{payment_method_code} != null && !$F{payment_method_code}.toUpperCase().contains("CASH") && ($F{payment_method_code}.toUpperCase().contains("TRANSFER") || $F{payment_method_code}.toUpperCase().contains("BANK") || $F{payment_method_code}.toUpperCase().contains("QR"))]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA["MB Bank - STK: " + $P{PAYMENT_ACCOUNT_NO}]]></textFieldExpression>
+            </textField>
+
+            <textField isBlankWhenNull="true">
+                <reportElement style="SmallMuted" x="0" y="334" width="535" height="14"
+                    isRemoveLineWhenBlank="true">
+                    <printWhenExpression><![CDATA[$F{payment_method_code} != null && !$F{payment_method_code}.toUpperCase().contains("CASH") && ($F{payment_method_code}.toUpperCase().contains("TRANSFER") || $F{payment_method_code}.toUpperCase().contains("BANK") || $F{payment_method_code}.toUpperCase().contains("QR"))]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" />
+                <textFieldExpression><![CDATA["Tên TK: " + $P{PAYMENT_ACCOUNT_NAME}]]></textFieldExpression>
+            </textField>
         </band>
     </summary>
 

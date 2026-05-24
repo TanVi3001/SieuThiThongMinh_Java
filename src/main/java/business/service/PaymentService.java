@@ -46,7 +46,7 @@ public class PaymentService {
 
         } catch (Exception e) {
             rollbackQuietly(con);
-            System.err.println("❌ Lỗi thanh toán: " + e.getMessage());
+            System.err.println("Lỗi thanh toán: " + e.getMessage());
             e.printStackTrace();
             return false;
         } finally {
@@ -152,7 +152,7 @@ public class PaymentService {
 
         } catch (Exception e) {
             rollbackQuietly(con);
-            System.err.println("❌ Lỗi hủy đơn: " + e.getMessage());
+            System.err.println("Lỗi hủy đơn: " + e.getMessage());
             e.printStackTrace();
             return false;
         } finally {
@@ -260,7 +260,7 @@ public class PaymentService {
             throw e;
         } catch (Exception e) {
             rollbackQuietly(con);
-            System.err.println("❌ Lỗi processCheckoutSecure: " + e.getMessage());
+            System.err.println("Lỗi processCheckoutSecure: " + e.getMessage());
             e.printStackTrace();
             return false;
         } finally {
