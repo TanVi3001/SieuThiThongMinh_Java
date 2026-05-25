@@ -699,6 +699,11 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
     private List<AccountRowData> loadAccountsForCurrentScope() {
         List<AccountRowData> rows = new ArrayList<>();
 
+        try {
+            AccountSql.getInstance().syncOnlineStatusFromSessions();
+        } catch (Exception ignored) {
+        }
+
         StringBuilder sql = new StringBuilder("""
             SELECT a.account_id,
                    a.user_id,
@@ -707,7 +712,18 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                    NVL(u.email, '') AS email,
                    COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value,
                    NVL(a.is_deleted, 0) AS is_deleted,
-                   NVL(a.online_status, 'OFFLINE') AS online_status,
+                   CASE
+                       WHEN NVL(a.is_deleted, 0) = 1 THEN 'OFFLINE'
+                       WHEN EXISTS (
+                           SELECT 1
+                           FROM ACCOUNT_SESSIONS s
+                           WHERE s.account_id = a.account_id
+                             AND s.status = 'ACTIVE'
+                             AND NVL(s.is_deleted, 0) = 0
+                             AND s.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND
+                       ) THEN 'ONLINE'
+                       ELSE 'OFFLINE'
+                   END AS online_status,
                    e.employee_id,
                    e.store_id
             FROM ACCOUNTS a
@@ -932,6 +948,10 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         if (accountId == null || accountId.trim().isEmpty()) {
             return null;
         }
+        try {
+            AccountSql.getInstance().syncOnlineStatusFromSessions();
+        } catch (Exception ignored) {
+        }
 
         String sql = """
             SELECT a.account_id,
@@ -941,7 +961,18 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
                    NVL(u.email, '') AS email,
                    COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value,
                    NVL(a.is_deleted, 0) AS is_deleted,
-                   NVL(a.online_status, 'OFFLINE') AS online_status,
+                   CASE
+                       WHEN NVL(a.is_deleted, 0) = 1 THEN 'OFFLINE'
+                       WHEN EXISTS (
+                           SELECT 1
+                           FROM ACCOUNT_SESSIONS s
+                           WHERE s.account_id = a.account_id
+                             AND s.status = 'ACTIVE'
+                             AND NVL(s.is_deleted, 0) = 0
+                             AND s.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND
+                       ) THEN 'ONLINE'
+                       ELSE 'OFFLINE'
+                   END AS online_status,
                    e.employee_id,
                    e.store_id
             FROM ACCOUNTS a
@@ -1036,21 +1067,36 @@ public class AccountRoleAssignmentPanel extends javax.swing.JPanel {
         }
 
         String sql = """
-            UPDATE ACCOUNTS
-            SET is_deleted = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE account_id = ?
-        """;
+    UPDATE ACCOUNTS
+    SET is_deleted = ?,
+        status = CASE WHEN ? = 1 THEN N'Bị khóa' ELSE N'Hoạt động' END,
+        online_status = CASE WHEN ? = 1 THEN 'OFFLINE' ELSE NVL(online_status, 'OFFLINE') END,
+        active_sessions = CASE WHEN ? = 1 THEN 0 ELSE NVL(active_sessions, 0) END,
+        current_session_id = CASE WHEN ? = 1 THEN NULL ELSE current_session_id END,
+        last_logout_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE last_logout_at END,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE account_id = ?
+""";
 
         try (
                 Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, nextState ? 0 : 1);
-            ps.setString(2, latest.accountId);
+            int deletedValue = nextState ? 0 : 1;
+
+            ps.setInt(1, deletedValue);
+            ps.setInt(2, deletedValue);
+            ps.setInt(3, deletedValue);
+            ps.setInt(4, deletedValue);
+            ps.setInt(5, deletedValue);
+            ps.setInt(6, deletedValue);
+            ps.setString(7, latest.accountId);
 
             int updated = ps.executeUpdate();
 
             if (updated > 0) {
                 toggleBtn.setOn(nextState);
+                if (!nextState) {
+                    AccountSql.getInstance().forceLogoutAccount(latest.accountId);
+                }
 
                 business.service.AuditLogService.logAction(
                         "CẬP NHẬT",

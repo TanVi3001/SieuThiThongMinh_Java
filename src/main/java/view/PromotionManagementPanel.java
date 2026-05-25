@@ -274,7 +274,7 @@ public class PromotionManagementPanel extends JPanel {
         bar.add(title, BorderLayout.WEST);
         bar.add(search, BorderLayout.EAST);
 
-        tableModel = new DefaultTableModel(new Object[]{"Mã KM", "Tên Chương Trình", "Mức Giảm", "Từ Ngày", "Đến Ngày", "Trạng Thái"}, 0) {
+        tableModel = new DefaultTableModel(new Object[]{"Mã KM", "Tên Chương Trình", "Từ Ngày", "Đến Ngày", "Trạng Thái"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -799,7 +799,6 @@ public class PromotionManagementPanel extends JPanel {
                 tableModel.addRow(new Object[]{
                     row.ma,
                     row.ten,
-                    row.giam + "%",
                     row.tuNgay,
                     row.denNgay,
                     row.trangThai
@@ -1659,13 +1658,12 @@ public class PromotionManagementPanel extends JPanel {
             tblPromos.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
             tblPromos.getColumnModel().getColumn(i).setCellRenderer(bodyRenderer);
         }
-        tblPromos.getColumnModel().getColumn(0).setPreferredWidth(90);
-        tblPromos.getColumnModel().getColumn(1).setPreferredWidth(240);
-        tblPromos.getColumnModel().getColumn(2).setPreferredWidth(90);
-        tblPromos.getColumnModel().getColumn(3).setPreferredWidth(105);
-        tblPromos.getColumnModel().getColumn(4).setPreferredWidth(105);
-        tblPromos.getColumnModel().getColumn(5).setPreferredWidth(150);
-        tblPromos.getColumnModel().getColumn(5).setCellRenderer(statusRenderer);
+        tblPromos.getColumnModel().getColumn(0).setPreferredWidth(100);
+        tblPromos.getColumnModel().getColumn(1).setPreferredWidth(310);
+        tblPromos.getColumnModel().getColumn(2).setPreferredWidth(120);
+        tblPromos.getColumnModel().getColumn(3).setPreferredWidth(120);
+        tblPromos.getColumnModel().getColumn(4).setPreferredWidth(160);
+        tblPromos.getColumnModel().getColumn(4).setCellRenderer(statusRenderer);
     }
 
     private JButton createButton(String value, Color bgColor, Color fgColor, Icon icon) {

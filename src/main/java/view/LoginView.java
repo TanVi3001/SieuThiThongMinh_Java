@@ -339,7 +339,7 @@ public class LoginView extends JFrame {
                             dispose();
                         }
                     } else {
-                        JOptionPane.showMessageDialog(this, "Sai tài khoản hoặc mật khẩu!");
+                        showLoginFailedMessage(user);
                         btnLogin.setEnabled(true);
                     }
                 });
@@ -352,6 +352,57 @@ public class LoginView extends JFrame {
                 Arrays.fill(passwordChars, '\0');
             }
         }, "login-auth-thread").start();
+    }
+
+    private void showLoginFailedMessage(String username) {
+        String message = "Tên đăng nhập hoặc mật khẩu không đúng.";
+        String title = "Đăng nhập thất bại";
+        int messageType = JOptionPane.ERROR_MESSAGE;
+
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("""
+                SELECT 
+                    NVL(is_deleted, 0) AS is_deleted,
+                    status
+                FROM ACCOUNTS
+                WHERE username = ?
+                FETCH FIRST 1 ROWS ONLY
+            """)) {
+            ps.setString(1, username);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    int isDeleted = rs.getInt("is_deleted");
+                    String status = rs.getString("status");
+
+                    boolean lockedByDeleted = isDeleted == 1;
+                    boolean lockedByStatus = status != null
+                            && (status.equalsIgnoreCase("Bị khóa")
+                            || status.equalsIgnoreCase("Bi khoa")
+                            || status.equalsIgnoreCase("LOCKED")
+                            || status.equalsIgnoreCase("DISABLED")
+                            || status.equalsIgnoreCase("INACTIVE"));
+
+                    if (lockedByDeleted || lockedByStatus) {
+                        title = "Tài khoản đã bị khóa";
+                        message = "Tài khoản của bạn hiện đang bị khóa hoặc đã bị tạm ngưng.\n"
+                                + "Vui lòng liên hệ Quản trị viên hoặc Quản lý cửa hàng để được hỗ trợ.";
+                        messageType = JOptionPane.WARNING_MESSAGE;
+                    }
+                }
+
+            }
+
+        } catch (Exception e) {
+            System.err.println("[LoginView] showLoginFailedMessage error: " + e.getMessage());
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                message,
+                title,
+                messageType
+        );
     }
 
     private String getEffectiveRoleId(model.account.Account acc) {

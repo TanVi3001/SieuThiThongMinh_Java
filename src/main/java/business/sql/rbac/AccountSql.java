@@ -1727,6 +1727,143 @@ public class AccountSql implements SqlInterface<Account> {
         }
     }
 
+    /**
+     * Ép đăng xuất một tài khoản khỏi mọi session. Dùng khi Admin/Manager khóa
+     * tài khoản.
+     *
+     * Lưu ý: - Không filter NVL(IS_DELETED,0)=0 vì lúc khóa xong account đã
+     * is_deleted=1. - Mục tiêu là dọn trạng thái online ảo và đóng toàn bộ
+     * ACCOUNT_SESSIONS.
+     */
+    public boolean forceLogoutAccount(String accountId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return false;
+        }
+
+        String cleanAccountId = accountId.trim();
+
+        String sqlAccount = """
+        UPDATE ACCOUNTS
+        SET ACTIVE_SESSIONS = 0,
+            CURRENT_SESSION_ID = NULL,
+            ONLINE_STATUS = 'OFFLINE',
+            LAST_LOGOUT_AT = CURRENT_TIMESTAMP,
+            UPDATED_AT = CURRENT_TIMESTAMP
+        WHERE ACCOUNT_ID = ?
+    """;
+
+        String sqlSessions = """
+        UPDATE ACCOUNT_SESSIONS
+        SET STATUS = 'FORCED_LOGOUT',
+            IS_DELETED = 1,
+            LOGOUT_AT = CURRENT_TIMESTAMP
+        WHERE ACCOUNT_ID = ?
+          AND NVL(IS_DELETED, 0) = 0
+          AND STATUS = 'ACTIVE'
+    """;
+
+        Connection con = null;
+        boolean oldAutoCommit = true;
+
+        try {
+            con = DatabaseConnection.getConnection();
+            oldAutoCommit = con.getAutoCommit();
+            con.setAutoCommit(false);
+
+            try (PreparedStatement ps = con.prepareStatement(sqlSessions)) {
+                ps.setString(1, cleanAccountId);
+                ps.executeUpdate();
+            }
+
+            int updated;
+            try (PreparedStatement ps = con.prepareStatement(sqlAccount)) {
+                ps.setString(1, cleanAccountId);
+                updated = ps.executeUpdate();
+            }
+
+            con.commit();
+            return updated > 0;
+
+        } catch (Exception e) {
+            if (con != null) {
+                try {
+                    con.rollback();
+                } catch (Exception ignored) {
+                }
+            }
+
+            System.err.println("[AccountSql] forceLogoutAccount error: " + e.getMessage());
+            return false;
+
+        } finally {
+            if (con != null) {
+                try {
+                    con.setAutoCommit(oldAutoCommit);
+                } catch (Exception ignored) {
+                }
+
+                try {
+                    con.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Dọn online ảo: - Account bị khóa -> OFFLINE - Account không còn session
+     * active trong 30s -> OFFLINE - Account còn session active trong 30s ->
+     * ONLINE
+     */
+    public int syncOnlineStatusFromSessions() {
+        cleanupDeadSessions();
+
+        String sql = """
+        UPDATE ACCOUNTS a
+        SET a.ONLINE_STATUS =
+                CASE
+                    WHEN NVL(a.IS_DELETED, 0) = 1 THEN 'OFFLINE'
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM ACCOUNT_SESSIONS s
+                        WHERE s.ACCOUNT_ID = a.ACCOUNT_ID
+                          AND s.STATUS = 'ACTIVE'
+                          AND NVL(s.IS_DELETED, 0) = 0
+                          AND s.LAST_HEARTBEAT_AT >= SYSTIMESTAMP - INTERVAL '30' SECOND
+                    ) THEN 'ONLINE'
+                    ELSE 'OFFLINE'
+                END,
+            a.ACTIVE_SESSIONS =
+                CASE
+                    WHEN NVL(a.IS_DELETED, 0) = 1 THEN 0
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM ACCOUNT_SESSIONS s
+                        WHERE s.ACCOUNT_ID = a.ACCOUNT_ID
+                          AND s.STATUS = 'ACTIVE'
+                          AND NVL(s.IS_DELETED, 0) = 0
+                          AND s.LAST_HEARTBEAT_AT >= SYSTIMESTAMP - INTERVAL '30' SECOND
+                    ) THEN 1
+                    ELSE 0
+                END,
+            a.CURRENT_SESSION_ID =
+                CASE
+                    WHEN NVL(a.IS_DELETED, 0) = 1 THEN NULL
+                    ELSE a.CURRENT_SESSION_ID
+                END,
+            a.UPDATED_AT = CURRENT_TIMESTAMP
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+            return ps.executeUpdate();
+
+        } catch (Exception e) {
+            System.err.println("[AccountSql] syncOnlineStatusFromSessions error: " + e.getMessage());
+            return 0;
+        }
+    }
+
     public boolean canLoginByCurrentShift(String accountId, String roleId) {
         if (accountId == null || accountId.trim().isEmpty()) {
             return false;
