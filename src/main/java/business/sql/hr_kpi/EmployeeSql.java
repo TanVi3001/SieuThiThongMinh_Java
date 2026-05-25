@@ -1,5 +1,6 @@
 package business.sql.hr_kpi;
 
+import business.service.RolePermissionService;
 import business.sql.SqlInterface;
 import common.db.DatabaseConnection;
 import java.sql.Connection;
@@ -18,6 +19,11 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     @Override
     public int insert(Employee t) {
+        if (!RolePermissionService.canAdd()) {
+            System.err.println("[EmployeeSql] Permission denied: add employee");
+            return 0;
+        }
+
         int res = 0;
         String sql = "INSERT INTO EMPLOYEES (employee_id, employee_name, phone, email, role_id, gender, store_id, hire_date, salary_coefficient, is_deleted) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, SYSDATE, 1.0, 0)";
@@ -271,51 +277,20 @@ public class EmployeeSql implements SqlInterface<Employee> {
         Employee e = new Employee();
         e.setEmployeeId(rs.getString("employee_id"));
         e.setEmployeeName(rs.getString("employee_name"));
-        try {
-            e.setHireDate(rs.getDate("hire_date"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setSalaryCoefficient(rs.getBigDecimal("salary_coefficient"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setTotalCompletedOrders(rs.getInt("total_completed_orders"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setShiftId(rs.getString("shift_id"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setIsDeleted(rs.getInt("is_deleted"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setPhone(rs.getString("phone"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setEmail(rs.getString("email"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setGender(rs.getString("gender"));
-        } catch (SQLException ignored) {
-        }
+        try { e.setHireDate(rs.getDate("hire_date")); } catch (SQLException ignored) {}
+        try { e.setSalaryCoefficient(rs.getBigDecimal("salary_coefficient")); } catch (SQLException ignored) {}
+        try { e.setTotalCompletedOrders(rs.getInt("total_completed_orders")); } catch (SQLException ignored) {}
+        try { e.setShiftId(rs.getString("shift_id")); } catch (SQLException ignored) {}
+        try { e.setIsDeleted(rs.getInt("is_deleted")); } catch (SQLException ignored) {}
+        try { e.setPhone(rs.getString("phone")); } catch (SQLException ignored) {}
+        try { e.setEmail(rs.getString("email")); } catch (SQLException ignored) {}
+        try { e.setGender(rs.getString("gender")); } catch (SQLException ignored) {}
         try {
             e.setRoleId(rs.getString("role_id"));
             e.setRole(rs.getString("role_id"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setStoreId(rs.getString("store_id"));
-        } catch (SQLException ignored) {
-        }
-        try {
-            e.setStoreName(rs.getString("store_name"));
-        } catch (SQLException ignored) {
-        }
+        } catch (SQLException ignored) {}
+        try { e.setStoreId(rs.getString("store_id")); } catch (SQLException ignored) {}
+        try { e.setStoreName(rs.getString("store_name")); } catch (SQLException ignored) {}
         return e;
     }
 
@@ -334,9 +309,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
         if (parts != null) {
             for (String p : parts) {
                 if (p != null && !p.isBlank()) {
-                    if (sb.length() > 0) {
-                        sb.append(", ");
-                    }
+                    if (sb.length() > 0) { sb.append(", "); }
                     sb.append(p);
                 }
             }
@@ -391,27 +364,11 @@ public class EmployeeSql implements SqlInterface<Employee> {
         sql.append("WHEN NVL(sess.active_count, 0) > 0 THEN 'ONLINE' ");
         sql.append("ELSE 'OFFLINE' ");
         sql.append("END AS online_status, ");
-
         sql.append("NVL(sess.active_count, 0) AS active_sessions ");
-
         sql.append("FROM EMPLOYEES e ");
-
-        sql.append("LEFT JOIN ACCOUNTS a ");
-        sql.append("ON e.employee_id = a.user_id ");
-        sql.append("AND NVL(a.is_deleted, 0) = 0 ");
-
-        sql.append("LEFT JOIN ( ");
-        sql.append("    SELECT account_id, COUNT(*) AS active_count ");
-        sql.append("    FROM ACCOUNT_SESSIONS ");
-        sql.append("    WHERE status = 'ACTIVE' ");
-        sql.append("      AND NVL(is_deleted, 0) = 0 ");
-        sql.append("      AND last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND ");
-        sql.append("    GROUP BY account_id ");
-        sql.append(") sess ON sess.account_id = a.account_id ");
-
-        sql.append("LEFT JOIN STORES s ");
-        sql.append("ON e.store_id = s.store_id ");
-        sql.append("AND NVL(s.is_deleted, 0) = 0 ");
+        sql.append("LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id AND NVL(a.is_deleted, 0) = 0 ");
+        sql.append("LEFT JOIN ( SELECT account_id, COUNT(*) AS active_count FROM ACCOUNT_SESSIONS WHERE status = 'ACTIVE' AND NVL(is_deleted, 0) = 0 AND last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND GROUP BY account_id ) sess ON sess.account_id = a.account_id ");
+        sql.append("LEFT JOIN STORES s ON e.store_id = s.store_id AND NVL(s.is_deleted, 0) = 0 ");
         sql.append("WHERE NVL(e.is_deleted, 0) = 0 ");
 
         if (isStoreManager) {
@@ -458,31 +415,14 @@ public class EmployeeSql implements SqlInterface<Employee> {
         String sql = "SELECT e.*, "
                 + "NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
                 + "NVL(a.status, N'Chưa cấp') AS account_status, "
-                + "CASE "
-                + "WHEN a.account_id IS NULL THEN 'N/A' "
-                + "WHEN NVL(sess.active_count, 0) > 0 THEN 'ONLINE' "
-                + "ELSE 'OFFLINE' "
-                + "END AS online_status, "
+                + "CASE WHEN a.account_id IS NULL THEN 'N/A' WHEN NVL(sess.active_count, 0) > 0 THEN 'ONLINE' ELSE 'OFFLINE' END AS online_status, "
                 + "NVL(sess.active_count, 0) AS active_sessions, "
                 + "s.store_name AS store_name "
                 + "FROM EMPLOYEES e "
-                + "LEFT JOIN ACCOUNTS a "
-                + "ON e.employee_id = a.user_id "
-                + "AND NVL(a.is_deleted, 0) = 0 "
-                + "LEFT JOIN ( "
-                + "    SELECT account_id, COUNT(*) AS active_count "
-                + "    FROM ACCOUNT_SESSIONS "
-                + "    WHERE status = 'ACTIVE' "
-                + "      AND NVL(is_deleted, 0) = 0 "
-                + "      AND last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND "
-                + "    GROUP BY account_id "
-                + ") sess ON sess.account_id = a.account_id "
-                + "LEFT JOIN STORES s "
-                + "ON e.store_id = s.store_id "
-                + "AND NVL(s.is_deleted, 0) = 0 "
-                + "WHERE NVL(e.is_deleted, 0) = 0 "
-                + "AND e.store_id = ? "
-                + "ORDER BY e.employee_name ASC";
+                + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id AND NVL(a.is_deleted, 0) = 0 "
+                + "LEFT JOIN ( SELECT account_id, COUNT(*) AS active_count FROM ACCOUNT_SESSIONS WHERE status = 'ACTIVE' AND NVL(is_deleted, 0) = 0 AND last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND GROUP BY account_id ) sess ON sess.account_id = a.account_id "
+                + "LEFT JOIN STORES s ON e.store_id = s.store_id AND NVL(s.is_deleted, 0) = 0 "
+                + "WHERE NVL(e.is_deleted, 0) = 0 AND e.store_id = ? ORDER BY e.employee_name ASC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, storeId);
@@ -508,22 +448,14 @@ public class EmployeeSql implements SqlInterface<Employee> {
         String sql = "SELECT e.*, "
                 + "NVL(e.role_id, N'Chưa phân bổ') AS actual_role, "
                 + "NVL(a.status, N'Chưa cấp') AS account_status, "
-                + "CASE "
-                + "WHEN a.account_id IS NULL THEN 'N/A' "
-                + "WHEN a.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND THEN 'ONLINE' "
-                + "ELSE 'OFFLINE' "
-                + "END AS online_status, "
-                + "CASE "
-                + "WHEN a.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND THEN 1 "
-                + "ELSE 0 "
-                + "END AS active_sessions, "
+                + "CASE WHEN a.account_id IS NULL THEN 'N/A' WHEN a.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND THEN 'ONLINE' ELSE 'OFFLINE' END AS online_status, "
+                + "CASE WHEN a.last_heartbeat_at >= SYSTIMESTAMP - INTERVAL '30' SECOND THEN 1 ELSE 0 END AS active_sessions, "
                 + "s.store_name AS store_name "
                 + "FROM EMPLOYEES e "
                 + "LEFT JOIN ACCOUNTS a ON e.employee_id = a.user_id AND NVL(a.is_deleted, 0) = 0 "
                 + "LEFT JOIN STORES s ON e.store_id = s.store_id AND NVL(s.is_deleted, 0) = 0 "
                 + "WHERE NVL(e.is_deleted, 0) = 0 AND e.store_id = ? "
-                + "AND (LOWER(e.employee_name) LIKE LOWER(?) OR e.phone LIKE ? OR LOWER(e.email) LIKE LOWER(?)) "
-                + "ORDER BY e.employee_name ASC";
+                + "AND (LOWER(e.employee_name) LIKE LOWER(?) OR e.phone LIKE ? OR LOWER(e.email) LIKE LOWER(?)) ORDER BY e.employee_name ASC";
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             String pattern = "%" + keyword + "%";
