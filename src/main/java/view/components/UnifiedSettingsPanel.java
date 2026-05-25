@@ -19,7 +19,9 @@ import java.awt.image.BufferedImage;
 import java.sql.*;
 
 /**
- * Unified Settings Panel - menu bên trái, nội dung bên phải
+ * Unified Settings Panel - mỗi mục là một phần riêng: - Thông tin cửa hàng: chỉ
+ * Admin được chỉnh. - Giao diện: đổi theme riêng. - Bảo mật: đổi mật khẩu
+ * riêng. - Email: cấu hình email riêng.
  */
 public class UnifiedSettingsPanel extends JPanel {
 
@@ -40,6 +42,10 @@ public class UnifiedSettingsPanel extends JPanel {
     private static final Color COLOR_NAV_BADGE_SECURITY = new Color(245, 158, 11);
     private static final Color COLOR_NAV_BADGE_EMAIL = new Color(168, 85, 247);
     private static final Color COLOR_NAV_HOVER = new Color(23, 37, 84);
+    private static final Color COLOR_DANGER_SOFT = new Color(254, 242, 242);
+    private static final Color COLOR_DANGER = new Color(220, 38, 38);
+    private static final Color COLOR_SUCCESS_SOFT = new Color(240, 253, 244);
+    private static final Color COLOR_SUCCESS = new Color(22, 163, 74);
 
     private static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 18);
     private static final Font FONT_SECTION = new Font("Segoe UI", Font.BOLD, 15);
@@ -68,6 +74,10 @@ public class UnifiedSettingsPanel extends JPanel {
     private JButton btnTheme;
     private JButton btnSecurity;
     private JButton btnEmail;
+    private JButton btnSave;
+    private JButton btnRefresh;
+    private JLabel lblCurrentSectionHint;
+
     private String activeSection = STORE_KEY;
 
     private AutoCloseable eventSub;
@@ -75,6 +85,7 @@ public class UnifiedSettingsPanel extends JPanel {
     public UnifiedSettingsPanel() {
         initUI();
         loadSettings();
+        applyStoreEditPermission();
         setupEventBus();
         showSection(STORE_KEY);
     }
@@ -91,16 +102,16 @@ public class UnifiedSettingsPanel extends JPanel {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(BG_PANEL);
         bar.setBorder(new MatteBorder(0, 0, 1, 0, COLOR_BORDER));
-        bar.setPreferredSize(new Dimension(0, 58));
+        bar.setPreferredSize(new Dimension(0, 64));
 
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
         left.setOpaque(false);
 
-        JLabel title = new JLabel("⚙️ Cài đặt hệ thống");
+        JLabel title = new JLabel("Cài đặt hệ thống");
         title.setFont(FONT_TITLE);
         title.setForeground(COLOR_TEXT);
 
-        JLabel subtitle = new JLabel("Chọn chức năng bên trái, xem nội dung bên phải");
+        JLabel subtitle = new JLabel("Mỗi mục là một phần riêng, lưu đúng phần đang chọn");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         subtitle.setForeground(COLOR_MUTED);
 
@@ -115,12 +126,21 @@ public class UnifiedSettingsPanel extends JPanel {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 12));
         right.setOpaque(false);
 
-        JButton btnRefresh = createActionButton("Làm mới", false);
-        btnRefresh.addActionListener(e -> loadSettings());
+        lblCurrentSectionHint = new JLabel("");
+        lblCurrentSectionHint.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblCurrentSectionHint.setForeground(COLOR_MUTED);
+        lblCurrentSectionHint.setBorder(new EmptyBorder(0, 0, 0, 10));
 
-        JButton btnSave = createActionButton("Lưu cài đặt", true);
-        btnSave.addActionListener(e -> saveSettings());
+        btnRefresh = createActionButton("Làm mới", false);
+        btnRefresh.addActionListener(e -> {
+            loadSettings();
+            applyStoreEditPermission();
+        });
 
+        btnSave = createActionButton("Lưu mục này", true);
+        btnSave.addActionListener(e -> saveCurrentSection());
+
+        right.add(lblCurrentSectionHint);
         right.add(btnRefresh);
         right.add(btnSave);
 
@@ -144,8 +164,8 @@ public class UnifiedSettingsPanel extends JPanel {
         nav.setPreferredSize(new Dimension(270, 0));
         nav.setBackground(COLOR_NAV);
         nav.setBorder(BorderFactory.createCompoundBorder(
-            new MatteBorder(1, 1, 1, 1, COLOR_NAV_BORDER),
-            new EmptyBorder(18, 16, 18, 16)
+                new MatteBorder(1, 1, 1, 1, COLOR_NAV_BORDER),
+                new EmptyBorder(18, 16, 18, 16)
         ));
         nav.setLayout(new BoxLayout(nav, BoxLayout.Y_AXIS));
 
@@ -154,7 +174,7 @@ public class UnifiedSettingsPanel extends JPanel {
         group.setForeground(COLOR_NAV_TEXT);
         group.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel hint = new JLabel("Chọn mục để hiển thị thông tin");
+        JLabel hint = new JLabel("Chọn từng mục để cấu hình riêng");
         hint.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         hint.setForeground(COLOR_NAV_MUTED);
         hint.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -165,8 +185,9 @@ public class UnifiedSettingsPanel extends JPanel {
         nav.add(Box.createVerticalStrut(18));
 
         btnStore = createNavButton("Thông tin cửa hàng", STORE_KEY, "T", COLOR_NAV_BADGE);
-        btnTheme = createNavButton("Giao diện", THEME_KEY, "G", COLOR_NAV_BADGE_THEME);
+        btnTheme = createNavButton("Giao diện", THEME_KEY, "▭", COLOR_NAV_BADGE_THEME);
         btnSecurity = createNavButton("Bảo mật", SECURITY_KEY, "B", COLOR_NAV_BADGE_SECURITY);
+
         nav.add(btnStore);
         nav.add(Box.createVerticalStrut(12));
         nav.add(btnTheme);
@@ -181,7 +202,7 @@ public class UnifiedSettingsPanel extends JPanel {
 
         nav.add(Box.createVerticalGlue());
 
-        JLabel note = new JLabel("Màu xanh là mục đang chọn");
+        JLabel note = new JLabel("Mỗi mục lưu độc lập");
         note.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         note.setForeground(COLOR_NAV_MUTED);
         note.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -198,7 +219,7 @@ public class UnifiedSettingsPanel extends JPanel {
         content.setBackground(BG_PANEL);
         content.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(1, 1, 1, 1, COLOR_BORDER),
-            new EmptyBorder(24, 28, 28, 28)
+                new EmptyBorder(24, 28, 28, 28)
         ));
 
         cardLayout = new CardLayout();
@@ -270,11 +291,24 @@ public class UnifiedSettingsPanel extends JPanel {
     }
 
     private JPanel buildStoreSection() {
-        JPanel card = createContentCard("Thông tin cửa hàng", "Hiển thị trên hóa đơn và báo cáo");
+        JPanel card = createContentCard(
+                "Thông tin cửa hàng",
+                isAdminOnly()
+                        ? "Admin có thể chỉnh thông tin hiển thị trên hóa đơn và báo cáo"
+                        : "Chỉ Admin được chỉnh thông tin cửa hàng. Tài khoản hiện tại chỉ được xem."
+        );
 
         txtStoreName = new JTextField();
         txtStoreAddress = new JTextField();
         txtStorePhone = new JTextField();
+
+        card.add(permissionNotice(
+                isAdminOnly()
+                        ? "Bạn đang đăng nhập bằng quyền Admin, có thể chỉnh thông tin cửa hàng."
+                        : "Bạn không có quyền chỉnh thông tin cửa hàng. Phần này chỉ cho phép xem.",
+                isAdminOnly()
+        ));
+        card.add(Box.createVerticalStrut(14));
 
         card.add(fieldRow("Tên siêu thị/Cửa hàng", txtStoreName));
         card.add(Box.createVerticalStrut(14));
@@ -289,7 +323,14 @@ public class UnifiedSettingsPanel extends JPanel {
     private JPanel buildThemeSection() {
         JPanel card = createContentCard("Giao diện hệ thống", "Chọn chế độ hiển thị Sáng hoặc Tối");
 
-        cbTheme = new JComboBox<>(new String[]{"☀️ Sáng (Light Mode)", "🌙 Tối (Dark Mode)"});
+        JLabel preview = new JLabel("Chế độ hiển thị giao diện");
+        preview.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        preview.setForeground(COLOR_SUCCESS);
+        preview.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(preview);
+        card.add(Box.createVerticalStrut(12));
+
+        cbTheme = new JComboBox<>(new String[]{"Sáng (Light Mode)", "Tối (Dark Mode)"});
         cbTheme.setFont(FONT_TEXT);
         cbTheme.addActionListener(e -> applyTheme());
 
@@ -331,7 +372,7 @@ public class UnifiedSettingsPanel extends JPanel {
         card.add(Box.createVerticalStrut(14));
         card.add(fieldRow("App Password / API Key", txtAppPassword));
 
-        JLabel hint = new JLabel("💡 Để trống để bỏ qua cấu hình email");
+        JLabel hint = new JLabel("Để trống App Password nếu không muốn đổi mật khẩu ứng dụng.");
         hint.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         hint.setForeground(COLOR_MUTED);
         hint.setBorder(new EmptyBorder(10, 2, 0, 0));
@@ -379,26 +420,21 @@ public class UnifiedSettingsPanel extends JPanel {
         return card;
     }
 
-    private JPanel sectionHeader(String title, String subtitle) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(BG_PANEL);
+    private JPanel permissionNotice(String text, boolean allowed) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.setBorder(new EmptyBorder(0, 0, 18, 0));
+        panel.setBackground(allowed ? COLOR_SUCCESS_SOFT : COLOR_DANGER_SOFT);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 1, 1, 1, allowed ? new Color(187, 247, 208) : new Color(254, 202, 202)),
+                new EmptyBorder(10, 12, 10, 12)
+        ));
 
-        JLabel lTitle = new JLabel(title);
-        lTitle.setFont(FONT_SECTION);
-        lTitle.setForeground(COLOR_TEXT);
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        label.setForeground(allowed ? COLOR_SUCCESS : COLOR_DANGER);
 
-        JLabel lSub = new JLabel(subtitle);
-        lSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lSub.setForeground(COLOR_MUTED);
-
-        panel.add(lTitle);
-        panel.add(Box.createVerticalStrut(4));
-        panel.add(lSub);
-        panel.add(Box.createVerticalStrut(12));
-
+        panel.add(label, BorderLayout.CENTER);
         return panel;
     }
 
@@ -438,33 +474,8 @@ public class UnifiedSettingsPanel extends JPanel {
         }
     }
 
-    private JButton createButton(String text, boolean isPrimary) {
-        JButton btn = new JButton(text);
-        btn.setFont(FONT_TEXT);
-        btn.setPreferredSize(new Dimension(120, 36));
-        btn.setFocusPainted(false);
-
-        if (isPrimary) {
-            btn.setBackground(COLOR_PRIMARY);
-            btn.setForeground(Color.WHITE);
-            btn.setBorder(BorderFactory.createCompoundBorder(
-                    new MatteBorder(1, 1, 1, 1, COLOR_PRIMARY),
-                    new EmptyBorder(8, 14, 8, 14)
-            ));
-        } else {
-            btn.setBackground(BG_PANEL);
-            btn.setForeground(COLOR_TEXT);
-            btn.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
-        }
-
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-
     private void loadSettings() {
-        try (Connection con = DatabaseConnection.getConnection();
-             Statement stmt = con.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT config_key, config_value FROM SYSTEM_CONFIG")) {
+        try (Connection con = DatabaseConnection.getConnection(); Statement stmt = con.createStatement(); ResultSet rs = stmt.executeQuery("SELECT config_key, config_value FROM SYSTEM_CONFIG")) {
 
             while (rs.next()) {
                 String key = rs.getString("config_key");
@@ -494,7 +505,6 @@ public class UnifiedSettingsPanel extends JPanel {
             System.err.println("Lỗi tải cấu hình: " + e.getMessage());
         }
 
-        // Clear password fields
         if (txtOldPass != null) {
             txtOldPass.setText("");
             txtNewPass.setText("");
@@ -502,42 +512,93 @@ public class UnifiedSettingsPanel extends JPanel {
         }
     }
 
-    private void saveSettings() {
+    private void saveCurrentSection() {
         try {
-            saveConfig("store_name", txtStoreName.getText().trim());
-            saveConfig("store_address", txtStoreAddress.getText().trim());
-            saveConfig("store_phone", txtStorePhone.getText().trim());
-            saveConfig("theme_mode", cbTheme.getSelectedIndex() == 1 ? "Dark" : "Light");
-
-            if (txtEmailSender != null && !txtEmailSender.getText().trim().isEmpty()) {
-                saveConfig("email_sender", txtEmailSender.getText().trim());
+            switch (activeSection) {
+                case STORE_KEY:
+                    saveStoreSection();
+                    break;
+                case THEME_KEY:
+                    saveThemeSection();
+                    break;
+                case SECURITY_KEY:
+                    saveSecuritySection();
+                    break;
+                case EMAIL_KEY:
+                    saveEmailSection();
+                    break;
+                default:
+                    showMessage("Không xác định mục cài đặt cần lưu.", JOptionPane.WARNING_MESSAGE);
+                    break;
             }
-
-            EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "Updated"));
-
-            // Handle password change
-            String oldPass = new String(txtOldPass.getPassword());
-            String newPass = new String(txtNewPass.getPassword());
-            String confirmPass = new String(txtConfirmPass.getPassword());
-
-            if (!oldPass.isEmpty() || !newPass.isEmpty() || !confirmPass.isEmpty()) {
-                changePassword(oldPass, newPass, confirmPass);
-            }
-
-            showMessage("✅ Đã lưu cài đặt thành công!", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             showMessage("❌ Lỗi: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void saveConfig(String key, String value) throws SQLException {
-        String sql = "MERGE INTO SYSTEM_CONFIG t USING (SELECT ? as k, ? as v FROM dual) s " +
-                "ON (t.config_key = s.k) " +
-                "WHEN MATCHED THEN UPDATE SET t.config_value = s.v " +
-                "WHEN NOT MATCHED THEN INSERT (config_key, config_value) VALUES (s.k, s.v)";
+    private void saveStoreSection() throws SQLException {
+        if (!isAdminOnly()) {
+            showMessage("❌ Chỉ Admin mới được chỉnh thông tin cửa hàng.", JOptionPane.ERROR_MESSAGE);
+            loadSettings();
+            applyStoreEditPermission();
+            return;
+        }
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        saveConfig("store_name", txtStoreName.getText().trim());
+        saveConfig("store_address", txtStoreAddress.getText().trim());
+        saveConfig("store_phone", txtStorePhone.getText().trim());
+
+        EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "Store config updated"));
+        showMessage("✅ Đã lưu thông tin cửa hàng!", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void saveThemeSection() throws SQLException {
+        saveConfig("theme_mode", cbTheme.getSelectedIndex() == 1 ? "Dark" : "Light");
+        EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "Theme updated"));
+        showMessage("✅ Đã lưu giao diện!", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void saveSecuritySection() {
+        String oldPass = new String(txtOldPass.getPassword());
+        String newPass = new String(txtNewPass.getPassword());
+        String confirmPass = new String(txtConfirmPass.getPassword());
+
+        if (oldPass.isEmpty() && newPass.isEmpty() && confirmPass.isEmpty()) {
+            showMessage("Vui lòng nhập thông tin mật khẩu cần đổi.", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        changePassword(oldPass, newPass, confirmPass);
+    }
+
+    private void saveEmailSection() throws SQLException {
+        if (txtEmailSender == null) {
+            return;
+        }
+
+        saveConfig("email_sender", txtEmailSender.getText().trim());
+
+        String appPassword = txtAppPassword == null ? "" : new String(txtAppPassword.getPassword()).trim();
+        if (!appPassword.isEmpty()) {
+            saveConfig("email_app_password", appPassword);
+            txtAppPassword.setText("");
+        }
+
+        EventBus.publish(new AppDataChangedEvent(AppEventType.SYSTEM_CONFIG, "Email config updated"));
+        showMessage("✅ Đã lưu cấu hình email!", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void saveSettings() {
+        saveCurrentSection();
+    }
+
+    private void saveConfig(String key, String value) throws SQLException {
+        String sql = "MERGE INTO SYSTEM_CONFIG t USING (SELECT ? as k, ? as v FROM dual) s "
+                + "ON (t.config_key = s.k) "
+                + "WHEN MATCHED THEN UPDATE SET t.config_value = s.v "
+                + "WHEN NOT MATCHED THEN INSERT (config_key, config_value) VALUES (s.k, s.v)";
+
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, key);
             ps.setString(2, value);
             ps.executeUpdate();
@@ -566,8 +627,7 @@ public class UnifiedSettingsPanel extends JPanel {
             return;
         }
 
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND is_deleted = 0")) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND is_deleted = 0")) {
 
             ps.setString(1, user.getUsername());
             try (ResultSet rs = ps.executeQuery()) {
@@ -622,10 +682,50 @@ public class UnifiedSettingsPanel extends JPanel {
         activeSection = sectionKey;
         cardLayout.show(cardPanel, sectionKey);
         updateNavState();
+        updateTopBarState();
 
         if (cardPanel != null) {
             cardPanel.revalidate();
             cardPanel.repaint();
+        }
+    }
+
+    private void updateTopBarState() {
+        if (btnSave == null || lblCurrentSectionHint == null) {
+            return;
+        }
+
+        switch (activeSection) {
+            case STORE_KEY:
+                lblCurrentSectionHint.setText(isAdminOnly() ? "Đang chỉnh: Thông tin cửa hàng" : "Chỉ Admin được chỉnh cửa hàng");
+                btnSave.setText(isAdminOnly() ? "Lưu cửa hàng" : "Chỉ xem");
+                btnSave.setEnabled(isAdminOnly());
+                btnSave.setBackground(isAdminOnly() ? COLOR_PRIMARY : new Color(203, 213, 225));
+                break;
+            case THEME_KEY:
+                lblCurrentSectionHint.setText("Đang chỉnh: Giao diện");
+                btnSave.setText("Lưu giao diện");
+                btnSave.setEnabled(true);
+                btnSave.setBackground(COLOR_PRIMARY);
+                break;
+            case SECURITY_KEY:
+                lblCurrentSectionHint.setText("Đang chỉnh: Bảo mật");
+                btnSave.setText("Đổi mật khẩu");
+                btnSave.setEnabled(true);
+                btnSave.setBackground(COLOR_PRIMARY);
+                break;
+            case EMAIL_KEY:
+                lblCurrentSectionHint.setText("Đang chỉnh: Email");
+                btnSave.setText("Lưu email");
+                btnSave.setEnabled(true);
+                btnSave.setBackground(COLOR_PRIMARY);
+                break;
+            default:
+                lblCurrentSectionHint.setText("");
+                btnSave.setText("Lưu mục này");
+                btnSave.setEnabled(true);
+                btnSave.setBackground(COLOR_PRIMARY);
+                break;
         }
     }
 
@@ -653,6 +753,28 @@ public class UnifiedSettingsPanel extends JPanel {
         button.setFont(active ? FONT_NAV.deriveFont(Font.BOLD) : FONT_NAV);
     }
 
+    private void applyStoreEditPermission() {
+        boolean admin = isAdminOnly();
+
+        setStoreFieldEditable(txtStoreName, admin);
+        setStoreFieldEditable(txtStoreAddress, admin);
+        setStoreFieldEditable(txtStorePhone, admin);
+
+        updateTopBarState();
+    }
+
+    private void setStoreFieldEditable(JTextField field, boolean editable) {
+        if (field == null) {
+            return;
+        }
+
+        field.setEditable(editable);
+        field.setFocusable(editable);
+        field.setBackground(editable ? BG_PANEL : new Color(248, 250, 252));
+        field.setForeground(editable ? COLOR_TEXT : COLOR_MUTED);
+        field.setToolTipText(editable ? null : "Chỉ Admin mới được chỉnh thông tin cửa hàng");
+    }
+
     private Icon createBadgeIcon(String text, Color background) {
         int size = 24;
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
@@ -660,15 +782,22 @@ public class UnifiedSettingsPanel extends JPanel {
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setColor(new Color(background.getRed(), background.getGreen(), background.getBlue(), 220));
-            g.fillRoundRect(0, 0, size - 1, size - 1, 10, 10);
-            g.setColor(new Color(255, 255, 255, 45));
-            g.drawRoundRect(1, 1, size - 3, size - 3, 8, 8);
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Segoe UI", Font.BOLD, 11));
-            FontMetrics fm = g.getFontMetrics();
-            int x = (size - fm.stringWidth(text)) / 2;
-            int y = ((size - fm.getHeight()) / 2) + fm.getAscent() - 1;
-            g.drawString(text, x, y);
+
+            if ("▭".equals(text)) {
+                g.fillRoundRect(3, 6, size - 7, size - 12, 5, 5);
+                g.setColor(new Color(255, 255, 255, 80));
+                g.drawRoundRect(4, 7, size - 9, size - 14, 4, 4);
+            } else {
+                g.fillRoundRect(0, 0, size - 1, size - 1, 10, 10);
+                g.setColor(new Color(255, 255, 255, 45));
+                g.drawRoundRect(1, 1, size - 3, size - 3, 8, 8);
+                g.setColor(Color.WHITE);
+                g.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                FontMetrics fm = g.getFontMetrics();
+                int x = (size - fm.stringWidth(text)) / 2;
+                int y = ((size - fm.getHeight()) / 2) + fm.getAscent() - 1;
+                g.drawString(text, x, y);
+            }
         } finally {
             g.dispose();
         }
@@ -680,11 +809,27 @@ public class UnifiedSettingsPanel extends JPanel {
         return user != null && user.getUsername() != null ? user.getUsername() : "N/A";
     }
 
+    private boolean isAdminOnly() {
+        Account user = LoginService.getCurrentUser();
+        if (user == null) {
+            return false;
+        }
+
+        String role = String.valueOf(user.getRole()).toUpperCase();
+        return role.contains("ADMIN") || role.contains("R_ADMIN_ALL");
+    }
+
     private boolean isAdminOrWarehouse() {
         Account user = LoginService.getCurrentUser();
-        if (user == null) return false;
-        String role = String.valueOf(user.getRole());
-        return role.contains("ADMIN") || role.contains("WAREHOUSE") || role.contains("Warehouse");
+        if (user == null) {
+            return false;
+        }
+
+        String role = String.valueOf(user.getRole()).toUpperCase();
+        return role.contains("ADMIN")
+                || role.contains("WAREHOUSE")
+                || role.contains("VIEW_PROD")
+                || role.contains("R_STAFF_VIEW_PROD");
     }
 
     private void showMessage(String msg, int type) {
@@ -696,6 +841,7 @@ public class UnifiedSettingsPanel extends JPanel {
             eventSub = EventBus.subscribe(AppDataChangedEvent.class, e -> {
                 if (e != null && e.getType() == AppEventType.SYSTEM_CONFIG) {
                     loadSettings();
+                    applyStoreEditPermission();
                 }
             });
         } catch (Exception e) {

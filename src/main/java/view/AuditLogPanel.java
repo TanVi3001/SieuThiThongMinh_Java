@@ -1,11 +1,13 @@
 package view;
 
 import common.events.AppDataChangedEvent;
-import common.events.AppEventType;
 import common.events.EventBus;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.sql.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -15,27 +17,34 @@ import view.components.IconHelper;
 
 public class AuditLogPanel extends JPanel {
 
-    // --- BẢNG MÀU UI CHUẨN ---
     private final Color bgLight = new Color(244, 246, 250);
     private final Color cardWhite = Color.WHITE;
     private final Color textDark = new Color(43, 54, 116);
-    private final Color textGray = new Color(163, 174, 208);
+    private final Color textGray = new Color(107, 114, 128);
     private final Color borderGray = new Color(230, 235, 241);
     private final Color primaryBlue = new Color(37, 99, 235);
     private final Color successGreen = new Color(16, 185, 129);
     private final Color dangerRed = new Color(239, 68, 68);
     private final Color warningOrange = new Color(245, 158, 11);
+    private final Color purple = new Color(124, 58, 237);
 
     private final Color softBlue = new Color(237, 242, 255);
     private final Color softGreen = new Color(236, 253, 245);
     private final Color softRed = new Color(254, 242, 242);
     private final Color softOrange = new Color(255, 247, 237);
+    private final Color softPurple = new Color(245, 243, 255);
 
     private JTable tblLogs;
     private DefaultTableModel tableModel;
     private JTextField txtSearch;
-    private JComboBox<String> cbActionType, cbEntity;
-    private JButton btnFilter, btnRefresh, btnExport;
+    private JComboBox<String> cbActionType;
+    private JComboBox<String> cbEntity;
+    private JComboBox<String> cbStore;
+    private JButton btnFilter;
+    private JButton btnRefresh;
+    private JButton btnExport;
+
+    private final Map<String, StoreColor> storeColorMap = new LinkedHashMap<>();
 
     public AuditLogPanel() {
         setLayout(new BorderLayout(20, 20));
@@ -44,8 +53,8 @@ public class AuditLogPanel extends JPanel {
 
         initUI();
         initEvents();
-
-        loadRealData("Tất cả Hành động", "Tất cả Đối tượng", "");
+        loadStoreFilter();
+        loadRealData("Tất cả Hành động", "Tất cả Đối tượng", "Tất cả Chi nhánh", "");
         setupRealtimeSync();
     }
 
@@ -55,12 +64,15 @@ public class AuditLogPanel extends JPanel {
 
         JPanel titlePanel = new JPanel(new GridLayout(2, 1));
         titlePanel.setOpaque(false);
+
         JLabel lblTitle = new JLabel("Nhật Ký Hoạt Động Hệ Thống (Audit Trail)");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(textDark);
-        JLabel lblSub = new JLabel("Giám sát mọi thao tác Thêm/Sửa/Xóa của tất cả các tài khoản theo thời gian thực");
-        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+
+        JLabel lblSub = new JLabel("Lưu toàn bộ thao tác hệ thống, theo dõi tài khoản, module và chi nhánh thực hiện");
+        lblSub.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblSub.setForeground(textGray);
+
         titlePanel.add(lblTitle);
         titlePanel.add(lblSub);
 
@@ -68,24 +80,30 @@ public class AuditLogPanel extends JPanel {
         add(headerPanel, BorderLayout.NORTH);
 
         RoundedPanel filterCard = new RoundedPanel(15, cardWhite);
-        filterCard.setLayout(new FlowLayout(FlowLayout.LEFT, 15, 15));
+        filterCard.setLayout(new FlowLayout(FlowLayout.LEFT, 12, 15));
         filterCard.setBorder(new EmptyBorder(5, 10, 5, 10));
 
-        txtSearch = createTextField("Tìm kiếm theo tài khoản hoặc IP...");
-        txtSearch.setPreferredSize(new Dimension(280, 40));
+        txtSearch = createTextField("Tìm tài khoản, IP, chi nhánh, nội dung...");
+        txtSearch.setPreferredSize(new Dimension(260, 40));
 
-        // 🔥 ĐÃ GỠ BỎ "ĐĂNG NHẬP", "ĐĂNG XUẤT" KHỎI BỘ LỌC
         cbActionType = new JComboBox<>(new String[]{
-            "Tất cả Hành động", "THÊM MỚI", "CẬP NHẬT", "XÓA", "XUẤT FILE"
+            "Tất cả Hành động", "ĐĂNG NHẬP", "ĐĂNG XUẤT", "THÊM MỚI", "CẬP NHẬT",
+            "XÓA", "XUẤT FILE", "NHẬP FILE", "IN PHIẾU", "HỆ THỐNG"
         });
-        cbActionType.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        cbActionType.setPreferredSize(new Dimension(180, 40));
+        cbActionType.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        cbActionType.setPreferredSize(new Dimension(160, 40));
 
         cbEntity = new JComboBox<>(new String[]{
-            "Tất cả Đối tượng", "ROLES", "ACCOUNTS", "EMPLOYEES", "PRODUCTS", "ORDERS", "CUSTOMERS", "INVENTORY", "HỆ THỐNG"
+            "Tất cả Đối tượng", "ACCOUNTS", "USERS", "ROLES", "EMPLOYEES",
+            "EMPLOYEE_SHIFT_ASSIGNMENTS", "PRODUCTS", "INVENTORY", "PURCHASE_RECEIPTS",
+            "ORDERS", "CUSTOMERS", "SUPPLIERS", "PROMOTIONS", "STORES", "SYSTEM_CONFIG", "HỆ THỐNG"
         });
-        cbEntity.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        cbEntity.setPreferredSize(new Dimension(180, 40));
+        cbEntity.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        cbEntity.setPreferredSize(new Dimension(190, 40));
+
+        cbStore = new JComboBox<>(new String[]{"Tất cả Chi nhánh"});
+        cbStore.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        cbStore.setPreferredSize(new Dimension(185, 40));
 
         btnFilter = createCustomButton("Lọc dữ liệu", new Color(54, 92, 245), Color.WHITE, IconHelper.search(18));
         btnRefresh = createCustomButton("Cập nhật", new Color(23, 162, 184), Color.WHITE, IconHelper.refresh(18));
@@ -97,6 +115,8 @@ public class AuditLogPanel extends JPanel {
         filterCard.add(cbActionType);
         filterCard.add(new JLabel("Đối tượng: "));
         filterCard.add(cbEntity);
+        filterCard.add(new JLabel("Chi nhánh: "));
+        filterCard.add(cbStore);
         filterCard.add(btnFilter);
         filterCard.add(btnRefresh);
         filterCard.add(btnExport);
@@ -105,19 +125,18 @@ public class AuditLogPanel extends JPanel {
         tableCard.setLayout(new BorderLayout());
         tableCard.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // CỘT SỐ 7: LÀ CỘT ẨN DÙNG ĐỂ CHỨA DỮ LIỆU ĐẦY ĐỦ CHO POPUP
         tableModel = new DefaultTableModel(new Object[]{
-            "Thời gian", "Tài khoản", "IP Address", "Hành động", "Đối tượng", "Mã Đối tượng (ID)", "Chi tiết thay đổi", "FullDetails"
+            "Thời gian", "Chi nhánh", "Module", "Tài khoản", "IP Address",
+            "Hành động", "Đối tượng", "Mã Đối tượng", "Chi tiết thay đổi", "FullDetails"
         }, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
                 return false;
             }
         };
-        tblLogs = new JTable(tableModel);
 
-        // Giấu cột FullDetails đi, không cho hiện trên bảng chính
-        tblLogs.removeColumn(tblLogs.getColumnModel().getColumn(7));
+        tblLogs = new JTable(tableModel);
+        tblLogs.removeColumn(tblLogs.getColumnModel().getColumn(9));
 
         setupTableStyle();
 
@@ -125,6 +144,8 @@ public class AuditLogPanel extends JPanel {
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(Color.WHITE);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(24);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(18);
 
         tableCard.add(scrollPane, BorderLayout.CENTER);
 
@@ -141,6 +162,7 @@ public class AuditLogPanel extends JPanel {
         txtSearch.addActionListener(e -> applyFilter());
         cbActionType.addActionListener(e -> applyFilter());
         cbEntity.addActionListener(e -> applyFilter());
+        cbStore.addActionListener(e -> applyFilter());
         btnRefresh.addActionListener(e -> resetAndRefresh());
 
         tblLogs.addMouseListener(new MouseAdapter() {
@@ -161,61 +183,68 @@ public class AuditLogPanel extends JPanel {
         txtSearch.setText("");
         cbActionType.setSelectedIndex(0);
         cbEntity.setSelectedIndex(0);
+        cbStore.setSelectedIndex(0);
+        loadStoreFilter();
         applyFilter();
     }
 
     private void setupRealtimeSync() {
         try {
             EventBus.subscribe(AppDataChangedEvent.class, event -> {
-                SwingUtilities.invokeLater(() -> applyFilter());
+                SwingUtilities.invokeLater(() -> {
+                    loadStoreFilter();
+                    applyFilter();
+                });
             });
         } catch (Exception e) {
             System.err.println("Lỗi thiết lập real-time Audit Log: " + e.getMessage());
         }
     }
 
-    // =====================================================================
-    // NÂNG CẤP GIAO DIỆN POPUP CHI TIẾT
-    // =====================================================================
     private void showLogDetailDialog() {
         int row = tblLogs.getSelectedRow();
         if (row < 0) {
             return;
         }
 
-        // Chuyển đổi index dòng từ View sang Model (Bắt buộc vì ta đã giấu cột)
         int modelRow = tblLogs.convertRowIndexToModel(row);
 
-        String time = tableModel.getValueAt(modelRow, 0).toString();
-        String user = tableModel.getValueAt(modelRow, 1).toString();
-        String ip = tableModel.getValueAt(modelRow, 2).toString();
-        String action = tableModel.getValueAt(modelRow, 3).toString();
-        String entity = tableModel.getValueAt(modelRow, 4).toString();
-        String entityId = tableModel.getValueAt(modelRow, 5).toString();
-
-        // Lấy chuỗi FullDetails từ cột ẩn số 7 thay vì cột 6
-        String fullDetails = tableModel.getValueAt(modelRow, 7).toString();
+        String time = textAt(modelRow, 0);
+        String store = textAt(modelRow, 1);
+        String module = textAt(modelRow, 2);
+        String user = textAt(modelRow, 3);
+        String ip = textAt(modelRow, 4);
+        String action = textAt(modelRow, 5);
+        String entity = textAt(modelRow, 6);
+        String entityId = textAt(modelRow, 7);
+        String fullDetails = textAt(modelRow, 9);
 
         JPanel panel = new JPanel(new BorderLayout(10, 15));
-        panel.setPreferredSize(new Dimension(600, 450));
+        panel.setPreferredSize(new Dimension(720, 500));
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        StoreColor storeColor = getStoreColor(extractStoreId(store));
 
         StringBuilder html = new StringBuilder("<html><body style='font-family:Segoe UI; font-size:11pt;'>");
         html.append("<h2 style='color:#365CF5; margin-bottom:5px;'>Thông Tin Chi Tiết Giao Dịch</h2>");
         html.append("<hr color='#E2E8F0'>");
         html.append("<table width='100%' cellpadding='5'>");
-        html.append("<tr><td width='120'><b>⌚ Thời gian:</b></td><td>").append(time).append("</td></tr>");
-        html.append("<tr><td><b>👤 Tài khoản:</b></td><td><span style='color:#E63946; font-weight:bold;'>").append(user).append("</span></td></tr>");
-        html.append("<tr><td><b>🌐 Địa chỉ IP:</b></td><td>").append(ip).append("</td></tr>");
-        html.append("<tr><td><b>⚡ Hành động:</b></td><td>").append(action).append("</td></tr>");
-        html.append("<tr><td><b>📦 Đối tượng:</b></td><td>").append(entity).append(" (Mã: ").append(entityId).append(")</td></tr>");
+        html.append("<tr><td width='150'><b>⌚ Thời gian:</b></td><td>").append(escapeHtml(time)).append("</td></tr>");
+        html.append("<tr><td><b>🏬 Chi nhánh:</b></td><td><span style='background:#")
+                .append(hex(storeColor.bg)).append("; color:#").append(hex(storeColor.fg))
+                .append("; font-weight:bold;'> ").append(escapeHtml(store)).append(" </span></td></tr>");
+        html.append("<tr><td><b>🧩 Module:</b></td><td>").append(escapeHtml(module)).append("</td></tr>");
+        html.append("<tr><td><b>👤 Tài khoản:</b></td><td><span style='color:#E63946; font-weight:bold;'>").append(escapeHtml(user)).append("</span></td></tr>");
+        html.append("<tr><td><b>🌐 Địa chỉ IP:</b></td><td>").append(escapeHtml(ip)).append("</td></tr>");
+        html.append("<tr><td><b>⚡ Hành động:</b></td><td>").append(escapeHtml(action)).append("</td></tr>");
+        html.append("<tr><td><b>📦 Đối tượng:</b></td><td>").append(escapeHtml(entity)).append(" (Mã: ").append(escapeHtml(entityId)).append(")</td></tr>");
         html.append("</table><br><b>📝 Nội dung thay đổi chi tiết:</b>");
         html.append("</body></html>");
 
         JLabel lblInfo = new JLabel(html.toString());
 
-        JTextArea txtDetails = new JTextArea(fullDetails); // Hiện chuỗi FullDetails lên
+        JTextArea txtDetails = new JTextArea(fullDetails);
         txtDetails.setFont(new Font("Consolas", Font.PLAIN, 15));
         txtDetails.setLineWrap(true);
         txtDetails.setWrapStyleWord(true);
@@ -233,125 +262,185 @@ public class AuditLogPanel extends JPanel {
     }
 
     private void applyFilter() {
-        String action = cbActionType.getSelectedItem().toString();
-        String entity = cbEntity.getSelectedItem().toString();
-        String keyword = txtSearch.getText();
-        loadRealData(action, entity, keyword);
+        loadRealData(
+                String.valueOf(cbActionType.getSelectedItem()),
+                String.valueOf(cbEntity.getSelectedItem()),
+                String.valueOf(cbStore.getSelectedItem()),
+                txtSearch.getText()
+        );
     }
 
-    private String translateReadable(String text) {
-        if (text == null) {
-            return null;
+    private void loadStoreFilter() {
+        Object selected = cbStore == null ? null : cbStore.getSelectedItem();
+        if (cbStore == null) {
+            return;
         }
-        return text.replace("R_ADMIN_ALL", "Quản trị viên")
-                .replace("R_STORE_MNG", "Quản lý cửa hàng")
-                .replace("R_STAFF_SALE", "Nhân viên bán hàng")
-                .replace("R_STAFF_STOCK", "Nhân viên kho")
-                .replace("R_STAFF_VIEW_PROD", "Nhân viên kho");
+
+        cbStore.removeAllItems();
+        cbStore.addItem("Tất cả Chi nhánh");
+        ensureAuditColumns();
+
+        String sql = "SELECT DISTINCT NVL(store_id, 'CENTRAL') AS store_id, "
+                + "NVL(store_name, CASE WHEN store_id IS NULL THEN 'Trung tâm' ELSE store_id END) AS store_name "
+                + "FROM AUDIT_LOG WHERE NVL(is_deleted, 0) = 0 ORDER BY store_id";
+
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                String id = normalizeStoreId(rs.getString("store_id"));
+                String name = rs.getString("store_name");
+                if (id == null) {
+                    id = "CENTRAL";
+                }
+
+                String label = id;
+                if (name != null && !name.trim().isEmpty() && !name.trim().equalsIgnoreCase(id)) {
+                    label = id + " - " + name.trim().replace(id + " - ", "");
+                }
+
+                cbStore.addItem(label);
+                getStoreColor(id);
+            }
+
+        } catch (Exception e) {
+            cbStore.addItem("CENTRAL - Trung tâm");
+        }
+
+        if (selected != null) {
+            cbStore.setSelectedItem(selected);
+        }
+        if (cbStore.getSelectedItem() == null) {
+            cbStore.setSelectedIndex(0);
+        }
     }
 
-    private void loadRealData(String actionFilter, String entityFilter, String searchKeyword) {
+    private void loadRealData(String actionFilter, String entityFilter, String storeFilter, String searchKeyword) {
         int selectedRow = tblLogs.getSelectedRow();
         tableModel.setRowCount(0);
+        ensureAuditColumns();
 
-        // 🔥 CHỈ LẤY CÁC LOG KHÔNG PHẢI LÀ ĐĂNG NHẬP/ĐĂNG XUẤT
-        StringBuilder sql = new StringBuilder(
-                "SELECT TO_CHAR(a.CREATED_AT, 'DD/MM/YYYY HH24:MI:SS') AS log_time, "
-                + "acc.username, a.IP_ADDRESS, a.ACTION_TYPE, a.ENTITY_TYPE, a.ENTITY_ID, "
-                + "a.NEW_VALUE, a.OLD_VALUE, a.REASON, "
-                + "(CASE "
-                + "  WHEN a.ENTITY_TYPE = 'ACCOUNTS' THEN (SELECT u.full_name FROM ACCOUNTS ac JOIN USERS u ON ac.user_id = u.user_id WHERE ac.account_id = a.ENTITY_ID) "
-                + "  WHEN a.ENTITY_TYPE = 'EMPLOYEES' THEN (SELECT employee_name FROM EMPLOYEES WHERE employee_id = a.ENTITY_ID) "
-                + "  WHEN a.ENTITY_TYPE = 'PRODUCTS' THEN (SELECT product_name FROM PRODUCTS WHERE product_id = a.ENTITY_ID) "
-                + "  WHEN a.ENTITY_TYPE = 'CUSTOMERS' THEN (SELECT customer_name FROM CUSTOMERS WHERE customer_id = a.ENTITY_ID) "
-                + "  WHEN a.ENTITY_TYPE = 'ROLES' THEN (SELECT role_name FROM ROLES WHERE role_id = a.ENTITY_ID) "
-                + "  ELSE CAST(a.ENTITY_ID AS NVARCHAR2(50)) "
-                + "END) AS target_name "
-                + "FROM AUDIT_LOG a "
-                + "LEFT JOIN ACCOUNTS acc ON a.ACCOUNT_ID = acc.ACCOUNT_ID "
-                + "WHERE a.IS_DELETED = 0 AND UPPER(a.ACTION_TYPE) NOT IN ('ĐĂNG NHẬP', 'ĐĂNG XUẤT') "
-        );
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT ")
+                .append("TO_CHAR(a.CREATED_AT, 'DD/MM/YYYY HH24:MI:SS') AS log_time, ")
+                .append("NVL(acc.username, a.account_id) AS username, ")
+                .append("NVL(a.IP_ADDRESS, 'Localhost') AS ip_address, ")
+                .append("a.ACTION_TYPE, a.ENTITY_TYPE, a.ENTITY_ID, a.NEW_VALUE, a.OLD_VALUE, a.REASON, ")
+                .append("NVL(a.STORE_ID, 'CENTRAL') AS store_id, ")
+                .append("NVL(a.STORE_NAME, CASE WHEN a.STORE_ID IS NULL THEN 'Trung tâm' ELSE a.STORE_ID END) AS store_name, ")
+                .append("NVL(a.MODULE_NAME, 'Hệ thống') AS module_name, ")
+                .append("(CASE ")
+                .append("WHEN a.ENTITY_TYPE = 'ACCOUNTS' THEN (SELECT u.full_name FROM ACCOUNTS ac JOIN USERS u ON ac.user_id = u.user_id WHERE ac.account_id = a.ENTITY_ID FETCH FIRST 1 ROWS ONLY) ")
+                .append("WHEN a.ENTITY_TYPE = 'EMPLOYEES' THEN (SELECT employee_name FROM EMPLOYEES WHERE employee_id = a.ENTITY_ID FETCH FIRST 1 ROWS ONLY) ")
+                .append("WHEN a.ENTITY_TYPE = 'PRODUCTS' THEN (SELECT product_name FROM PRODUCTS WHERE product_id = a.ENTITY_ID FETCH FIRST 1 ROWS ONLY) ")
+                .append("WHEN a.ENTITY_TYPE = 'CUSTOMERS' THEN (SELECT customer_name FROM CUSTOMERS WHERE customer_id = a.ENTITY_ID FETCH FIRST 1 ROWS ONLY) ")
+                .append("WHEN a.ENTITY_TYPE = 'ROLES' THEN (SELECT role_name FROM ROLES WHERE role_id = a.ENTITY_ID FETCH FIRST 1 ROWS ONLY) ")
+                .append("ELSE CAST(a.ENTITY_ID AS NVARCHAR2(100)) END) AS target_name ")
+                .append("FROM AUDIT_LOG a LEFT JOIN ACCOUNTS acc ON a.ACCOUNT_ID = acc.ACCOUNT_ID ")
+                .append("WHERE NVL(a.IS_DELETED, 0) = 0 ");
 
-        if (actionFilter != null && !actionFilter.equals("Tất cả Hành động")) {
-            sql.append(" AND UPPER(a.ACTION_TYPE) = '").append(actionFilter).append("' ");
+        java.util.List<Object> params = new java.util.ArrayList<>();
+
+        if (actionFilter != null && !"Tất cả Hành động".equals(actionFilter)) {
+            sql.append(" AND UPPER(a.ACTION_TYPE) = UPPER(?) ");
+            params.add(actionFilter);
         }
-        if (entityFilter != null && !entityFilter.equals("Tất cả Đối tượng")) {
-            sql.append(" AND UPPER(a.ENTITY_TYPE) = '").append(entityFilter).append("' ");
+
+        if (entityFilter != null && !"Tất cả Đối tượng".equals(entityFilter)) {
+            sql.append(" AND UPPER(a.ENTITY_TYPE) = UPPER(?) ");
+            params.add(entityFilter);
         }
+
+        String selectedStoreId = normalizeStoreId(storeFilter);
+        if (selectedStoreId != null) {
+            sql.append(" AND UPPER(NVL(a.STORE_ID, 'CENTRAL')) = UPPER(?) ");
+            params.add(selectedStoreId);
+        }
+
         if (searchKeyword != null && !searchKeyword.trim().isEmpty()) {
-            sql.append(" AND (LOWER(acc.username) LIKE LOWER('%").append(searchKeyword).append("%') ")
-                    .append(" OR a.IP_ADDRESS LIKE '%").append(searchKeyword).append("%') ");
+            sql.append(" AND (")
+                    .append("LOWER(NVL(acc.username, a.account_id)) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.IP_ADDRESS, 'Localhost')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.STORE_ID, 'CENTRAL')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.STORE_NAME, '')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.MODULE_NAME, '')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.REASON, '')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.NEW_VALUE, '')) LIKE LOWER(?) ")
+                    .append("OR LOWER(NVL(a.OLD_VALUE, '')) LIKE LOWER(?) ")
+                    .append(") ");
+            String like = "%" + searchKeyword.trim() + "%";
+            for (int i = 0; i < 8; i++) {
+                params.add(like);
+            }
         }
 
         sql.append(" ORDER BY a.CREATED_AT DESC");
 
-        try (java.sql.Connection con = common.db.DatabaseConnection.getConnection(); java.sql.PreparedStatement ps = con.prepareStatement(sql.toString()); java.sql.ResultSet rs = ps.executeQuery()) {
+        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
 
-            while (rs.next()) {
-                String time = rs.getString("log_time");
-                String user = rs.getString("username");
-                if (user == null || user.isEmpty()) {
-                    user = "Hệ thống (SYSTEM)";
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String time = rs.getString("log_time");
+                    String user = safe(rs.getString("username"), "Hệ thống (SYSTEM)");
+                    String ip = rs.getString("IP_ADDRESS");
+                    String action = rs.getString("ACTION_TYPE");
+                    String entity = rs.getString("ENTITY_TYPE");
+                    String entityId = rs.getString("ENTITY_ID");
+                    String reason = safe(rs.getString("REASON"), "Hệ thống ghi nhận tự động");
+                    String targetName = safe(rs.getString("target_name"), entityId);
+
+                    String storeId = safe(normalizeStoreId(rs.getString("store_id")), "CENTRAL");
+                    String storeName = safe(rs.getString("store_name"), storeId);
+                    String storeDisplay = storeId;
+                    if (!storeName.equalsIgnoreCase(storeId) && !storeName.startsWith(storeId + " - ")) {
+                        storeDisplay = storeId + " - " + storeName;
+                    } else if (storeName.startsWith(storeId + " - ")) {
+                        storeDisplay = storeName;
+                    }
+
+                    String moduleName = safe(rs.getString("module_name"), resolveModuleName(entity));
+                    String newValue = translateReadable(rs.getString("NEW_VALUE"));
+                    String oldValue = translateReadable(rs.getString("OLD_VALUE"));
+
+                    String details;
+                    String fullDetails;
+
+                    if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
+                        details = "Cập nhật [" + targetName + "]: " + oldValue + " sang " + newValue;
+                        fullDetails = "🏬 Chi nhánh:\n   " + storeDisplay + "\n\n"
+                                + "🧩 Module:\n   " + moduleName + "\n\n"
+                                + "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
+                                + "🔹 Dữ liệu ban đầu:\n   " + oldValue + "\n\n"
+                                + "🔹 Dữ liệu sau khi cập nhật:\n   " + newValue + "\n\n"
+                                + "💡 Lý do / Ghi chú:\n   " + reason;
+                    } else if (newValue != null && !newValue.isEmpty()) {
+                        details = action + " [" + targetName + "]: " + newValue;
+                        fullDetails = "🏬 Chi nhánh:\n   " + storeDisplay + "\n\n"
+                                + "🧩 Module:\n   " + moduleName + "\n\n"
+                                + "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
+                                + "🔹 Dữ liệu mới:\n   " + newValue + "\n\n"
+                                + "💡 Lý do / Ghi chú:\n   " + reason;
+                    } else if (oldValue != null && !oldValue.isEmpty()) {
+                        details = action + " [" + targetName + "]: " + oldValue;
+                        fullDetails = "🏬 Chi nhánh:\n   " + storeDisplay + "\n\n"
+                                + "🧩 Module:\n   " + moduleName + "\n\n"
+                                + "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
+                                + "🔹 Dữ liệu cũ:\n   " + oldValue + "\n\n"
+                                + "💡 Lý do / Ghi chú:\n   " + reason;
+                    } else {
+                        details = action + " trên [" + targetName + "]";
+                        fullDetails = "🏬 Chi nhánh:\n   " + storeDisplay + "\n\n"
+                                + "🧩 Module:\n   " + moduleName + "\n\n"
+                                + "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
+                                + "💡 Lý do / Ghi chú:\n   " + reason;
+                    }
+
+                    getStoreColor(storeId);
+                    tableModel.addRow(new Object[]{time, storeDisplay, moduleName, user, ip, action, entity, entityId, details, fullDetails});
                 }
-
-                String ip = rs.getString("IP_ADDRESS");
-                if (ip == null || ip.isEmpty()) {
-                    ip = "Localhost";
-                }
-
-                String action = rs.getString("ACTION_TYPE");
-                String entity = rs.getString("ENTITY_TYPE");
-                String entityId = rs.getString("ENTITY_ID");
-
-                String reason = rs.getString("REASON");
-                if (reason == null || reason.isEmpty()) {
-                    reason = "Hệ thống ghi nhận tự động";
-                }
-
-                String targetName = rs.getString("target_name");
-                if (targetName == null || targetName.isEmpty()) {
-                    targetName = entityId;
-                }
-
-                String newValue = translateReadable(rs.getString("NEW_VALUE"));
-                String oldValue = translateReadable(rs.getString("OLD_VALUE"));
-
-                String details = ""; // Nội dung rút gọn hiện ở Bảng
-                String fullDetails = ""; // Nội dung đầy đủ có Enter xuống dòng hiện ở Popup
-
-                if ("ROLES".equalsIgnoreCase(entity) && "CẬP NHẬT".equalsIgnoreCase(action)) {
-                    details = "Chỉnh quyền [" + targetName + "]: " + newValue;
-                    fullDetails = "🔹 Chức vụ bị tác động:\n   " + targetName + " (" + entityId + ")\n\n"
-                            + "🔹 Chi tiết thay đổi:\n   " + newValue + "\n\n"
-                            + // Hiển thị Bật/Tắt
-                            "🔹 Quyền hạn trước đó:\n   " + oldValue + "\n\n"
-                            + "💡 Ghi chú:\n   " + reason;
-
-                } else if ("CẬP NHẬT".equalsIgnoreCase(action) && oldValue != null && newValue != null) {
-                    details = "Cập nhật [" + targetName + "]: " + oldValue + " sang " + newValue;
-                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
-                            + "🔹 Dữ liệu ban đầu:\n   " + oldValue + "\n\n"
-                            + "🔹 Dữ liệu sau khi cập nhật:\n   " + newValue + "\n\n"
-                            + "💡 Lý do / Ghi chú:\n   " + reason;
-
-                } else if (newValue != null && !newValue.isEmpty()) {
-                    details = "Thêm mới [" + targetName + "]: " + newValue;
-                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
-                            + "🔹 Dữ liệu được thêm mới:\n   " + newValue + "\n\n"
-                            + "💡 Lý do / Ghi chú:\n   " + reason;
-
-                } else if (oldValue != null && !oldValue.isEmpty()) {
-                    details = "Đã xóa [" + targetName + "]: " + oldValue;
-                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
-                            + "🔹 Dữ liệu bị xóa:\n   " + oldValue + "\n\n"
-                            + "💡 Lý do / Ghi chú:\n   " + reason;
-                } else {
-                    details = "Thao tác trên [" + targetName + "]";
-                    fullDetails = "🔹 Đối tượng tác động:\n   " + targetName + " (" + entityId + ")\n\n"
-                            + "💡 Lý do / Ghi chú:\n   " + reason;
-                }
-
-                tableModel.addRow(new Object[]{time, user, ip, action, entity, entityId, details, fullDetails});
             }
 
             if (selectedRow >= 0 && selectedRow < tableModel.getRowCount()) {
@@ -366,7 +455,6 @@ public class AuditLogPanel extends JPanel {
 
     private void setupTableStyle() {
         tblLogs.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-
         tblLogs.setRowHeight(44);
         tblLogs.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         tblLogs.setShowVerticalLines(false);
@@ -384,94 +472,78 @@ public class AuditLogPanel extends JPanel {
         header.setForeground(Color.BLACK);
         header.setFont(new Font("Segoe UI", Font.BOLD, 13));
 
-        tblLogs.getColumnModel().getColumn(0).setPreferredWidth(160);
-        tblLogs.getColumnModel().getColumn(1).setPreferredWidth(150);
-        tblLogs.getColumnModel().getColumn(2).setPreferredWidth(120);
-        tblLogs.getColumnModel().getColumn(3).setPreferredWidth(130);
-        tblLogs.getColumnModel().getColumn(4).setPreferredWidth(130);
-        tblLogs.getColumnModel().getColumn(5).setPreferredWidth(150);
-        tblLogs.getColumnModel().getColumn(6).setPreferredWidth(600);
+        int[] widths = {155, 175, 160, 135, 115, 120, 125, 150, 560};
+        for (int i = 0; i < widths.length; i++) {
+            tblLogs.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
 
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(
-                    JTable table,
-                    Object value,
-                    boolean selected,
-                    boolean focus,
-                    int row,
-                    int column
-            ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, selected, focus, row, column
-                );
-
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, column);
                 label.setOpaque(true);
                 label.setBackground(new Color(243, 246, 250));
                 label.setForeground(Color.BLACK);
                 label.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-
                 return label;
             }
         };
 
         DefaultTableCellRenderer bodyRenderer = new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(
-                    JTable table,
-                    Object value,
-                    boolean selected,
-                    boolean focus,
-                    int row,
-                    int column
-            ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, selected, focus, row, column
-                );
-
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, column);
                 label.setOpaque(true);
                 label.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-                label.setFont(new Font("Segoe UI", column == 0 ? Font.BOLD : Font.PLAIN, 13));
-
-                if (column == 6) {
-                    label.setHorizontalAlignment(SwingConstants.LEFT);
-                } else {
-                    label.setHorizontalAlignment(SwingConstants.CENTER);
-                }
+                label.setFont(new Font("Segoe UI", column == 0 || column == 2 ? Font.BOLD : Font.PLAIN, 13));
+                label.setHorizontalAlignment(column == 8 ? SwingConstants.LEFT : SwingConstants.CENTER);
 
                 if (selected) {
                     label.setBackground(new Color(219, 234, 254));
                     label.setForeground(textDark);
                 } else {
                     label.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
+                    label.setForeground(column == 0 ? primaryBlue : column == 2 ? purple : Color.BLACK);
+                }
+                return label;
+            }
+        };
 
-                    if (column == 0) {
-                        label.setForeground(primaryBlue);
-                    } else {
-                        label.setForeground(Color.BLACK);
-                    }
+        DefaultTableCellRenderer storeRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, column);
+                String text = value == null ? "CENTRAL" : value.toString();
+                StoreColor color = getStoreColor(extractStoreId(text));
+
+                label.setOpaque(true);
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+                label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                label.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createEmptyBorder(6, 8, 6, 8),
+                        BorderFactory.createLineBorder(selected ? new Color(96, 165, 250) : color.border)
+                ));
+
+                if (selected) {
+                    label.setBackground(new Color(219, 234, 254));
+                    label.setForeground(textDark);
+                } else {
+                    label.setBackground(color.bg);
+                    label.setForeground(color.fg);
                 }
 
+                label.setText(shortText(text, 22));
+                label.setToolTipText(text);
                 return label;
             }
         };
 
         DefaultTableCellRenderer actionRenderer = new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(
-                    JTable table,
-                    Object value,
-                    boolean selected,
-                    boolean focus,
-                    int row,
-                    int column
-            ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table, value, selected, focus, row, column
-                );
-
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, selected, focus, row, column);
                 String action = value == null ? "" : value.toString().toUpperCase();
 
                 label.setOpaque(true);
@@ -482,7 +554,7 @@ public class AuditLogPanel extends JPanel {
                 if (selected) {
                     label.setBackground(new Color(219, 234, 254));
                     label.setForeground(textDark);
-                } else if (action.contains("THÊM")) {
+                } else if (action.contains("THÊM") || action.contains("NHẬP")) {
                     label.setBackground(softGreen);
                     label.setForeground(successGreen);
                 } else if (action.contains("CẬP NHẬT") || action.contains("UPDATE")) {
@@ -491,14 +563,16 @@ public class AuditLogPanel extends JPanel {
                 } else if (action.contains("XÓA") || action.contains("DELETE")) {
                     label.setBackground(softRed);
                     label.setForeground(dangerRed);
-                } else if (action.contains("XUẤT")) {
+                } else if (action.contains("XUẤT") || action.contains("IN")) {
                     label.setBackground(softOrange);
                     label.setForeground(warningOrange);
+                } else if (action.contains("ĐĂNG")) {
+                    label.setBackground(softPurple);
+                    label.setForeground(purple);
                 } else {
                     label.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                     label.setForeground(textDark);
                 }
-
                 return label;
             }
         };
@@ -508,13 +582,13 @@ public class AuditLogPanel extends JPanel {
             tblLogs.getColumnModel().getColumn(i).setCellRenderer(bodyRenderer);
         }
 
-        // Cột Hành động có màu riêng
-        tblLogs.getColumnModel().getColumn(3).setCellRenderer(actionRenderer);
+        tblLogs.getColumnModel().getColumn(1).setCellRenderer(storeRenderer);
+        tblLogs.getColumnModel().getColumn(5).setCellRenderer(actionRenderer);
     }
 
     private JTextField createTextField(String placeholder) {
         JTextField txt = new JTextField();
-        txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        txt.setFont(new Font("Segoe UI", Font.BOLD, 14));
         txt.putClientProperty("JTextField.placeholderText", placeholder);
         txt.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 8), new EmptyBorder(5, 10, 5, 10)));
         return txt;
@@ -547,6 +621,177 @@ public class AuditLogPanel extends JPanel {
             }
         });
         return btn;
+    }
+
+    private void ensureAuditColumns() {
+        try (Connection con = common.db.DatabaseConnection.getConnection()) {
+            addColumnIfMissing(con, "STORE_ID", "VARCHAR2(30)");
+            addColumnIfMissing(con, "STORE_NAME", "NVARCHAR2(150)");
+            addColumnIfMissing(con, "MODULE_NAME", "NVARCHAR2(100)");
+        } catch (Exception e) {
+            System.err.println("Không thể kiểm tra cột AUDIT_LOG: " + e.getMessage());
+        }
+    }
+
+    private void addColumnIfMissing(Connection con, String columnName, String columnType) {
+        String checkSql = "SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'AUDIT_LOG' AND COLUMN_NAME = ?";
+        try (PreparedStatement ps = con.prepareStatement(checkSql)) {
+            ps.setString(1, columnName.toUpperCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return;
+                }
+            }
+            try (Statement st = con.createStatement()) {
+                st.executeUpdate("ALTER TABLE AUDIT_LOG ADD (" + columnName + " " + columnType + ")");
+            }
+        } catch (Exception e) {
+            System.err.println("Bỏ qua thêm cột " + columnName + ": " + e.getMessage());
+        }
+    }
+
+    private String translateReadable(String text) {
+        if (text == null) {
+            return null;
+        }
+        return text.replace("R_ADMIN_ALL", "Quản trị viên")
+                .replace("R_STORE_MNG", "Quản lý cửa hàng")
+                .replace("R_STAFF_SALE", "Nhân viên bán hàng")
+                .replace("R_STAFF_STOCK", "Nhân viên kho")
+                .replace("R_STAFF_VIEW_PROD", "Nhân viên kho");
+    }
+
+    private String resolveModuleName(String entityType) {
+        if (entityType == null) {
+            return "Hệ thống";
+        }
+        String e = entityType.toUpperCase();
+        if (e.contains("ACCOUNT") || e.contains("ROLE") || e.contains("USER")) {
+            return "Tài khoản & phân quyền";
+        }
+        if (e.contains("EMPLOYEE") || e.contains("SHIFT")) {
+            return "Nhân viên & phân ca";
+        }
+        if (e.contains("PRODUCT") || e.contains("INVENTORY") || e.contains("PURCHASE") || e.contains("SUPPLIER")) {
+            return "Kho hàng";
+        }
+        if (e.contains("ORDER") || e.contains("INVOICE") || e.contains("SALE")) {
+            return "Bán hàng";
+        }
+        if (e.contains("CUSTOMER")) {
+            return "Khách hàng";
+        }
+        if (e.contains("PROMOTION") || e.contains("VOUCHER")) {
+            return "Khuyến mãi";
+        }
+        if (e.contains("STORE")) {
+            return "Chi nhánh";
+        }
+        return "Hệ thống";
+    }
+
+    private StoreColor getStoreColor(String storeId) {
+        String key = normalizeStoreId(storeId);
+        if (key == null) {
+            key = "CENTRAL";
+        }
+
+        StoreColor cached = storeColorMap.get(key.toUpperCase());
+        if (cached != null) {
+            return cached;
+        }
+
+        StoreColor color;
+        if ("CENTRAL".equalsIgnoreCase(key)) {
+            color = new StoreColor(new Color(243, 232, 255), new Color(109, 40, 217), new Color(196, 181, 253));
+        } else {
+            Color[] bg = {
+                new Color(219, 234, 254), new Color(220, 252, 231), new Color(255, 237, 213),
+                new Color(254, 226, 226), new Color(224, 242, 254), new Color(237, 233, 254),
+                new Color(204, 251, 241), new Color(254, 249, 195)
+            };
+            Color[] fg = {
+                new Color(30, 64, 175), new Color(22, 101, 52), new Color(154, 52, 18),
+                new Color(153, 27, 27), new Color(3, 105, 161), new Color(91, 33, 182),
+                new Color(15, 118, 110), new Color(133, 77, 14)
+            };
+            Color[] border = {
+                new Color(147, 197, 253), new Color(134, 239, 172), new Color(253, 186, 116),
+                new Color(252, 165, 165), new Color(125, 211, 252), new Color(196, 181, 253),
+                new Color(94, 234, 212), new Color(253, 224, 71)
+            };
+            int idx = Math.abs(key.toUpperCase().hashCode()) % bg.length;
+            color = new StoreColor(bg[idx], fg[idx], border[idx]);
+        }
+
+        storeColorMap.put(key.toUpperCase(), color);
+        return color;
+    }
+
+    private String extractStoreId(String storeDisplay) {
+        String value = normalizeStoreId(storeDisplay);
+        return value == null ? "CENTRAL" : value;
+    }
+
+    private String normalizeStoreId(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        String text = value.trim();
+        if ("null".equalsIgnoreCase(text)
+                || "Tất cả Chi nhánh".equalsIgnoreCase(text)
+                || "Tất cả chi nhánh".equalsIgnoreCase(text)
+                || "Chưa xác định".equalsIgnoreCase(text)) {
+            return null;
+        }
+        if (text.contains(" - ")) {
+            return text.substring(0, text.indexOf(" - ")).trim();
+        }
+        return text;
+    }
+
+    private String textAt(int modelRow, int col) {
+        Object value = tableModel.getValueAt(modelRow, col);
+        return value == null ? "" : value.toString();
+    }
+
+    private String safe(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private String shortText(String text, int max) {
+        if (text == null || text.length() <= max) {
+            return text == null ? "" : text;
+        }
+        return text.substring(0, max - 3) + "...";
+    }
+
+    private String escapeHtml(String input) {
+        if (input == null) {
+            return "";
+        }
+        return input.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    private String hex(Color color) {
+        return String.format("%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    static class StoreColor {
+
+        Color bg;
+        Color fg;
+        Color border;
+
+        StoreColor(Color bg, Color fg, Color border) {
+            this.bg = bg;
+            this.fg = fg;
+            this.border = border;
+        }
     }
 
     class RoundedPanel extends JPanel {
