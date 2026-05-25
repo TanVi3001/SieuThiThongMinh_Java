@@ -1,5 +1,6 @@
 package common.report;
 
+import business.service.RolePermissionService;
 import common.db.DatabaseConnection;
 import java.awt.BorderLayout;
 import java.awt.Dialog;
@@ -41,6 +42,16 @@ public class ReportViewer extends JFrame {
     }
 
     public static void showReport(String reportPath, Map<String, Object> parameters) {
+        if (!RolePermissionService.canExport()) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Bạn không có quyền Xuất file / Xuất báo cáo!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         SwingUtilities.invokeLater(() -> {
             ReportViewer viewer = new ReportViewer(reportPath, parameters);
             viewer.setVisible(true);
