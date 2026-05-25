@@ -13,6 +13,8 @@ import java.util.List;
 
 public class LoginHistorySql implements SqlInterface<LoginHistory> {
 
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.loginHistory");
+
     public static LoginHistorySql getInstance() {
         return new LoginHistorySql();
     }
@@ -26,7 +28,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String resolvedAccountId = resolveAccountIdForHistory(h);
 
         if (resolvedAccountId == null || resolvedAccountId.trim().isEmpty()) {
-            System.err.println("[LoginHistory] Bo qua ghi log vi ACCOUNT_ID null. "
+            debug("[LoginHistory] Bo qua ghi log vi ACCOUNT_ID null. "
                     + "Action=" + h.getActionType()
                     + ", Status=" + h.getStatus()
                     + ", Reason=" + h.getFailureReason());
@@ -78,8 +80,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String resolvedAccountId = resolveAccountIdForHistory(h);
 
         if (resolvedAccountId == null || resolvedAccountId.trim().isEmpty()) {
-            System.err.println("[LoginHistory] Bo qua update log vi ACCOUNT_ID null. "
-                    + "LogId=" + h.getLogId());
+            debug("[LoginHistory] Bo qua update log vi ACCOUNT_ID null. LogId=" + h.getLogId());
             return 0;
         }
 
@@ -273,22 +274,26 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         }
     }
 
-    public void log(String accountId, String actionType, String status, String reason, String ip, String device) {
-        LoginHistory h = new LoginHistory();
+    public int log(String accountId,
+            String actionType,
+            String status,
+            String failureReason,
+            String ipAddress,
+            String deviceInfo) {
 
+        LoginHistory h = new LoginHistory();
         h.setAccountId(accountId);
         h.setActionType(actionType);
         h.setStatus(status);
-        h.setFailureReason(reason);
-        h.setIpAddress(ip);
-        h.setDeviceInfo(device);
+        h.setFailureReason(failureReason);
+        h.setIpAddress(ipAddress);
+        h.setDeviceInfo(deviceInfo);
 
-        insert(h);
+        return insert(h);
     }
 
     private LoginHistory map(ResultSet rs) throws SQLException {
         LoginHistory h = new LoginHistory();
-
         h.setLogId(rs.getString("LOG_ID"));
         h.setAccountId(rs.getString("ACCOUNT_ID"));
         h.setActionType(rs.getString("ACTION_TYPE"));
@@ -298,40 +303,64 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         h.setStatus(rs.getString("STATUS"));
         h.setFailureReason(rs.getString("FAILURE_REASON"));
         h.setIsDeleted(rs.getInt("IS_DELETED"));
-
         return h;
     }
 
     private String resolveAccountIdForHistory(LoginHistory h) {
-        if (h != null && h.getAccountId() != null && !h.getAccountId().trim().isEmpty()) {
-            return h.getAccountId().trim();
+        String accountId = trimOrNull(h.getAccountId());
+
+        if (accountId != null) {
+            return accountId;
         }
 
-        try {
-            if (business.service.SessionManager.getCurrentUser() != null
-                    && business.service.SessionManager.getCurrentUser().getAccountId() != null
-                    && !business.service.SessionManager.getCurrentUser().getAccountId().trim().isEmpty()) {
-                return business.service.SessionManager.getCurrentUser().getAccountId().trim();
+        String username = trimOrNull(h.getUsername());
+        if (username == null) {
+            return null;
+        }
+
+        String sql = "SELECT account_id FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0 FETCH FIRST 1 ROWS ONLY";
+
+        try (
+                Connection con = DatabaseConnection.getConnection();
+                PreparedStatement pst = con.prepareStatement(sql)
+        ) {
+            pst.setString(1, username);
+
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    return trimOrNull(rs.getString("account_id"));
+                }
             }
-        } catch (Exception ignored) {
+
+        } catch (SQLException e) {
+            System.err.println("[LoginHistory] Resolve account failed:");
+            e.printStackTrace();
         }
 
         return null;
     }
 
-    private String fallback(String value, String defaultValue) {
-        if (value == null || value.trim().isEmpty()) {
-            return defaultValue;
+    private String makeLogId(String input) {
+        String id = trimOrNull(input);
+        if (id != null) {
+            return id;
         }
 
-        return value.trim();
+        return "LG" + System.currentTimeMillis() + (int) (Math.random() * 1000);
     }
 
-    private String makeLogId(String currentLogId) {
-        if (currentLogId != null && !currentLogId.trim().isEmpty()) {
-            return currentLogId.trim();
-        }
+    private String fallback(String value, String defaultValue) {
+        String v = trimOrNull(value);
+        return v == null ? defaultValue : v;
+    }
 
-        return "LH" + System.currentTimeMillis();
+    private String trimOrNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private static void debug(String message) {
+        if (DEBUG_LOG) {
+            System.out.println(message);
+        }
     }
 }
