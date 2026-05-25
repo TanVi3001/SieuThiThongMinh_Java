@@ -45,7 +45,14 @@ public final class RolePermissionService {
             return false;
         }
 
-        String sql = "SELECT " + columnName + " AS allowed "
+        /*
+         * ROLES can contain more than one row for the same role_id because older
+         * scripts linked roles to function_id. Do not read a random first row.
+         * Permission matrix behavior must be strict: if any active row of this
+         * role has the permission disabled, the whole role is locked for that
+         * action.
+         */
+        String sql = "SELECT MIN(NVL(" + columnName + ", 0)) AS allowed "
                 + "FROM ROLES "
                 + "WHERE role_id = ? "
                 + "AND NVL(is_deleted, 0) = 0";
@@ -56,7 +63,10 @@ public final class RolePermissionService {
             ps.setString(1, roleId);
 
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt("allowed") == 1;
+                if (!rs.next()) {
+                    return false;
+                }
+                return rs.getInt("allowed") == 1;
             }
         } catch (Exception e) {
             System.err.println("[RolePermissionService] Cannot read permission: " + e.getMessage());
