@@ -31,10 +31,10 @@ public class CustomerView extends JPanel {
     private final Color cardWhite = Color.WHITE;
     private final Color primaryBlue = new Color(54, 92, 245);
     private final Color textDark = new Color(43, 54, 116);
-    private final Color textGray = new Color(130, 140, 160);
+    private final Color textGray = new Color(75, 85, 110);
     private final Color borderGray = new Color(230, 235, 241);
 
-    private final Color zebraBg = new Color(249, 251, 253);
+    private final Color zebraBg = new Color(246, 248, 252);
     private final Color selectedBg = new Color(219, 234, 254);
 
     private JTextField txtId, txtName, txtPhone, txtEmail, txtAddress;
@@ -211,7 +211,7 @@ public class CustomerView extends JPanel {
         JLabel lblSub = new JLabel(
                 "Quản lý hồ sơ khách hàng toàn hệ thống; chi nhánh nào cũng có thể tra SĐT để áp hạng/voucher"
         );
-        lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        lblSub.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblSub.setForeground(textGray);
 
         titlePanel.add(lblTitle);
@@ -227,7 +227,7 @@ public class CustomerView extends JPanel {
         searchFieldWrapper.setBackground(Color.WHITE);
         searchFieldWrapper.setPreferredSize(new Dimension(460, 45));
         searchFieldWrapper.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(new Color(220, 225, 235), 25),
+                new RoundBorder(new Color(203, 213, 225), 25),
                 new EmptyBorder(0, 15, 0, 15)
         ));
 
@@ -342,7 +342,7 @@ public class CustomerView extends JPanel {
     }
 
     private void setupTableStyle() {
-        tblCustomers.setRowHeight(38);
+        tblCustomers.setRowHeight(42);
         tblCustomers.setFont(new Font("Segoe UI", Font.BOLD, 14));
         tblCustomers.setShowVerticalLines(false);
         tblCustomers.setShowHorizontalLines(false);
@@ -352,11 +352,11 @@ public class CustomerView extends JPanel {
         tblCustomers.setFillsViewportHeight(true);
 
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
-        headerRenderer.setBackground(bgLight);
-        headerRenderer.setForeground(Color.BLACK);
-        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        headerRenderer.setBackground(new Color(238, 242, 247));
+        headerRenderer.setForeground(new Color(15, 23, 42));
+        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 15));
         headerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        headerRenderer.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
+        headerRenderer.setBorder(BorderFactory.createEmptyBorder(11, 6, 11, 6));
 
         for (int i = 0; i < tblCustomers.getColumnModel().getColumnCount(); i++) {
             tblCustomers.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
@@ -787,11 +787,11 @@ public class CustomerView extends JPanel {
         cb.setEditable(true);
         cb.setBorder(null);
         cb.setBackground(Color.WHITE);
-        cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cb.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
         JTextField editor = (JTextField) cb.getEditor().getEditorComponent();
         editor.setBorder(new EmptyBorder(0, 5, 0, 5));
-        editor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        editor.setFont(new Font("Segoe UI", Font.BOLD, 14));
         editor.putClientProperty("JTextField.placeholderText", "Tìm theo tên, mã, SĐT, email...");
     }
 
@@ -852,7 +852,7 @@ public class CustomerView extends JPanel {
 
     private JLabel createLabel(String text) {
         JLabel lbl = new JLabel(text);
-        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lbl.setForeground(textDark);
 
         return lbl;
@@ -861,11 +861,11 @@ public class CustomerView extends JPanel {
     private JTextField createTextField(String placeholder) {
         JTextField txt = new JTextField();
         txt.setPreferredSize(new Dimension(200, 40));
-        txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        txt.setFont(new Font("Segoe UI", Font.BOLD, 14));
         txt.putClientProperty("JTextField.placeholderText", placeholder);
         txt.setBackground(Color.WHITE);
         txt.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(borderGray, 10),
+                new RoundBorder(new Color(210, 218, 230), 10),
                 new EmptyBorder(6, 12, 6, 12)
         ));
 
@@ -880,7 +880,7 @@ public class CustomerView extends JPanel {
             btn.setIconTextGap(8);
         }
 
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setForeground(fg);
         btn.setBackground(bg);
         btn.setPreferredSize(new Dimension(140, 45));
@@ -933,8 +933,8 @@ public class CustomerView extends JPanel {
 
             setOpaque(true);
             setBorder(new EmptyBorder(0, 10, 0, 10));
-            setFont(new Font("Segoe UI", Font.PLAIN, 14));
-            setForeground(new Color(30, 41, 59));
+            setFont(new Font("Segoe UI", Font.BOLD, 14));
+            setForeground(new Color(15, 23, 42));
 
             if (isSelected) {
                 setBackground(selectedBg);
@@ -953,7 +953,7 @@ public class CustomerView extends JPanel {
 
                 String rank = normalizeRank(value == null ? "" : value.toString());
                 setText(rank);
-                setFont(new Font("Segoe UI", Font.BOLD, 13));
+                setFont(new Font("Segoe UI", Font.BOLD, 14));
                 setForeground(getRankFg(rank));
                 setBackground(isSelected ? selectedBg : getRankBg(rank));
 
