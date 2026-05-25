@@ -12,31 +12,29 @@ import java.awt.Window;
 
 public class SecurityGuard {
 
-    // 🌟 GLOBAL GUARD FLAG: Cờ khóa chống gọi Logout nhiều lần (Chống 2 app, 2 popup)
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.security");
+
+    // GLOBAL GUARD FLAG: Cờ khóa chống gọi Logout nhiều lần
     private static volatile boolean isProcessingLogout = false;
 
-    // 👉 THÊM VÀO: Hàm để các file khác có thể ĐỌC được trạng thái cờ
     public static boolean isProcessingLogout() {
         return isProcessingLogout;
     }
 
-    // 👉 ĐÃ SỬA: Hàm để các file khác có thể ĐỔI trạng thái cờ (Xóa cái ném lỗi của IDE đi)
     public static void setProcessingLogout(boolean value) {
         isProcessingLogout = value;
     }
 
     public static void attach(JPanel view) {
-        // Reset cờ mỗi khi gắn guard mới (lúc login vào)
         isProcessingLogout = false;
 
         EventBus.subscribe(AppDataChangedEvent.class, event -> {
-            // Nếu đang trong quá trình văng acc rồi thì bỏ qua mọi event khác
-            if (isProcessingLogout) {
+            if (isProcessingLogout || event == null || event.getType() == null) {
                 return;
             }
 
             if (event.getType() == AppEventType.ACCOUNT_SECURITY) {
-                System.out.println("🛡️ [SecurityGuard] Bắt được tín hiệu WebSocket đổi quyền!");
+                debug("[SecurityGuard] ACCOUNT_SECURITY received");
                 verifyCurrentSession(view);
             }
         });
@@ -58,7 +56,6 @@ public class SecurityGuard {
         }
 
         String accId = currentUser.getAccountId();
-
         String currentRole = business.service.SessionManager.getCurrentRole();
 
         if (currentRole == null || currentRole.trim().isEmpty()) {
@@ -91,11 +88,7 @@ public class SecurityGuard {
                 if (!isActive || roleChanged) {
                     if (!isProcessingLogout) {
                         isProcessingLogout = true;
-
-                        System.out.println("🛡️ [SecurityGuard] 🚨 PHÁT HIỆN ĐỔI QUYỀN");
-                        System.out.println("🛡️ [SecurityGuard] currentRole=" + finalCurrentRole + ", dbRoleId=" + dbRoleId);
-                        System.out.println("🛡️ [SecurityGuard] -> KICK USER");
-
+                        debug("[SecurityGuard] KICK USER currentRole=" + finalCurrentRole + ", dbRoleId=" + dbRoleId);
                         SwingUtilities.invokeLater(() -> forceLogout(view));
                     }
                 }
@@ -133,11 +126,6 @@ public class SecurityGuard {
         } catch (Exception ignored) {
         }
 
-        /*
-     * QUAN TRỌNG:
-     * Không chỉ dispose window ancestor của panel.
-     * Phải đóng toàn bộ JFrame dashboard đang mở để tránh Warehouse Portal còn nằm phía sau.
-         */
         try {
             for (Window w : Window.getWindows()) {
                 if (w == null) {
@@ -156,9 +144,6 @@ public class SecurityGuard {
         }
 
         SwingUtilities.invokeLater(() -> {
-            /*
-         * Nếu đã có LoginView đang mở thì chỉ focus lại, không tạo thêm.
-             */
             for (Window w : Window.getWindows()) {
                 if (w instanceof LoginView && w.isDisplayable()) {
                     w.setVisible(true);
@@ -192,7 +177,6 @@ public class SecurityGuard {
             }
 
             String dbRoleId = latestData[4];
-
             String currentRole = business.service.SessionManager.getCurrentRole();
 
             if (dbRoleId == null || currentRole == null) {
@@ -204,6 +188,12 @@ public class SecurityGuard {
         } catch (Exception e) {
             System.err.println("[SecurityGuard] Cannot check current role: " + e.getMessage());
             return false;
+        }
+    }
+
+    private static void debug(String message) {
+        if (DEBUG_LOG) {
+            System.out.println(message);
         }
     }
 }
