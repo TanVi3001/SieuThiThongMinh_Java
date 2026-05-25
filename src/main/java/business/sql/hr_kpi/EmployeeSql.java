@@ -13,6 +13,8 @@ import model.employee.Employee;
 
 public class EmployeeSql implements SqlInterface<Employee> {
 
+    private static final int WRITE_QUERY_TIMEOUT_SECONDS = 5;
+
     public static EmployeeSql getInstance() {
         return new EmployeeSql();
     }
@@ -30,6 +32,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             con.setAutoCommit(false);
             try {
+                pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
                 String roleId = (t.getRoleId() != null && !t.getRoleId().isEmpty()) ? t.getRoleId() : t.getRole();
                 pst.setString(1, t.getEmployeeId());
                 pst.setString(2, t.getEmployeeName());
@@ -71,8 +74,10 @@ public class EmployeeSql implements SqlInterface<Employee> {
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             con.setAutoCommit(false);
             try {
+                pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
                 String oldName = null, oldPhone = null, oldEmail = null, oldRole = null, oldGender = null;
                 try (PreparedStatement psOld = con.prepareStatement(sqlOld)) {
+                    psOld.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
                     psOld.setString(1, t.getEmployeeId());
                     try (ResultSet rs = psOld.executeQuery()) {
                         if (rs.next()) {
@@ -132,27 +137,39 @@ public class EmployeeSql implements SqlInterface<Employee> {
 
     @Override
     public int delete(String id) {
-        String sql = "UPDATE EMPLOYEES SET is_deleted = 1 WHERE employee_id = ? AND is_deleted = 0";
+        if (!RolePermissionService.canDelete()) {
+            System.err.println("[EmployeeSql] Permission denied: delete employee");
+            return 0;
+        }
+
+        String sql = "UPDATE EMPLOYEES SET is_deleted = 1 WHERE employee_id = ? AND NVL(is_deleted, 0) = 0";
+
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             con.setAutoCommit(false);
             try {
+                pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
                 pst.setString(1, id);
+
                 int rows = pst.executeUpdate();
-                if (rows > 0) {
-                    logAuditWithConn(con, "DELETE_EMPLOYEE", "EMPLOYEE", id, pair("is_deleted", 0), pair("is_deleted", 1), "Xoa mem nhan vien");
-                }
                 con.commit();
+
+                // Không ghi audit trong cùng transaction xóa để tránh kẹt UI khi bảng log/trigger bị lock.
+                // Nếu cần audit chi tiết, nên ghi async ở service riêng sau khi xóa đã commit.
                 return rows;
-            } catch (Exception e) {
-                System.err.println("=== LỖI KHI XÓA NHÂN VIÊN ===");
-                e.printStackTrace();
+
+            } catch (java.sql.SQLTimeoutException e) {
                 con.rollback();
+                System.err.println("[EmployeeSql] Delete timeout after " + WRITE_QUERY_TIMEOUT_SECONDS + "s: " + e.getMessage());
+                return 0;
+            } catch (Exception e) {
+                con.rollback();
+                System.err.println("=== LỖI KHI XÓA NHÂN VIÊN === " + e.getMessage());
                 return 0;
             } finally {
                 con.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            System.err.println("[EmployeeSql] Delete connection error: " + e.getMessage());
             return 0;
         }
     }
@@ -241,6 +258,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
     public int updateCompletedOrders(String employeeId, int count) {
         String sql = "UPDATE EMPLOYEES SET total_completed_orders = ? WHERE employee_id = ? AND is_deleted = 0";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
             pst.setInt(1, count);
             pst.setString(2, employeeId);
             return pst.executeUpdate();
@@ -484,6 +502,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
         String sql = "UPDATE EMPLOYEES SET employee_name = ?, phone = ?, email = ?, role_id = ?, gender = ?, store_id = ? "
                 + "WHERE employee_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
             String roleId = (t.getRoleId() != null && !t.getRoleId().isEmpty()) ? t.getRoleId() : t.getRole();
             pst.setString(1, t.getEmployeeName());
             pst.setString(2, t.getPhone());
@@ -503,6 +522,7 @@ public class EmployeeSql implements SqlInterface<Employee> {
     public int deleteInStore(String employeeId, String storeId) {
         String sql = "UPDATE EMPLOYEES SET is_deleted = 1 WHERE employee_id = ? AND store_id = ? AND NVL(is_deleted, 0) = 0";
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            pst.setQueryTimeout(WRITE_QUERY_TIMEOUT_SECONDS);
             pst.setString(1, employeeId);
             pst.setString(2, storeId);
             return pst.executeUpdate();
