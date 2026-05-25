@@ -128,6 +128,7 @@ public class EmployeeView extends JPanel {
 
         initUI();
         initEvents();
+        applyPermissionMatrixToButtons();
 
         refreshAllData();
         setupRealtimeSync();
@@ -952,6 +953,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void handleUpdateEmployee() {
+        if (!RolePermissionService.canEdit()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Sửa nhân viên!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         String displayedId = txtId.getText();
         if (displayedId == null || displayedId.trim().isEmpty() || displayedId.startsWith("Mã")) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên trong bảng để cập nhật!");
@@ -1110,6 +1121,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void handleDeleteEmployee() {
+        if (!RolePermissionService.canDelete()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Xóa nhân viên!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         if (currentSelectedRawId == null || currentSelectedRawId.trim().isEmpty()) {
             return;
         }
@@ -1327,6 +1348,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void updateSelectedShiftBlockFromForm() {
+        if (!RolePermissionService.canEdit()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Sửa phân ca!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         if (selectedTimelineBlock == null && (selectedAssignmentId == null || selectedAssignmentId.isBlank())) {
             JOptionPane.showMessageDialog(
                     this,
@@ -1453,6 +1484,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void cancelShiftAssignment() {
+        if (!RolePermissionService.canEdit()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Hủy/Sửa phân ca!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         if (selectedAssignmentId == null || selectedAssignmentId.isBlank()) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một phân ca trong bảng để hủy.");
             return;
@@ -1474,6 +1515,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void deleteShiftAssignment() {
+        if (!RolePermissionService.canDelete()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Xóa lịch phân ca!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         if (selectedTimelineBlock == null && (selectedAssignmentId == null || selectedAssignmentId.isBlank())) {
             JOptionPane.showMessageDialog(
                     this,
@@ -1842,6 +1893,16 @@ public class EmployeeView extends JPanel {
     }
 
     private void showNewShiftDialogFromTimelineCell(String employeeId, LocalDate date, int clickedHour) {
+        if (!RolePermissionService.canAdd()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền Thêm phân ca!",
+                    "Từ chối quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
         if (employeeId == null || date == null) {
             return;
         }
@@ -1939,6 +2000,16 @@ public class EmployeeView extends JPanel {
         btnCancel.setPreferredSize(new Dimension(100, 42));
 
         btnSave.addActionListener(e -> {
+            if (!RolePermissionService.canAdd()) {
+                JOptionPane.showMessageDialog(
+                        dialog,
+                        "Bạn không có quyền Thêm phân ca!",
+                        "Từ chối quyền",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
             EmployeeOption employeeOption = (EmployeeOption) dlgEmployee.getSelectedItem();
             ShiftOption shiftOption = (ShiftOption) dlgShift.getSelectedItem();
 
