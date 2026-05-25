@@ -9,14 +9,11 @@ import common.realtime.RealtimeClient;
 
 public class AccountService {
 
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.account");
+
     private AccountService() {
     }
 
-    /**
-     * Ghi audit log cho hành động đổi role user. Sau khi đổi role phải bắn
-     * ACCOUNT_SECURITY_CHANGED để máy user đang online tự kiểm tra quyền và
-     * logout nếu role bị đổi.
-     */
     public static void logChangeRole(String targetAccountId, String oldRole, String newRole, String reason) {
         String actorId = SessionManager.getCurrentUser() != null
                 ? SessionManager.getCurrentUser().getAccountId()
@@ -37,11 +34,6 @@ public class AccountService {
         notifyAccountSecurityChanged("ROLE_CHANGED");
     }
 
-    /**
-     * Set trạng thái ONLINE/OFFLINE ở bảng ACCOUNTS. Lưu ý: trạng thái hiển thị
-     * số phiên online thật nên lấy từ ACCOUNT_SESSIONS. Hàm này chỉ giữ tương
-     * thích cho các màn cũ còn đọc ONLINE_STATUS.
-     */
     public static boolean updateOnlineStatus(String accountId, String onlineStatus) {
         accountId = clean(accountId);
 
@@ -55,7 +47,7 @@ public class AccountService {
 
         if (ok) {
             notifyOnlineStatusChanged("ONLINE_STATUS_CHANGED");
-            System.out.println("[AccountService] Account " + accountId + " -> " + status);
+            debug("[AccountService] Account " + accountId + " -> " + status);
         }
 
         return ok;
@@ -69,11 +61,6 @@ public class AccountService {
         return updateOnlineStatus(accountId, "OFFLINE");
     }
 
-    /**
-     * Login thành công theo logic mới: - Tạo/cập nhật một dòng trong
-     * ACCOUNT_SESSIONS. - Mỗi cửa sổ app có một sessionId riêng. - Không kick
-     * phiên cũ khi Manager/Admin đăng nhập nhiều thiết bị.
-     */
     public static void onLoginSuccess(String accountId, String sessionId) {
         accountId = clean(accountId);
         sessionId = clean(sessionId);
@@ -97,20 +84,11 @@ public class AccountService {
         }
     }
 
-    /**
-     * Giữ hàm cũ để code cũ gọi không bị lỗi. Nếu không truyền sessionId thì
-     * lấy session hiện tại từ SessionManager.
-     */
     public static void onLoginSuccess(String accountId) {
         String sessionId = SessionManager.getCurrentSessionId();
         onLoginSuccess(accountId, sessionId);
     }
 
-    /**
-     * Logout hoặc đóng app theo logic mới: - Đóng đúng session hiện tại trong
-     * ACCOUNT_SESSIONS. - Không làm sai số phiên còn lại nếu tài khoản đang mở
-     * nhiều cửa sổ.
-     */
     public static void onLogoutOrCloseApp(String accountId, String sessionId) {
         accountId = clean(accountId);
         sessionId = clean(sessionId);
@@ -126,10 +104,6 @@ public class AccountService {
                 accountSql.closeLoginSession(accountId, sessionId);
             }
 
-            /*
-             * Giữ lại để các màn cũ còn dùng ACTIVE_SESSIONS không bị quá bẩn.
-             * Nhưng UI online chuẩn nên đọc từ ACCOUNT_SESSIONS.
-             */
             try {
                 accountSql.decreaseActiveSession(accountId);
             } catch (Exception ignored) {
@@ -143,19 +117,11 @@ public class AccountService {
         }
     }
 
-    /**
-     * Giữ hàm cũ để code cũ gọi không bị lỗi. Sửa bug cũ: trước đây hàm này
-     * dùng biến sessionId không tồn tại.
-     */
     public static void onLogoutOrCloseApp(String accountId) {
         String sessionId = SessionManager.getCurrentSessionId();
         onLogoutOrCloseApp(accountId, sessionId);
     }
 
-    /**
-     * Heartbeat cho session hiện tại. Dùng nếu có file cũ gọi
-     * AccountService.sendHeartbeat(accountId).
-     */
     public static void sendHeartbeat(String accountId) {
         accountId = clean(accountId);
 
@@ -184,9 +150,6 @@ public class AccountService {
         }
     }
 
-    /**
-     * Dọn session chết. Logic mới không dùng resetDeadSessions() nữa.
-     */
     public static void cleanupDeadSessions() {
         try {
             AccountSql.getInstance().cleanupDeadSessions();
@@ -196,19 +159,10 @@ public class AccountService {
         }
     }
 
-    /**
-     * Legacy alias. Trước đây dùng force single session. Bây giờ chuyển sang
-     * tạo session bình thường để không đá Manager/Admin.
-     */
     public static void onLoginSuccessForceSingleSession(String accountId, String sessionId) {
         onLoginSuccess(accountId, sessionId);
     }
 
-    /**
-     * Legacy alias. Trước đây phân biệt single/multi theo role. Bây giờ mọi
-     * role đều ghi ACCOUNT_SESSIONS. Việc staff có bị kick khi đổi role/quyền
-     * sẽ do SecurityGuard xử lý.
-     */
     public static void onLoginSuccessByRole(model.account.Account acc, String sessionId) {
         if (acc == null || acc.getAccountId() == null) {
             return;
@@ -217,13 +171,6 @@ public class AccountService {
         onLoginSuccess(acc.getAccountId(), sessionId);
     }
 
-    /**
-     * Legacy method cho HeartbeatService cũ. Nếu còn file nào chưa sửa vẫn gọi
-     * hàm này thì vẫn chạy được.
-     *
-     * Logic mới: - Không check CURRENT_SESSION_ID. - Không kick phiên cũ khi
-     * login thiết bị khác. - Chỉ cập nhật heartbeat cho ACCOUNT_SESSIONS.
-     */
     public static boolean heartbeatAndCheckSession(String accountId, String sessionId) {
         accountId = clean(accountId);
         sessionId = clean(sessionId);
@@ -254,10 +201,6 @@ public class AccountService {
         }
     }
 
-    /**
-     * Bắn realtime khi đổi role/quyền/bảo mật tài khoản. SecurityGuard sẽ bắt
-     * ACCOUNT_SECURITY_CHANGED và tự kiểm tra role hiện tại.
-     */
     public static void notifyAccountSecurityChanged(String message) {
         try {
             RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
@@ -271,16 +214,13 @@ public class AccountService {
                     )
             );
 
-            System.out.println("[AccountService] Đã gửi realtime security: " + message);
+            debug("[AccountService] realtime security: " + message);
 
         } catch (Exception e) {
             System.err.println("[AccountService] Không thể gửi realtime security: " + e.getMessage());
         }
     }
 
-    /**
-     * Bắn realtime khi trạng thái online/offline thay đổi.
-     */
     private static void notifyOnlineStatusChanged(String message) {
         try {
             RealtimeClient.send("ACCOUNTS_CHANGED");
@@ -293,7 +233,7 @@ public class AccountService {
                     )
             );
 
-            System.out.println("[AccountService] Đã gửi realtime online: " + message);
+            debug("[AccountService] realtime online: " + message);
 
         } catch (Exception e) {
             System.err.println("[AccountService] Realtime online error: " + e.getMessage());
@@ -319,5 +259,11 @@ public class AccountService {
     private static String safe(String value, String fallback) {
         value = clean(value);
         return value == null ? fallback : value;
+    }
+
+    private static void debug(String message) {
+        if (DEBUG_LOG) {
+            System.out.println(message);
+        }
     }
 }
