@@ -2,9 +2,12 @@ package business.service;
 
 import common.db.DatabaseConnection;
 import model.account.Account;
+import java.awt.Window;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.UUID;
+import javax.swing.JDialog;
+import javax.swing.Timer;
 
 public class AuditLogService {
 
@@ -37,8 +40,37 @@ public class AuditLogService {
                 System.out.println("[AuditLog] Saved: " + actionType + " on " + entityType);
             }
 
+            autoHideRoleSuccessDialog(actionType, entityType);
+
         } catch (Exception e) {
             System.err.println("[AuditLog] Lỗi ghi nhật ký hệ thống: " + e.getMessage());
         }
+    }
+
+    private static void autoHideRoleSuccessDialog(String actionType, String entityType) {
+        if (!"CẬP NHẬT".equalsIgnoreCase(String.valueOf(actionType).trim())
+                || !"ACCOUNTS".equalsIgnoreCase(String.valueOf(entityType).trim())) {
+            return;
+        }
+
+        final int[] ticks = {0};
+        Timer timer = new Timer(80, null);
+        timer.addActionListener(e -> {
+            ticks[0]++;
+
+            for (Window window : Window.getWindows()) {
+                if (window instanceof JDialog dialog
+                        && dialog.isShowing()
+                        && "Thành công".equals(dialog.getTitle())) {
+                    dialog.setVisible(false);
+                }
+            }
+
+            if (ticks[0] >= 20) {
+                timer.stop();
+            }
+        });
+        timer.setRepeats(true);
+        timer.start();
     }
 }
