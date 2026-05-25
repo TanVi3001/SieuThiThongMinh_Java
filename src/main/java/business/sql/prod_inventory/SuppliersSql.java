@@ -1,5 +1,6 @@
 package business.sql.prod_inventory;
 
+import business.service.RolePermissionService;
 import common.db.DatabaseConnection;
 import model.product.Supplier;
 import business.sql.SqlInterface;
@@ -44,8 +45,9 @@ public class SuppliersSql implements SqlInterface<Supplier> {
             WHERE REGEXP_LIKE(supplier_id, '^SUP_[0-9]+$')
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
                 int nextNo = rs.getInt("next_no");
                 return String.format("SUP_%03d", nextNo);
@@ -59,6 +61,10 @@ public class SuppliersSql implements SqlInterface<Supplier> {
 
     public List<SupplierProductStat> getSupplierProductStats() {
         List<SupplierProductStat> result = new ArrayList<>();
+
+        if (!RolePermissionService.canView()) {
+            return result;
+        }
 
         String sql = """
         WITH product_supplier_link AS (
@@ -97,16 +103,15 @@ public class SuppliersSql implements SqlInterface<Supplier> {
         ORDER BY product_count DESC, total_quantity DESC, s.supplier_id
     """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 SupplierProductStat stat = new SupplierProductStat();
-
                 stat.supplierId = rs.getString("supplier_id");
                 stat.supplierName = rs.getString("supplier_name");
                 stat.productCount = rs.getInt("product_count");
                 stat.totalQuantity = rs.getInt("total_quantity");
-
                 result.add(stat);
             }
         } catch (SQLException e) {
@@ -128,6 +133,11 @@ public class SuppliersSql implements SqlInterface<Supplier> {
 
     @Override
     public int insert(Supplier t) {
+        if (!RolePermissionService.canAdd()) {
+            System.err.println("[SuppliersSql] Permission denied: add supplier");
+            return 0;
+        }
+
         if (t.getSupplierId() == null || t.getSupplierId().trim().isEmpty()) {
             t.setSupplierId(generateNextSupplierId());
         }
@@ -144,8 +154,8 @@ public class SuppliersSql implements SqlInterface<Supplier> {
             VALUES (?, ?, ?, ?, ?, 0)
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, t.getSupplierId());
             pst.setString(2, t.getSupplierName());
             pst.setString(3, t.getEmail());
@@ -165,6 +175,10 @@ public class SuppliersSql implements SqlInterface<Supplier> {
     public List<Supplier> selectAll() {
         List<Supplier> result = new ArrayList<>();
 
+        if (!RolePermissionService.canView()) {
+            return result;
+        }
+
         String sql = """
             SELECT supplier_id,
                    supplier_name,
@@ -183,8 +197,9 @@ public class SuppliersSql implements SqlInterface<Supplier> {
                 supplier_id
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql);
+             ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
                 result.add(mapResultSetToSupplier(rs));
             }
@@ -197,6 +212,11 @@ public class SuppliersSql implements SqlInterface<Supplier> {
 
     @Override
     public int update(Supplier t) {
+        if (!RolePermissionService.canEdit()) {
+            System.err.println("[SuppliersSql] Permission denied: edit supplier");
+            return 0;
+        }
+
         String sql = """
             UPDATE SUPPLIERS
             SET supplier_name = ?,
@@ -207,8 +227,8 @@ public class SuppliersSql implements SqlInterface<Supplier> {
             WHERE supplier_id = ?
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, t.getSupplierName());
             pst.setString(2, t.getEmail());
             pst.setString(3, t.getAddress());
@@ -226,14 +246,19 @@ public class SuppliersSql implements SqlInterface<Supplier> {
 
     @Override
     public int delete(String id) {
+        if (!RolePermissionService.canDelete()) {
+            System.err.println("[SuppliersSql] Permission denied: delete supplier");
+            return 0;
+        }
+
         String sql = """
             UPDATE SUPPLIERS
             SET is_deleted = 1
             WHERE supplier_id = ?
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
             return pst.executeUpdate();
 
@@ -246,6 +271,10 @@ public class SuppliersSql implements SqlInterface<Supplier> {
 
     @Override
     public Supplier selectById(String id) {
+        if (!RolePermissionService.canView()) {
+            return null;
+        }
+
         String sql = """
             SELECT supplier_id,
                    supplier_name,
@@ -258,8 +287,8 @@ public class SuppliersSql implements SqlInterface<Supplier> {
               AND NVL(is_deleted, 0) = 0
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id);
 
             try (ResultSet rs = pst.executeQuery()) {
@@ -279,6 +308,10 @@ public class SuppliersSql implements SqlInterface<Supplier> {
     public List<Supplier> selectByCondition(String condition) {
         List<Supplier> result = new ArrayList<>();
 
+        if (!RolePermissionService.canView()) {
+            return result;
+        }
+
         String sql = """
             SELECT supplier_id,
                    supplier_name,
@@ -297,8 +330,8 @@ public class SuppliersSql implements SqlInterface<Supplier> {
             ORDER BY supplier_id
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement pst = con.prepareStatement(sql)) {
             String pattern = "%" + condition + "%";
 
             pst.setString(1, pattern);
@@ -328,8 +361,8 @@ public class SuppliersSql implements SqlInterface<Supplier> {
               AND (? IS NULL OR supplier_id <> ?)
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, supplierName);
             ps.setString(2, exceptSupplierId);
             ps.setString(3, exceptSupplierId);
