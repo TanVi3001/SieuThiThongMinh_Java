@@ -355,6 +355,30 @@ public class EmployeeView extends JPanel {
         return formCard;
     }
 
+    private void applyPermissionMatrixToButtons() {
+        if (btnAdd != null) {
+            btnAdd.setEnabled(RolePermissionService.canAdd());
+        }
+        if (btnAddAssignment != null) {
+            btnAddAssignment.setEnabled(RolePermissionService.canAdd());
+        }
+        if (btnUpdate != null) {
+            btnUpdate.setEnabled(RolePermissionService.canEdit());
+        }
+        if (btnUpdateAssignment != null) {
+            btnUpdateAssignment.setEnabled(RolePermissionService.canEdit());
+        }
+        if (btnDelete != null) {
+            btnDelete.setEnabled(RolePermissionService.canDelete());
+        }
+        if (btnDeleteAssignment != null) {
+            btnDeleteAssignment.setEnabled(RolePermissionService.canDelete());
+        }
+        if (btnCancelAssignment != null) {
+            btnCancelAssignment.setEnabled(RolePermissionService.canEdit());
+        }
+    }
+
     private JPanel createEmployeeListPanel() {
         RoundedPanel tableCard = new RoundedPanel(20, cardWhite);
         tableCard.setLayout(new BorderLayout());
