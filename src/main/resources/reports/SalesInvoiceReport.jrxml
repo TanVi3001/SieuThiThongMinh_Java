@@ -12,16 +12,83 @@
     bottomMargin="25"
     whenNoDataType="AllSectionsNoDetail">
 
+    <property name="net.sf.jasperreports.default.font.name" value="Arial" />
+    <property name="net.sf.jasperreports.default.pdf.font.name" value="C:/Windows/Fonts/arial.ttf" />
+    <property name="net.sf.jasperreports.default.pdf.encoding" value="Identity-H" />
+    <property name="net.sf.jasperreports.default.pdf.embedded" value="true" />
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle" />
 
-    <style name="Base" fontName="SansSerif" fontSize="10" forecolor="#1F2937" />
-    <style name="SmallMuted" style="Base" fontSize="8" forecolor="#6B7280" />
-    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#374151" />
-    <style name="SectionTitle" style="Base" fontSize="10" isBold="true" forecolor="#0F172A" />
-    <style name="TableHeader" style="Base" fontSize="9" isBold="true" forecolor="#FFFFFF"
-        backcolor="#0F766E" mode="Opaque" />
-    <style name="TableCell" style="Base" fontSize="9" />
-    <style name="Money" style="TableCell" />
+    <style name="BaseStyle"
+        isDefault="true"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+
+<style name="Base"
+        fontName="Arial"
+        fontSize="10"
+        forecolor="#1F2937"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="SmallMuted"
+        style="Base"
+        fontSize="8"
+        forecolor="#6B7280"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="Label"
+        style="Base"
+        fontSize="9"
+        isBold="true"
+        forecolor="#374151"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="SectionTitle"
+        style="Base"
+        fontSize="10"
+        isBold="true"
+        forecolor="#0F766E"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="TableHeader"
+        style="Base"
+        fontSize="9"
+        isBold="true"
+        forecolor="#FFFFFF"
+        backcolor="#0F766E"
+        mode="Opaque"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="TableCell"
+        style="Base"
+        fontSize="9"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
+
+    <style name="Money"
+        style="TableCell"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
 
     <parameter name="ORDER_ID" class="java.lang.String">
         <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
@@ -232,7 +299,9 @@ ORDER BY ol.order_detail_id
             <staticText>
                 <reportElement x="18" y="31" width="50" height="18" forecolor="#0F766E" />
                 <textElement textAlignment="Center" verticalAlignment="Middle">
-                    <font size="9" isBold="true" />
+                    <font size="9" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[LOGO]]></text>
             </staticText>
@@ -240,7 +309,9 @@ ORDER BY ol.order_detail_id
             <staticText>
                 <reportElement x="82" y="16" width="245" height="25" forecolor="#FFFFFF" />
                 <textElement>
-                    <font size="17" isBold="true" />
+                    <font size="17" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[SMART SUPERMARKET]]></text>
             </staticText>
@@ -248,7 +319,8 @@ ORDER BY ol.order_detail_id
             <staticText>
                 <reportElement x="82" y="43" width="250" height="14" forecolor="#CCFBF1" />
                 <textElement>
-                    <font size="9" />
+                    <font size="9" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Hàng hóa tươi mới, thanh toán nhanh, dịch vụ tin cậy]]></text>
             </staticText>
@@ -256,7 +328,9 @@ ORDER BY ol.order_detail_id
             <staticText>
                 <reportElement x="365" y="18" width="150" height="28" forecolor="#FFFFFF" />
                 <textElement textAlignment="Right">
-                    <font size="18" isBold="true" />
+                    <font size="18" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[HÓA ĐƠN]]></text>
             </staticText>
@@ -264,7 +338,8 @@ ORDER BY ol.order_detail_id
             <textField>
                 <reportElement x="365" y="50" width="150" height="14" forecolor="#CCFBF1" />
                 <textElement textAlignment="Right">
-                    <font size="9" />
+                    <font size="9" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA["#" + $F{order_id}]]></textFieldExpression>
             </textField>
@@ -296,7 +371,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="92" y="130" width="140" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{order_id}]]></textFieldExpression>
             </textField>
@@ -309,7 +385,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="92" y="145" width="140" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{order_date}]]></textFieldExpression>
             </textField>
@@ -322,7 +399,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="92" y="160" width="140" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{cashier_name}]]></textFieldExpression>
             </textField>
@@ -335,7 +413,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="92" y="175" width="140" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{store_name}]]></textFieldExpression>
             </textField>
@@ -348,7 +427,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="92" y="190" width="140" height="20"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{store_address}]]></textFieldExpression>
             </textField>
@@ -366,7 +446,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="382" y="130" width="135" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{customer_name}]]></textFieldExpression>
             </textField>
@@ -379,7 +460,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="382" y="145" width="135" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{customer_id}]]></textFieldExpression>
             </textField>
@@ -392,7 +474,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="382" y="160" width="135" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{payment_method_name}]]></textFieldExpression>
             </textField>
@@ -405,7 +488,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="382" y="175" width="135" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{status}]]></textFieldExpression>
             </textField>
@@ -418,7 +502,8 @@ ORDER BY ol.order_detail_id
                 <reportElement style="Base" x="382" y="190" width="135" height="12"
                     forecolor="#111827" />
                 <textElement textAlignment="Right">
-                    <font size="8" />
+                    <font size="8" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{store_id}]]></textFieldExpression>
             </textField>
@@ -752,7 +837,9 @@ $F{order_discount_amount} == null
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement verticalAlignment="Middle">
-                    <font size="12" isBold="true" />
+                    <font size="12" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
@@ -765,7 +852,9 @@ $F{order_discount_amount} == null
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="13" isBold="true" />
+                    <font size="13" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}]]></textFieldExpression>
             </textField>
@@ -868,7 +957,9 @@ $F{order_discount_amount} != null
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement verticalAlignment="Middle">
-                    <font size="12" isBold="true" />
+                    <font size="12" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
@@ -881,7 +972,9 @@ $F{order_discount_amount} != null
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="13" isBold="true" />
+                    <font size="13" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}]]></textFieldExpression>
             </textField>
@@ -903,7 +996,9 @@ $F{order_discount_amount} != null
                     <printWhenExpression><![CDATA[$F{payment_method_code} != null && !$F{payment_method_code}.toUpperCase().contains("CASH") && ($F{payment_method_code}.toUpperCase().contains("TRANSFER") || $F{payment_method_code}.toUpperCase().contains("BANK") || $F{payment_method_code}.toUpperCase().contains("QR"))]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
-                    <font size="11" isBold="true" />
+                    <font size="11" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[QUÉT QR ĐỂ CHUYỂN KHOẢN]]></text>
             </staticText>

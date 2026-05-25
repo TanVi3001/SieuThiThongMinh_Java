@@ -14,17 +14,31 @@
     whenNoDataType="AllSectionsNoDetail"
     uuid="d73ac4a2-6511-4d2e-85c8-0fc2dd9efc31">
 
+    <property name="net.sf.jasperreports.default.font.name" value="Arial" />
+    <property name="net.sf.jasperreports.default.pdf.font.name" value="C:/Windows/Fonts/arial.ttf" />
+    <property name="net.sf.jasperreports.default.pdf.encoding" value="Identity-H" />
+    <property name="net.sf.jasperreports.default.pdf.embedded" value="true" />
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle" />
+    <style name="BaseStyle"
+        isDefault="true"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
 
-    <style name="Base" fontName="SansSerif" fontSize="10" forecolor="#1F2937" />
-    <style name="SmallMuted" style="Base" fontSize="8" forecolor="#6B7280" />
-    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#374151" />
+    <style name="Base" fontName="Arial" fontSize="10" forecolor="#1F2937" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="SmallMuted" style="Base" fontSize="8" forecolor="#6B7280" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#374151" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
     <style name="TableHeader" style="Base" fontSize="9" isBold="true" forecolor="#FFFFFF"
-        backcolor="#0F766E" mode="Opaque" />
-    <style name="TableCell" style="Base" fontSize="9" />
-    <style name="Money" style="TableCell" hTextAlign="Right" />
+        backcolor="#0F766E" mode="Opaque" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
 
-    <parameter name="START_DATE" class="java.util.Date">
+    <style name="TableCell" style="Base" fontSize="9" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="Money" style="TableCell" hTextAlign="Right" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+<parameter name="START_DATE" class="java.util.Date">
         <defaultValueExpression><![CDATA[new java.util.Date()]]></defaultValueExpression>
     </parameter>
     <parameter name="END_DATE" class="java.util.Date">
@@ -258,7 +272,7 @@ ORDER BY period_start
                 <reportElement x="18" y="26" width="48" height="16" forecolor="#0F766E"
                     uuid="b59cc0d5-85e8-47c0-89cb-17ce0dcbece6" />
                 <textElement textAlignment="Center" verticalAlignment="Middle">
-                    <font size="9" isBold="true" />
+                    <font size="9" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[LOGO]]></text>
             </staticText>
@@ -266,7 +280,7 @@ ORDER BY period_start
                 <reportElement x="82" y="14" width="280" height="22" forecolor="#FFFFFF"
                     uuid="bc102c54-7421-4a20-86d9-b2176d4251d7" />
                 <textElement>
-                    <font size="17" isBold="true" />
+                    <font size="17" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[SIÊU THỊ SMART]]></text>
             </staticText>
@@ -274,7 +288,7 @@ ORDER BY period_start
                 <reportElement x="82" y="39" width="300" height="14" forecolor="#CCFBF1"
                     uuid="f0367c58-8ff2-42ec-949f-5b5dcc178cf8" />
                 <textElement>
-                    <font size="9" />
+                    <font size="9" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Doanh thu, nhập kho và hiệu quả lãi gộp theo kỳ]]></text>
             </staticText>
@@ -282,7 +296,7 @@ ORDER BY period_start
                 <reportElement x="470" y="18" width="292" height="24" forecolor="#FFFFFF"
                     uuid="530ee471-c96c-418f-bb56-6fb5e8e6e612" />
                 <textElement textAlignment="Right">
-                    <font size="18" isBold="true" />
+                    <font size="18" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[BÁO CÁO DOANH THU]]></text>
             </staticText>
@@ -479,7 +493,7 @@ ORDER BY period_start
                     uuid="f79e6899-d0fb-4175-a9e7-33306ca027c0" />
                 <box leftPadding="8" />
                 <textElement>
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
@@ -487,7 +501,7 @@ ORDER BY period_start
                 <reportElement x="130" y="15" width="70" height="14" forecolor="#065F46"
                     uuid="6a0d8bb7-f85d-40bb-a5aa-29984baaa003" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalOrders}]]></textFieldExpression>
             </textField>
@@ -495,7 +509,7 @@ ORDER BY period_start
                 <reportElement x="200" y="15" width="90" height="14" forecolor="#065F46"
                     uuid="8233ef51-ddea-47e4-842f-b7b27a7c2b28" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalProductsSold}]]></textFieldExpression>
             </textField>
@@ -504,7 +518,7 @@ ORDER BY period_start
                     uuid="2b2a5ec1-fc26-49b3-b5e1-88a9721de3d2" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression>
             </textField>
@@ -513,7 +527,7 @@ ORDER BY period_start
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0007" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression>
             </textField>
@@ -522,7 +536,7 @@ ORDER BY period_start
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0008" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression>
             </textField>
@@ -531,7 +545,7 @@ ORDER BY period_start
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0009" />
                 <box rightPadding="8" />
                 <textElement textAlignment="Right">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[($V{TotalRevenue} == null || $V{TotalRevenue}.doubleValue() == 0 ? "0" : new java.text.DecimalFormat("#,##0.##").format($V{TotalGrossProfit}.doubleValue() / $V{TotalRevenue}.doubleValue() * 100)) + "%"]]></textFieldExpression>
             </textField>
@@ -547,7 +561,7 @@ ORDER BY period_start
                 <reportElement x="14" y="59" width="100" height="16" forecolor="#CCFBF1"
                     uuid="601569bf-a32c-4e6b-8cbb-39ec7d4d1152" />
                 <textElement verticalAlignment="Middle">
-                    <font size="10" isBold="true" />
+                    <font size="10" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Doanh thu]]></text>
             </staticText>
@@ -555,7 +569,7 @@ ORDER BY period_start
                 <reportElement x="122" y="57" width="112" height="18" forecolor="#FFFFFF"
                     uuid="8f5de065-b261-4e5d-b3fb-9cced6f39d7e" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="13" isBold="true" />
+                    <font size="13" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalRevenue}]]></textFieldExpression>
             </textField>
@@ -571,7 +585,7 @@ ORDER BY period_start
                 <reportElement x="280" y="59" width="100" height="16" forecolor="#E0E7FF"
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0011" />
                 <textElement verticalAlignment="Middle">
-                    <font size="10" isBold="true" />
+                    <font size="10" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Tiền nhập]]></text>
             </staticText>
@@ -579,7 +593,7 @@ ORDER BY period_start
                 <reportElement x="388" y="57" width="112" height="18" forecolor="#FFFFFF"
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0012" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="13" isBold="true" />
+                    <font size="13" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalImportCost}]]></textFieldExpression>
             </textField>
@@ -595,7 +609,7 @@ ORDER BY period_start
                 <reportElement x="546" y="59" width="92" height="16" forecolor="#CCFBF1"
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0014" />
                 <textElement verticalAlignment="Middle">
-                    <font size="10" isBold="true" />
+                    <font size="10" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Lãi gộp]]></text>
             </staticText>
@@ -603,7 +617,7 @@ ORDER BY period_start
                 <reportElement x="646" y="57" width="120" height="18" forecolor="#FFFFFF"
                     uuid="a1f99038-ec23-49b8-a002-c4e7c02c0015" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="13" isBold="true" />
+                    <font size="13" isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$V{TotalGrossProfit}]]></textFieldExpression>
             </textField>

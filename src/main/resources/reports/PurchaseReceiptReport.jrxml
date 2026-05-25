@@ -12,17 +12,39 @@
     topMargin="16"
     bottomMargin="16">
 
+    <property name="net.sf.jasperreports.default.font.name" value="Arial" />
+    <property name="net.sf.jasperreports.default.pdf.font.name" value="C:/Windows/Fonts/arial.ttf" />
+    <property name="net.sf.jasperreports.default.pdf.encoding" value="Identity-H" />
+    <property name="net.sf.jasperreports.default.pdf.embedded" value="true" />
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="Oracle" />
+    <style name="BaseStyle"
+        isDefault="true"
+        fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf"
+        pdfEncoding="Identity-H"
+        isPdfEmbedded="true" />
 
-    <style name="Base" fontName="SansSerif" fontSize="9" forecolor="#111827" />
-    <style name="Muted" style="Base" fontSize="8" forecolor="#64748B" />
-    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#0F766E" />
-    <style name="CardLabel" style="Base" fontSize="8" forecolor="#64748B" />
+    <style name="Base" fontName="Arial" fontSize="9" forecolor="#111827"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="Muted" style="Base" fontSize="8" forecolor="#64748B" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="Label" style="Base" fontSize="9" isBold="true" forecolor="#0F766E" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="CardLabel" style="Base" fontSize="8" forecolor="#64748B" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
     <style name="TableHeader" style="Base" fontSize="8" isBold="true" forecolor="#FFFFFF"
-        backcolor="#0F766E" mode="Opaque" />
-    <style name="TableCell" style="Base" fontSize="8" />
-    <style name="Money" style="TableCell" hTextAlign="Right" />
+        backcolor="#0F766E" mode="Opaque" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
 
+    <style name="TableCell" style="Base" fontSize="8" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
+
+    <style name="Money" style="TableCell" hTextAlign="Right" fontName="Arial"
+        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H" isPdfEmbedded="true" />
     <parameter name="RECEIPT_ID" class="java.lang.String">
         <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
     </parameter>
@@ -128,35 +150,43 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement x="28" y="28" width="56" height="16" forecolor="#0F766E" />
                 <textElement textAlignment="Center" verticalAlignment="Middle">
-                    <font size="10" isBold="true" />
+                    <font size="10" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[LOGO]]></text>
             </staticText>
             <staticText>
                 <reportElement x="106" y="17" width="300" height="24" forecolor="#FFFFFF" />
                 <textElement>
-                    <font size="19" isBold="true" />
+                    <font size="19" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[SIEUTHIONLINE]]></text>
             </staticText>
             <staticText>
                 <reportElement x="106" y="43" width="300" height="14" forecolor="#CCFBF1" />
                 <textElement>
-                    <font size="10" />
+                    <font size="10" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Fresh goods, fast checkout, trusted service]]></text>
             </staticText>
             <staticText>
                 <reportElement x="520" y="16" width="258" height="30" forecolor="#FFFFFF" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="24" isBold="true" />
+                    <font size="24" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[PHIẾU NHẬP HÀNG]]></text>
             </staticText>
             <textField isBlankWhenNull="true">
                 <reportElement x="590" y="48" width="188" height="18" forecolor="#CCFBF1" />
                 <textElement textAlignment="Right">
-                    <font size="12" />
+                    <font size="12" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA["#" + $F{receipt_id}]]></textFieldExpression>
             </textField>
@@ -369,7 +399,8 @@ ORDER BY d.created_at, d.receipt_detail_id
             <textField pattern="#,##0">
                 <reportElement style="TableCell" x="674" y="5" width="118" height="13" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
             </textField>
@@ -387,7 +418,8 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement style="Muted" x="245" y="6" width="310" height="12" />
                 <textElement textAlignment="Center">
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Phiếu được tạo từ hệ thống quản lý siêu thị]]></text>
             </staticText>
@@ -408,7 +440,8 @@ ORDER BY d.created_at, d.receipt_detail_id
             <textField textAdjust="StretchHeight" isBlankWhenNull="true">
                 <reportElement style="Base" x="82" y="12" width="410" height="24" />
                 <textElement>
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$P{AMOUNT_IN_WORDS}]]></textFieldExpression>
             </textField>
@@ -460,14 +493,18 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement x="528" y="65" width="110" height="16" forecolor="#0F766E" />
                 <textElement verticalAlignment="Middle">
-                    <font size="9" isBold="true" />
+                    <font size="9" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Tổng thanh toán:]]></text>
             </staticText>
             <textField pattern="#,##0">
                 <reportElement x="650" y="62" width="120" height="22" forecolor="#0F766E" />
                 <textElement textAlignment="Right" verticalAlignment="Middle">
-                    <font size="16" isBold="true" />
+                    <font size="16" isBold="true" fontName="Arial"
+                        pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
+                        isPdfEmbedded="true" />
                 </textElement>
                 <textFieldExpression><![CDATA[$F{grand_total}]]></textFieldExpression>
             </textField>
@@ -481,14 +518,16 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement style="Base" x="35" y="112" width="140" height="12" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Người giao hàng]]></text>
             </staticText>
             <staticText>
                 <reportElement style="Muted" x="35" y="126" width="140" height="12" />
                 <textElement textAlignment="Center">
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[(Ký, ghi rõ họ tên)]]></text>
             </staticText>
@@ -501,14 +540,16 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement style="Base" x="225" y="112" width="120" height="12" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Thủ kho]]></text>
             </staticText>
             <staticText>
                 <reportElement style="Muted" x="225" y="126" width="120" height="12" />
                 <textElement textAlignment="Center">
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[(Ký, ghi rõ họ tên)]]></text>
             </staticText>
@@ -521,14 +562,16 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement style="Base" x="420" y="112" width="110" height="12" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Kế toán]]></text>
             </staticText>
             <staticText>
                 <reportElement style="Muted" x="420" y="126" width="110" height="12" />
                 <textElement textAlignment="Center">
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[(Ký, ghi rõ họ tên)]]></text>
             </staticText>
@@ -541,14 +584,16 @@ ORDER BY d.created_at, d.receipt_detail_id
             <staticText>
                 <reportElement style="Base" x="610" y="112" width="140" height="12" />
                 <textElement textAlignment="Center">
-                    <font isBold="true" />
+                    <font isBold="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[Người lập phiếu]]></text>
             </staticText>
             <staticText>
                 <reportElement style="Muted" x="610" y="126" width="140" height="12" />
                 <textElement textAlignment="Center">
-                    <font isItalic="true" />
+                    <font isItalic="true" fontName="Arial" pdfFontName="C:/Windows/Fonts/arial.ttf"
+                        pdfEncoding="Identity-H" isPdfEmbedded="true" />
                 </textElement>
                 <text><![CDATA[(Ký, ghi rõ họ tên)]]></text>
             </staticText>
