@@ -88,6 +88,7 @@ public class StatisticView extends JPanel {
 
         initUI();
         initEvents();
+        view.util.RolePermissionButtonGuard.applyTo(this);
         subscribeRealtime();
         loadInitialData();
     }

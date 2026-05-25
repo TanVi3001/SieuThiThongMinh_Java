@@ -76,6 +76,7 @@ public class OrderView extends javax.swing.JPanel {
         initComponents();
         initDateFilter();
         setupModernUI();
+        view.util.RolePermissionButtonGuard.applyTo(this);
         initTableModel();
         initStatusFilter();
         loadDataToTable();

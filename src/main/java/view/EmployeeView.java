@@ -128,6 +128,7 @@ public class EmployeeView extends JPanel {
 
         initUI();
         initEvents();
+        view.util.RolePermissionButtonGuard.applyTo(this);
         applyPermissionMatrixToButtons();
 
         refreshAllData();
