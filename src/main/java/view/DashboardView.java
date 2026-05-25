@@ -20,6 +20,7 @@ import javax.swing.Timer;
 import view.components.NotificationBell;
 import view.components.Sidebar;
 import view.components.TongQuanPanel;
+import view.util.RolePermissionButtonGuard;
 
 public class DashboardView extends JFrame {
 
@@ -267,6 +268,8 @@ public class DashboardView extends JFrame {
         childPanel.setMinimumSize(new Dimension(900, 600));
         childPanel.setBackground(BACKGROUND_COLOR);
 
+        RolePermissionButtonGuard.applyTo(childPanel);
+
         JScrollPane scrollPane = new JScrollPane(childPanel);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(BACKGROUND_COLOR);
@@ -278,6 +281,8 @@ public class DashboardView extends JFrame {
         mainContentPanel.add(scrollPane, BorderLayout.CENTER);
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
+
+        SwingUtilities.invokeLater(() -> RolePermissionButtonGuard.applyTo(childPanel));
     }
 
     private void handleLogout() {
