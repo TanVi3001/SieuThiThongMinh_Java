@@ -8,100 +8,78 @@ import common.sync.SyncVersionDao;
 /**
  * Centralized realtime mapping helper.
  *
- * Rule: call these methods only AFTER database changes are committed successfully.
- * Each method publishes local EventBus events for the current app and sends websocket
- * messages for other running app instances. Dashboard and statistics companion events
- * are included for summary panels such as AdminSystemPanel.
+ * Production rule:
+ * - Only publish the primary domain event.
+ * - Do not cascade Dashboard/Statistics companion events for every small change.
+ *   Those summary screens can reload when opened or through SyncWatcher.
+ * - This prevents dozens of reloads after a single payment and keeps Swing UI smooth.
  */
 public final class RealtimeNotifier {
+
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.realtime");
 
     private RealtimeNotifier() {
     }
 
     public static void ordersChanged(String message) {
-        bump("ORDERS");
-        publishLocal(AppEventType.ORDERS, normalize(message, "ORDERS_CHANGED"));
-        sendRemote("ORDERS_CHANGED:" + normalize(message, "ORDER_UPDATED"));
-        dashboardChanged("FROM_ORDERS:" + normalize(message, "ORDER_UPDATED"));
-        statisticsChanged("FROM_ORDERS:" + normalize(message, "ORDER_UPDATED"));
+        notify("ORDERS", AppEventType.ORDERS, "ORDERS_CHANGED", message, "ORDER_UPDATED");
     }
 
     public static void orderDetailsChanged(String message) {
-        bump("ORDER_DETAILS");
-        publishLocal(AppEventType.ORDERS, normalize(message, "ORDER_DETAILS_CHANGED"));
-        sendRemote("ORDER_DETAILS_CHANGED:" + normalize(message, "ORDER_DETAILS_UPDATED"));
-        ordersChanged("FROM_ORDER_DETAILS:" + normalize(message, "ORDER_DETAILS_UPDATED"));
+        notify("ORDER_DETAILS", AppEventType.ORDERS, "ORDER_DETAILS_CHANGED", message, "ORDER_DETAILS_UPDATED");
     }
 
     public static void inventoryChanged(String message) {
-        bump("INVENTORY");
-        publishLocal(AppEventType.INVENTORY, normalize(message, "INVENTORY_CHANGED"));
-        sendRemote("INVENTORY_CHANGED:" + normalize(message, "STOCK_UPDATED"));
-        dashboardChanged("FROM_INVENTORY:" + normalize(message, "STOCK_UPDATED"));
-        statisticsChanged("FROM_INVENTORY:" + normalize(message, "STOCK_UPDATED"));
+        notify("INVENTORY", AppEventType.INVENTORY, "INVENTORY_CHANGED", message, "STOCK_UPDATED");
     }
 
     public static void productsChanged(String message) {
-        bump("PRODUCTS");
-        publishLocal(AppEventType.PRODUCTS, normalize(message, "PRODUCTS_CHANGED"));
-        sendRemote("PRODUCTS_CHANGED:" + normalize(message, "PRODUCT_UPDATED"));
-        dashboardChanged("FROM_PRODUCTS:" + normalize(message, "PRODUCT_UPDATED"));
-        statisticsChanged("FROM_PRODUCTS:" + normalize(message, "PRODUCT_UPDATED"));
+        notify("PRODUCTS", AppEventType.PRODUCTS, "PRODUCTS_CHANGED", message, "PRODUCT_UPDATED");
     }
 
     public static void customersChanged(String message) {
-        bump("CUSTOMERS");
-        publishLocal(AppEventType.CUSTOMERS, normalize(message, "CUSTOMERS_CHANGED"));
-        sendRemote("CUSTOMERS_CHANGED:" + normalize(message, "CUSTOMER_UPDATED"));
-        dashboardChanged("FROM_CUSTOMERS:" + normalize(message, "CUSTOMER_UPDATED"));
-        statisticsChanged("FROM_CUSTOMERS:" + normalize(message, "CUSTOMER_UPDATED"));
+        notify("CUSTOMERS", AppEventType.CUSTOMERS, "CUSTOMERS_CHANGED", message, "CUSTOMER_UPDATED");
     }
 
     public static void employeesChanged(String message) {
-        bump("EMPLOYEES");
-        publishLocal(AppEventType.EMPLOYEES, normalize(message, "EMPLOYEES_CHANGED"));
-        sendRemote("EMPLOYEES_CHANGED:" + normalize(message, "EMPLOYEE_UPDATED"));
-        dashboardChanged("FROM_EMPLOYEES:" + normalize(message, "EMPLOYEE_UPDATED"));
-        statisticsChanged("FROM_EMPLOYEES:" + normalize(message, "EMPLOYEE_UPDATED"));
+        notify("EMPLOYEES", AppEventType.EMPLOYEES, "EMPLOYEES_CHANGED", message, "EMPLOYEE_UPDATED");
     }
 
     public static void storesChanged(String message) {
-        bump("STORES");
-        publishLocal(AppEventType.STORE_INFO, normalize(message, "STORE_INFO_CHANGED"));
-        sendRemote("STORE_INFO_CHANGED:" + normalize(message, "STORE_UPDATED"));
-        dashboardChanged("FROM_STORES:" + normalize(message, "STORE_UPDATED"));
-        statisticsChanged("FROM_STORES:" + normalize(message, "STORE_UPDATED"));
+        notify("STORES", AppEventType.STORE_INFO, "STORE_INFO_CHANGED", message, "STORE_UPDATED");
     }
 
     public static void accountSecurityChanged(String message) {
-        bump("ACCOUNTS");
-        publishLocal(AppEventType.ACCOUNT_SECURITY, normalize(message, "ACCOUNT_SECURITY_CHANGED"));
-        sendRemote("ACCOUNT_SECURITY_CHANGED:" + normalize(message, "ACCOUNT_UPDATED"));
-        dashboardChanged("FROM_ACCOUNT_SECURITY:" + normalize(message, "ACCOUNT_UPDATED"));
+        notify("ACCOUNTS", AppEventType.ACCOUNT_SECURITY, "ACCOUNT_SECURITY_CHANGED", message, "ACCOUNT_UPDATED");
     }
 
     public static void systemConfigChanged(String message) {
-        bump("SYSTEM_CONFIG");
-        publishLocal(AppEventType.SYSTEM_CONFIG, normalize(message, "SYSTEM_CONFIG_CHANGED"));
-        sendRemote("SYSTEM_CONFIG_CHANGED:" + normalize(message, "SYSTEM_CONFIG_UPDATED"));
-        dashboardChanged("FROM_SYSTEM_CONFIG:" + normalize(message, "SYSTEM_CONFIG_UPDATED"));
-        statisticsChanged("FROM_SYSTEM_CONFIG:" + normalize(message, "SYSTEM_CONFIG_UPDATED"));
+        notify("SYSTEM_CONFIG", AppEventType.SYSTEM_CONFIG, "SYSTEM_CONFIG_CHANGED", message, "SYSTEM_CONFIG_UPDATED");
     }
 
     public static void dashboardChanged(String message) {
-        publishLocal(AppEventType.DASHBOARD, normalize(message, "DASHBOARD_CHANGED"));
-        sendRemote("DASHBOARD_CHANGED:" + normalize(message, "DASHBOARD_UPDATED"));
+        notifyNoBump(AppEventType.DASHBOARD, "DASHBOARD_CHANGED", message, "DASHBOARD_UPDATED");
     }
 
     public static void statisticsChanged(String message) {
-        publishLocal(AppEventType.STATISTICS, normalize(message, "STATISTICS_CHANGED"));
-        sendRemote("STATISTICS_CHANGED:" + normalize(message, "STATISTICS_UPDATED"));
+        notifyNoBump(AppEventType.STATISTICS, "STATISTICS_CHANGED", message, "STATISTICS_UPDATED");
     }
 
     public static void inventoryAlert(String message) {
-        publishLocal(AppEventType.INVENTORY_ALERT, normalize(message, "INVENTORY_ALERT"));
-        sendRemote("INVENTORY_ALERT:" + normalize(message, "LOW_STOCK"));
-        dashboardChanged("FROM_INVENTORY_ALERT:" + normalize(message, "LOW_STOCK"));
+        notifyNoBump(AppEventType.INVENTORY_ALERT, "INVENTORY_ALERT", message, "LOW_STOCK");
+    }
+
+    private static void notify(String syncKey, AppEventType type, String remotePrefix, String message, String fallback) {
+        bump(syncKey);
+        String normalized = normalize(message, fallback);
+        publishLocal(type, normalized);
+        sendRemote(remotePrefix + ":" + normalized);
+    }
+
+    private static void notifyNoBump(AppEventType type, String remotePrefix, String message, String fallback) {
+        String normalized = normalize(message, fallback);
+        publishLocal(type, normalized);
+        sendRemote(remotePrefix + ":" + normalized);
     }
 
     private static void bump(String key) {
@@ -122,6 +100,9 @@ public final class RealtimeNotifier {
 
     private static void sendRemote(String message) {
         try {
+            if (DEBUG_LOG) {
+                System.out.println("[RealtimeNotifier] send: " + message);
+            }
             RealtimeClient.send(message);
         } catch (Exception ex) {
             System.err.println("[RealtimeNotifier] remote send error: " + ex.getMessage());
