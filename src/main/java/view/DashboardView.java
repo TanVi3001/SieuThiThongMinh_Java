@@ -122,12 +122,20 @@ public class DashboardView extends JFrame {
         getContentPane().add(sidebar, BorderLayout.WEST);
         getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
-        showPanel(new TongQuanPanel());
+        if (AuthorizationService.canAccessDashboard()) {
+            showPanel(new TongQuanPanel());
+        } else {
+            showAccessDenied();
+        }
     }
 
     private void handleMenuClick(String title) {
         switch (title) {
             case "Tổng quan":
+                if (!AuthorizationService.canAccessDashboard()) {
+                    showAccessDenied();
+                    return;
+                }
                 showPanel(new TongQuanPanel());
                 break;
 
@@ -204,6 +212,10 @@ public class DashboardView extends JFrame {
                 break;
 
             case "Cài đặt":
+                if (!AuthorizationService.canAccessSettings()) {
+                    showAccessDenied();
+                    return;
+                }
                 showPanel(new view.components.UnifiedSettingsPanel());
                 break;
 
