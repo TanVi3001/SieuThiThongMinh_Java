@@ -22,14 +22,13 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
     private final Color MUTED = new Color(111, 124, 149);
     private final Color BG = new Color(246, 247, 251);
     private final Color BORDER = new Color(232, 237, 245);
-    private final Color BLUE = new Color(67, 97, 238);
     private final Color GREEN = new Color(0, 163, 108);
+    private final Color GRAY = new Color(142, 153, 176);
     private final Color RED = new Color(220, 53, 69);
 
     public PurchaseReceiptInvoiceDialog(Frame owner, String receiptId) {
         super(owner, "Phiếu nhập hàng", true);
         this.receiptId = receiptId;
-
         initUI();
     }
 
@@ -48,9 +47,15 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
             return;
         }
 
-        setSize(1320, 760);
+        setResizable(true);
         setMinimumSize(new Dimension(1180, 680));
+
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        int width = Math.min(1360, Math.max(1180, screen.width - 210));
+        int height = Math.min(790, Math.max(680, screen.height - 160));
+        setSize(width, height);
         setLocationRelativeTo(getOwner());
+
         setLayout(new BorderLayout());
         getContentPane().setBackground(BG);
 
@@ -83,7 +88,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
                 + "  •  Số dòng sản phẩm: " + lineCount
                 + "  •  Giá nhập sau VAT phải nhỏ hơn giá bán"
         );
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
         subtitle.setForeground(MUTED);
         subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -122,7 +127,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         title.setForeground(NAVY);
 
         JLabel note = new JLabel("Giá nhập là giá chưa VAT; hệ thống tự tính giá nhập sau VAT và thành tiền.");
-        note.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        note.setFont(new Font("Segoe UI", Font.BOLD, 12));
         note.setForeground(MUTED);
 
         JPanel textBox = new JPanel();
@@ -186,6 +191,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.getHorizontalScrollBar().setUnitIncrement(18);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 
         card.add(infoPanel, BorderLayout.NORTH);
         card.add(scrollPane, BorderLayout.CENTER);
@@ -202,17 +208,16 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttons.setOpaque(false);
 
-        JButton btnPreview = createButton("Xuất phiếu nhập hàng", GREEN);
-        JButton btnPrint = createButton("In phiếu", BLUE);
-        JButton btnClose = createButton("Đóng", new Color(142, 153, 176));
+        JButton btnExport = createButton("Xuất phiếu", GREEN);
+        JButton btnClose = createButton("Đóng", GRAY);
 
-        btnPreview.setPreferredSize(new Dimension(170, 40));
-        btnPreview.addActionListener(e -> PurchaseReceiptReportService.showPurchaseReceipt(receiptId));
-        btnPrint.addActionListener(e -> PurchaseReceiptReportService.printPurchaseReceipt(receiptId));
+        btnExport.setPreferredSize(new Dimension(145, 40));
+        btnClose.setPreferredSize(new Dimension(115, 40));
+
+        btnExport.addActionListener(e -> PurchaseReceiptReportService.showPurchaseReceipt(receiptId));
         btnClose.addActionListener(e -> dispose());
 
-        buttons.add(btnPreview);
-        buttons.add(btnPrint);
+        buttons.add(btnExport);
         buttons.add(btnClose);
 
         bottom.add(summaryCard, BorderLayout.CENTER);
@@ -285,7 +290,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
     private void styleTable() {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setRowHeight(38);
-        table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        table.setFont(new Font("Segoe UI", Font.BOLD, 13));
         table.setForeground(NAVY);
         table.setGridColor(new Color(245, 246, 250));
         table.setShowVerticalLines(false);
@@ -336,11 +341,7 @@ public class PurchaseReceiptInvoiceDialog extends JDialog {
                         lbl.setHorizontalAlignment(SwingConstants.LEFT);
                     }
 
-                    if (column == 9) {
-                        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
-                    } else {
-                        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-                    }
+                    lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 }
 
                 return c;

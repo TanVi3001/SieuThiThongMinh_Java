@@ -16,6 +16,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -27,9 +29,6 @@ import javax.swing.table.DefaultTableModel;
 import model.product.Product;
 import view.components.IconHelper;
 import business.sql.prod_inventory.InventoryNotificationSql;
-import javax.swing.SwingUtilities;
-import java.text.SimpleDateFormat;
-import java.sql.Timestamp;
 
 public class InventoryView extends JPanel {
 
@@ -49,6 +48,11 @@ public class InventoryView extends JPanel {
     private JTable tblInventory;
     private DefaultTableModel tableModel;
 
+    /*
+     * Đã bỏ combobox "Lọc theo kho" khỏi UI.
+     * Vẫn giữ biến này để tránh phá các hàm cũ nếu nơi khác còn gọi,
+     * nhưng nó không còn được add lên header nữa.
+     */
     private JComboBox<String> cbStoreFilter;
     private JTextField txtSearch;
 
@@ -95,9 +99,7 @@ public class InventoryView extends JPanel {
                     || e.getType() == AppEventType.ORDERS
                     || e.getType() == AppEventType.INVENTORY_ALERT) {
 
-                SwingUtilities.invokeLater(() -> {
-                    loadInventoryData();
-                });
+                SwingUtilities.invokeLater(this::loadInventoryData);
             }
         });
     }
@@ -115,35 +117,47 @@ public class InventoryView extends JPanel {
         title.setForeground(NAVY);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel subtitle = new JLabel("Theo dõi số lượng thực tế, cảnh báo tồn kho và điều chỉnh kho hàng");
+        JLabel subtitle = new JLabel("Theo dõi số lượng thực tế, cảnh báo tồn kho và điều chỉnh kho hàng theo chi nhánh hiện tại");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subtitle.setForeground(SOFT_MUTED);
         subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        JLabel branchInfo = new JLabel(buildCurrentBranchLabel());
+        branchInfo.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        branchInfo.setForeground(new Color(0, 120, 95));
+        branchInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         titleBox.add(title);
         titleBox.add(Box.createVerticalStrut(6));
         titleBox.add(subtitle);
+        titleBox.add(Box.createVerticalStrut(4));
+        titleBox.add(branchInfo);
 
-        JPanel filterBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 4));
-        filterBox.setOpaque(false);
-
-        JLabel lblFilter = new JLabel("Lọc theo kho:");
-        lblFilter.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblFilter.setForeground(NAVY);
-
+        /*
+         * Không add filterBox nữa. Lọc kho bị loại bỏ theo yêu cầu.
+         * Dữ liệu bảng, KPI, cảnh báo, biến động kho đều lấy theo store trong session.
+         */
         cbStoreFilter = new JComboBox<>();
-        cbStoreFilter.addItem("Tất cả chi nhánh");
-        cbStoreFilter.setPreferredSize(new Dimension(210, 38));
-        cbStoreFilter.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        cbStoreFilter.setBackground(Color.WHITE);
-
-        filterBox.add(lblFilter);
-        filterBox.add(cbStoreFilter);
+        cbStoreFilter.addItem(buildCurrentBranchValueForHiddenFilter());
 
         header.add(titleBox, BorderLayout.WEST);
-        header.add(filterBox, BorderLayout.EAST);
 
         return header;
+    }
+
+    private String buildCurrentBranchLabel() {
+        String currentStoreId = getCurrentStoreIdOrNull();
+
+        if (currentStoreId == null || currentStoreId.isBlank()) {
+            return "Phạm vi kho: Chưa xác định chi nhánh";
+        }
+
+        return "Phạm vi kho: " + currentStoreId;
+    }
+
+    private String buildCurrentBranchValueForHiddenFilter() {
+        String currentStoreId = getCurrentStoreIdOrNull();
+        return currentStoreId == null ? "Chưa xác định" : currentStoreId;
     }
 
     private JPanel buildBody() {
@@ -388,15 +402,31 @@ public class InventoryView extends JPanel {
         actionBar.add(buttons, BorderLayout.EAST);
 
         tableModel = new DefaultTableModel(
-            new Object[]{"Ảnh","Mã SP","Tên sản phẩm","Tồn hiện tại","Mức cảnh báo","Đơn vị",
-                "Chi nhánh","Trạng thái","Cập nhật cuối"},0) {
+                new Object[]{
+                    "Ảnh",
+                    "Mã SP",
+                    "Tên sản phẩm",
+                    "Tồn hiện tại",
+                    "Mức cảnh báo",
+                    "Đơn vị",
+                    "Chi nhánh",
+                    "Trạng thái",
+                    "Cập nhật cuối"
+                },
+                0
+        ) {
             @Override
             public Class<?> getColumnClass(int col) {
-                if (col == 0) return ImageIcon.class;
+                if (col == 0) {
+                    return ImageIcon.class;
+                }
                 return Object.class;
             }
+
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
 
         tblInventory = new JTable(tableModel);
@@ -409,8 +439,13 @@ public class InventoryView extends JPanel {
             public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
                 JLabel lbl = new JLabel();
                 lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                if (v instanceof ImageIcon) lbl.setIcon((ImageIcon) v);
-                else lbl.setText("—");
+                lbl.setOpaque(true);
+                lbl.setBackground(sel ? t.getSelectionBackground() : Color.WHITE);
+                if (v instanceof ImageIcon) {
+                    lbl.setIcon((ImageIcon) v);
+                } else {
+                    lbl.setText("—");
+                }
                 return lbl;
             }
         });
@@ -484,7 +519,7 @@ public class InventoryView extends JPanel {
                 if (c instanceof JLabel lbl) {
                     lbl.setBorder(new EmptyBorder(0, 8, 0, 8));
                     lbl.setHorizontalAlignment(
-                            column == 2 || column == 3 || column == 4 || column == 5 || column == 6
+                            column == 3 || column == 4 || column == 5 || column == 6
                                     ? SwingConstants.CENTER
                                     : SwingConstants.LEFT
                     );
@@ -500,14 +535,15 @@ public class InventoryView extends JPanel {
             }
         });
 
-        tblInventory.getColumnModel().getColumn(0).setPreferredWidth(95);
-        tblInventory.getColumnModel().getColumn(1).setPreferredWidth(260);
-        tblInventory.getColumnModel().getColumn(2).setPreferredWidth(90);
+        tblInventory.getColumnModel().getColumn(0).setPreferredWidth(70);
+        tblInventory.getColumnModel().getColumn(1).setPreferredWidth(100);
+        tblInventory.getColumnModel().getColumn(2).setPreferredWidth(260);
         tblInventory.getColumnModel().getColumn(3).setPreferredWidth(100);
-        tblInventory.getColumnModel().getColumn(4).setPreferredWidth(75);
-        tblInventory.getColumnModel().getColumn(5).setPreferredWidth(90);
-        tblInventory.getColumnModel().getColumn(6).setPreferredWidth(120);
+        tblInventory.getColumnModel().getColumn(4).setPreferredWidth(105);
+        tblInventory.getColumnModel().getColumn(5).setPreferredWidth(80);
+        tblInventory.getColumnModel().getColumn(6).setPreferredWidth(100);
         tblInventory.getColumnModel().getColumn(7).setPreferredWidth(120);
+        tblInventory.getColumnModel().getColumn(8).setPreferredWidth(140);
     }
 
     private JPanel buildRecentActivityPanel() {
@@ -523,7 +559,7 @@ public class InventoryView extends JPanel {
         title.setFont(new Font("Segoe UI", Font.BOLD, 18));
         title.setForeground(NAVY);
 
-        JLabel sub = new JLabel("Theo dõi nhanh giao dịch kho.");
+        JLabel sub = new JLabel("Theo dõi nhanh giao dịch của chi nhánh hiện tại.");
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         sub.setForeground(MUTED);
 
@@ -609,7 +645,7 @@ public class InventoryView extends JPanel {
                 recentActivityPanel.add(createActivityItem(
                         "Chưa có dữ liệu",
                         "Hãy nhập kho, nhập CSV hoặc xuất/hủy để phát sinh lịch sử.",
-                        "Đang chờ thao tác",
+                        storeId == null ? "Chưa xác định chi nhánh" : "Chi nhánh: " + storeId,
                         ORANGE
                 ));
             } else {
@@ -622,7 +658,7 @@ public class InventoryView extends JPanel {
                             inbound ? "Nhập kho" : "Xuất / Hủy",
                             safe(x.productName, x.productId) + " • SL: " + x.quantity,
                             x.receiptId == null || x.receiptId.trim().isEmpty()
-                            ? "Không có phiếu"
+                            ? "Chi nhánh: " + safe(x.storeId, storeId == null ? "—" : storeId)
                             : "Phiếu: " + x.receiptId,
                             inbound ? GREEN : RED
                     ));
@@ -683,12 +719,10 @@ public class InventoryView extends JPanel {
             }
         });
 
-        cbStoreFilter.addActionListener(e -> {
-            if (!updatingStoreFilter) {
-                applySearchFilter();
-                refreshRecentActivities();
-            }
-        });
+        /*
+         * Không còn cbStoreFilter trên UI nên không cần listener lọc kho nữa.
+         * Tất cả dữ liệu tồn kho và biến động kho lấy theo chi nhánh hiện tại.
+         */
     }
 
     private void applyInventoryRolePermission() {
@@ -743,23 +777,21 @@ public class InventoryView extends JPanel {
         }
 
         int modelRow = tblInventory.convertRowIndexToModel(row);
-        String productId = String.valueOf(tableModel.getValueAt(modelRow, 0));
-        String selectedRowStoreId = normalizeStoreId(String.valueOf(tableModel.getValueAt(modelRow, 5)));
 
-        /*
-         * Đồng nhất scope:
-         * - User chi nhánh: luôn dùng store trong session.
-         * - Admin: ưu tiên store của dòng đang chọn, vì bảng có thể đang ở chế độ "Tất cả chi nhánh".
-         */
-        String storeIdForAction = business.service.SessionManager.isAdmin()
-                ? selectedRowStoreId
-                : currentInventoryStoreId();
+        String productId = String.valueOf(tableModel.getValueAt(modelRow, 1));
+        String selectedRowStoreId = normalizeStoreId(String.valueOf(tableModel.getValueAt(modelRow, 6)));
+
+        String storeIdForAction = currentInventoryStoreId();
+
+        if (storeIdForAction == null || storeIdForAction.isBlank()) {
+            storeIdForAction = selectedRowStoreId;
+        }
 
         if (storeIdForAction == null || storeIdForAction.isBlank()) {
             JOptionPane.showMessageDialog(
                     this,
                     "Không xác định được chi nhánh để nhập kho.\n"
-                    + "Vui lòng lọc/chọn một chi nhánh cụ thể rồi thử lại.",
+                    + "Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.",
                     "Thiếu chi nhánh",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -768,13 +800,15 @@ public class InventoryView extends JPanel {
 
         Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
 
+        String finalStoreIdForAction = storeIdForAction;
+
         StockImportReceiptDialog dialog = new StockImportReceiptDialog(
                 owner,
                 productId,
                 () -> {
                     try {
                         InventoryNotificationSql.getInstance()
-                                .resolveByProductIdAndStore(productId, storeIdForAction);
+                                .resolveByProductIdAndStore(productId, finalStoreIdForAction);
                     } catch (Exception ignored) {
                     }
 
@@ -791,12 +825,7 @@ public class InventoryView extends JPanel {
                 ? ""
                 : txtSearch.getText().trim().toLowerCase();
 
-        String storeFilter = cbStoreFilter.getSelectedItem() == null
-                ? "Tất cả chi nhánh"
-                : cbStoreFilter.getSelectedItem().toString();
-
-        boolean scopedUser = !business.service.SessionManager.isAdmin();
-        String currentStoreId = getCurrentStoreIdOrNull();
+        String currentStoreId = currentInventoryStoreId();
 
         List<Product> result = new ArrayList<>();
 
@@ -810,18 +839,9 @@ public class InventoryView extends JPanel {
                     || id.contains(keyword)
                     || name.contains(keyword);
 
-            boolean matchStore;
-
-            if (scopedUser) {
-                matchStore = currentStoreId != null
-                        && normalizedProductStoreId != null
-                        && currentStoreId.equalsIgnoreCase(normalizedProductStoreId);
-            } else {
-                String selectedStoreId = normalizeStoreId(storeFilter);
-                matchStore = selectedStoreId == null
-                        || (normalizedProductStoreId != null
-                        && selectedStoreId.equalsIgnoreCase(normalizedProductStoreId));
-            }
+            boolean matchStore = currentStoreId == null
+                    || (normalizedProductStoreId != null
+                    && currentStoreId.equalsIgnoreCase(normalizedProductStoreId));
 
             if (matchKeyword && matchStore) {
                 result.add(p);
@@ -858,9 +878,9 @@ public class InventoryView extends JPanel {
 
         int modelRow = tblInventory.convertRowIndexToModel(row);
 
-        String prodId = String.valueOf(tableModel.getValueAt(modelRow, 0));
-        String prodName = String.valueOf(tableModel.getValueAt(modelRow, 1));
-        int currentQty = parseInt(tableModel.getValueAt(modelRow, 2));
+        String prodId = String.valueOf(tableModel.getValueAt(modelRow, 1));
+        String prodName = String.valueOf(tableModel.getValueAt(modelRow, 2));
+        int currentQty = parseInt(tableModel.getValueAt(modelRow, 3));
 
         String actionName = isInbound ? "NHẬP KHO" : "XUẤT / HỦY KHO";
 
@@ -952,14 +972,15 @@ public class InventoryView extends JPanel {
         cachedInventory.clear();
 
         try {
+            String currentStoreId = currentInventoryStoreId();
             List<Product> list;
 
-            if (business.service.SessionManager.isAdmin()) {
-                list = ProductsSql.getInstance().selectAll();
-            } else {
-                String currentStoreId = currentInventoryStoreId();
-
-                if (currentStoreId == null) {
+            if (currentStoreId == null || currentStoreId.isBlank()) {
+                /*
+                 * Admin không có store trong session thì vẫn xem toàn bộ.
+                 * Với Warehouse/Staff/Manager có chi nhánh thì luôn scope theo chi nhánh.
+                 */
+                if (!business.service.SessionManager.isAdmin()) {
                     JOptionPane.showMessageDialog(
                             this,
                             "Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập lại bằng tài khoản đã được phân chi nhánh.",
@@ -969,6 +990,8 @@ public class InventoryView extends JPanel {
                     return;
                 }
 
+                list = ProductsSql.getInstance().selectAll();
+            } else {
                 list = ProductsSql.getInstance().selectAllByStore(currentStoreId);
             }
 
@@ -976,12 +999,6 @@ public class InventoryView extends JPanel {
 
             rebuildStoreFilter(cachedInventory);
 
-            /*
-             * Đồng nhất dữ liệu hiển thị theo bộ lọc hiện tại:
-             * - Admin chọn ST01 thì bảng/KPI/cảnh báo/biến động đều là ST01.
-             * - Admin chọn Tất cả thì xem toàn bộ.
-             * - Staff Product luôn bị ép theo store trong session.
-             */
             applySearchFilter();
             refreshRecentActivities();
 
@@ -1028,12 +1045,12 @@ public class InventoryView extends JPanel {
                 thumb,
                 safe(p.getProductId(), ""),
                 safe(p.getProductName(), ""),
-            qty,
-            threshold,
-            safe(p.getUnit(), "Cái"),
-            safe(p.getStoreId(), "Chưa xác định"),
-            status,
-            formatLastUpdated(p.getLastUpdated())
+                qty,
+                threshold,
+                safe(p.getUnit(), "Cái"),
+                safe(p.getStoreId(), "Chưa xác định"),
+                status,
+                formatLastUpdated(p.getLastUpdated())
             });
         }
     }
@@ -1050,54 +1067,14 @@ public class InventoryView extends JPanel {
         updatingStoreFilter = true;
 
         try {
-            Object selected = cbStoreFilter.getSelectedItem();
+            if (cbStoreFilter == null) {
+                cbStoreFilter = new JComboBox<>();
+            }
 
             cbStoreFilter.removeAllItems();
-
-            if (business.service.SessionManager.isAdmin()) {
-                cbStoreFilter.addItem("Tất cả chi nhánh");
-
-                List<String> storeIds = new ArrayList<>();
-
-                if (list != null) {
-                    for (Product p : list) {
-                        String storeId = safe(p.getStoreId(), "");
-
-                        if (!storeId.isEmpty()
-                                && !"Chưa xác định".equalsIgnoreCase(storeId)
-                                && !storeIds.contains(storeId)) {
-                            storeIds.add(storeId);
-                        }
-                    }
-                }
-
-                storeIds.sort(String::compareToIgnoreCase);
-
-                for (String storeId : storeIds) {
-                    cbStoreFilter.addItem(storeId);
-                }
-
-                if (selected != null) {
-                    cbStoreFilter.setSelectedItem(selected);
-                }
-
-                if (cbStoreFilter.getSelectedItem() == null && cbStoreFilter.getItemCount() > 0) {
-                    cbStoreFilter.setSelectedIndex(0);
-                }
-
-                cbStoreFilter.setEnabled(true);
-            } else {
-                String currentStoreId = getCurrentStoreIdOrNull();
-
-                if (currentStoreId == null) {
-                    cbStoreFilter.addItem("Chưa xác định");
-                } else {
-                    cbStoreFilter.addItem(currentStoreId);
-                }
-
-                cbStoreFilter.setSelectedIndex(0);
-                cbStoreFilter.setEnabled(false);
-            }
+            cbStoreFilter.addItem(buildCurrentBranchValueForHiddenFilter());
+            cbStoreFilter.setSelectedIndex(0);
+            cbStoreFilter.setEnabled(false);
 
         } finally {
             updatingStoreFilter = false;
@@ -1170,19 +1147,18 @@ public class InventoryView extends JPanel {
             );
             return;
         }
-        if (AuthorizationService.isAdmin()) {
-            String selectedStoreId = currentInventoryStoreId();
 
-            if (selectedStoreId == null || selectedStoreId.isBlank()) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Admin cần chọn một chi nhánh cụ thể trước khi nhập CSV.\n"
-                        + "Không thể nhập hàng vào 'Tất cả chi nhánh'.",
-                        "Thiếu chi nhánh nhập kho",
-                        JOptionPane.WARNING_MESSAGE
-                );
-                return;
-            }
+        String selectedStoreId = currentInventoryStoreId();
+
+        if (selectedStoreId == null || selectedStoreId.isBlank()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không xác định được chi nhánh hiện tại để nhập CSV.\n"
+                    + "Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.",
+                    "Thiếu chi nhánh nhập kho",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
         }
 
         JFileChooser fileChooser = new JFileChooser();
@@ -1466,10 +1442,6 @@ public class InventoryView extends JPanel {
                     txtSearch.setText("");
                 }
 
-                if (cbStoreFilter != null && cbStoreFilter.getItemCount() > 0 && business.service.SessionManager.isAdmin()) {
-                    cbStoreFilter.setSelectedIndex(0);
-                }
-
                 loadInventoryData();
 
                 boolean found = selectProductInTable(targetId);
@@ -1501,13 +1473,13 @@ public class InventoryView extends JPanel {
         String targetId = productId.trim();
 
         for (int i = 0; i < tableModel.getRowCount(); i++) {
-            Object value = tableModel.getValueAt(i, 0);
+            Object value = tableModel.getValueAt(i, 1);
 
             if (targetId.equalsIgnoreCase(String.valueOf(value))) {
                 int viewRow = tblInventory.convertRowIndexToView(i);
 
                 tblInventory.setRowSelectionInterval(viewRow, viewRow);
-                tblInventory.scrollRectToVisible(tblInventory.getCellRect(viewRow, 0, true));
+                tblInventory.scrollRectToVisible(tblInventory.getCellRect(viewRow, 1, true));
                 tblInventory.requestFocusInWindow();
 
                 return true;
@@ -1526,9 +1498,14 @@ public class InventoryView extends JPanel {
     }
 
     private String currentInventoryStoreId() {
+        String currentStoreId = getCurrentStoreIdOrNull();
+
+        if (currentStoreId != null && !currentStoreId.isBlank()) {
+            return currentStoreId;
+        }
+
         if (business.service.SessionManager.isAdmin()) {
-            Object selected = cbStoreFilter == null ? null : cbStoreFilter.getSelectedItem();
-            return normalizeStoreId(selected == null ? null : selected.toString());
+            return null;
         }
 
         return normalizeStoreId(business.service.SessionManager.requireCurrentStoreId());
@@ -1553,6 +1530,7 @@ public class InventoryView extends JPanel {
 
         return text;
     }
+
     private ImageIcon loadInventoryThumb(String imagePath) {
         return view.components.ProductImageLoader.load(imagePath, 55, 45);
     }

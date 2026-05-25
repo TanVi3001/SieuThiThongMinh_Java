@@ -35,8 +35,8 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
             return 0;
         }
 
-        String sql =
-                "INSERT INTO LOGIN_HISTORY ("
+        String sql
+                = "INSERT INTO LOGIN_HISTORY ("
                 + "LOG_ID, "
                 + "ACCOUNT_ID, "
                 + "ACTION_TYPE, "
@@ -49,9 +49,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
                 + ") VALUES (?, ?, ?, ?, ?, SYSTIMESTAMP, ?, ?, 0)";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             String logId = makeLogId(h.getLogId());
 
             pst.setString(1, logId);
@@ -84,8 +82,8 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
             return 0;
         }
 
-        String sql =
-                "UPDATE LOGIN_HISTORY SET "
+        String sql
+                = "UPDATE LOGIN_HISTORY SET "
                 + "ACCOUNT_ID = ?, "
                 + "ACTION_TYPE = ?, "
                 + "IP_ADDRESS = ?, "
@@ -96,9 +94,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
                 + "WHERE LOG_ID = ?";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, resolvedAccountId);
             pst.setString(2, fallback(h.getActionType(), "LOGIN"));
             pst.setString(3, fallback(h.getIpAddress(), "unknown"));
@@ -126,9 +122,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String sql = "UPDATE LOGIN_HISTORY SET IS_DELETED = 1 WHERE LOG_ID = ?";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id.trim());
             return pst.executeUpdate();
 
@@ -148,9 +142,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String sql = "SELECT * FROM LOGIN_HISTORY WHERE LOG_ID = ? AND IS_DELETED = 0";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, id.trim());
 
             try (ResultSet rs = pst.executeQuery()) {
@@ -171,16 +163,13 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
     public ArrayList<LoginHistory> selectAll() {
         ArrayList<LoginHistory> list = new ArrayList<>();
 
-        String sql =
-                "SELECT * FROM LOGIN_HISTORY "
+        String sql
+                = "SELECT * FROM LOGIN_HISTORY "
                 + "WHERE IS_DELETED = 0 "
                 + "ORDER BY LOGIN_TIME DESC";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql);
-                ResultSet rs = pst.executeQuery()
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
                 list.add(map(rs));
             }
@@ -204,10 +193,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String sql = "SELECT * FROM LOGIN_HISTORY WHERE " + condition;
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql);
-                ResultSet rs = pst.executeQuery()
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql); ResultSet rs = pst.executeQuery()) {
             while (rs.next()) {
                 list.add(map(rs));
             }
@@ -227,16 +213,14 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
             return list;
         }
 
-        String sql =
-                "SELECT * FROM LOGIN_HISTORY "
+        String sql
+                = "SELECT * FROM LOGIN_HISTORY "
                 + "WHERE ACCOUNT_ID = ? "
                 + "AND IS_DELETED = 0 "
                 + "ORDER BY LOGIN_TIME DESC";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, accountId.trim());
 
             try (ResultSet rs = pst.executeQuery()) {
@@ -261,9 +245,7 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
         String sql = "UPDATE LOGIN_HISTORY SET IS_DELETED = 1 WHERE ACCOUNT_ID = ?";
 
         try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, accountId.trim());
             return pst.executeUpdate();
 
@@ -307,36 +289,19 @@ public class LoginHistorySql implements SqlInterface<LoginHistory> {
     }
 
     private String resolveAccountIdForHistory(LoginHistory h) {
+        if (h == null) {
+            return null;
+        }
+
         String accountId = trimOrNull(h.getAccountId());
 
         if (accountId != null) {
             return accountId;
         }
 
-        String username = trimOrNull(h.getUsername());
-        if (username == null) {
-            return null;
-        }
-
-        String sql = "SELECT account_id FROM ACCOUNTS WHERE username = ? AND NVL(is_deleted, 0) = 0 FETCH FIRST 1 ROWS ONLY";
-
-        try (
-                Connection con = DatabaseConnection.getConnection();
-                PreparedStatement pst = con.prepareStatement(sql)
-        ) {
-            pst.setString(1, username);
-
-            try (ResultSet rs = pst.executeQuery()) {
-                if (rs.next()) {
-                    return trimOrNull(rs.getString("account_id"));
-                }
-            }
-
-        } catch (SQLException e) {
-            System.err.println("[LoginHistory] Resolve account failed:");
-            e.printStackTrace();
-        }
-
+        // Trường hợp login fail ACCOUNT_NOT_FOUND thì chưa có account_id.
+        // Không cố resolve bằng username nữa vì LoginHistory model không có getUsername().
+        // Trả null để insert() bỏ qua ghi log, tránh lỗi compile và tránh spam console.
         return null;
     }
 

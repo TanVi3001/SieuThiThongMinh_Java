@@ -1,13 +1,18 @@
 package view;
 
 import business.sql.prod_inventory.InventoryTransactionSql;
-import common.report.PurchaseReceiptReportService;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import view.components.IconHelper;
 
@@ -15,11 +20,24 @@ public class InventoryHistoryDialog extends JDialog {
 
     private JTable table;
     private DefaultTableModel model;
+    private final List<ReceiptGroup> currentGroups = new ArrayList<>();
 
     private final String storeId;
 
     private final Color NAVY = new Color(23, 52, 99);
     private final Color BG = new Color(246, 247, 251);
+    private final Color GREEN = new Color(10, 116, 103);
+    private final Color BORDER = new Color(214, 222, 235);
+
+    private static final int COL_TIME = 0;
+    private static final int COL_RECEIPT = 1;
+    private static final int COL_TYPE = 2;
+    private static final int COL_ITEMS = 3;
+    private static final int COL_TOTAL_QTY = 4;
+    private static final int COL_TOTAL_IMPORT = 5;
+    private static final int COL_TOTAL_VAT = 6;
+    private static final int COL_TOTAL_AMOUNT = 7;
+    private static final int COL_NOTE = 8;
 
     public InventoryHistoryDialog(Frame owner) {
         this(owner, null);
@@ -33,45 +51,77 @@ public class InventoryHistoryDialog extends JDialog {
     }
 
     private void initUI() {
-        setSize(1050, 620);
+        setResizable(true);
+        setMinimumSize(new Dimension(1180, 720));
+
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        int width = Math.min(1400, Math.max(1180, screen.width - 140));
+        int height = Math.min(840, Math.max(720, screen.height - 120));
+        setSize(width, height);
         setLocationRelativeTo(getOwner());
+
         setLayout(new BorderLayout());
         getContentPane().setBackground(BG);
 
-        JPanel root = new JPanel(new BorderLayout(0, 16));
+        JPanel root = new JPanel(new BorderLayout(0, 18));
         root.setBackground(BG);
-        root.setBorder(new EmptyBorder(20, 24, 20, 24));
+        root.setBorder(new EmptyBorder(24, 28, 24, 28));
 
-        JLabel title = new JLabel("Lịch sử biến động kho");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        title.setForeground(NAVY);
+        root.add(createHeaderPanel(), BorderLayout.NORTH);
+        root.add(createCenterTablePanel(), BorderLayout.CENTER);
+        root.add(createBottomPanel(), BorderLayout.SOUTH);
 
-        JLabel sub = new JLabel(buildSubtitle());
-        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        sub.setForeground(new Color(111, 124, 149));
+        add(root, BorderLayout.CENTER);
+    }
+
+    private JPanel createHeaderPanel() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
 
         JPanel titleBox = new JPanel();
         titleBox.setOpaque(false);
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
-        titleBox.add(title);
-        titleBox.add(Box.createVerticalStrut(4));
-        titleBox.add(sub);
 
-        root.add(titleBox, BorderLayout.NORTH);
+        JLabel title = new JLabel("Lịch sử biến động kho");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        title.setForeground(NAVY);
+
+        JLabel sub = new JLabel(buildSubtitle());
+        sub.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        sub.setForeground(new Color(93, 110, 140));
+
+        JLabel hint = new JLabel("Mỗi phiếu nhập được gom thành 1 đơn. Nhấp đúp vào dòng để mở phiếu nhập.");
+        hint.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        hint.setForeground(GREEN);
+
+        titleBox.add(title);
+        titleBox.add(Box.createVerticalStrut(5));
+        titleBox.add(sub);
+        titleBox.add(Box.createVerticalStrut(4));
+        titleBox.add(hint);
+
+        header.add(titleBox, BorderLayout.WEST);
+        return header;
+    }
+
+    private JPanel createCenterTablePanel() {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(BORDER, 18),
+                new EmptyBorder(14, 14, 14, 14)
+        ));
 
         model = new DefaultTableModel(
                 new Object[]{
                     "Thời gian",
+                    "Phiếu nhập",
                     "Loại",
-                    "Mã SP",
-                    "Tên sản phẩm",
-                    "SL",
-                    "Đơn vị",
-                    "Giá nhập",
-                    "Giá bán",
+                    "Mặt hàng",
+                    "Tổng SL",
+                    "Tổng giá nhập",
                     "VAT",
                     "Tổng tiền",
-                    "Phiếu",
                     "Ghi chú"
                 },
                 0
@@ -83,45 +133,94 @@ public class InventoryHistoryDialog extends JDialog {
         };
 
         table = new JTable(model);
-        table.setRowHeight(34);
-        table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
-        table.getTableHeader().setBackground(new Color(245, 246, 250));
-        table.setShowVerticalLines(false);
-        table.setSelectionBackground(new Color(237, 242, 255));
-        table.setSelectionForeground(NAVY);
+        setupTableStyle();
+
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() >= 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    openSelectedReceipt();
+                }
+            }
+        });
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setBackground(Color.WHITE);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        scroll.getHorizontalScrollBar().setUnitIncrement(22);
 
-        root.add(scroll, BorderLayout.CENTER);
+        card.add(scroll, BorderLayout.CENTER);
+        return card;
+    }
 
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    private JPanel createBottomPanel() {
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         bottom.setOpaque(false);
 
-        JButton btnClose = new JButton("Đóng");
-        btnClose.setIcon(IconHelper.close(18));
-        btnClose.setPreferredSize(new Dimension(100, 38));
+        JButton btnOpenReceipt = createFooterButton("Mở phiếu nhập", IconHelper.view(20));
+        btnOpenReceipt.setPreferredSize(new Dimension(175, 42));
+        btnOpenReceipt.addActionListener(e -> openSelectedReceipt());
+
+        JButton btnClose = createFooterButton("Đóng", IconHelper.close(18));
+        btnClose.setPreferredSize(new Dimension(115, 42));
         btnClose.addActionListener(e -> dispose());
 
-        JButton btnViewReceipt = new JButton("Xem phiếu nhập hàng");
-        btnViewReceipt.setIcon(IconHelper.view(20));
-        btnViewReceipt.setPreferredSize(new Dimension(175, 38));
-        btnViewReceipt.addActionListener(e -> viewReceipt());
-
-        JButton btnExportReceipt = new JButton("Xuất phiếu nhập hàng");
-        btnExportReceipt.setIcon(IconHelper.export(20));
-        btnExportReceipt.setPreferredSize(new Dimension(185, 38));
-        btnExportReceipt.addActionListener(e -> exportReceipt());
-
-        bottom.add(btnViewReceipt);
-        bottom.add(btnExportReceipt);
+        bottom.add(btnOpenReceipt);
         bottom.add(btnClose);
 
-        root.add(bottom, BorderLayout.SOUTH);
+        return bottom;
+    }
 
-        add(root, BorderLayout.CENTER);
+    private JButton createFooterButton(String text, Icon icon) {
+        JButton btn = new JButton(text);
+        btn.setIcon(icon);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(new Color(15, 23, 42));
+        btn.setBackground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private void setupTableStyle() {
+        table.setRowHeight(40);
+        table.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        table.getTableHeader().setBackground(new Color(238, 242, 247));
+        table.getTableHeader().setForeground(new Color(15, 23, 42));
+        table.getTableHeader().setReorderingAllowed(false);
+
+        table.setShowVerticalLines(true);
+        table.setShowHorizontalLines(true);
+        table.setGridColor(new Color(226, 232, 240));
+        table.setSelectionBackground(new Color(219, 234, 254));
+        table.setSelectionForeground(NAVY);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setFillsViewportHeight(true);
+
+        CenterRenderer centerRenderer = new CenterRenderer();
+
+        for (int i = 0; i < table.getColumnModel().getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
+
+        setColumnWidth(COL_TIME, 145);
+        setColumnWidth(COL_RECEIPT, 170);
+        setColumnWidth(COL_TYPE, 115);
+        setColumnWidth(COL_ITEMS, 330);
+        setColumnWidth(COL_TOTAL_QTY, 95);
+        setColumnWidth(COL_TOTAL_IMPORT, 145);
+        setColumnWidth(COL_TOTAL_VAT, 120);
+        setColumnWidth(COL_TOTAL_AMOUNT, 145);
+        setColumnWidth(COL_NOTE, 360);
+    }
+
+    private void setColumnWidth(int col, int width) {
+        table.getColumnModel().getColumn(col).setPreferredWidth(width);
+        table.getColumnModel().getColumn(col).setMinWidth(Math.min(width, 80));
     }
 
     private String buildSubtitle() {
@@ -134,21 +233,19 @@ public class InventoryHistoryDialog extends JDialog {
 
     private void loadData() {
         model.setRowCount(0);
+        currentGroups.clear();
 
         List<InventoryTransactionSql.InventoryTransactionDTO> list
-                = InventoryTransactionSql.getInstance().getRecentTransactionsByStore(storeId, 100);
+                = InventoryTransactionSql.getInstance().getRecentTransactionsByStore(storeId, 300);
 
         if (list == null || list.isEmpty()) {
             model.addRow(new Object[]{
                 "",
-                "Chưa có dữ liệu",
                 "",
+                "Chưa có dữ liệu",
                 storeId == null
                 ? "Hãy nhập kho hoặc xuất/hủy kho để phát sinh lịch sử."
                 : "Chưa có lịch sử biến động cho chi nhánh " + storeId + ".",
-                "",
-                "",
-                "",
                 "",
                 "",
                 "",
@@ -158,74 +255,137 @@ public class InventoryHistoryDialog extends JDialog {
             return;
         }
 
+        currentGroups.addAll(groupTransactions(list));
+
         SimpleDateFormat fmt = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
-        for (InventoryTransactionSql.InventoryTransactionDTO x : list) {
+        for (ReceiptGroup group : currentGroups) {
             model.addRow(new Object[]{
-                x.createdAt == null ? "" : fmt.format(x.createdAt),
-                normalizeType(x.transactionType),
-                x.productId,
-                x.productName,
-                x.quantity,
-                x.unit,
-                money(x.unitImportPrice),
-                money(x.salePrice),
-                x.vatRate == null ? "" : x.vatRate + "%",
-                money(x.totalAmount),
-                x.receiptId == null ? "" : x.receiptId,
-                x.note == null ? "" : x.note
+                group.createdAt == null ? "" : fmt.format(group.createdAt),
+                group.receiptId == null ? "" : group.receiptId,
+                normalizeType(group.transactionType),
+                group.itemSummary,
+                group.totalQuantity,
+                money(group.totalImportAmount),
+                money(group.totalVatAmount),
+                money(group.totalAmount),
+                group.note == null ? "" : group.note
             });
         }
     }
 
-    private void viewReceipt() {
-        String receiptId = getSelectedReceiptId();
+    private List<ReceiptGroup> groupTransactions(List<InventoryTransactionSql.InventoryTransactionDTO> list) {
+        Map<String, ReceiptGroup> map = new LinkedHashMap<>();
+        int fallbackIndex = 0;
 
-        if (receiptId == null) {
+        for (InventoryTransactionSql.InventoryTransactionDTO x : list) {
+            String receiptId = normalizeEmpty(x.receiptId);
+
+            String key;
+            if (receiptId != null) {
+                key = "RECEIPT_" + receiptId;
+            } else {
+                key = "TX_" + (++fallbackIndex) + "_" + normalizeEmpty(x.transactionId);
+            }
+
+            ReceiptGroup group = map.get(key);
+            if (group == null) {
+                group = new ReceiptGroup();
+                group.receiptId = receiptId;
+                group.transactionType = x.transactionType;
+                group.createdAt = x.createdAt;
+                group.note = x.note;
+                map.put(key, group);
+            }
+
+            group.lines.add(x);
+            group.totalQuantity += Math.max(0, x.quantity);
+
+            BigDecimal quantity = BigDecimal.valueOf(Math.max(0, x.quantity));
+
+            if (x.unitImportPrice != null) {
+                group.totalImportAmount = group.totalImportAmount.add(x.unitImportPrice.multiply(quantity));
+            }
+
+            if (x.vatAmount != null) {
+                group.totalVatAmount = group.totalVatAmount.add(x.vatAmount);
+            }
+
+            if (x.totalAmount != null) {
+                group.totalAmount = group.totalAmount.add(x.totalAmount);
+            }
+
+            if (group.createdAt == null || (x.createdAt != null && x.createdAt.before(group.createdAt))) {
+                group.createdAt = x.createdAt;
+            }
+        }
+
+        for (ReceiptGroup group : map.values()) {
+            group.itemSummary = buildItemSummary(group.lines);
+        }
+
+        return new ArrayList<>(map.values());
+    }
+
+    private String buildItemSummary(List<InventoryTransactionSql.InventoryTransactionDTO> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+
+        String firstName = lines.get(0).productName == null ? "" : lines.get(0).productName;
+        if (lines.size() == 1) {
+            return firstName;
+        }
+
+        return firstName + " + " + (lines.size() - 1) + " mặt hàng khác";
+    }
+
+    private void openSelectedReceipt() {
+        ReceiptGroup group = getSelectedGroup();
+
+        if (group == null) {
+            return;
+        }
+
+        if (group.receiptId == null || group.receiptId.isBlank()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Dòng này chưa có phiếu nhập.\nHãy chọn dòng nhập kho có mã phiếu.",
+                    "Chưa có phiếu nhập",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
             return;
         }
 
         Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
-        new PurchaseReceiptInvoiceDialog(owner, receiptId).setVisible(true);
+        new PurchaseReceiptInvoiceDialog(owner, group.receiptId).setVisible(true);
 
         loadData();
     }
 
-    private void exportReceipt() {
-        String receiptId = getSelectedReceiptId();
-
-        if (receiptId != null) {
-            PurchaseReceiptReportService.showPurchaseReceipt(receiptId);
-        }
-    }
-
-    private String getSelectedReceiptId() {
+    private ReceiptGroup getSelectedGroup() {
         int row = table.getSelectedRow();
 
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn phiếu nhập cần xuất.");
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn một đơn nhập trong bảng.");
             return null;
         }
 
         int modelRow = table.convertRowIndexToModel(row);
-        String receiptId = String.valueOf(model.getValueAt(modelRow, 10));
 
-        if (receiptId == null
-                || receiptId.trim().isEmpty()
-                || "null".equalsIgnoreCase(receiptId)
-                || "Chưa có dữ liệu".equalsIgnoreCase(String.valueOf(model.getValueAt(modelRow, 1)))) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Dòng này chưa có phiếu nhập.\n"
-                    + "Hãy bấm Nhập Kho, lưu phiếu nhập trước rồi quay lại xem.",
-                    "Chưa có phiếu nhập",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+        if (modelRow < 0 || modelRow >= currentGroups.size()) {
+            JOptionPane.showMessageDialog(this, "Dòng này chưa có dữ liệu chi tiết.");
             return null;
         }
 
-        return receiptId.trim();
+        ReceiptGroup group = currentGroups.get(modelRow);
+
+        if (group == null || group.lines.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Dòng này chưa có dữ liệu chi tiết.");
+            return null;
+        }
+
+        return group;
     }
 
     private String normalizeType(String type) {
@@ -248,6 +408,13 @@ public class InventoryHistoryDialog extends JDialog {
         return String.format("%,.0f", value);
     }
 
+    private String normalizeEmpty(String value) {
+        if (value == null || value.trim().isEmpty() || "null".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private String normalizeStoreId(String value) {
         if (value == null || value.trim().isEmpty()) {
             return null;
@@ -265,5 +432,90 @@ public class InventoryHistoryDialog extends JDialog {
         }
 
         return text;
+    }
+
+    private static class ReceiptGroup {
+
+        String receiptId;
+        String transactionType;
+        java.sql.Timestamp createdAt;
+        String itemSummary;
+        int totalQuantity;
+        BigDecimal totalImportAmount = BigDecimal.ZERO;
+        BigDecimal totalVatAmount = BigDecimal.ZERO;
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        String note;
+        List<InventoryTransactionSql.InventoryTransactionDTO> lines = new ArrayList<>();
+    }
+
+    class CenterRenderer extends DefaultTableCellRenderer {
+
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column
+        ) {
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            setHorizontalAlignment(JLabel.CENTER);
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.BOLD, 13));
+            setForeground(new Color(15, 23, 42));
+            setBorder(new EmptyBorder(0, 8, 0, 8));
+
+            if (isSelected) {
+                setBackground(new Color(219, 234, 254));
+                setForeground(NAVY);
+            } else {
+                setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
+            }
+
+            String text = value == null ? "" : value.toString();
+            setText(text);
+            setToolTipText(text);
+
+            return this;
+        }
+    }
+
+    class RoundBorder implements javax.swing.border.Border {
+
+        private final Color color;
+        private final int radius;
+
+        public RoundBorder(Color color, int radius) {
+            this.color = color;
+            this.radius = radius;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+
+            g2.setRenderingHint(
+                    RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(1.25f));
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+
+            g2.dispose();
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(1, 1, 1, 1);
+        }
+
+        @Override
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 }
