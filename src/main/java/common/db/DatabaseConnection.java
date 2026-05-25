@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Properties;
 
 public class DatabaseConnection {
@@ -28,25 +27,9 @@ public class DatabaseConnection {
 
         try {
             DriverManager.registerDriver(new oracle.jdbc.OracleDriver());
-            Connection connection = DriverManager.getConnection(url, username, password);
-            configureOracleSession(connection);
-            return connection;
+            return DriverManager.getConnection(url, username, password);
         } catch (SQLException e) {
             throw new IllegalStateException(buildConnectionErrorMessage(url, username), e);
-        }
-    }
-
-    private static void configureOracleSession(Connection connection) {
-        if (connection == null) {
-            return;
-        }
-
-        try (Statement statement = connection.createStatement()) {
-            // Tránh tình trạng UI đứng lâu khi UPDATE/DELETE gặp row/table đang bị lock.
-            // Oracle sẽ trả ORA-00054 sau tối đa 3 giây thay vì chờ vô hạn.
-            statement.execute("ALTER SESSION SET DML_LOCK_TIMEOUT = 3");
-        } catch (SQLException e) {
-            System.err.println("[DB] Cannot set DML_LOCK_TIMEOUT: " + e.getMessage());
         }
     }
 
