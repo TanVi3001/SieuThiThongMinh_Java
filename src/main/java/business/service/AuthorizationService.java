@@ -104,7 +104,10 @@ public class AuthorizationService {
      * =========================================================
      */
     public static boolean canAccessSales() {
-        return canViewCurrentRole() && (isAdmin() || isCashier());
+        // POS/Bán hàng là nghiệp vụ chính của nhân viên bán hàng.
+        // Không khóa thao tác bán hàng theo ma trận Thêm/Sửa/Xóa/Xuất.
+        // Các phần phụ như Khách hàng và Xuất file vẫn bị khóa ở module riêng.
+        return isAdmin() || isCashier();
     }
 
     public static boolean canAccessProductsAndInventory() {
