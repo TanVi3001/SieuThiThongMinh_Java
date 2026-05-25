@@ -8,8 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * EventBus đơn giản, thread-safe. Mặc định dispatch listener trên EDT
- * (SwingUtilities.invokeLater).
+ * EventBus don gian, thread-safe. Mac dinh dispatch listener tren EDT.
  */
 public final class EventBus {
 
@@ -21,7 +20,6 @@ public final class EventBus {
     public static <T> AutoCloseable subscribe(Class<T> eventClass, Consumer<T> handler) {
         LISTENERS.computeIfAbsent(eventClass, k -> new CopyOnWriteArrayList<>()).add(handler);
 
-        // trả về "subscription" để unsubscribe khi cần
         return () -> {
             List<Consumer<?>> list = LISTENERS.get(eventClass);
             if (list != null) {
@@ -35,6 +33,7 @@ public final class EventBus {
         if (event == null) {
             return;
         }
+
         List<Consumer<?>> list = LISTENERS.get(event.getClass());
         if (list == null || list.isEmpty()) {
             return;
@@ -42,14 +41,14 @@ public final class EventBus {
 
         for (Consumer<?> raw : list) {
             Consumer<T> handler = (Consumer<T>) raw;
-            // Đảm bảo UI update chạy đúng thread EDT
             SwingUtilities.invokeLater(() -> handler.accept(event));
         }
     }
 
-    // 🌟 THÊM VÀO ĐÂY: Hàm quét sạch mọi Listener đang nghe lén (Diệt Zombie)
+    /**
+     * Don listener khi logout/chuyen man de tranh listener cu giu reference gay lag.
+     */
     public static void clearAll() {
         LISTENERS.clear();
-        System.out.println("🧹 [EventBus] Đã dọn sạch toàn bộ Event Listeners!");
     }
 }

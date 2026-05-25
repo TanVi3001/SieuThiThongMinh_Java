@@ -23,7 +23,8 @@ public final class RealtimeClient {
     private static volatile boolean reconnectScheduled = false;
     private static volatile long lastAdminPanelRefreshAt = 0L;
 
-    private static final long ADMIN_REFRESH_THROTTLE_MS = 120L;
+    private static final boolean DEBUG = Boolean.getBoolean("app.debug.realtime");
+    private static final long ADMIN_REFRESH_THROTTLE_MS = 300L;
     private static final long RECONNECT_DELAY_SECONDS = 1L;
 
     private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -40,65 +41,57 @@ public final class RealtimeClient {
     }
 
     public static void connect(String wsUrl) {
-        // 1. Xử lý logic URL/IP TRƯỚC khi tạo URI
-
-        // Ưu tiên dùng IP tĩnh để tránh lỗi phân giải IPv6 của Windows/Localhost
         if (wsUrl == null || wsUrl.isEmpty() || wsUrl.contains("localhost")) {
-            // Có thể đổi thành 127.0.0.1 hoặc IP máy chủ cụ thể của ông
             wsUrl = "ws://127.0.0.1:8887";
-
         }
 
         try {
             serverUri = URI.create(wsUrl);
 
-            // 2. Quản lý kết nối cũ
             if (client != null) {
                 if (client.isOpen()) {
-                    System.out.println("[RT] Đã online, bỏ qua kết nối mới.");
+                    debug("Already online, skip reconnect");
                     return;
                 }
-                // Dọn dẹp client cũ
                 try {
                     client.close();
                 } catch (Exception ignored) {
                 }
             }
 
-            System.out.println("[RT] Đang thử kết nối tới: " + serverUri);
+            debug("Connecting to " + serverUri);
 
-            // 3. Khởi tạo Client mới
             client = new WebSocketClient(serverUri) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     reconnectScheduled = false;
-                    System.out.println("[RT] CONNECTED: " + serverUri);
+                    debug("Connected: " + serverUri);
                 }
 
                 @Override
                 public void onMessage(String message) {
-                    System.out.println("[RT] MSG RECEIVED: " + message);
+                    debug("Message received: " + message);
                     dispatchRealtimeMessage(message);
                 }
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    if (code != 1000) { // 1000 là đóng chủ động (Normal Closure)
-                        System.out.println("[RT] DISCONNECTED: " + reason + " (code=" + code + ")");
+                    if (code != 1000) {
+                        debug("Disconnected: code=" + code + ", reason=" + reason);
                         scheduleReconnect();
                     }
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    System.err.println("[RT] ERROR: " + ex.getMessage());
+                    debug("Error: " + ex.getMessage());
                 }
             };
 
             client.connect();
 
         } catch (Exception e) {
-            System.err.println("[RT] CONNECT CRITICAL FAILED: " + e.getMessage());
+            debug("Connect failed: " + e.getMessage());
             scheduleReconnect();
         }
     }
@@ -109,7 +102,7 @@ public final class RealtimeClient {
         }
 
         reconnectScheduled = true;
-        System.out.println("[RT] Sẽ thử kết nối lại sau " + RECONNECT_DELAY_SECONDS + " giây...");
+        debug("Reconnect scheduled after " + RECONNECT_DELAY_SECONDS + "s");
 
         RECONNECT_SCHEDULER.schedule(() -> {
             reconnectScheduled = false;
@@ -120,18 +113,17 @@ public final class RealtimeClient {
     }
 
     public static void send(String message) {
-        // Publish local ngay lập tức để máy đang thao tác không phải chờ WebSocket echo/polling.
         dispatchRealtimeMessage(message);
 
         try {
             if (isOnline()) {
                 client.send(message);
-                System.out.println("[RT] SENT: " + message);
+                debug("Sent: " + message);
             } else {
-                System.err.println("[RT] SEND FAILED: Client offline. Msg: " + message);
+                debug("Send skipped because client is offline: " + message);
             }
         } catch (Exception e) {
-            System.err.println("[RT] SEND ERROR: " + e.getMessage());
+            debug("Send error: " + e.getMessage());
         }
     }
 
@@ -148,7 +140,7 @@ public final class RealtimeClient {
         try {
             EventBus.publish(new AppDataChangedEvent(type, message));
         } catch (Exception ex) {
-            System.err.println("[RT] EVENT BUS ERROR: " + ex.getMessage());
+            debug("EventBus error: " + ex.getMessage());
         }
     }
 
@@ -166,11 +158,6 @@ public final class RealtimeClient {
                 || type == AppEventType.STATISTICS;
     }
 
-    /**
-     * Fallback thực dụng cho AdminSystemPanel hiện tại: tự quét các Window đang mở
-     * và gọi reloadAll() bằng reflection. Không bắn thêm DASHBOARD companion event
-     * nữa để tránh AdminDashboardView tự chuyển nhầm sang StoreManagementPanel cũ.
-     */
     private static void refreshAdminSystemPanels(AppEventType type, String message) {
         if (!affectsDashboard(type)) {
             return;
@@ -199,9 +186,9 @@ public final class RealtimeClient {
                 Method reloadAll = component.getClass().getDeclaredMethod("reloadAll");
                 reloadAll.setAccessible(true);
                 reloadAll.invoke(component);
-                System.out.println("[RT] AdminSystemPanel reloaded by realtime event.");
+                debug("AdminSystemPanel reloaded by realtime event");
             } catch (Exception ex) {
-                System.err.println("[RT] AdminSystemPanel reload failed: " + ex.getMessage());
+                debug("AdminSystemPanel reload failed: " + ex.getMessage());
             }
             return;
         }
@@ -265,5 +252,11 @@ public final class RealtimeClient {
         }
 
         return AppEventType.UNKNOWN;
+    }
+
+    private static void debug(String message) {
+        if (DEBUG) {
+            System.out.println("[RT] " + message);
+        }
     }
 }

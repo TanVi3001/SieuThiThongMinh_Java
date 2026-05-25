@@ -6,24 +6,21 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * HeartbeatService dùng để giữ phiên đăng nhập hiện tại còn sống.
- *
- * Logic mới: - Cho phép tài khoản Manager đăng nhập nhiều phiên. - Mỗi cửa
- * sổ/thiết bị có một session_id riêng trong ACCOUNT_SESSIONS. - Heartbeat chỉ
- * cập nhật last_heartbeat_at cho session hiện tại. - Không kick phiên cũ khi
- * login phiên mới. - Session chết quá 30 giây sẽ được cleanup thành EXPIRED.
- *
- * Việc kick user khi đổi role/quyền sẽ do SecurityGuard xử lý qua
- * ACCOUNT_SECURITY_CHANGED.
+ * HeartbeatService giu session dang nhap hien tai con song.
+ * Tan suat duoc chon de cap nhat Online nhanh nhung khong spam database.
  */
 public class HeartbeatService {
+
+    private static final long INITIAL_DELAY_SECONDS = 1L;
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 10L;
+    private static final long CLEANUP_INTERVAL_MS = 30_000L;
 
     private static ScheduledExecutorService scheduler;
 
     private static String currentAccountId;
     private static String currentSessionId;
-
     private static boolean stoppedByLogout = false;
+    private static long lastCleanupAt = 0L;
 
     private HeartbeatService() {
     }
@@ -34,9 +31,10 @@ public class HeartbeatService {
         currentAccountId = clean(accountId);
         currentSessionId = clean(sessionId);
         stoppedByLogout = false;
+        lastCleanupAt = 0L;
 
         if (currentAccountId == null || currentSessionId == null) {
-            System.err.println("[HeartbeatService] Không thể start vì thiếu accountId/sessionId.");
+            System.err.println("[HeartbeatService] Cannot start because accountId/sessionId is missing.");
             return;
         }
 
@@ -51,10 +49,6 @@ public class HeartbeatService {
             return t;
         });
 
-        /*
-         * Chạy ngay sau 3 giây để UI online cập nhật nhanh.
-         * Sau đó mỗi 5 giây update heartbeat.
-         */
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 if (isStoppedOrInvalidSession()) {
@@ -62,45 +56,26 @@ public class HeartbeatService {
                 }
 
                 AccountSql accountSql = AccountSql.getInstance();
+                cleanupDeadSessionsIfNeeded(accountSql);
 
-                /*
-                 * Dọn session chết trước để bảng nhân viên không còn Online ảo.
-                 */
-                accountSql.cleanupDeadSessions();
-
-                /*
-                 * Cập nhật heartbeat cho đúng session hiện tại.
-                 */
                 boolean updated = accountSql.heartbeatSession(
                         currentAccountId,
                         currentSessionId
                 );
 
-                /*
-                 * Nếu vì lý do nào đó session chưa tồn tại trong ACCOUNT_SESSIONS
-                 * thì tạo lại để tránh UI bị Offline dù app đang mở.
-                 */
                 if (!updated) {
                     accountSql.createLoginSession(currentAccountId, currentSessionId);
                     accountSql.heartbeatSession(currentAccountId, currentSessionId);
                 }
 
-                /*
-                 * Optional: đồng bộ trạng thái ACCOUNTS để các màn cũ còn dùng
-                 * ONLINE_STATUS/LAST_HEARTBEAT_AT vẫn không bị sai.
-                 */
                 accountSql.heartbeat(currentAccountId);
 
             } catch (Exception e) {
                 System.err.println("[HeartbeatService] heartbeat error: " + e.getMessage());
             }
-        }, 3, 5, TimeUnit.SECONDS);
+        }, INITIAL_DELAY_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
-    /**
-     * Gọi khi user đăng xuất chủ động. Sẽ đóng đúng session hiện tại trong
-     * ACCOUNT_SESSIONS.
-     */
     public static synchronized void stop() {
         stoppedByLogout = true;
 
@@ -122,10 +97,15 @@ public class HeartbeatService {
         currentSessionId = null;
     }
 
-    /**
-     * Chỉ dừng timer, không đóng session. Dùng trong một số luồng force
-     * logout/đóng app đã tự xử lý DB bên ngoài.
-     */
+    private static void cleanupDeadSessionsIfNeeded(AccountSql accountSql) throws Exception {
+        long now = System.currentTimeMillis();
+        if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) {
+            return;
+        }
+        lastCleanupAt = now;
+        accountSql.cleanupDeadSessions();
+    }
+
     private static synchronized void stopOnlyScheduler() {
         if (scheduler != null && !scheduler.isShutdown()) {
             scheduler.shutdownNow();
@@ -134,9 +114,6 @@ public class HeartbeatService {
         scheduler = null;
     }
 
-    /**
-     * Dùng để tránh gọi logout/close session nhiều lần.
-     */
     public static synchronized boolean markLogoutOnce() {
         if (stoppedByLogout) {
             return false;

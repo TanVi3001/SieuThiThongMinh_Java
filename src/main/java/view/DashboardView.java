@@ -232,8 +232,6 @@ public class DashboardView extends JFrame {
     }
 
     private void refreshTongQuanIfVisible() {
-        System.out.println("Cập nhật Real-time: Refresh Dashboard...");
-
         if (mainContentPanel == null || mainContentPanel.getComponentCount() <= 0) {
             return;
         }
@@ -320,7 +318,7 @@ public class DashboardView extends JFrame {
     }
 
     private void startSessionCheck() {
-        sessionTimer = new Timer(5000, e -> {
+        sessionTimer = new Timer(10000, e -> {
             if (SecurityGuard.isProcessingLogout() || isLoggingOut) {
                 ((Timer) e.getSource()).stop();
                 return;

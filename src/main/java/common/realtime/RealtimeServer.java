@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 public class RealtimeServer extends WebSocketServer {
 
     private static RealtimeServer instance;
+    private static final boolean DEBUG = Boolean.getBoolean("app.debug.realtime");
 
     public RealtimeServer(InetSocketAddress address) {
         super(address);
@@ -18,39 +19,41 @@ public class RealtimeServer extends WebSocketServer {
             try {
                 instance = new RealtimeServer(new InetSocketAddress("0.0.0.0", port));
                 instance.start();
-                System.out.println("[RT] WebSocket Server đã khởi động trên port " + port);
+                debug("WebSocket server started on port " + port);
             } catch (Exception e) {
-                System.err.println("Lỗi khởi động Server: " + e.getMessage());
+                System.err.println("[RT] Server start failed: " + e.getMessage());
             }
         }
     }
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        System.out.println("[SERVER] Một máy vừa kết nối!");
+        debug("Client connected");
     }
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        System.out.println("[SERVER] Một máy đã ngắt kết nối.");
+        debug("Client disconnected: code=" + code);
     }
 
     @Override
     public void onMessage(WebSocket conn, String message) {
-        System.out.println("[SERVER] Nhận được tin nhắn: " + message);
-        // =======================================================
-        // BƯỚC QUAN TRỌNG NHẤT: Phát loa cho tất cả các máy khác!
-        // =======================================================
         broadcast(message);
     }
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        System.err.println("[SERVER] Lỗi mạng: " + ex.getMessage());
+        debug("Network error: " + ex.getMessage());
     }
 
     @Override
     public void onStart() {
-        System.out.println("[SERVER] Đã sẵn sàng truyền tín hiệu!");
+        debug("Server ready");
+    }
+
+    private static void debug(String message) {
+        if (DEBUG) {
+            System.out.println("[RT] " + message);
+        }
     }
 }
