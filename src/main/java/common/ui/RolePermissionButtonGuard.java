@@ -3,13 +3,42 @@ package common.ui;
 import business.service.RolePermissionService;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Window;
 import java.text.Normalizer;
 import javax.swing.AbstractButton;
 import javax.swing.JButton;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 public final class RolePermissionButtonGuard {
 
+    private static volatile boolean installed = false;
+
     private RolePermissionButtonGuard() {
+    }
+
+    public static void installGlobalGuard() {
+        if (installed) {
+            return;
+        }
+
+        installed = true;
+
+        SwingUtilities.invokeLater(() -> {
+            applyToAllWindows();
+
+            Timer timer = new Timer(900, e -> applyToAllWindows());
+            timer.setRepeats(true);
+            timer.start();
+        });
+    }
+
+    public static void applyToAllWindows() {
+        for (Window window : Window.getWindows()) {
+            if (window != null && window.isShowing()) {
+                apply(window);
+            }
+        }
     }
 
     public static void apply(Container root) {
@@ -60,7 +89,7 @@ public final class RolePermissionButtonGuard {
     }
 
     private static boolean isAddButton(String text) {
-        return text.startsWith("them")
+        return text.startsWith(" them")
                 || text.contains(" them ")
                 || text.contains("them ho so")
                 || text.contains("them phan ca")
@@ -71,9 +100,9 @@ public final class RolePermissionButtonGuard {
     }
 
     private static boolean isEditButton(String text) {
-        return text.startsWith("cap nhat")
-                || text.startsWith("sua")
-                || text.contains(" cap nhat")
+        return text.startsWith(" cap nhat")
+                || text.startsWith(" sua")
+                || text.contains(" cap nhat ")
                 || text.contains(" chinh sua")
                 || text.contains("huy phan ca")
                 || text.contains("cap nhat trang thai")
@@ -82,23 +111,21 @@ public final class RolePermissionButtonGuard {
     }
 
     private static boolean isDeleteButton(String text) {
-        return text.startsWith("xoa")
-                || text.contains(" xoa")
+        return text.startsWith(" xoa")
+                || text.contains(" xoa ")
                 || text.contains("xoa ho so")
                 || text.contains("xoa nha cung cap")
                 || text.contains("xoa lich");
     }
 
     private static boolean isExportButton(String text) {
-        return text.startsWith("xuat")
-                || text.contains(" xuat")
-                || text.contains("excel")
-                || text.contains("bao cao")
-                || text.contains("hoa don pdf")
-                || text.contains("xuat hoa don")
-                || text.contains("xuat excel")
-                || text.contains("xuat bao cao")
-                || text.contains("doanh thu");
+        return text.startsWith(" xuat")
+                || text.contains(" xuat ")
+                || text.contains(" xuat hoa don")
+                || text.contains(" xuat excel")
+                || text.contains(" xuat bao cao")
+                || text.contains(" hoa don pdf")
+                || text.contains(" excel ");
     }
 
     private static void lockIfNeeded(AbstractButton button, boolean allowed, String tooltip) {
