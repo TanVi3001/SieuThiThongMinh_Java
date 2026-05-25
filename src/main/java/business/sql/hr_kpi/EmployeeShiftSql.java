@@ -98,7 +98,6 @@ public class EmployeeShiftSql {
         int total = 0;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-
             for (String id : assignmentIds) {
                 if (id == null || id.trim().isEmpty()) {
                     continue;
@@ -106,7 +105,6 @@ public class EmployeeShiftSql {
                 ps.setString(1, id.trim());
                 total += ps.executeUpdate();
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -140,13 +138,11 @@ public class EmployeeShiftSql {
         }
     }
 
-    // Giữ hàm cũ để không làm vỡ các nơi đang gọi theo 1 ngày.
     public List<EmployeeShift> selectAssignments(String keyword, Date workDate, String employeeType,
             String shiftId, String status) {
         return selectAssignments(keyword, workDate, workDate, employeeType, shiftId, status);
     }
 
-    // Hàm mới: lọc theo khoảng ngày FromDate - ToDate để vẽ timeline.
     public List<EmployeeShift> selectAssignments(String keyword, Date fromDate, Date toDate, String employeeType,
             String shiftId, String status) {
         List<EmployeeShift> result = new ArrayList<>();
@@ -249,6 +245,10 @@ public class EmployeeShiftSql {
     }
 
     private void ensureStorage() {
+        if (tableExists(TABLE_NAME)) {
+            return;
+        }
+
         String createSql = "CREATE TABLE " + TABLE_NAME + " ("
                 + "assignment_id VARCHAR2(50) PRIMARY KEY, "
                 + "employee_id VARCHAR2(50) NOT NULL, "
@@ -266,14 +266,18 @@ public class EmployeeShiftSql {
         try (Connection con = DatabaseConnection.getConnection(); Statement st = con.createStatement()) {
             st.executeUpdate(createSql);
         } catch (SQLException e) {
-            if (e.getErrorCode() != 955) {
-                e.printStackTrace();
+            int code = e.getErrorCode();
+            if (code == 955 || code == 54 || tableExists(TABLE_NAME)) {
+                System.err.println("[EmployeeShiftSql] Skip runtime DDL for " + TABLE_NAME
+                        + " because table exists or database object is busy. Run migration SQL outside app if table is missing. ORA-" + code);
+                return;
             }
+            e.printStackTrace();
         }
     }
 
     private void migrateLegacyEmployeeShiftsIfExists() {
-        if (!tableExists("EMPLOYEE_SHIFTS")) {
+        if (!tableExists(TABLE_NAME) || !tableExists("EMPLOYEE_SHIFTS")) {
             return;
         }
 
@@ -291,7 +295,9 @@ public class EmployeeShiftSql {
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.executeUpdate();
         } catch (SQLException e) {
-            System.err.println("[EmployeeShiftSql] migrateLegacyEmployeeShiftsIfExists error: " + e.getMessage());
+            if (e.getErrorCode() != 54) {
+                System.err.println("[EmployeeShiftSql] migrateLegacyEmployeeShiftsIfExists error: " + e.getMessage());
+            }
         }
     }
 
