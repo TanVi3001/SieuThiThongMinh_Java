@@ -74,7 +74,7 @@ public class ManagerManagementView extends JPanel {
         try {
             EventBus.subscribe(AppDataChangedEvent.class, event -> {
                 if (event.getType() == AppEventType.ACCOUNT_SECURITY || event.getType() == AppEventType.EMPLOYEES) {
-                    loadDataToTable();
+                    SwingUtilities.invokeLater(this::loadDataToTable);
                 }
             });
         } catch (Exception e) {
@@ -686,27 +686,105 @@ public class ManagerManagementView extends JPanel {
             }
         });
 
-        btnDelete.addActionListener(e -> {
-            if (currentSelectedRawId.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn Quản lý trong bảng để xóa!");
-                return;
-            }
-            if (JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn thu hồi quyền Quản lý cửa hàng này?", "Xác nhận", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-                if (employeeSql.delete(currentSelectedRawId) > 0) {
-                    SyncVersionDao.bumpVersion("EMPLOYEES");
-                    RealtimeClient.send("EMPLOYEES_CHANGED");
-                    RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                    loadDataToTable();
-                    clearForm();
-                }
-            }
-        });
+        btnDelete.addActionListener(e -> handleDeleteManagerAsync());
 
         btnClear.addActionListener(e -> clearForm());
         btnSearch.addActionListener(e -> {
             JTextField searchEditor = (JTextField) cbSearch.getEditor().getEditorComponent();
             updateTable(employeeSql.search(searchEditor.getText().trim()));
         });
+    }
+
+    private void handleDeleteManagerAsync() {
+        if (currentSelectedRawId == null || currentSelectedRawId.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn Quản lý trong bảng để xóa!");
+            return;
+        }
+
+        String managerId = currentSelectedRawId.trim();
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Bạn có chắc muốn thu hồi quyền Quản lý cửa hàng này?",
+                "Xác nhận",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        btnDelete.setEnabled(false);
+        btnDelete.setText("Đang xóa...");
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+        new SwingWorker<Boolean, Void>() {
+            private Exception error;
+
+            @Override
+            protected Boolean doInBackground() {
+                try {
+                    int deleted = employeeSql.delete(managerId);
+
+                    if (deleted > 0) {
+                        try {
+                            SyncVersionDao.bumpVersion("EMPLOYEES");
+                        } catch (Exception ex) {
+                            System.err.println("[ManagerManagementView] bumpVersion error: " + ex.getMessage());
+                        }
+
+                        try {
+                            RealtimeClient.send("EMPLOYEES_CHANGED");
+                        } catch (Exception ex) {
+                            System.err.println("[ManagerManagementView] realtime error: " + ex.getMessage());
+                        }
+
+                        return true;
+                    }
+
+                    return false;
+                } catch (Exception ex) {
+                    error = ex;
+                    return false;
+                }
+            }
+
+            @Override
+            protected void done() {
+                btnDelete.setEnabled(true);
+                btnDelete.setText("Xóa hồ sơ");
+                setCursor(Cursor.getDefaultCursor());
+
+                try {
+                    boolean ok = get();
+
+                    if (ok) {
+                        loadDataToTable();
+                        clearForm();
+                        JOptionPane.showMessageDialog(
+                                ManagerManagementView.this,
+                                "Xóa hồ sơ quản lý thành công!",
+                                "Thành công",
+                                JOptionPane.INFORMATION_MESSAGE
+                        );
+                    } else {
+                        String message = error != null ? error.getMessage() : "Không có dòng dữ liệu nào được cập nhật.";
+                        JOptionPane.showMessageDialog(
+                                ManagerManagementView.this,
+                                "Xóa hồ sơ thất bại hoặc dữ liệu đang bị khóa.\n" + message,
+                                "Không thể xóa",
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(
+                            ManagerManagementView.this,
+                            "Lỗi khi xóa hồ sơ quản lý: " + ex.getMessage(),
+                            "Lỗi",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                }
+            }
+        }.execute();
     }
 
     private void loadDataToTable() {
