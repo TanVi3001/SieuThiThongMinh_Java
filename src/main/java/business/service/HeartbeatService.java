@@ -7,13 +7,16 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * HeartbeatService giu session dang nhap hien tai con song.
- * Tan suat duoc chon de cap nhat Online nhanh nhung khong spam database.
+ *
+ * Chu ky thuc te cho desktop noi bo:
+ * - Heartbeat moi 20 giay: du nhanh de cap nhat online/offline, khong spam DB.
+ * - Cleanup dead session moi 2 phut: tranh quet bang lien tuc khi nhieu may cung mo app.
  */
 public class HeartbeatService {
 
-    private static final long INITIAL_DELAY_SECONDS = 1L;
-    private static final long HEARTBEAT_INTERVAL_SECONDS = 10L;
-    private static final long CLEANUP_INTERVAL_MS = 30_000L;
+    private static final long INITIAL_DELAY_SECONDS = 2L;
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 20L;
+    private static final long CLEANUP_INTERVAL_MS = 120_000L;
 
     private static ScheduledExecutorService scheduler;
 
