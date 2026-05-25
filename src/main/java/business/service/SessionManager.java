@@ -4,6 +4,8 @@ import model.account.Account;
 
 public class SessionManager {
 
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.session");
+
     private static String token;
     private static Account currentUser;
     private static String currentToken;
@@ -246,6 +248,9 @@ public class SessionManager {
     }
 
     public static void debugPrintScope(String source) {
+        if (!DEBUG_LOG) {
+            return;
+        }
         System.out.println("[SESSION_SCOPE] " + source
                 + " accountId=" + safeAccountId()
                 + ", userId=" + safeUserId()
