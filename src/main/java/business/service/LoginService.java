@@ -27,12 +27,13 @@ import javax.swing.JOptionPane;
 public class LoginService {
 
     private static final String LOGIN_VERSION = "BCRYPT_ONLY_V8_STORE_SCOPE_STAFF_SHIFT_GUARD_2026-05-24";
+    private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.login");
 
     public static Account authenticate(String username, String password) {
-        System.out.println("[" + LOGIN_VERSION + "] authenticate called, username=" + username);
+        debug("[" + LOGIN_VERSION + "] authenticate called, username=" + username);
 
         if (username == null || username.isBlank() || password == null) {
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: invalid input");
+            debug("[" + LOGIN_VERSION + "] FAIL: invalid input");
             return null;
         }
 
@@ -41,30 +42,30 @@ public class LoginService {
 
         if (acc == null) {
             LoginHistorySql.getInstance().log(null, "LOGIN_FAILED", "FAILURE", "ACCOUNT_NOT_FOUND", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: ACCOUNT_NOT_FOUND");
+            debug("[" + LOGIN_VERSION + "] FAIL: ACCOUNT_NOT_FOUND");
             return null;
         }
 
         String storedHash = acc.getPassword();
         if (storedHash == null) {
-            System.out.println("[" + LOGIN_VERSION + "] storedHash=null");
+            debug("[" + LOGIN_VERSION + "] storedHash=null");
         } else {
             String prefix = storedHash.length() > 8 ? storedHash.substring(0, 8) : storedHash;
-            System.out.println("[" + LOGIN_VERSION + "] storedHash.len=" + storedHash.length() + " prefix=" + prefix);
+            debug("[" + LOGIN_VERSION + "] storedHash.len=" + storedHash.length() + " prefix=" + prefix);
         }
 
         if (storedHash == null || storedHash.isBlank()) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "EMPTY_PASSWORD_HASH", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: EMPTY_PASSWORD_HASH");
+            debug("[" + LOGIN_VERSION + "] FAIL: EMPTY_PASSWORD_HASH");
             return null;
         }
 
         boolean isBcrypt = PasswordUtils.isBCryptHash(storedHash);
-        System.out.println("[" + LOGIN_VERSION + "] isBCrypt=" + isBcrypt);
+        debug("[" + LOGIN_VERSION + "] isBCrypt=" + isBcrypt);
 
         if (!isBcrypt) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "INVALID_PASSWORD_HASH", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: INVALID_PASSWORD_HASH");
+            debug("[" + LOGIN_VERSION + "] FAIL: INVALID_PASSWORD_HASH");
             return null;
         }
 
@@ -73,13 +74,13 @@ public class LoginService {
             ok = PasswordUtils.checkPassword(password, storedHash);
         } catch (Exception ex) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "BCRYPT_VERIFY_ERROR", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: BCRYPT_VERIFY_ERROR - " + ex.getMessage());
+            debug("[" + LOGIN_VERSION + "] FAIL: BCRYPT_VERIFY_ERROR - " + ex.getMessage());
             return null;
         }
 
         if (!ok) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "WRONG_PASSWORD", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: WRONG_PASSWORD");
+            debug("[" + LOGIN_VERSION + "] FAIL: WRONG_PASSWORD");
             return null;
         }
 
@@ -107,7 +108,7 @@ public class LoginService {
                     JOptionPane.WARNING_MESSAGE
             );
 
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: SHIFT_NOT_ALLOWED accountId=" + acc.getAccountId());
+            debug("[" + LOGIN_VERSION + "] FAIL: SHIFT_NOT_ALLOWED accountId=" + acc.getAccountId());
             return null;
         }
 
@@ -123,7 +124,7 @@ public class LoginService {
         int inserted = TokenSql.getInstance().insert(token);
         if (inserted <= 0) {
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "TOKEN_INSERT_FAILED", localIp(), deviceInfo());
-            System.out.println("[" + LOGIN_VERSION + "] WARN: token insert failed");
+            debug("[" + LOGIN_VERSION + "] WARN: token insert failed");
             return null;
         }
 
@@ -158,7 +159,7 @@ public class LoginService {
                     JOptionPane.WARNING_MESSAGE
             );
 
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: STORE_INACTIVE");
+            debug("[" + LOGIN_VERSION + "] FAIL: STORE_INACTIVE");
             return null;
         }
 
@@ -174,7 +175,7 @@ public class LoginService {
                     JOptionPane.WARNING_MESSAGE
             );
 
-            System.out.println("[" + LOGIN_VERSION + "] FAIL: STORE_USER_WITHOUT_STORE");
+            debug("[" + LOGIN_VERSION + "] FAIL: STORE_USER_WITHOUT_STORE");
             return null;
         }
 
@@ -213,7 +214,7 @@ public class LoginService {
         }
 
         SessionManager.clear();
-        System.out.println("[" + LOGIN_VERSION + "] user logged out");
+        debug("[" + LOGIN_VERSION + "] user logged out");
     }
 
     /**
@@ -293,11 +294,9 @@ public class LoginService {
             try (ResultSet rs = ps.executeQuery()) {
                 boolean allowed = rs.next() && rs.getInt("valid_shift_count") > 0;
 
-                System.out.println(
-                        "[" + LOGIN_VERSION + "] shiftGuard accountId=" + acc.getAccountId()
+                debug("[" + LOGIN_VERSION + "] shiftGuard accountId=" + acc.getAccountId()
                         + ", role=" + role
-                        + ", allowed=" + allowed
-                );
+                        + ", allowed=" + allowed);
 
                 return allowed;
             }
@@ -305,11 +304,8 @@ public class LoginService {
         } catch (Exception ex) {
             // Fail-closed cho nhân viên: nếu bảng phân ca/query lỗi thì không cho login để tránh bypass.
             // Admin/Manager đã được bypass ở trên.
-            System.out.println(
-                    "[" + LOGIN_VERSION + "] FAIL: SHIFT_CHECK_ERROR accountId="
-                    + acc.getAccountId() + " - " + ex.getMessage()
-            );
-            ex.printStackTrace();
+            debug("[" + LOGIN_VERSION + "] FAIL: SHIFT_CHECK_ERROR accountId="
+                    + acc.getAccountId() + " - " + ex.getMessage());
             return false;
         }
     }
@@ -343,5 +339,11 @@ public class LoginService {
 
     private static String deviceInfo() {
         return System.getProperty("os.name") + " | Java " + System.getProperty("java.version");
+    }
+
+    private static void debug(String message) {
+        if (DEBUG_LOG) {
+            System.out.println(message);
+        }
     }
 }
