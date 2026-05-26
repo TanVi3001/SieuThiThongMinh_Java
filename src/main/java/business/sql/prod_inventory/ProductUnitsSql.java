@@ -227,19 +227,39 @@ public class ProductUnitsSql {
 
     public List<ProductUnit> selectByProductId(String productId) {
         List<ProductUnit> units = new ArrayList<>();
-        String sql = "SELECT product_id, unit_id, conversion_rate_to_base, is_base_unit, is_deleted "
-                + "FROM PRODUCT_UNITS "
-                + "WHERE product_id = ? AND NVL(is_deleted, 0) = 0 "
-                + "ORDER BY is_base_unit DESC, unit_id";
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement pst = con.prepareStatement(sql)) {
+
+        String sql = """
+        SELECT
+            pu.product_id,
+            pu.unit_id,
+            u.unit_name,
+            pu.conversion_rate_to_base,
+            NVL(pu.selling_price, p.base_price) AS selling_price,
+            pu.is_base_unit,
+            pu.is_deleted
+        FROM PRODUCT_UNITS pu
+        JOIN PRODUCTS p
+            ON p.product_id = pu.product_id
+        JOIN UNITS u
+            ON u.unit_id = pu.unit_id
+        WHERE pu.product_id = ?
+          AND NVL(pu.is_deleted, 0) = 0
+          AND NVL(u.is_deleted, 0) = 0
+        ORDER BY pu.is_base_unit DESC, pu.unit_id
+    """;
+
+        try (
+                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
             pst.setString(1, productId);
+
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
                     units.add(new ProductUnit(
                             rs.getString("product_id"),
                             rs.getString("unit_id"),
+                            rs.getString("unit_name"),
                             rs.getBigDecimal("conversion_rate_to_base"),
+                            rs.getBigDecimal("selling_price"),
                             rs.getInt("is_base_unit"),
                             rs.getInt("is_deleted")
                     ));
@@ -249,6 +269,7 @@ public class ProductUnitsSql {
             System.err.println("Loi ProductUnitsSql.selectByProductId: " + e.getMessage());
             e.printStackTrace();
         }
+
         return units;
     }
 

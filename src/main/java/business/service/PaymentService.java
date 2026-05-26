@@ -117,7 +117,7 @@ public class PaymentService {
                 for (OrderDetail ct : details) {
                     ps.setString(1, ct.getProductId());
                     ps.setString(2, storeId);
-                    ps.setInt(3, ct.getQuantity());
+                    ps.setInt(3, ct.getQuantityInBaseUnit());
                     ps.executeUpdate();
                 }
             }
@@ -210,16 +210,18 @@ public class PaymentService {
             """;
 
             String insertDetailSql = """
-                INSERT INTO ORDER_DETAILS (
-                    order_detail_id,
-                    order_id,
-                    product_id,
-                    quantity,
-                    unit_price,
-                    is_deleted
-                )
-                VALUES (?, ?, ?, ?, ?, 0)
-            """;
+    INSERT INTO ORDER_DETAILS (
+        order_detail_id,
+        order_id,
+        product_id,
+        quantity,
+        unit_price,
+        unit_id,
+        quantity_base,
+        is_deleted
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+""";
 
             try (
                     PreparedStatement psCheckStock = con.prepareStatement(checkStockSql); PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql); PreparedStatement psDetail = con.prepareStatement(insertDetailSql)) {
@@ -385,7 +387,9 @@ public class PaymentService {
 
                     int stock = rs.getInt("stock_quantity");
 
-                    if (stock < ct.getQuantity()) {
+                    int requiredBaseQty = ct.getQuantityInBaseUnit();
+
+                    if (stock < requiredBaseQty) {
                         throw new SQLException(
                                 "Sản phẩm [" + rs.getString("product_name")
                                 + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock
@@ -429,17 +433,21 @@ public class PaymentService {
             for (OrderDetail ct : details) {
                 normalizeOrderDetailBeforeInsert(ct, order.getOrderId());
 
+                int quantityBase = ct.getQuantityInBaseUnit();
+
                 psDetail.setString(1, ct.getOrderDetailId());
                 psDetail.setString(2, order.getOrderId());
                 psDetail.setString(3, ct.getProductId());
                 psDetail.setInt(4, ct.getQuantity());
                 psDetail.setDouble(5, ct.getUnitPrice());
+                psDetail.setString(6, ct.getUnitId());
+                psDetail.setInt(7, quantityBase);
                 psDetail.addBatch();
 
-                psStock.setInt(1, ct.getQuantity());
+                psStock.setInt(1, quantityBase);
                 psStock.setString(2, ct.getProductId());
                 psStock.setString(3, storeId);
-                psStock.setInt(4, ct.getQuantity());
+                psStock.setInt(4, quantityBase);
 
                 int updated = psStock.executeUpdate();
 

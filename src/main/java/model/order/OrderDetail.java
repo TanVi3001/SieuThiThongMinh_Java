@@ -13,6 +13,7 @@ public class OrderDetail {
     private String unitId;
     private int quantityInBaseUnit;
     private boolean isDeleted;
+    private int quantityBase;
 
     public OrderDetail() {
         this.isDeleted = false;
@@ -109,6 +110,14 @@ public class OrderDetail {
 
     public double getLineTotal() {
         return quantity * unitPrice;
+    }
+
+    public int getQuantityBase() {
+        return quantityBase;
+    }
+
+    public void setQuantityBase(int quantityBase) {
+        this.quantityBase = quantityBase;
     }
 
     @Override

@@ -31,6 +31,8 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import model.product.ProductUnit;
+import business.sql.prod_inventory.ProductUnitsSql;
 
 public class SellPanel extends JPanel {
 
@@ -134,6 +136,16 @@ public class SellPanel extends JPanel {
 
     private KpiEvaluation currentKpiEval = new KpiEvaluation();
     private boolean isUpdatingCart = false;
+    private JComboBox<ProductUnit> cboSaleUnit;
+    private java.util.Map<String, java.util.List<ProductUnit>> productUnitCache = new java.util.HashMap<>();
+    private static final int CART_COL_PRODUCT_ID = 0;
+    private static final int CART_COL_PRODUCT_NAME = 1;
+    private static final int CART_COL_UNIT = 2;
+    private static final int CART_COL_QTY = 3;
+    private static final int CART_COL_UNIT_PRICE = 4;
+    private static final int CART_COL_LINE_TOTAL = 5;
+    private static final int CART_COL_STOCK = 6;
+    private static final int CART_COL_STATUS = 7;
 
     // =========================================================
     // INIT
@@ -416,9 +428,10 @@ public class SellPanel extends JPanel {
         }
 
         lblPreviewName.setText(p.getProductName() != null ? p.getProductName() : productId);
-        lblPreviewPrice.setText("Giá bán: " + moneyFormat.format(p.getBasePrice()));
-        lblPreviewStock.setText("Kho: " + p.getQuantity());
+        lblPreviewStock.setText("Kho: " + p.getQuantity() + " đơn vị gốc");
         lblPreviewCategory.setText("Loại: " + (p.getCategoryId() == null ? "—" : p.getCategoryId()));
+
+        loadSaleUnitsForPreview(p);
 
         lblPreviewImage.setIcon(null);
         lblPreviewImage.setText("Ảnh");
@@ -459,6 +472,218 @@ public class SellPanel extends JPanel {
         if (lblPreviewCategory != null) {
             lblPreviewCategory.setText("Loại: —");
         }
+
+        if (cboSaleUnit != null) {
+            cboSaleUnit.removeAllItems();
+            cboSaleUnit.setEnabled(false);
+        }
+    }
+
+    private void loadSaleUnitsForPreview(Product p) {
+        if (cboSaleUnit == null || p == null) {
+            return;
+        }
+
+        cboSaleUnit.removeAllItems();
+        cboSaleUnit.setEnabled(true);
+
+        java.util.List<ProductUnit> units = productUnitCache.get(p.getProductId());
+
+        if (units == null) {
+            units = ProductUnitsSql.getInstance().selectByProductId(p.getProductId());
+            productUnitCache.put(p.getProductId(), units);
+        }
+
+        if (units == null || units.isEmpty()) {
+            cboSaleUnit.addItem(createFallbackProductUnit(p));
+        } else {
+            for (ProductUnit u : units) {
+                if (u != null) {
+                    normalizeProductUnitForDisplay(u, p);
+                    cboSaleUnit.addItem(u);
+                }
+            }
+        }
+
+        if (cboSaleUnit.getItemCount() > 0) {
+            cboSaleUnit.setSelectedIndex(0);
+        }
+
+        updatePreviewPriceBySelectedUnit();
+    }
+
+    private void updatePreviewPriceBySelectedUnit() {
+        if (cboSaleUnit == null || lblPreviewPrice == null) {
+            return;
+        }
+
+        Product selectedProduct = getSelectedProductFromTableOrSearch();
+        ProductUnit unit = getSelectedSaleUnitOrFallback(selectedProduct);
+
+        if (unit != null) {
+            java.math.BigDecimal price = getSafeSellingPrice(unit, selectedProduct);
+            String unitName = getUnitDisplayName(unit);
+            lblPreviewPrice.setText("Giá bán: " + moneyFormat.format(price) + " / " + unitName);
+        } else {
+            lblPreviewPrice.setText("Giá bán: —");
+        }
+    }
+
+    private Product getSelectedProductFromTableOrSearch() {
+        if (tblProducts != null && tblProducts.getSelectedRow() >= 0) {
+            int modelRow = tblProducts.convertRowIndexToModel(tblProducts.getSelectedRow());
+
+            if (modelRow >= 0 && modelRow < modProducts.getRowCount()) {
+                String productId = String.valueOf(modProducts.getValueAt(modelRow, 0));
+
+                return allProducts.stream()
+                        .filter(x -> x.getProductId() != null && x.getProductId().equals(productId))
+                        .findFirst()
+                        .orElse(null);
+            }
+        }
+
+        String kw = getSearchText();
+
+        if (kw != null && !kw.isBlank()) {
+            return allProducts.stream()
+                    .filter(x -> x.getProductId() != null
+                    && (x.getProductId().equalsIgnoreCase(kw)
+                    || formatProductSearchLabel(x).equalsIgnoreCase(kw)))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        return null;
+    }
+
+    private ProductUnit getSelectedSaleUnitOrFallback(Product p) {
+        if (p == null) {
+            return null;
+        }
+
+        if (cboSaleUnit != null && cboSaleUnit.getSelectedItem() instanceof ProductUnit pu) {
+            if (pu.getProductId() != null && pu.getProductId().equals(p.getProductId())) {
+                normalizeProductUnitForDisplay(pu, p);
+                return pu;
+            }
+        }
+
+        return createFallbackProductUnit(p);
+    }
+
+    private ProductUnit createFallbackProductUnit(Product p) {
+        ProductUnit fallback = new ProductUnit();
+        fallback.setProductId(p.getProductId());
+        fallback.setUnitId(p.getBaseUnitId() != null && !p.getBaseUnitId().isBlank() ? p.getBaseUnitId() : "U_CAI");
+        fallback.setUnitName(p.getUnit() != null && !p.getUnit().isBlank() ? p.getUnit() : "Cái");
+        fallback.setConversionRateToBase(java.math.BigDecimal.ONE);
+        fallback.setSellingPrice(p.getBasePrice() != null ? p.getBasePrice() : java.math.BigDecimal.ZERO);
+        fallback.setIsBaseUnit(1);
+        fallback.setIsDeleted(0);
+        return fallback;
+    }
+
+    private void normalizeProductUnitForDisplay(ProductUnit unit, Product p) {
+        if (unit == null) {
+            return;
+        }
+
+        if (unit.getProductId() == null || unit.getProductId().isBlank()) {
+            unit.setProductId(p.getProductId());
+        }
+
+        if (unit.getUnitId() == null || unit.getUnitId().isBlank()) {
+            unit.setUnitId(p.getBaseUnitId() != null ? p.getBaseUnitId() : "U_CAI");
+        }
+
+        if (unit.getUnitName() == null || unit.getUnitName().isBlank()) {
+            unit.setUnitName(unit.getUnitId());
+        }
+
+        if (unit.getConversionRateToBase() == null
+                || unit.getConversionRateToBase().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            unit.setConversionRateToBase(java.math.BigDecimal.ONE);
+        }
+
+        if (unit.getSellingPrice() == null) {
+            unit.setSellingPrice(p.getBasePrice() != null ? p.getBasePrice() : java.math.BigDecimal.ZERO);
+        }
+    }
+
+    private String getUnitDisplayName(ProductUnit unit) {
+        if (unit == null) {
+            return "Cái";
+        }
+
+        if (unit.getUnitName() != null && !unit.getUnitName().isBlank()) {
+            return unit.getUnitName();
+        }
+
+        if (unit.getUnitId() != null && !unit.getUnitId().isBlank()) {
+            return unit.getUnitId();
+        }
+
+        return "Cái";
+    }
+
+    private java.math.BigDecimal getSafeSellingPrice(ProductUnit unit, Product p) {
+        if (unit != null && unit.getSellingPrice() != null) {
+            return unit.getSellingPrice();
+        }
+
+        if (p != null && p.getBasePrice() != null) {
+            return p.getBasePrice();
+        }
+
+        return java.math.BigDecimal.ZERO;
+    }
+
+    private int toBaseQuantity(int quantity, ProductUnit unit) {
+        java.math.BigDecimal rate = java.math.BigDecimal.ONE;
+
+        if (unit != null && unit.getConversionRateToBase() != null
+                && unit.getConversionRateToBase().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            rate = unit.getConversionRateToBase();
+        }
+
+        return java.math.BigDecimal.valueOf(quantity)
+                .multiply(rate)
+                .setScale(0, java.math.RoundingMode.CEILING)
+                .intValue();
+    }
+
+    private ProductUnit getCartUnitAt(int row) {
+        if (row < 0 || row >= modCart.getRowCount()) {
+            return null;
+        }
+
+        Object unitObj = modCart.getValueAt(row, CART_COL_UNIT);
+
+        if (unitObj instanceof ProductUnit pu) {
+            return pu;
+        }
+
+        String productId = String.valueOf(modCart.getValueAt(row, CART_COL_PRODUCT_ID));
+        Product p = allProducts.stream()
+                .filter(x -> x.getProductId() != null && x.getProductId().equals(productId))
+                .findFirst()
+                .orElse(null);
+
+        return p == null ? null : createFallbackProductUnit(p);
+    }
+
+    private int getCartLineBaseQuantity(int row) {
+        if (row < 0 || row >= modCart.getRowCount()) {
+            return 0;
+        }
+
+        try {
+            int qty = Integer.parseInt(String.valueOf(modCart.getValueAt(row, CART_COL_QTY)));
+            return toBaseQuantity(qty, getCartUnitAt(row));
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private JPanel buildCartPanel() {
@@ -477,7 +702,7 @@ public class SellPanel extends JPanel {
         pnlActions.setOpaque(false);
 
         // Spinner và nút Thêm đã nằm ở preview sản phẩm bên trái.
-// KHÔNG tạo lại spnQtyAdd ở đây, nếu không preview chỉnh 7 nhưng add vẫn lấy 1.
+        // KHÔNG tạo lại spnQtyAdd ở đây, nếu không preview chỉnh 7 nhưng add vẫn lấy 1.
         if (spnQtyAdd == null) {
             spnQtyAdd = new JSpinner(new SpinnerNumberModel(1, 1, 999, 1));
         }
@@ -486,6 +711,7 @@ public class SellPanel extends JPanel {
         styleButton(btnAdd, PRIMARY_BLUE);
         btnAdd.setVisible(false);
         btnAdd.putClientProperty("permission.guard.skip", Boolean.TRUE);
+
         btnRemove = new RoundedButton("Bỏ khỏi giỏ");
         styleButton(btnRemove, new Color(149, 165, 166));
         btnRemove.setPreferredSize(new Dimension(120, 34));
@@ -500,6 +726,7 @@ public class SellPanel extends JPanel {
 
         pnlActions.add(btnRemove);
         pnlActions.add(btnCancel);
+
         JPanel headerWrap = new JPanel(new BorderLayout(0, 8));
         headerWrap.setOpaque(false);
         headerWrap.add(header, BorderLayout.NORTH);
@@ -516,28 +743,34 @@ public class SellPanel extends JPanel {
         headerWrap.add(pnlWarning, BorderLayout.SOUTH);
         pnl.add(headerWrap, BorderLayout.NORTH);
 
-        modCart = new DefaultTableModel(new Object[]{"Mã SP", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tồn", "Trạng thái"}, 0) {
+        modCart = new DefaultTableModel(new Object[]{"Mã SP", "Sản phẩm", "Đơn vị", "Số lượng", "Đơn giá", "Thành tiền", "Tồn gốc", "Trạng thái"}, 0) {
             @Override
             public boolean isCellEditable(int row, int col) {
-                return col == 2;
+                return col == CART_COL_QTY;
             }
         };
+
         tblCart = new JTable(modCart);
         tblCart.setRowHeight(52);
-        tblCart.getColumnModel().getColumn(1).setPreferredWidth(220);
-        tblCart.getColumnModel().getColumn(2).setPreferredWidth(130);
-        tblCart.getColumnModel().getColumn(2).setMinWidth(110);
-        tblCart.getColumnModel().getColumn(2).setMaxWidth(150);
+        tblCart.getColumnModel().getColumn(CART_COL_PRODUCT_NAME).setPreferredWidth(210);
+        tblCart.getColumnModel().getColumn(CART_COL_UNIT).setPreferredWidth(95);
+        tblCart.getColumnModel().getColumn(CART_COL_QTY).setPreferredWidth(120);
+        tblCart.getColumnModel().getColumn(CART_COL_QTY).setMinWidth(100);
+        tblCart.getColumnModel().getColumn(CART_COL_QTY).setMaxWidth(145);
+        tblCart.getColumnModel().getColumn(CART_COL_UNIT_PRICE).setPreferredWidth(95);
+        tblCart.getColumnModel().getColumn(CART_COL_LINE_TOTAL).setPreferredWidth(105);
+        tblCart.getColumnModel().getColumn(CART_COL_STOCK).setPreferredWidth(75);
+        tblCart.getColumnModel().getColumn(CART_COL_STATUS).setPreferredWidth(95);
 
         tblCart.setSurrendersFocusOnKeystroke(true);
         tblCart.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
-        tblCart.getColumnModel().getColumn(2).setCellRenderer(new QuantitySpinnerRenderer());
-        tblCart.getColumnModel().getColumn(2).setCellEditor(new QuantitySpinnerEditor());
+        tblCart.getColumnModel().getColumn(CART_COL_QTY).setCellRenderer(new QuantitySpinnerRenderer());
+        tblCart.getColumnModel().getColumn(CART_COL_QTY).setCellEditor(new QuantitySpinnerEditor());
 
         CartTableRenderer cartRenderer = new CartTableRenderer();
         for (int i = 0; i < tblCart.getColumnCount(); i++) {
-            if (i != 2) {
+            if (i != CART_COL_QTY) {
                 tblCart.getColumnModel().getColumn(i).setCellRenderer(cartRenderer);
             }
         }
@@ -559,6 +792,7 @@ public class SellPanel extends JPanel {
         lblCartEmptyHint.setForeground(TEXT_DARK);
         footer.add(lblCartEmptyHint, BorderLayout.WEST);
         pnl.add(footer, BorderLayout.SOUTH);
+
         return pnl;
     }
 
@@ -829,7 +1063,7 @@ public class SellPanel extends JPanel {
                 BorderFactory.createLineBorder(BORDER_GRAY),
                 new EmptyBorder(10, 12, 10, 12)
         ));
-        pnlProductPreview.setPreferredSize(new Dimension(0, 112));
+        pnlProductPreview.setPreferredSize(new Dimension(0, 128));
 
         lblPreviewImage = new JLabel("Ảnh", SwingConstants.CENTER);
         lblPreviewImage.setPreferredSize(new Dimension(105, 88));
@@ -869,11 +1103,37 @@ public class SellPanel extends JPanel {
 
         JPanel actionPanel = new JPanel(new GridBagLayout());
         actionPanel.setOpaque(false);
-        actionPanel.setPreferredSize(new Dimension(210, 0));
+        actionPanel.setPreferredSize(new Dimension(235, 0));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(3, 4, 3, 4);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        JLabel lblUnit = new JLabel("ĐV:");
+        lblUnit.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblUnit.setForeground(TEXT_DARK);
+
+        cboSaleUnit = new JComboBox<>();
+        cboSaleUnit.setPreferredSize(new Dimension(145, 34));
+        cboSaleUnit.setEnabled(false);
+        cboSaleUnit.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+
+                if (value instanceof ProductUnit pu) {
+                    String name = getUnitDisplayName(pu);
+                    java.math.BigDecimal price = getSafeSellingPrice(pu, null);
+                    setText(name + " - " + moneyFormat.format(price));
+                }
+
+                return this;
+            }
+        });
+        cboSaleUnit.addActionListener(e -> updatePreviewPriceBySelectedUnit());
 
         JLabel lblQty = new JLabel("SL:");
         lblQty.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -883,11 +1143,11 @@ public class SellPanel extends JPanel {
         if (spnQtyAdd == null) {
             spnQtyAdd = new JSpinner(new SpinnerNumberModel(1, 1, 999, 1));
         }
-        spnQtyAdd.setPreferredSize(new Dimension(70, 34));
+        spnQtyAdd.setPreferredSize(new Dimension(75, 34));
 
         RoundedButton btnAddPreview = new RoundedButton("Thêm vào giỏ");
         styleButton(btnAddPreview, PRIMARY_BLUE);
-        btnAddPreview.setPreferredSize(new Dimension(130, 36));
+        btnAddPreview.setPreferredSize(new Dimension(145, 36));
         btnAddPreview.putClientProperty("permission.guard.skip", Boolean.TRUE);
         btnAddPreview.addActionListener(e -> {
             try {
@@ -900,15 +1160,26 @@ public class SellPanel extends JPanel {
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.weightx = 0;
-        actionPanel.add(lblQty, gbc);
+        gbc.gridwidth = 1;
+        actionPanel.add(lblUnit, gbc);
 
         gbc.gridx = 1;
         gbc.gridy = 0;
         gbc.weightx = 1;
-        actionPanel.add(spnQtyAdd, gbc);
+        actionPanel.add(cboSaleUnit, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 1;
+        gbc.weightx = 0;
+        actionPanel.add(lblQty, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.weightx = 1;
+        actionPanel.add(spnQtyAdd, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         gbc.gridwidth = 2;
         gbc.weightx = 1;
         actionPanel.add(btnAddPreview, gbc);
@@ -1157,32 +1428,42 @@ public class SellPanel extends JPanel {
             if (isUpdatingCart) {
                 return;
             }
-            if (e.getColumn() != 2 || e.getType() != javax.swing.event.TableModelEvent.UPDATE) {
+
+            if (e.getColumn() != CART_COL_QTY || e.getType() != javax.swing.event.TableModelEvent.UPDATE) {
                 return;
             }
+
             final int r = e.getFirstRow();
 
             SwingUtilities.invokeLater(() -> {
                 if (r < 0 || r >= modCart.getRowCount()) {
                     return;
                 }
+
                 isUpdatingCart = true;
+
                 try {
-                    Object qtyObj = modCart.getValueAt(r, 2);
+                    Object qtyObj = modCart.getValueAt(r, CART_COL_QTY);
+
                     if (qtyObj == null) {
                         return;
                     }
+
                     int qty = Integer.parseInt(qtyObj.toString());
+
                     if (qty <= 0) {
                         if (r >= 0 && r < modCart.getRowCount()) {
                             modCart.removeRow(r);
                         }
                     } else {
-                        double price = Double.parseDouble(modCart.getValueAt(r, 3).toString());
-                        modCart.setValueAt(price * qty, r, 4);
+                        double price = parseMoneyObject(modCart.getValueAt(r, CART_COL_UNIT_PRICE));
+                        modCart.setValueAt(price * qty, r, CART_COL_LINE_TOTAL);
                     }
+
                     calculateTotal();
                     validateCartAgainstDatabase();
+                    refreshProductsForCartState();
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 } finally {
@@ -1319,25 +1600,21 @@ public class SellPanel extends JPanel {
             return 0;
         }
 
-        int total = 0;
+        int totalBaseQuantity = 0;
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            Object idObj = modCart.getValueAt(i, 0);
-            Object qtyObj = modCart.getValueAt(i, 2);
+            Object idObj = modCart.getValueAt(i, CART_COL_PRODUCT_ID);
 
-            if (idObj == null || qtyObj == null) {
+            if (idObj == null) {
                 continue;
             }
 
             if (productId.equals(String.valueOf(idObj))) {
-                try {
-                    total += Integer.parseInt(String.valueOf(qtyObj));
-                } catch (Exception ignored) {
-                }
+                totalBaseQuantity += getCartLineBaseQuantity(i);
             }
         }
 
-        return total;
+        return totalBaseQuantity;
     }
 
     private void refreshProductsForCartState() {
@@ -1462,31 +1739,90 @@ public class SellPanel extends JPanel {
     }
 
     private void addToCart(String pId, int qty) {
-        Product p = allProducts.stream().filter(x -> x.getProductId().equals(pId)).findFirst().orElse(null);
+        Product p = allProducts.stream()
+                .filter(x -> x.getProductId().equals(pId))
+                .findFirst()
+                .orElse(null);
+
         if (p == null || p.getQuantity() <= 0) {
             return;
         }
 
-        double price = p.getBasePrice().doubleValue();
+        ProductUnit selectedUnit = getSelectedSaleUnitOrFallback(p);
+
+        if (selectedUnit == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Không xác định được đơn vị bán cho sản phẩm này!",
+                    "Thiếu đơn vị bán",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        normalizeProductUnitForDisplay(selectedUnit, p);
+
+        int baseQtyToAdd = toBaseQuantity(qty, selectedUnit);
+        int currentBaseQtyInCart = getCartQuantity(pId);
+
+        if (currentBaseQtyInCart + baseQtyToAdd > p.getQuantity()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Số lượng vượt tồn kho!\n"
+                    + "Tồn hiện tại: " + p.getQuantity() + " đơn vị gốc\n"
+                    + "Đã có trong giỏ: " + currentBaseQtyInCart + " đơn vị gốc\n"
+                    + "Đang thêm: " + qty + " " + getUnitDisplayName(selectedUnit)
+                    + " = " + baseQtyToAdd + " đơn vị gốc",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        String unitId = selectedUnit.getUnitId();
+        double price = getSafeSellingPrice(selectedUnit, p).doubleValue();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            if (modCart.getValueAt(i, 0).equals(pId)) {
-                int currentQty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
+            String cartProductId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
+            ProductUnit cartUnit = getCartUnitAt(i);
+            String cartUnitId = cartUnit != null ? cartUnit.getUnitId() : "";
+
+            if (cartProductId.equals(pId) && cartUnitId.equals(unitId)) {
+                int currentQty = Integer.parseInt(modCart.getValueAt(i, CART_COL_QTY).toString());
                 int newQty = currentQty + qty;
 
-                if (newQty > p.getQuantity()) {
-                    JOptionPane.showMessageDialog(this, "Số lượng vượt tồn kho!\nTồn hiện tại: " + p.getQuantity(), "Cảnh báo", JOptionPane.WARNING_MESSAGE);
-                    return;
+                isUpdatingCart = true;
+                try {
+                    modCart.setValueAt(newQty, i, CART_COL_QTY);
+                    modCart.setValueAt(price, i, CART_COL_UNIT_PRICE);
+                    modCart.setValueAt(price * newQty, i, CART_COL_LINE_TOTAL);
+                    modCart.setValueAt(p.getQuantity(), i, CART_COL_STOCK);
+                } finally {
+                    isUpdatingCart = false;
                 }
-                modCart.setValueAt(newQty, i, 2);
+
                 refreshProductsForCartState();
+                calculateTotal();
+                validateCartAgainstDatabase();
                 return;
             }
         }
 
         isUpdatingCart = true;
-        modCart.addRow(new Object[]{pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
-        isUpdatingCart = false;
+        try {
+            modCart.addRow(new Object[]{
+                pId,
+                p.getProductName(),
+                selectedUnit,
+                qty,
+                price,
+                price * qty,
+                p.getQuantity(),
+                ""
+            });
+        } finally {
+            isUpdatingCart = false;
+        }
 
         refreshProductsForCartState();
         calculateTotal();
@@ -1606,8 +1942,9 @@ public class SellPanel extends JPanel {
         }
 
         if (lblProductCount != null) {
-            lblProductCount.setText(normalized.isBlank() ? allProducts.size() + " sản phẩm khả dụng" : modProducts.getRowCount() + " kết quả phù hợp");
+            lblProductCount.setText(normalized.isBlank() ? modProducts.getRowCount() + " sản phẩm khả dụng" : modProducts.getRowCount() + " kết quả phù hợp");
         }
+
         if (productsCardLayout != null && pnlProductsBody != null) {
             productsCardLayout.show(pnlProductsBody, "table");
         }
@@ -1642,23 +1979,30 @@ public class SellPanel extends JPanel {
         if (paymentProcessing || paymentJustSucceeded) {
             return;
         }
+
         boolean hasError = false;
 
         isUpdatingCart = true;
-        for (int i = 0; i < modCart.getRowCount(); i++) {
-            int q = Integer.parseInt(modCart.getValueAt(i, 2).toString());
-            int stock = getStockFromDB(modCart.getValueAt(i, 0).toString());
-            modCart.setValueAt(stock, i, 5);
-            if (q > stock) {
-                hasError = true;
+
+        try {
+            for (int i = 0; i < modCart.getRowCount(); i++) {
+                int requiredBaseQty = getCartLineBaseQuantity(i);
+                int stock = getStockFromDB(modCart.getValueAt(i, CART_COL_PRODUCT_ID).toString());
+
+                modCart.setValueAt(stock, i, CART_COL_STOCK);
+
+                if (requiredBaseQty > stock) {
+                    hasError = true;
+                }
             }
+        } finally {
+            isUpdatingCart = false;
         }
-        isUpdatingCart = false;
 
         if (hasError) {
             pnlWarning.setBackground(new Color(253, 237, 236));
             lblWarningMsg.setForeground(DANGER_RED);
-            lblWarningMsg.setText("Lỗi: Có sản phẩm vượt tồn kho hoặc đã bị thay đổi!");
+            lblWarningMsg.setText("Lỗi: Có sản phẩm vượt tồn kho sau khi quy đổi đơn vị bán!");
             pnlWarning.setVisible(true);
             btnPay.setEnabled(false);
             btnPay.putClientProperty("permission.guard.skip", Boolean.TRUE);
@@ -1680,9 +2024,11 @@ public class SellPanel extends JPanel {
         if (lblCartCount != null) {
             lblCartCount.setText(modCart.getRowCount() + " dòng");
         }
+
         if (cartCardLayout != null && pnlCartBody != null) {
             cartCardLayout.show(pnlCartBody, modCart.getRowCount() > 0 ? "table" : "empty");
         }
+
         updateKpiMiniPanel();
         tblCart.repaint();
     }
@@ -1799,8 +2145,8 @@ public class SellPanel extends JPanel {
             double discountAmount = 0.0;
 
             for (int i = 0; i < modCart.getRowCount(); i++) {
-                String productId = String.valueOf(modCart.getValueAt(i, 0));
-                double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+                String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
+                double lineTotal = parseMoneyObject(modCart.getValueAt(i, CART_COL_LINE_TOTAL));
                 Double percent = rule.productDiscountMap.get(productId);
 
                 if (percent != null && percent > 0) {
@@ -1867,10 +2213,10 @@ public class SellPanel extends JPanel {
 
         // 1. Thành tiền gốc
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+            double lineTotal = parseMoneyObject(modCart.getValueAt(i, CART_COL_LINE_TOTAL));
             subTotal += lineTotal;
 
-            String productId = String.valueOf(modCart.getValueAt(i, 0));
+            String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
             currentLineProgramDiscountPercent.put(productId, 0.0);
             currentLineProgramDiscountAmount.put(productId, 0.0);
         }
@@ -1896,8 +2242,8 @@ public class SellPanel extends JPanel {
             double eligibleSubTotal = 0.0;
 
             for (int i = 0; i < modCart.getRowCount(); i++) {
-                String productId = String.valueOf(modCart.getValueAt(i, 0));
-                double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+                String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
+                double lineTotal = parseMoneyObject(modCart.getValueAt(i, CART_COL_LINE_TOTAL));
 
                 Double linePercent = selectedRule.productDiscountMap.get(productId);
 
@@ -1908,8 +2254,8 @@ public class SellPanel extends JPanel {
 
             if (eligibleSubTotal >= selectedRule.minOrderAmount) {
                 for (int i = 0; i < modCart.getRowCount(); i++) {
-                    String productId = String.valueOf(modCart.getValueAt(i, 0));
-                    double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+                    String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
+                    double lineTotal = parseMoneyObject(modCart.getValueAt(i, CART_COL_LINE_TOTAL));
 
                     Double linePercent = selectedRule.productDiscountMap.get(productId);
 
@@ -1931,12 +2277,13 @@ public class SellPanel extends JPanel {
                 currentLineProgramDiscountAmount.clear();
 
                 for (int i = 0; i < modCart.getRowCount(); i++) {
-                    String productId = String.valueOf(modCart.getValueAt(i, 0));
+                    String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
                     currentLineProgramDiscountPercent.put(productId, 0.0);
                     currentLineProgramDiscountAmount.put(productId, 0.0);
                 }
 
                 updatingPromotionSelection = true;
+
                 try {
                     if (cboKhuyenMai != null && cboKhuyenMai.getItemCount() > 0) {
                         cboKhuyenMai.setSelectedIndex(0);
@@ -2155,6 +2502,7 @@ public class SellPanel extends JPanel {
             protected void done() {
                 try {
                     allProducts = get();
+                    productUnitCache.clear();
 
                     if (searchComboModel != null) {
                         searchComboModel.removeAllElements();
@@ -2472,23 +2820,23 @@ public class SellPanel extends JPanel {
         List<OrderDetail> dt = new ArrayList<>();
 
         for (int i = 0; i < modCart.getRowCount(); i++) {
-            String id = modCart.getValueAt(i, 0).toString();
-            int qty = Integer.parseInt(modCart.getValueAt(i, 2).toString());
-            double unitPrice = Double.parseDouble(modCart.getValueAt(i, 3).toString());
+            String id = modCart.getValueAt(i, CART_COL_PRODUCT_ID).toString();
+            int qty = Integer.parseInt(modCart.getValueAt(i, CART_COL_QTY).toString());
+            double unitPrice = parseMoneyObject(modCart.getValueAt(i, CART_COL_UNIT_PRICE));
 
-            Product p = allProducts.stream()
-                    .filter(x -> x.getProductId().equals(id))
-                    .findFirst()
-                    .orElse(null);
+            ProductUnit unit = getCartUnitAt(i);
+            int quantityBase = getCartLineBaseQuantity(i);
 
-            dt.add(new OrderDetail(
+            OrderDetail detail = new OrderDetail(
                     oId,
                     id,
                     qty,
                     unitPrice,
-                    (p != null && p.getBaseUnitId() != null) ? p.getBaseUnitId() : "U_CAI",
-                    qty
-            ));
+                    unit != null && unit.getUnitId() != null ? unit.getUnitId() : "U_CAI",
+                    quantityBase > 0 ? quantityBase : qty
+            );
+
+            dt.add(detail);
         }
 
         new SwingWorker<Boolean, Void>() {
@@ -2622,7 +2970,7 @@ public class SellPanel extends JPanel {
 
             try (java.sql.PreparedStatement ps = con.prepareStatement(sqlUpdateDetail)) {
                 for (int i = 0; i < modCart.getRowCount(); i++) {
-                    String productId = String.valueOf(modCart.getValueAt(i, 0));
+                    String productId = String.valueOf(modCart.getValueAt(i, CART_COL_PRODUCT_ID));
 
                     double percent = currentLineProgramDiscountPercent.getOrDefault(productId, 0.0);
                     double amount = currentLineProgramDiscountAmount.getOrDefault(productId, 0.0);
@@ -2960,8 +3308,8 @@ public class SellPanel extends JPanel {
                         });
                         return super.stopCellEditing();
                     }
-                    double price = Double.parseDouble(modCart.getValueAt(row, 3).toString());
-                    modCart.setValueAt(price * qty, row, 4);
+                    double price = parseMoneyObject(modCart.getValueAt(row, CART_COL_UNIT_PRICE));
+                    modCart.setValueAt(price * qty, row, CART_COL_LINE_TOTAL);
                     calculateTotal();
                     validateCartAgainstDatabase();
                 }
@@ -2986,16 +3334,23 @@ public class SellPanel extends JPanel {
             editor.getTextField().setForeground(TEXT_DARK);
             editor.getTextField().setBackground(Color.WHITE);
 
-            int q = 0, st = 0;
+            int q = 0, requiredBaseQty = 0, st = 0;
+
             try {
-                q = Integer.parseInt(t.getValueAt(r, 2).toString());
-                st = Integer.parseInt(t.getValueAt(r, 5).toString());
+                int modelRow = t.convertRowIndexToModel(r);
+                q = Integer.parseInt(t.getModel().getValueAt(modelRow, CART_COL_QTY).toString());
+                requiredBaseQty = getCartLineBaseQuantity(modelRow);
+                st = Integer.parseInt(t.getModel().getValueAt(modelRow, CART_COL_STOCK).toString());
             } catch (Exception ex) {
             }
+
             spinner.setValue(q);
 
-            Color bg = selected ? new Color(230, 240, 255) : (r == hoverRow ? new Color(244, 248, 255) : (r % 2 == 0 ? Color.WHITE : new Color(249, 251, 253)));
-            if (q > st) {
+            Color bg = selected
+                    ? new Color(230, 240, 255)
+                    : (r == hoverRow ? new Color(244, 248, 255) : (r % 2 == 0 ? Color.WHITE : new Color(249, 251, 253)));
+
+            if (requiredBaseQty > st) {
                 bg = new Color(253, 237, 236);
             } else if (st <= 5) {
                 bg = new Color(254, 249, 231);
@@ -3011,28 +3366,35 @@ public class SellPanel extends JPanel {
 
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean s, boolean f, int r, int c) {
-            if ((c == 3 || c == 4) && v instanceof Number) {
+            int modelRow = t.convertRowIndexToModel(r);
+
+            if (c == CART_COL_UNIT && v instanceof ProductUnit pu) {
+                v = getUnitDisplayName(pu);
+            } else if ((c == CART_COL_UNIT_PRICE || c == CART_COL_LINE_TOTAL) && v instanceof Number) {
                 v = moneyFormat.format(v);
             }
+
             Component cp = super.getTableCellRendererComponent(t, v, s, f, r, c);
             Color rowBg = (r == hoverRow) ? new Color(244, 248, 255) : (r % 2 == 0 ? Color.WHITE : new Color(249, 251, 253));
 
-            if (c == 3 || c == 4) {
+            if (c == CART_COL_UNIT_PRICE || c == CART_COL_LINE_TOTAL) {
                 setHorizontalAlignment(JLabel.RIGHT);
-            } else if (c == 1) {
+            } else if (c == CART_COL_PRODUCT_NAME) {
                 setHorizontalAlignment(JLabel.LEFT);
             } else {
                 setHorizontalAlignment(JLabel.CENTER);
             }
 
             try {
-                int q = Integer.parseInt(t.getValueAt(r, 2).toString());
-                int st = Integer.parseInt(t.getValueAt(r, 5).toString());
-                if (c == 6) {
+                int requiredBaseQty = getCartLineBaseQuantity(modelRow);
+                int st = Integer.parseInt(t.getModel().getValueAt(modelRow, CART_COL_STOCK).toString());
+
+                if (c == CART_COL_STATUS) {
                     setFont(new Font("Segoe UI", Font.BOLD, 12));
                     setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
                     setOpaque(true);
-                    if (q > st) {
+
+                    if (requiredBaseQty > st) {
                         setText("Vượt tồn");
                         setForeground(DANGER_RED);
                         setBackground(new Color(251, 226, 226));
@@ -3049,14 +3411,20 @@ public class SellPanel extends JPanel {
                     setForeground(TEXT_DARK);
                     setFont(new Font("Segoe UI", Font.PLAIN, 14));
                     setOpaque(true);
-                    setBackground(q > st ? new Color(253, 237, 236) : (st <= 5 ? new Color(254, 249, 231) : rowBg));
+                    setBackground(requiredBaseQty > st ? new Color(253, 237, 236) : (st <= 5 ? new Color(254, 249, 231) : rowBg));
                 }
 
-                if (c != 6 && s) {
+                if (c != CART_COL_STATUS && s) {
                     setBackground(new Color(230, 240, 255));
                 }
+
             } catch (Exception e) {
+                setForeground(TEXT_DARK);
+                setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                setOpaque(true);
+                setBackground(s ? new Color(230, 240, 255) : rowBg);
             }
+
             return cp;
         }
     }
