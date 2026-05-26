@@ -36,12 +36,19 @@ public class PaymentService {
 
             insertOrderDetailsAndSubtractStock(con, hoaDon, dsChiTiet, storeId);
 
-            if (hoaDon.getCustomerId() != null && !hoaDon.getCustomerId().trim().isEmpty()) {
+            if (hasText(hoaDon.getCustomerId())) {
                 CustomersSql.getInstance().recalculateCustomerRank(con, hoaDon.getCustomerId());
             }
 
             con.commit();
-            publishPaymentChanges("PAYMENT_SUCCESS:" + hoaDon.getOrderId() + ":STORE:" + storeId);
+
+            publishPaymentChanges(
+                    "PAYMENT_SUCCESS:" + hoaDon.getOrderId() + ":STORE:" + storeId,
+                    hoaDon.getOrderId(),
+                    storeId,
+                    hoaDon.getCustomerId()
+            );
+
             return true;
 
         } catch (Exception e) {
@@ -68,7 +75,7 @@ public class PaymentService {
             } else {
                 String currentStoreId = SessionManager.getCurrentStoreId();
 
-                if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+                if (!hasText(currentStoreId)) {
                     throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
                 }
 
@@ -114,9 +121,7 @@ public class PaymentService {
             }
 
             String oldNote = order.getNote() == null ? "" : order.getNote();
-            String cancelReason = reason == null || reason.trim().isEmpty()
-                    ? "Không có lý do"
-                    : reason.trim();
+            String cancelReason = !hasText(reason) ? "Không có lý do" : reason.trim();
             String newNote = oldNote + " | Lý do hủy: " + cancelReason;
 
             String sqlUpdateStatus = """
@@ -142,12 +147,19 @@ public class PaymentService {
 
             logStatusChange(con, orderId, order.getStatus(), "Đã hủy", employeeId, cancelReason);
 
-            if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
+            if (hasText(order.getCustomerId())) {
                 CustomersSql.getInstance().recalculateCustomerRank(con, order.getCustomerId());
             }
 
             con.commit();
-            publishPaymentChanges("ORDER_CANCELLED:" + orderId + ":STORE:" + storeId);
+
+            publishPaymentChanges(
+                    "ORDER_CANCELLED:" + orderId + ":STORE:" + storeId,
+                    orderId,
+                    storeId,
+                    order.getCustomerId()
+            );
+
             return true;
 
         } catch (Exception e) {
@@ -244,12 +256,19 @@ public class PaymentService {
                 psDetail.executeBatch();
             }
 
-            if (order.getCustomerId() != null && !order.getCustomerId().trim().isEmpty()) {
+            if (hasText(order.getCustomerId())) {
                 CustomersSql.getInstance().updateCustomerAfterPayment(con, order);
             }
 
             con.commit();
-            publishPaymentChanges("PAYMENT_SUCCESS:" + order.getOrderId() + ":STORE:" + storeId);
+
+            publishPaymentChanges(
+                    "PAYMENT_SUCCESS:" + order.getOrderId() + ":STORE:" + storeId,
+                    order.getOrderId(),
+                    storeId,
+                    order.getCustomerId()
+            );
+
             return true;
 
         } catch (ConcurrentCheckoutException e) {
@@ -270,7 +289,7 @@ public class PaymentService {
             throw new SQLException("Hóa đơn không hợp lệ.");
         }
 
-        if (order.getOrderId() == null || order.getOrderId().trim().isEmpty()) {
+        if (!hasText(order.getOrderId())) {
             throw new SQLException("Hóa đơn chưa có mã đơn.");
         }
 
@@ -283,7 +302,7 @@ public class PaymentService {
                 throw new SQLException("Chi tiết hóa đơn không hợp lệ.");
             }
 
-            if (d.getProductId() == null || d.getProductId().trim().isEmpty()) {
+            if (!hasText(d.getProductId())) {
                 throw new SQLException("Có sản phẩm trong giỏ chưa có mã sản phẩm.");
             }
 
@@ -302,16 +321,15 @@ public class PaymentService {
 
         String currentEmployeeId = getCurrentEmployeeIdOrNull();
 
-        if ((order.getEmployeeId() == null || order.getEmployeeId().trim().isEmpty())
-                && currentEmployeeId != null) {
+        if (!hasText(order.getEmployeeId()) && currentEmployeeId != null) {
             order.setEmployeeId(currentEmployeeId);
         }
 
-        if (order.getEmployeeId() == null || order.getEmployeeId().trim().isEmpty()) {
+        if (!hasText(order.getEmployeeId())) {
             throw new SQLException("Không xác định được nhân viên bán hàng hiện tại.");
         }
 
-        if (order.getStatus() == null || order.getStatus().isBlank()) {
+        if (!hasText(order.getStatus())) {
             order.setStatus("Hoàn thành");
         }
     }
@@ -320,15 +338,13 @@ public class PaymentService {
         try {
             detail.setOrderId(orderId);
         } catch (Exception ignored) {
-            // Nếu model không có setter thì insert manual vẫn dùng orderId truyền vào.
         }
 
         try {
-            if (detail.getOrderDetailId() == null || detail.getOrderDetailId().trim().isEmpty()) {
+            if (!hasText(detail.getOrderDetailId())) {
                 detail.setOrderDetailId(buildOrderDetailId());
             }
         } catch (Exception ignored) {
-            // Nếu model không có orderDetailId thì insert manual vẫn tự sinh.
         }
     }
 
@@ -433,11 +449,11 @@ public class PaymentService {
     private static String requireStoreId(Order order) throws SQLException {
         String storeId = order != null ? order.getStoreId() : null;
 
-        if (storeId == null || storeId.trim().isEmpty()) {
+        if (!hasText(storeId)) {
             storeId = SessionManager.getCurrentStoreId();
         }
 
-        if (storeId == null || storeId.trim().isEmpty()) {
+        if (!hasText(storeId)) {
             throw new SQLException("Không xác định được chi nhánh hiện tại. Vui lòng đăng nhập bằng tài khoản đã được phân chi nhánh.");
         }
 
@@ -451,7 +467,7 @@ public class PaymentService {
 
         String currentStoreId = SessionManager.getCurrentStoreId();
 
-        if (currentStoreId == null || currentStoreId.trim().isEmpty()) {
+        if (!hasText(currentStoreId)) {
             throw new SQLException("Tài khoản chưa được phân chi nhánh. Vui lòng liên hệ Admin.");
         }
 
@@ -464,7 +480,7 @@ public class PaymentService {
         try {
             String employeeId = SessionManager.getCurrentEmployeeId();
 
-            if (employeeId != null && !employeeId.trim().isEmpty()) {
+            if (hasText(employeeId)) {
                 return employeeId.trim();
             }
         } catch (Exception ignored) {
@@ -472,8 +488,7 @@ public class PaymentService {
 
         try {
             if (SessionManager.getCurrentUser() != null
-                    && SessionManager.getCurrentUser().getUserId() != null
-                    && !SessionManager.getCurrentUser().getUserId().trim().isEmpty()) {
+                    && hasText(SessionManager.getCurrentUser().getUserId())) {
                 return SessionManager.getCurrentUser().getUserId().trim();
             }
         } catch (Exception ignored) {
@@ -499,24 +514,36 @@ public class PaymentService {
                 || s.equals("cancelled");
     }
 
-    private static void publishPaymentChanges(String message) {
+    /**
+     * Realtime sau thanh toán/hủy đơn: - ORDERS: luôn reload vì hóa đơn thay
+     * đổi. - INVENTORY: luôn reload vì tồn kho bị trừ/hoàn. - CUSTOMERS: chỉ
+     * reload nếu có customerId thật, tránh guest order làm lag CustomerView.
+     *
+     * Dashboard/Report không gọi trực tiếp ở đây; RealtimeNotifier tự debounce
+     * theo ordersChanged().
+     */
+    private static void publishPaymentChanges(
+            String message,
+            String orderId,
+            String storeId,
+            String customerId
+    ) {
         try {
-            String baseMessage = message == null || message.trim().isEmpty()
-                    ? "PAYMENT_CHANGED"
-                    : message.trim();
+            String baseMessage = !hasText(message) ? "PAYMENT_CHANGED" : message.trim();
+            String orderToken = hasText(orderId) ? ":ORDER:" + orderId.trim() : "";
+            String storeToken = hasText(storeId) ? ":STORE:" + storeId.trim() : "";
 
-            /*
-         * Thanh toán / hủy đơn ảnh hưởng chính:
-         * - ORDERS: danh sách hóa đơn
-         * - INVENTORY: tồn kho bị trừ hoặc hoàn lại
-         * - CUSTOMERS: điểm/hạng khách hàng thay đổi nếu có customer_id
-         *
-         * Không bắn quá nhiều event PRODUCTS / STATISTICS / DASHBOARD trực tiếp nữa.
-         * RealtimeNotifier.ordersChanged(...) đã tự debounce dashboard/report rồi.
-             */
-            RealtimeNotifier.ordersChanged("ORDERS_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.inventoryChanged("INVENTORY_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.customersChanged("CUSTOMERS_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.ordersChanged("ORDER_PAYMENT_CHANGED:" + baseMessage + orderToken + storeToken);
+            RealtimeNotifier.inventoryChanged("INVENTORY_BY_ORDER:" + baseMessage + orderToken + storeToken);
+
+            if (hasText(customerId)) {
+                RealtimeNotifier.customersChanged(
+                        "CUSTOMER_BY_ORDER:" + baseMessage
+                        + ":CUSTOMER:" + customerId.trim()
+                        + orderToken
+                        + storeToken
+                );
+            }
 
         } catch (Exception ex) {
             System.err.println("[PaymentService] realtime notify error: " + ex.getMessage());
@@ -552,6 +579,10 @@ public class PaymentService {
         } catch (SQLException e) {
             System.err.println("⚠️ Không thể ghi log trạng thái nhưng giao dịch vẫn hoàn tất.");
         }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private static void rollbackQuietly(Connection con) {

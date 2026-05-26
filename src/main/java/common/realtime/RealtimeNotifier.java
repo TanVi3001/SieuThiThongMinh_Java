@@ -4,18 +4,22 @@ import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
 import common.sync.SyncVersionDao;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * RealtimeNotifier chuẩn: - Publish đúng event, đúng module. - Không publish
- * bừa nhiều event. - Dashboard/Report được debounce. - AuditLog/LoginHistory
- * không nằm trong realtime.
+ * RealtimeNotifier chuẩn: - Publish đúng event, đúng module. - Giữ tương thích
+ * event cũ để không phá các panel hiện tại. - Dedupe event trùng trong thời
+ * gian ngắn để tránh reload bừa. - Dashboard/Report được debounce. -
+ * AuditLog/LoginHistory không nằm trong realtime.
  */
 public final class RealtimeNotifier {
 
     private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.realtime");
+    private static final long DUPLICATE_WINDOW_MS = 350L;
 
     private static final ScheduledExecutorService SCHEDULER
             = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -25,6 +29,8 @@ public final class RealtimeNotifier {
             });
 
     private static final Object SUMMARY_LOCK = new Object();
+    private static final Map<String, Long> LAST_EVENT_AT = new ConcurrentHashMap<>();
+
     private static boolean dashboardPending = false;
     private static boolean reportPending = false;
 
@@ -65,6 +71,15 @@ public final class RealtimeNotifier {
         scheduleReport("FROM_ORDERS");
     }
 
+    /**
+     * Compatibility cho code cũ. Chi tiết đơn hàng vẫn thuộc nhóm
+     * ORDER_CHANGED. Không tạo event riêng để tránh OrderView/Report reload 2
+     * lần.
+     */
+    public static void orderDetailsChanged(String message) {
+        ordersChanged("ORDER_DETAILS_CHANGED:" + normalize(message, "ORDER_DETAILS_CHANGED"));
+    }
+
     public static void promotionsChanged(String message) {
         notify("PROMOTIONS", AppEventType.PROMOTION_CHANGED, null, "PROMOTION_CHANGED", message);
     }
@@ -92,15 +107,17 @@ public final class RealtimeNotifier {
     }
 
     public static void dashboardChanged(String message) {
-        publish(AppEventType.DASHBOARD_CHANGED, normalize(message, "DASHBOARD_CHANGED"));
-        publish(AppEventType.DASHBOARD, normalize(message, "DASHBOARD_CHANGED"));
-        sendRemote("DASHBOARD_CHANGED:" + normalize(message, "DASHBOARD_CHANGED"));
+        String msg = normalize(message, "DASHBOARD_CHANGED");
+        publish(AppEventType.DASHBOARD_CHANGED, msg);
+        publish(AppEventType.DASHBOARD, msg);
+        sendRemote("DASHBOARD_CHANGED:" + msg);
     }
 
     public static void reportChanged(String message) {
-        publish(AppEventType.REPORT_CHANGED, normalize(message, "REPORT_CHANGED"));
-        publish(AppEventType.STATISTICS, normalize(message, "REPORT_CHANGED"));
-        sendRemote("REPORT_CHANGED:" + normalize(message, "REPORT_CHANGED"));
+        String msg = normalize(message, "REPORT_CHANGED");
+        publish(AppEventType.REPORT_CHANGED, msg);
+        publish(AppEventType.STATISTICS, msg);
+        sendRemote("REPORT_CHANGED:" + msg);
     }
 
     public static void statisticsChanged(String message) {
@@ -108,8 +125,9 @@ public final class RealtimeNotifier {
     }
 
     public static void inventoryAlert(String message) {
-        publish(AppEventType.INVENTORY_ALERT, normalize(message, "INVENTORY_ALERT"));
-        sendRemote("INVENTORY_ALERT:" + normalize(message, "INVENTORY_ALERT"));
+        String msg = normalize(message, "INVENTORY_ALERT");
+        publish(AppEventType.INVENTORY_ALERT, msg);
+        sendRemote("INVENTORY_ALERT:" + msg);
     }
 
     private static void notify(
@@ -120,15 +138,32 @@ public final class RealtimeNotifier {
             String message
     ) {
         String msg = normalize(message, remotePrefix);
+        String dedupeKey = remotePrefix + "|" + msg;
+
+        if (isDuplicate(dedupeKey)) {
+            return;
+        }
 
         bump(syncKey);
+
         publish(newType, msg);
 
-        if (legacyType != null) {
+        if (legacyType != null && legacyType != newType) {
             publish(legacyType, msg);
         }
 
         sendRemote(remotePrefix + ":" + msg);
+    }
+
+    private static boolean isDuplicate(String key) {
+        long now = System.currentTimeMillis();
+        Long previous = LAST_EVENT_AT.put(key, now);
+
+        if (previous == null) {
+            return false;
+        }
+
+        return now - previous < DUPLICATE_WINDOW_MS;
     }
 
     private static void publish(AppEventType type, String message) {
@@ -194,9 +229,5 @@ public final class RealtimeNotifier {
         return message == null || message.trim().isEmpty()
                 ? fallback
                 : message.trim();
-    }
-
-    public static void orderDetailsChanged(String message) {
-        ordersChanged(message == null ? "ORDER_DETAILS_CHANGED" : message);
     }
 }

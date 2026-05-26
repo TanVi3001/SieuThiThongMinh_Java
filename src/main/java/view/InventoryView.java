@@ -29,6 +29,9 @@ import javax.swing.table.DefaultTableModel;
 import model.product.Product;
 import view.components.IconHelper;
 import business.sql.prod_inventory.InventoryNotificationSql;
+import common.realtime.PanelRealtimeSupport;
+import common.realtime.RealtimeNotifier;
+import common.ui.UiAsync;
 
 public class InventoryView extends JPanel {
 
