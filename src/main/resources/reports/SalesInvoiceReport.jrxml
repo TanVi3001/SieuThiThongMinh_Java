@@ -520,8 +520,8 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box leftPadding="8" />
-                <textElement verticalAlignment="Middle" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
             <staticText>
@@ -541,7 +541,7 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Giá SP]]></text>
             </staticText>
             <staticText>
@@ -551,8 +551,8 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box rightPadding="8" />
-                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
 
@@ -564,8 +564,8 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box leftPadding="8" />
-                <textElement verticalAlignment="Middle" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
             <staticText>
@@ -575,7 +575,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Giá SP]]></text>
             </staticText>
             <staticText>
@@ -595,7 +595,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
             <staticText>
@@ -615,8 +615,8 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box rightPadding="8" />
-                <textElement textAlignment="Right" verticalAlignment="Middle" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Sau giảm]]></text>
             </staticText>
         </band>
@@ -639,7 +639,8 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box leftPadding="8" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -649,7 +650,7 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Center" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -659,7 +660,7 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -669,8 +670,8 @@ $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box rightPadding="8" />
-                <textElement textAlignment="Right" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
             </textField>
 
@@ -682,7 +683,8 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box leftPadding="8" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -692,7 +694,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -702,7 +704,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Center" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -712,7 +714,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Right" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0.##'%'">
@@ -722,7 +724,7 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <textElement textAlignment="Center" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_discount_percent} == null ? java.math.BigDecimal.ZERO : $F{line_discount_percent}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0">
@@ -732,8 +734,8 @@ $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
-                <box rightPadding="8" />
-                <textElement textAlignment="Right" />
+                <box leftPadding="0" rightPadding="0" />
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_net_total}]]></textFieldExpression>
             </textField>
         </band>
@@ -844,8 +846,8 @@ $F{order_discount_amount} == null
                 <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
 
-            <textField pattern="#,##0">
-                <reportElement x="420" y="66" width="95" height="20" forecolor="#0F766E">
+            <textField>
+                <reportElement x="390" y="66" width="125" height="20" forecolor="#0F766E">
                     <printWhenExpression><![CDATA[
 $F{order_discount_amount} == null
 || $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
@@ -856,7 +858,7 @@ $F{order_discount_amount} == null
                         pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
                         isPdfEmbedded="true" />
                 </textElement>
-                <textFieldExpression><![CDATA[$F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[new java.text.DecimalFormat("#,##0").format($F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}) + " VND"]]></textFieldExpression>
             </textField>
 
             <!-- CÓ GIẢM GIÁ: hiện rõ giảm thành viên và giảm chương trình để dễ đối soát -->
@@ -903,7 +905,7 @@ $F{order_discount_amount} != null
                 <text><![CDATA[Giảm giá thành viên]]></text>
             </staticText>
 
-            <textField pattern="#,##0">
+            <textField>
                 <reportElement style="Money" x="445" y="44" width="70" height="14">
                     <printWhenExpression><![CDATA[
 $F{order_discount_amount} != null
@@ -911,7 +913,11 @@ $F{order_discount_amount} != null
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Right" />
-                <textFieldExpression><![CDATA[$F{member_discount_amount} == null ? java.math.BigDecimal.ZERO : $F{member_discount_amount}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[
+$F{member_discount_amount} == null || $F{member_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
+? "0"
+: "-" + new java.text.DecimalFormat("#,##0").format($F{member_discount_amount})
+]]></textFieldExpression>
             </textField>
 
             <staticText>
@@ -924,7 +930,7 @@ $F{order_discount_amount} != null
                 <text><![CDATA[Giảm giá chương trình]]></text>
             </staticText>
 
-            <textField pattern="#,##0">
+            <textField>
                 <reportElement style="Money" x="445" y="64" width="70" height="14">
                     <printWhenExpression><![CDATA[
 $F{order_discount_amount} != null
@@ -933,7 +939,9 @@ $F{order_discount_amount} != null
                 </reportElement>
                 <textElement textAlignment="Right" />
                 <textFieldExpression><![CDATA[
-$F{program_discount_amount} == null ? java.math.BigDecimal.ZERO : $F{program_discount_amount}
+$F{program_discount_amount} == null || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
+? "0"
+: "-" + new java.text.DecimalFormat("#,##0").format($F{program_discount_amount})
 ]]></textFieldExpression>
             </textField>
 
@@ -964,8 +972,8 @@ $F{order_discount_amount} != null
                 <text><![CDATA[TỔNG CỘNG]]></text>
             </staticText>
 
-            <textField pattern="#,##0">
-                <reportElement x="420" y="102" width="95" height="20" forecolor="#0F766E">
+            <textField>
+                <reportElement x="390" y="102" width="125" height="20" forecolor="#0F766E">
                     <printWhenExpression><![CDATA[
 $F{order_discount_amount} != null
 && $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
@@ -976,19 +984,8 @@ $F{order_discount_amount} != null
                         pdfFontName="C:/Windows/Fonts/arial.ttf" pdfEncoding="Identity-H"
                         isPdfEmbedded="true" />
                 </textElement>
-                <textFieldExpression><![CDATA[$F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[new java.text.DecimalFormat("#,##0").format($F{total_amount} == null ? java.math.BigDecimal.ZERO : $F{total_amount}) + " VND"]]></textFieldExpression>
             </textField>
-
-            <staticText>
-                <reportElement style="SmallMuted" x="452" y="126" width="63" height="10">
-                    <printWhenExpression><![CDATA[
-$F{order_discount_amount} != null
-&& $F{order_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
-]]></printWhenExpression>
-                </reportElement>
-                <textElement textAlignment="Right" />
-                <text><![CDATA[VND]]></text>
-            </staticText>
 
             <staticText>
                 <reportElement style="Label" x="0" y="150" width="535" height="18"

@@ -59,6 +59,7 @@ public class SellPanel extends JPanel {
     private JComboBox<String> cboSearchProduct;
     private DefaultComboBoxModel<String> searchComboModel;
     private JTextField searchEditor;
+    private boolean productSearchSpaceInjected = false;
     private JSpinner spnQtyAdd;
     private RoundedButton btnAdd;
     private RoundedButton btnRefreshProducts;
@@ -84,6 +85,7 @@ public class SellPanel extends JPanel {
 
     private JComboBox<String> cboPaymentMethod;
     private JComboBox<String> cboKhuyenMai;
+    private boolean updatingPromotionSelection = false;
     private double discountPercentage = 0.0;
     private JLabel lblSubTotal, lblDiscount, lblTotalPay;
     private RoundedButton btnPay, btnCancel, btnRemove;
@@ -137,12 +139,15 @@ public class SellPanel extends JPanel {
     // INIT
     // =========================================================
     public SellPanel() {
+        putClientProperty("permission.guard.skip", Boolean.TRUE);
         setLayout(new BorderLayout(15, 15));
         setBackground(BG_LIGHT);
         setBorder(new EmptyBorder(15, 15, 15, 15));
 
         buildUI();
+        disablePermissionGuardForThisPanel();
         initEvents();
+        forceEnablePosControls();
         loadProducts();
         loadPaymentMethods();
 
@@ -170,6 +175,39 @@ public class SellPanel extends JPanel {
                 });
             }
         });
+    }
+
+    // =========================================================
+    // POS PERMISSION GUARD BYPASS
+    // =========================================================
+    private void disablePermissionGuardForThisPanel() {
+        /*
+         * SellPanel là màn nghiệp vụ bán hàng riêng.
+         * Không áp dụng ma trận quyền CRUD chung ở đây.
+         *
+         * Lý do:
+         * - Nút "Xóa" chỉ là xóa sản phẩm khỏi giỏ tạm, không xóa DB.
+         * - Nút "Hủy" chỉ là hủy giỏ tạm, không xóa DB.
+         * - Nút "Thêm vào giỏ" và "Thanh toán" là nghiệp vụ bắt buộc của Staff Sale.
+         */
+        putClientProperty("permission.guard.skip", Boolean.TRUE);
+        markPermissionGuardSkipRecursively(this);
+    }
+
+    private void markPermissionGuardSkipRecursively(Component component) {
+        if (component == null) {
+            return;
+        }
+
+        if (component instanceof JComponent jc) {
+            jc.putClientProperty("permission.guard.skip", Boolean.TRUE);
+        }
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                markPermissionGuardSkipRecursively(child);
+            }
+        }
     }
 
     // =========================================================
@@ -299,31 +337,39 @@ public class SellPanel extends JPanel {
         JPanel toolbar = new JPanel(new BorderLayout(8, 0));
         toolbar.setOpaque(false);
 
+        // FIX FINAL: dùng JTextField thuần thay cho JComboBox editable.
+        // JComboBox editable hay nuốt phím SPACE/key-selection nên gõ "Mì hảo" bị dính thành "Mìhảo".
+        // JTextField thuần sẽ nhận khoảng trắng ổn định và vẫn lọc realtime bằng DocumentListener.
         searchComboModel = new DefaultComboBoxModel<>();
-        cboSearchProduct = new JComboBox<>(searchComboModel);
-        cboSearchProduct.setEditable(true);
-        cboSearchProduct.setMaximumRowCount(8);
-        cboSearchProduct.setPreferredSize(new Dimension(250, 36));
-        cboSearchProduct.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        cboSearchProduct.setToolTipText("Ê, gõ mã hoặc tên sản phẩm vào ô này để tìm kiếm nha!");
+        cboSearchProduct = null;
 
-        searchEditor = (JTextField) cboSearchProduct.getEditor().getEditorComponent();
+        searchEditor = new JTextField();
+        searchEditor.setPreferredSize(new Dimension(250, 36));
         searchEditor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         searchEditor.putClientProperty("JTextField.placeholderText", SEARCH_HINT);
-        searchEditor.setToolTipText("Ê, gõ mã hoặc tên sản phẩm vào ô này để tìm kiếm nha!");
-        // Bỏ Icon kính lúp ở đây
+        searchEditor.setToolTipText("Gõ mã hoặc tên sản phẩm, ví dụ: Mì hảo, Nước mắm, Omachi sườn hầm");
+        searchEditor.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_GRAY),
+                new EmptyBorder(0, 10, 0, 10)
+        ));
+        searchEditor.putClientProperty("permission.guard.skip", Boolean.TRUE);
 
         btnRefreshProducts = new RoundedButton("Làm mới");
         styleButton(btnRefreshProducts, new Color(127, 140, 141));
-        btnRefreshProducts.setPreferredSize(new Dimension(110, 34));
+        btnRefreshProducts.setPreferredSize(new Dimension(125, 36));
+        btnRefreshProducts.setMinimumSize(new Dimension(125, 36));
         btnRefreshProducts.setIcon(IconHelper.refresh(14));
+        btnRefreshProducts.setIconTextGap(8);
+        btnRefreshProducts.setHorizontalAlignment(SwingConstants.CENTER);
+        btnRefreshProducts.setMargin(new Insets(0, 12, 0, 12));
+        btnRefreshProducts.putClientProperty("permission.guard.skip", Boolean.TRUE);
 
         JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         rightActions.setOpaque(false);
         // Bỏ Add nút Tìm ở đây
         rightActions.add(btnRefreshProducts);
 
-        toolbar.add(cboSearchProduct, BorderLayout.CENTER);
+        toolbar.add(searchEditor, BorderLayout.CENTER);
         toolbar.add(rightActions, BorderLayout.EAST);
 
         pnl.add(toolbar, BorderLayout.NORTH);
@@ -439,13 +485,18 @@ public class SellPanel extends JPanel {
         btnAdd = new RoundedButton("Thêm");
         styleButton(btnAdd, PRIMARY_BLUE);
         btnAdd.setVisible(false);
-        btnRemove = new RoundedButton("Xóa");
+        btnAdd.putClientProperty("permission.guard.skip", Boolean.TRUE);
+        btnRemove = new RoundedButton("Bỏ khỏi giỏ");
         styleButton(btnRemove, new Color(149, 165, 166));
-        btnRemove.setPreferredSize(new Dimension(80, 34));
+        btnRemove.setPreferredSize(new Dimension(120, 34));
+        btnRemove.putClientProperty("permission.guard.skip", Boolean.TRUE);
+        btnRemove.setToolTipText("Bỏ sản phẩm đang chọn khỏi giỏ hàng tạm thời");
 
-        btnCancel = new RoundedButton("Hủy");
+        btnCancel = new RoundedButton("Làm trống giỏ");
         styleButton(btnCancel, DANGER_RED);
-        btnCancel.setPreferredSize(new Dimension(80, 34));
+        btnCancel.setPreferredSize(new Dimension(125, 34));
+        btnCancel.putClientProperty("permission.guard.skip", Boolean.TRUE);
+        btnCancel.setToolTipText("Làm trống toàn bộ giỏ hàng tạm thời");
 
         pnlActions.add(btnRemove);
         pnlActions.add(btnCancel);
@@ -525,13 +576,20 @@ public class SellPanel extends JPanel {
         cboKhuyenMai = new JComboBox<>();
         cboKhuyenMai.setPreferredSize(new Dimension(220, 36));
         cboKhuyenMai.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cboKhuyenMai.setEnabled(false);
+        cboKhuyenMai.setToolTipText("Hệ thống tự động áp dụng mã tốt nhất khi đơn hàng đủ điều kiện");
         loadActivePromotions();
         cboKhuyenMai.addActionListener(e -> {
-            String selected = cboKhuyenMai.getSelectedItem() != null
-                    ? cboKhuyenMai.getSelectedItem().toString()
-                    : "";
-            discountPercentage = getPromoRateFromString(selected);
-            calculateTotal(); // Tính lại tiền ngay khi chọn
+            if (updatingPromotionSelection) {
+                return;
+            }
+
+            // POS không cho chọn tay voucher nữa. Hệ thống tự chọn mã phù hợp nhất trong calculateTotal().
+            autoApplyBestPromotion();
+            discountPercentage = getPromoRateFromString(
+                    cboKhuyenMai.getSelectedItem() == null ? "" : cboKhuyenMai.getSelectedItem().toString()
+            );
+            calculateTotal();
         });
 
         cboPaymentMethod = new JComboBox<>();
@@ -557,6 +615,7 @@ public class SellPanel extends JPanel {
         btnPay.setPreferredSize(new Dimension(0, 50));
         btnPay.setFont(new Font("Segoe UI", Font.BOLD, 18));
         btnPay.setEnabled(false);
+        btnPay.putClientProperty("permission.guard.skip", Boolean.TRUE);
 
         chkPrintBill = new ToggleButton("In hóa đơn");
 
@@ -661,6 +720,7 @@ public class SellPanel extends JPanel {
         btnFindCustomer = new RoundedButton("Tìm");
         styleButton(btnFindCustomer, PRIMARY_BLUE);
         btnFindCustomer.setPreferredSize(new Dimension(75, 34));
+        btnFindCustomer.putClientProperty("permission.guard.skip", Boolean.TRUE);
 
         JPanel infoWrap = new JPanel();
         infoWrap.setOpaque(false);
@@ -828,6 +888,7 @@ public class SellPanel extends JPanel {
         RoundedButton btnAddPreview = new RoundedButton("Thêm vào giỏ");
         styleButton(btnAddPreview, PRIMARY_BLUE);
         btnAddPreview.setPreferredSize(new Dimension(130, 36));
+        btnAddPreview.putClientProperty("permission.guard.skip", Boolean.TRUE);
         btnAddPreview.addActionListener(e -> {
             try {
                 spnQtyAdd.commitEdit();
@@ -1002,21 +1063,37 @@ public class SellPanel extends JPanel {
                     }
                 }
             });
+            installProductSearchTextKeyFix();
         }
 
         btnRefreshProducts.addActionListener(e -> resetProductSearch());
 
-        cboSearchProduct.addActionListener(e -> {
-            if (!updatingSearchSuggestions && cboSearchProduct.getSelectedItem() != null) {
+        if (cboSearchProduct != null) {
+            cboSearchProduct.addActionListener(e -> {
+                if (updatingSearchSuggestions || cboSearchProduct.getSelectedItem() == null) {
+                    return;
+                }
+
+                if (!cboSearchProduct.isPopupVisible()) {
+                    return;
+                }
+
                 String selected = cboSearchProduct.getSelectedItem().toString();
+
                 updatingSearchSuggestions = true;
+
                 if (searchEditor != null) {
                     searchEditor.setText(selected);
+                    searchEditor.requestFocusInWindow();
+                    searchEditor.setCaretPosition(searchEditor.getText().length());
                 }
+
                 updatingSearchSuggestions = false;
+
+                productSearchKeyword = selected;
                 filterProductsBySearch(selected);
-            }
-        });
+            });
+        }
 
         tblProducts.addMouseListener(new MouseAdapter() {
             @Override
@@ -1068,24 +1145,7 @@ public class SellPanel extends JPanel {
             }
         }
         btnRemove.addActionListener(e -> {
-            int[] selectedRows = tblCart.getSelectedRows();
-            if (selectedRows.length == 0) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn sản phẩm trong giỏ để xóa!");
-                return;
-            }
-            int[] modelRows = Arrays.stream(selectedRows)
-                    .map(tblCart::convertRowIndexToModel)
-                    .sorted()
-                    .toArray();
-            isUpdatingCart = true;
-            for (int i = modelRows.length - 1; i >= 0; i--) {
-                if (modelRows[i] >= 0 && modelRows[i] < modCart.getRowCount()) {
-                    modCart.removeRow(modelRows[i]);
-                }
-            }
-            isUpdatingCart = false;
-            calculateTotal();
-            validateCartAgainstDatabase();
+            removeSelectedCartItems();
         });
 
         btnCancel.addActionListener(e -> clearCart());
@@ -1133,6 +1193,165 @@ public class SellPanel extends JPanel {
 
         // 🚀 KÍCH HOẠT DRAG & DROP
         setupDragAndDrop();
+        installEnterToAddCartShortcut();
+    }
+
+    private void installProductSearchTextKeyFix() {
+        if (searchEditor == null) {
+            return;
+        }
+
+        /*
+         * Vì đã đổi ô tìm kiếm sang JTextField thuần nên SPACE không còn bị JComboBox nuốt nữa.
+         * Vẫn map rõ phím SPACE để đảm bảo gõ tiếng Việt có khoảng trắng ổn định.
+         */
+        KeyStroke spaceKey = KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0);
+
+        searchEditor.getInputMap(JComponent.WHEN_FOCUSED)
+                .put(spaceKey, "insert-space-into-product-search");
+
+        searchEditor.getActionMap()
+                .put("insert-space-into-product-search", new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        searchEditor.replaceSelection(" ");
+                    }
+                });
+
+        KeyStroke enterKey = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0);
+
+        searchEditor.getInputMap(JComponent.WHEN_FOCUSED)
+                .put(enterKey, "add-selected-product-to-cart");
+
+        searchEditor.getActionMap()
+                .put("add-selected-product-to-cart", new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        addSelectedProductToCart();
+                    }
+                });
+    }
+
+    private void installEnterToAddCartShortcut() {
+        Action addToCartAction = new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                addSelectedProductToCart();
+            }
+        };
+
+        KeyStroke enterKey = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0);
+
+        if (tblProducts != null) {
+            tblProducts.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                    .put(enterKey, "addSelectedProductToCart");
+            tblProducts.getActionMap()
+                    .put("addSelectedProductToCart", addToCartAction);
+        }
+
+        if (searchEditor != null) {
+            searchEditor.addActionListener(e -> addSelectedProductToCart());
+        }
+
+        if (spnQtyAdd != null && spnQtyAdd.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            JTextField qtyTextField = editor.getTextField();
+
+            qtyTextField.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(enterKey, "addSelectedProductToCart");
+            qtyTextField.getActionMap()
+                    .put("addSelectedProductToCart", addToCartAction);
+
+            qtyTextField.addActionListener(e -> addSelectedProductToCart());
+        }
+
+        if (pnlProductPreview != null) {
+            pnlProductPreview.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                    .put(enterKey, "addSelectedProductToCart");
+            pnlProductPreview.getActionMap()
+                    .put("addSelectedProductToCart", addToCartAction);
+        }
+    }
+
+    private void removeSelectedCartItems() {
+        if (tblCart.isEditing()) {
+            try {
+                tblCart.getCellEditor().stopCellEditing();
+            } catch (Exception ignored) {
+            }
+        }
+
+        int[] selectedRows = tblCart.getSelectedRows();
+
+        if (selectedRows.length == 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn sản phẩm trong giỏ để xóa!",
+                    "Chưa chọn sản phẩm",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        int[] modelRows = Arrays.stream(selectedRows)
+                .map(tblCart::convertRowIndexToModel)
+                .sorted()
+                .toArray();
+
+        isUpdatingCart = true;
+
+        for (int i = modelRows.length - 1; i >= 0; i--) {
+            int row = modelRows[i];
+
+            if (row >= 0 && row < modCart.getRowCount()) {
+                modCart.removeRow(row);
+            }
+        }
+
+        isUpdatingCart = false;
+
+        refreshProductsForCartState();
+        calculateTotal();
+        validateCartAgainstDatabase();
+    }
+
+    private int getCartQuantity(String productId) {
+        if (productId == null) {
+            return 0;
+        }
+
+        int total = 0;
+
+        for (int i = 0; i < modCart.getRowCount(); i++) {
+            Object idObj = modCart.getValueAt(i, 0);
+            Object qtyObj = modCart.getValueAt(i, 2);
+
+            if (idObj == null || qtyObj == null) {
+                continue;
+            }
+
+            if (productId.equals(String.valueOf(idObj))) {
+                try {
+                    total += Integer.parseInt(String.valueOf(qtyObj));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        return total;
+    }
+
+    private void refreshProductsForCartState() {
+        applyProductFilter(productSearchKeyword);
+
+        int viewRow = tblProducts.getSelectedRow();
+
+        if (viewRow >= 0) {
+            int modelRow = tblProducts.convertRowIndexToModel(viewRow);
+
+            if (modelRow >= 0 && modelRow < modProducts.getRowCount()) {
+                updateProductPreviewByProductId(String.valueOf(modProducts.getValueAt(modelRow, 0)));
+            }
+        }
     }
 
     private void setupDragAndDrop() {
@@ -1260,6 +1479,7 @@ public class SellPanel extends JPanel {
                     return;
                 }
                 modCart.setValueAt(newQty, i, 2);
+                refreshProductsForCartState();
                 return;
             }
         }
@@ -1268,6 +1488,7 @@ public class SellPanel extends JPanel {
         modCart.addRow(new Object[]{pId, p.getProductName(), qty, price, price * qty, p.getQuantity(), ""});
         isUpdatingCart = false;
 
+        refreshProductsForCartState();
         calculateTotal();
         validateCartAgainstDatabase();
     }
@@ -1298,84 +1519,33 @@ public class SellPanel extends JPanel {
     }
 
     private String getSearchText() {
-        return searchEditor != null ? searchEditor.getText().trim() : "";
+        return searchEditor != null ? searchEditor.getText() : "";
     }
 
     private void clearSearchText() {
         updatingSearchSuggestions = true;
-        if (searchEditor != null) {
-            searchEditor.setText("");
-        }
-        if (cboSearchProduct != null) {
-            cboSearchProduct.setSelectedItem(null);
-        }
-        updatingSearchSuggestions = false;
-    }
-
-    private void refreshSearchSuggestions(String keyword) {
-        if (searchComboModel == null || cboSearchProduct == null || searchEditor == null) {
-            return;
-        }
-
-        if (updatingSearchSuggestions) {
-            return;
-        }
-
-        final String keepText = keyword == null ? "" : keyword.trim();
-        final String normalizedKeyword = normalizeSearchText(keepText);
-
-        updatingSearchSuggestions = true;
-
         try {
-            searchComboModel.removeAllElements();
-
-            // Fix lỗi vừa mở màn hình POS đã tự xổ dropdown tìm kiếm:
-            // Khi ô tìm kiếm đang rỗng thì không nạp suggestion và không show popup.
-            if (normalizedKeyword.isBlank()) {
-                if (searchEditor != null) {
-                    searchEditor.setText("");
-                    searchEditor.setCaretPosition(0);
-                }
-
-                if (cboSearchProduct != null) {
-                    cboSearchProduct.hidePopup();
-                    cboSearchProduct.setSelectedItem(null);
-                }
-                return;
+            if (searchEditor != null) {
+                searchEditor.setText("");
+                searchEditor.setCaretPosition(0);
             }
-
-            int count = 0;
-
-            for (Product p : allProducts) {
-                if (p == null || p.getProductId() == null || p.getProductName() == null) {
-                    continue;
-                }
-
-                String label = formatProductSearchLabel(p);
-                String haystack = normalizeSearchText(p.getProductId() + " " + p.getProductName());
-
-                if (haystack.contains(normalizedKeyword)) {
-                    searchComboModel.addElement(label);
-                    count++;
-                }
-
-                if (count >= 20) {
-                    break;
-                }
+            if (cboSearchProduct != null) {
+                cboSearchProduct.hidePopup();
+                cboSearchProduct.setSelectedItem(null);
             }
-
-            searchEditor.setText(keepText);
-            searchEditor.setCaretPosition(searchEditor.getText().length());
-
         } finally {
             updatingSearchSuggestions = false;
         }
+    }
 
-        if (!keepText.isBlank() && cboSearchProduct.isShowing() && searchComboModel.getSize() > 0) {
-            cboSearchProduct.showPopup();
-        } else {
-            cboSearchProduct.hidePopup();
+    private void refreshSearchSuggestions(String keyword) {
+        // Search hiện dùng JTextField thuần để tránh lỗi dính chữ khi gõ SPACE.
+        // Không cập nhật lại text tại đây, tránh làm mất khoảng trắng user vừa nhập.
+        if (searchComboModel == null) {
+            return;
         }
+
+        searchComboModel.removeAllElements();
     }
 
     private String normalizeSearchText(String value) {
@@ -1417,12 +1587,21 @@ public class SellPanel extends JPanel {
         modProducts.setRowCount(0);
 
         for (Product p : allProducts) {
-            if (p.getQuantity() <= 0) {
+            int availableQty = p.getQuantity() - getCartQuantity(p.getProductId());
+
+            if (availableQty <= 0) {
                 continue;
             }
-            String haystack = (p.getProductId() + " " + p.getProductName()).toLowerCase();
-            if (normalized.isBlank() || haystack.contains(normalized)) {
-                modProducts.addRow(new Object[]{p.getProductId(), p.getProductName(), moneyFormat.format(p.getBasePrice()), p.getQuantity()});
+
+            String haystack = normalizeSearchText(p.getProductId() + " " + p.getProductName());
+
+            if (normalized.isBlank() || haystack.contains(normalizeSearchText(normalized))) {
+                modProducts.addRow(new Object[]{
+                    p.getProductId(),
+                    p.getProductName(),
+                    moneyFormat.format(p.getBasePrice()),
+                    availableQty
+                });
             }
         }
 
@@ -1482,9 +1661,20 @@ public class SellPanel extends JPanel {
             lblWarningMsg.setText("Lỗi: Có sản phẩm vượt tồn kho hoặc đã bị thay đổi!");
             pnlWarning.setVisible(true);
             btnPay.setEnabled(false);
+            btnPay.putClientProperty("permission.guard.skip", Boolean.TRUE);
         } else {
             pnlWarning.setVisible(false);
             btnPay.setEnabled(modCart.getRowCount() > 0);
+        }
+
+        if (btnRemove != null) {
+            btnRemove.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnRemove.setEnabled(true);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnCancel.setEnabled(true);
         }
 
         if (lblCartCount != null) {
@@ -1498,11 +1688,21 @@ public class SellPanel extends JPanel {
     }
 
     private void clearCart() {
+        if (tblCart.isEditing()) {
+            try {
+                tblCart.getCellEditor().stopCellEditing();
+            } catch (Exception ignored) {
+            }
+        }
+
         isUpdatingCart = true;
         modCart.setRowCount(0);
         isUpdatingCart = false;
+
+        refreshProductsForCartState();
         calculateTotal();
         validateCartAgainstDatabase();
+        forceEnablePosControls();
     }
 
     private double getSelectedCustomerDiscountRate() {
@@ -1582,6 +1782,77 @@ public class SellPanel extends JPanel {
         return s;
     }
 
+    private PromoRule findBestEligiblePromotion() {
+        if (promoRuleMap == null || promoRuleMap.isEmpty() || modCart == null || modCart.getRowCount() == 0) {
+            return null;
+        }
+
+        PromoRule bestRule = null;
+        double bestDiscountAmount = 0.0;
+
+        for (PromoRule rule : promoRuleMap.values()) {
+            if (rule == null || rule.productDiscountMap == null || rule.productDiscountMap.isEmpty()) {
+                continue;
+            }
+
+            double eligibleSubTotal = 0.0;
+            double discountAmount = 0.0;
+
+            for (int i = 0; i < modCart.getRowCount(); i++) {
+                String productId = String.valueOf(modCart.getValueAt(i, 0));
+                double lineTotal = parseMoneyObject(modCart.getValueAt(i, 4));
+                Double percent = rule.productDiscountMap.get(productId);
+
+                if (percent != null && percent > 0) {
+                    eligibleSubTotal += lineTotal;
+                    discountAmount += roundMoney(lineTotal * percent / 100.0);
+                }
+            }
+
+            if (eligibleSubTotal >= rule.minOrderAmount && discountAmount > bestDiscountAmount) {
+                bestDiscountAmount = discountAmount;
+                bestRule = rule;
+            }
+        }
+
+        return bestRule;
+    }
+
+    private void autoApplyBestPromotion() {
+        if (cboKhuyenMai == null) {
+            return;
+        }
+
+        PromoRule bestRule = findBestEligiblePromotion();
+        String targetPromoId = bestRule == null ? null : bestRule.promotionId;
+        int targetIndex = 0;
+
+        if (targetPromoId != null) {
+            for (int i = 1; i < cboKhuyenMai.getItemCount(); i++) {
+                String item = cboKhuyenMai.getItemAt(i);
+                if (item != null && item.split("\\|")[0].trim().equals(targetPromoId)) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (cboKhuyenMai.getSelectedIndex() != targetIndex) {
+            updatingPromotionSelection = true;
+            try {
+                cboKhuyenMai.setSelectedIndex(targetIndex);
+            } finally {
+                updatingPromotionSelection = false;
+            }
+        }
+
+        if (bestRule != null) {
+            cboKhuyenMai.setToolTipText("Tự động áp dụng: " + bestRule.promotionName);
+        } else {
+            cboKhuyenMai.setToolTipText("Chưa có mã giảm giá phù hợp với giỏ hàng hiện tại");
+        }
+    }
+
     private void calculateTotal() {
         if (lblSubTotal == null || lblTotalPay == null) {
             return;
@@ -1613,7 +1884,8 @@ public class SellPanel extends JPanel {
             }
         }
 
-        // 3. Giảm giá chương trình: mỗi sản phẩm có % riêng trong PROMOTION_PRODUCTS.
+        // 3. Giảm giá chương trình: tự động chọn mã tốt nhất nếu đơn hàng đủ điều kiện.
+        autoApplyBestPromotion();
         PromoRule selectedRule = getSelectedPromoRule();
 
         if (selectedRule != null
@@ -1654,6 +1926,7 @@ public class SellPanel extends JPanel {
                     }
                 }
             } else {
+                // Không popup ở POS: hệ thống tự bỏ mã nếu chưa đủ điều kiện.
                 currentLineProgramDiscountPercent.clear();
                 currentLineProgramDiscountAmount.clear();
 
@@ -1663,19 +1936,13 @@ public class SellPanel extends JPanel {
                     currentLineProgramDiscountAmount.put(productId, 0.0);
                 }
 
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Mã khuyến mãi cần tổng tiền nhóm sản phẩm áp dụng tối thiểu "
-                        + moneyFormat.format(selectedRule.minOrderAmount)
-                        + ".\nHiện tại nhóm sản phẩm áp dụng chỉ có "
-                        + moneyFormat.format(eligibleSubTotal)
-                        + ".",
-                        "Chưa đủ điều kiện khuyến mãi",
-                        JOptionPane.WARNING_MESSAGE
-                );
-
-                if (cboKhuyenMai != null && cboKhuyenMai.getSelectedIndex() > 0) {
-                    cboKhuyenMai.setSelectedIndex(0);
+                updatingPromotionSelection = true;
+                try {
+                    if (cboKhuyenMai != null && cboKhuyenMai.getItemCount() > 0) {
+                        cboKhuyenMai.setSelectedIndex(0);
+                    }
+                } finally {
+                    updatingPromotionSelection = false;
                 }
 
                 programDiscount = 0.0;
@@ -1889,13 +2156,8 @@ public class SellPanel extends JPanel {
                 try {
                     allProducts = get();
 
-                    if (productSearchKeyword != null && !productSearchKeyword.trim().isEmpty()) {
-                        refreshSearchSuggestions(productSearchKeyword);
-                    } else if (searchComboModel != null) {
+                    if (searchComboModel != null) {
                         searchComboModel.removeAllElements();
-                        if (cboSearchProduct != null) {
-                            cboSearchProduct.hidePopup();
-                        }
                     }
                     applyProductFilter(productSearchKeyword);
 
@@ -2059,8 +2321,6 @@ public class SellPanel extends JPanel {
             return;
         }
 
-        Object currentSelected = cboKhuyenMai.getSelectedItem();
-
         promoRuleMap.clear();
         cboKhuyenMai.removeAllItems();
         cboKhuyenMai.addItem("Không áp dụng mã giảm giá");
@@ -2122,20 +2382,13 @@ public class SellPanel extends JPanel {
                 }
             }
 
-            if (currentSelected != null) {
-                String old = currentSelected.toString();
-
-                for (int i = 0; i < cboKhuyenMai.getItemCount(); i++) {
-                    String item = cboKhuyenMai.getItemAt(i);
-
-                    if (item != null && item.equals(old)) {
-                        cboKhuyenMai.setSelectedIndex(i);
-                        return;
-                    }
-                }
+            updatingPromotionSelection = true;
+            try {
+                cboKhuyenMai.setSelectedIndex(0);
+            } finally {
+                updatingPromotionSelection = false;
             }
-
-            cboKhuyenMai.setSelectedIndex(0);
+            autoApplyBestPromotion();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -2182,6 +2435,7 @@ public class SellPanel extends JPanel {
         paymentJustSucceeded = false;
 
         btnPay.setEnabled(false);
+        btnPay.putClientProperty("permission.guard.skip", Boolean.TRUE);
         btnPay.setText("ĐANG XỬ LÝ...");
         btnPay.setBackground(Color.GRAY);
         btnCancel.setEnabled(false);
@@ -2471,7 +2725,12 @@ public class SellPanel extends JPanel {
         }
         // Reset Khuyến mãi về dòng đầu tiên ("Không áp dụng")
         if (cboKhuyenMai != null && cboKhuyenMai.getItemCount() > 0) {
-            cboKhuyenMai.setSelectedIndex(0);
+            updatingPromotionSelection = true;
+            try {
+                cboKhuyenMai.setSelectedIndex(0);
+            } finally {
+                updatingPromotionSelection = false;
+            }
         }
         updateCustomerUI();
     }
@@ -2800,6 +3059,79 @@ public class SellPanel extends JPanel {
             }
             return cp;
         }
+    }
+
+    private void forceEnablePosControls() {
+        putClientProperty("permission.guard.skip", Boolean.TRUE);
+        markPermissionGuardSkipRecursively(this);
+
+        if (btnAdd != null) {
+            btnAdd.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnAdd.setEnabled(true);
+        }
+
+        if (btnRemove != null) {
+            btnRemove.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnRemove.setEnabled(true);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnCancel.setEnabled(true);
+        }
+
+        if (btnRefreshProducts != null) {
+            btnRefreshProducts.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnRefreshProducts.setEnabled(true);
+        }
+
+        if (btnFindCustomer != null) {
+            btnFindCustomer.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnFindCustomer.setEnabled(true);
+        }
+
+        if (btnPay != null) {
+            btnPay.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            btnPay.setEnabled(modCart != null && modCart.getRowCount() > 0 && !paymentProcessing);
+        }
+
+        if (tblCart != null) {
+            tblCart.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            tblCart.setEnabled(true);
+        }
+
+        if (tblProducts != null) {
+            tblProducts.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            tblProducts.setEnabled(true);
+        }
+
+        if (spnQtyAdd != null) {
+            spnQtyAdd.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            spnQtyAdd.setEnabled(true);
+        }
+
+        if (cboSearchProduct != null) {
+            cboSearchProduct.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            cboSearchProduct.setEnabled(true);
+        }
+
+        if (searchEditor != null) {
+            searchEditor.putClientProperty("permission.guard.skip", Boolean.TRUE);
+            searchEditor.setEnabled(true);
+        }
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+
+        SwingUtilities.invokeLater(() -> {
+            forceEnablePosControls();
+
+            Timer t = new Timer(150, e -> forceEnablePosControls());
+            t.setRepeats(false);
+            t.start();
+        });
     }
 
     private double getPromoRateFromString(String promoString) {

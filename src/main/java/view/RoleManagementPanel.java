@@ -116,20 +116,21 @@ public class RoleManagementPanel extends javax.swing.JPanel {
     private void loadDataFromDB() {
         roleDataList.clear();
         String sql = """
-    SELECT role_id, role_name, can_view, can_add, can_edit, can_delete, can_export
-    FROM ROLES
-    WHERE is_deleted = 0
-      AND role_id IN ('R_ADMIN_ALL', 'R_STORE_MNG', 'R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
-    ORDER BY CASE role_id
-        WHEN 'R_ADMIN_ALL' THEN 1
-        WHEN 'R_STORE_MNG' THEN 2
-        WHEN 'R_STAFF_SALE' THEN 3
-        WHEN 'R_STAFF_VIEW_PROD' THEN 4
-        ELSE 99
-    END
-""";
+            SELECT role_id, role_name, can_view, can_add, can_edit, can_delete, can_export
+            FROM ROLES
+            WHERE is_deleted = 0
+              AND role_id IN ('R_ADMIN_ALL', 'R_STORE_MNG', 'R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
+            ORDER BY CASE role_id
+                WHEN 'R_ADMIN_ALL' THEN 1
+                WHEN 'R_STORE_MNG' THEN 2
+                WHEN 'R_STAFF_SALE' THEN 3
+                WHEN 'R_STAFF_VIEW_PROD' THEN 4
+                ELSE 99
+            END
+        """;
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
                 RoleMatrixItem item = new RoleMatrixItem(
@@ -143,22 +144,43 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 );
                 roleDataList.add(item);
             }
+
             refreshMatrixUI();
+
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Lỗi tải phân quyền: " + e.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void saveMatrixToDB() {
-        String sql = "UPDATE ROLES SET can_view = ?, can_add = ?, can_edit = ?, can_delete = ?, can_export = ? WHERE role_id = ?";
+        String sql = """
+            UPDATE ROLES
+            SET can_view = ?,
+                can_add = ?,
+                can_edit = ?,
+                can_delete = ?,
+                can_export = ?
+            WHERE role_id = ?
+        """;
 
-        try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
             boolean hasChanges = false;
 
             for (RoleMatrixItem item : roleDataList) {
+
+                /*
+                 * ADMIN:
+                 * - Không cho tắt Xem/Thêm/Sửa/Xuất file vì Admin là vai trò lõi hệ thống.
+                 * - CHO phép bật/tắt Xóa để demo nghiệp vụ chặn thao tác xóa.
+                 * - Vì vậy không được continue bỏ qua R_ADMIN_ALL như bản cũ.
+                 */
                 if ("R_ADMIN_ALL".equals(item.roleId)) {
-                    continue;
+                    item.canView = true;
+                    item.canAdd = true;
+                    item.canEdit = true;
+                    item.canExport = true;
                 }
 
                 if (item.isChanged()) {
@@ -188,12 +210,24 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 ps.executeBatch();
 
                 try {
-                    common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                    EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
+                    common.realtime.RealtimeNotifier.roleChanged("ROLE_MATRIX_UPDATED");
                 } catch (Exception ignored) {
+                    try {
+                        common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                        EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "MATRIX_UPDATED"));
+                    } catch (Exception ignored2) {
+                    }
                 }
 
-                JOptionPane.showMessageDialog(this, "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Đã lưu cấu hình Phân quyền thành công!\nHệ thống đã đồng bộ bảo mật.",
+                        "Thành công",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+
+                loadDataFromDB();
+
             } else {
                 JOptionPane.showMessageDialog(this, "Không có sự thay đổi nào để lưu.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             }
@@ -269,36 +303,36 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 JLabel lblRole = new JLabel(displayRoleName);
                 lblRole.setFont(new Font("Segoe UI", Font.BOLD, 14));
                 lblRole.setForeground(textDark);
+
                 if ("R_ADMIN_ALL".equals(item.roleId)) {
                     lblRole.setForeground(new Color(220, 53, 69));
                 }
+
                 lblRole.setBorder(new EmptyBorder(12, 10, 12, 0));
                 cellRole.add(lblRole, BorderLayout.CENTER);
 
-                // ===============================================================
-                // KHÔI PHỤC NÚT XÓA: CHỈ HIỆN KHI KHÔNG PHẢI LÀ ADMIN
-                // ===============================================================
+                // Chỉ cho xóa mềm các vai trò phụ, tuyệt đối không cho xóa role Admin lõi.
                 if (!"R_ADMIN_ALL".equals(item.roleId)) {
                     JButton btnDeleteRole = new JButton();
+
                     try {
                         btnDeleteRole.setIcon(view.components.IconHelper.delete(18));
                     } catch (Exception ex) {
                         btnDeleteRole.setText("❌");
                         btnDeleteRole.setForeground(Color.RED);
                     }
+
                     btnDeleteRole.setBorderPainted(false);
                     btnDeleteRole.setContentAreaFilled(false);
                     btnDeleteRole.setCursor(new Cursor(Cursor.HAND_CURSOR));
                     btnDeleteRole.setToolTipText("Xóa vai trò này (Xóa mềm)");
 
-                    // Gắn sự kiện xóa
                     final String finalRoleId = item.roleId;
                     final String finalRoleName = displayRoleName;
                     btnDeleteRole.addActionListener(e -> handleDeleteRole(finalRoleId, finalRoleName));
 
                     cellRole.add(btnDeleteRole, BorderLayout.EAST);
                 }
-                // ===============================================================
 
                 tablePanel.add(cellRole, gbc);
 
@@ -314,41 +348,38 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                     cb.setBackground(cardWhite);
                     cb.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-                    if (isAdmin) {
+                    if (j == 0) {
+                        cb.setSelected(item.canView);
+                    } else if (j == 1) {
+                        cb.setSelected(item.canAdd);
+                    } else if (j == 2) {
+                        cb.setSelected(item.canEdit);
+                    } else if (j == 3) {
+                        cb.setSelected(item.canDelete);
+                    } else if (j == 4) {
+                        cb.setSelected(item.canExport);
+                    }
+
+                    /*
+                     * Admin chỉ khóa 4 quyền lõi, nhưng quyền Xóa phải chỉnh được.
+                     * Mục đích: demo Admin có thể bị chặn thao tác xóa ở module nghiệp vụ
+                     * như Khách hàng, nhưng vẫn dùng được màn phân quyền.
+                     */
+                    if (isAdmin && j != 3) {
                         cb.setSelected(true);
                         cb.setEnabled(false);
                     } else {
-                        if (j == 0) {
-                            cb.setSelected(item.canView);
-                        }
-                        if (j == 1) {
-                            cb.setSelected(item.canAdd);
-                        }
-                        if (j == 2) {
-                            cb.setSelected(item.canEdit);
-                        }
-                        if (j == 3) {
-                            cb.setSelected(item.canDelete);
-                        }
-                        if (j == 4) {
-                            cb.setSelected(item.canExport);
-                        }
-
                         final int actionIndex = j;
                         cb.addActionListener(e -> {
                             if (actionIndex == 0) {
                                 item.canView = cb.isSelected();
-                            }
-                            if (actionIndex == 1) {
+                            } else if (actionIndex == 1) {
                                 item.canAdd = cb.isSelected();
-                            }
-                            if (actionIndex == 2) {
+                            } else if (actionIndex == 2) {
                                 item.canEdit = cb.isSelected();
-                            }
-                            if (actionIndex == 3) {
+                            } else if (actionIndex == 3) {
                                 item.canDelete = cb.isSelected();
-                            }
-                            if (actionIndex == 4) {
+                            } else if (actionIndex == 4) {
                                 item.canExport = cb.isSelected();
                             }
                         });
@@ -386,11 +417,9 @@ public class RoleManagementPanel extends javax.swing.JPanel {
         return container;
     }
 
-    // =========================================================================
-    // LOGIC XỬ LÝ XÓA MỀM (SOFT DELETE) KÈM XÁC THỰC MẬT KHẨU
-    // =========================================================================
     private void handleDeleteRole(String roleId, String roleName) {
         JPasswordField pf = new JPasswordField();
+
         int okCxl = JOptionPane.showConfirmDialog(
                 this,
                 new Object[]{"Vui lòng nhập mật khẩu Quản trị viên để xác nhận xóa vai trò [" + roleName + "]:", pf},
@@ -399,60 +428,67 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 JOptionPane.WARNING_MESSAGE
         );
 
-        if (okCxl == JOptionPane.OK_OPTION) {
-            String password = new String(pf.getPassword());
+        if (okCxl != JOptionPane.OK_OPTION) {
+            return;
+        }
 
-            // 🔥 BẠN CẦN CHỈNH SỬA HÀM NÀY ĐỂ KHỚP VỚI CÁCH MÃ HÓA PASSWORD CỦA BẠN (VD: BCrypt)
-            if (verifyAdminPassword(password)) {
-                String sql = "UPDATE ROLES SET is_deleted = 1 WHERE role_id = ?";
+        String password = new String(pf.getPassword());
 
-                try (Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        if (!verifyAdminPassword(password)) {
+            JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác! Từ chối thao tác.", "Lỗi bảo mật", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-                    ps.setString(1, roleId);
-                    ps.executeUpdate();
+        String sql = "UPDATE ROLES SET is_deleted = 1 WHERE role_id = ? AND role_id <> 'R_ADMIN_ALL'";
 
-                    // Ghi vào Audit Log
-                    business.service.AuditLogService.logAction(
-                            "XÓA",
-                            "ROLES",
-                            roleId,
-                            roleName,
-                            "Đã đưa vào thùng rác (Xóa mềm)",
-                            "Admin xác thực mật khẩu và xóa vai trò"
-                    );
+        try (
+                Connection con = common.db.DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
-                    JOptionPane.showMessageDialog(this, "Đã xóa vai trò [" + roleName + "] thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            ps.setString(1, roleId);
+            int affected = ps.executeUpdate();
 
-                    // Kéo dữ liệu mới và báo tin cho các panel khác
-                    loadDataFromDB();
-                    try {
-                        common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
-                        EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_DELETED"));
-                    } catch (Exception ignored) {
-                    }
-
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Lỗi khi xóa vai trò: " + ex.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Mật khẩu không chính xác! Từ chối thao tác.", "Lỗi bảo mật", JOptionPane.ERROR_MESSAGE);
+            if (affected <= 0) {
+                JOptionPane.showMessageDialog(this, "Không thể xóa vai trò lõi hoặc vai trò không tồn tại.", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+                return;
             }
+
+            business.service.AuditLogService.logAction(
+                    "XÓA",
+                    "ROLES",
+                    roleId,
+                    roleName,
+                    "Đã đưa vào thùng rác (Xóa mềm)",
+                    "Admin xác thực mật khẩu và xóa vai trò"
+            );
+
+            JOptionPane.showMessageDialog(this, "Đã xóa vai trò [" + roleName + "] thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+
+            loadDataFromDB();
+
+            try {
+                common.realtime.RealtimeNotifier.roleChanged("ROLE_DELETED:" + roleId);
+            } catch (Exception ignored) {
+                try {
+                    common.realtime.RealtimeClient.send("ACCOUNT_SECURITY_CHANGED");
+                    EventBus.publish(new AppDataChangedEvent(AppEventType.ACCOUNT_SECURITY, "ROLE_DELETED"));
+                } catch (Exception ignored2) {
+                }
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Lỗi khi xóa vai trò: " + ex.getMessage(), "Lỗi DB", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private boolean verifyAdminPassword(String inputPassword) {
-        // Lấy thông tin user hiện tại
         model.account.Account currentUser = business.service.LoginService.getCurrentUser();
 
         if (currentUser != null && currentUser.getPassword() != null) {
-            // Tạm thời mình dùng phép so sánh String bình thường.
-            // Nếu Database của bạn lưu mã hóa (như BCrypt hay MD5), bạn hãy thay đổi dòng return dưới đây nhé!
-            // VD BCrypt: return org.mindrot.jbcrypt.BCrypt.checkpw(inputPassword, currentUser.getPassword());
             return currentUser.getPassword().equals(inputPassword);
         }
+
         return false;
     }
-    // =========================================================================
 
     class RoleMatrixItem {
 
@@ -484,6 +520,7 @@ public class RoleManagementPanel extends javax.swing.JPanel {
 
         public String getPermissionsString(boolean v, boolean a, boolean e, boolean d, boolean x) {
             java.util.List<String> list = new java.util.ArrayList<>();
+
             if (v) {
                 list.add("Xem");
             }
@@ -499,6 +536,7 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             if (x) {
                 list.add("Xuất file");
             }
+
             return list.isEmpty() ? "Không có quyền" : String.join(", ", list);
         }
 
@@ -558,9 +596,11 @@ public class RoleManagementPanel extends javax.swing.JPanel {
             }
 
             java.util.List<String> result = new java.util.ArrayList<>();
+
             if (!bat.isEmpty()) {
                 result.add("Bật: " + String.join(", ", bat));
             }
+
             if (!tat.isEmpty()) {
                 result.add("Tắt: " + String.join(", ", tat));
             }
@@ -581,12 +621,14 @@ public class RoleManagementPanel extends javax.swing.JPanel {
                 g2.dispose();
             }
         };
+
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setForeground(fg);
         btn.setPreferredSize(new Dimension(180, 40));
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
         return btn;
     }
 
