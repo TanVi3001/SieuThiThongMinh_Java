@@ -6,173 +6,197 @@ import common.events.EventBus;
 import common.sync.SyncVersionDao;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Centralized realtime mapping helper.
- *
- * Rule for desktop production:
- * - Domain screens receive their primary realtime event immediately.
- * - Dashboard and Statistics still stay realtime, but companion refresh events are
- *   debounced so one payment does not trigger 10+ reloads.
+ * RealtimeNotifier chuẩn: - Publish đúng event, đúng module. - Không publish
+ * bừa nhiều event. - Dashboard/Report được debounce. - AuditLog/LoginHistory
+ * không nằm trong realtime.
  */
 public final class RealtimeNotifier {
 
     private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.realtime");
-    private static final long SUMMARY_DEBOUNCE_MS = 900L;
 
-    private static final ScheduledExecutorService SUMMARY_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "realtime-summary-debounce-thread");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final ScheduledExecutorService SCHEDULER
+            = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "realtime-notifier-debounce");
+                t.setDaemon(true);
+                return t;
+            });
 
     private static final Object SUMMARY_LOCK = new Object();
-    private static ScheduledFuture<?> pendingDashboardTask;
-    private static ScheduledFuture<?> pendingStatisticsTask;
-    private static String pendingDashboardReason = "SUMMARY_UPDATED";
-    private static String pendingStatisticsReason = "SUMMARY_UPDATED";
+    private static boolean dashboardPending = false;
+    private static boolean reportPending = false;
 
     private RealtimeNotifier() {
     }
 
-    public static void ordersChanged(String message) {
-        notify("ORDERS", AppEventType.ORDERS, "ORDERS_CHANGED", message, "ORDER_UPDATED");
-        scheduleDashboardAndStatistics("FROM_ORDERS:" + normalize(message, "ORDER_UPDATED"));
-    }
-
-    public static void orderDetailsChanged(String message) {
-        notify("ORDER_DETAILS", AppEventType.ORDERS, "ORDER_DETAILS_CHANGED", message, "ORDER_DETAILS_UPDATED");
-        scheduleDashboardAndStatistics("FROM_ORDER_DETAILS:" + normalize(message, "ORDER_DETAILS_UPDATED"));
+    public static void productsChanged(String message) {
+        notify("PRODUCTS", AppEventType.PRODUCT_CHANGED, AppEventType.PRODUCTS, "PRODUCTS_CHANGED", message);
+        scheduleDashboard("FROM_PRODUCTS");
     }
 
     public static void inventoryChanged(String message) {
-        notify("INVENTORY", AppEventType.INVENTORY, "INVENTORY_CHANGED", message, "STOCK_UPDATED");
-        scheduleDashboardAndStatistics("FROM_INVENTORY:" + normalize(message, "STOCK_UPDATED"));
+        notify("INVENTORY", AppEventType.INVENTORY_CHANGED, AppEventType.INVENTORY, "INVENTORY_CHANGED", message);
+        scheduleDashboard("FROM_INVENTORY");
     }
 
-    public static void productsChanged(String message) {
-        notify("PRODUCTS", AppEventType.PRODUCTS, "PRODUCTS_CHANGED", message, "PRODUCT_UPDATED");
-        scheduleDashboardAndStatistics("FROM_PRODUCTS:" + normalize(message, "PRODUCT_UPDATED"));
+    public static void suppliersChanged(String message) {
+        notify("SUPPLIERS", AppEventType.SUPPLIER_CHANGED, null, "SUPPLIER_CHANGED", message);
     }
 
     public static void customersChanged(String message) {
-        notify("CUSTOMERS", AppEventType.CUSTOMERS, "CUSTOMERS_CHANGED", message, "CUSTOMER_UPDATED");
-        scheduleDashboardAndStatistics("FROM_CUSTOMERS:" + normalize(message, "CUSTOMER_UPDATED"));
+        notify("CUSTOMERS", AppEventType.CUSTOMER_CHANGED, AppEventType.CUSTOMERS, "CUSTOMERS_CHANGED", message);
+        scheduleDashboard("FROM_CUSTOMERS");
     }
 
     public static void employeesChanged(String message) {
-        notify("EMPLOYEES", AppEventType.EMPLOYEES, "EMPLOYEES_CHANGED", message, "EMPLOYEE_UPDATED");
-        scheduleDashboardAndStatistics("FROM_EMPLOYEES:" + normalize(message, "EMPLOYEE_UPDATED"));
+        notify("EMPLOYEES", AppEventType.EMPLOYEE_CHANGED, AppEventType.EMPLOYEES, "EMPLOYEES_CHANGED", message);
+        scheduleDashboard("FROM_EMPLOYEES");
+    }
+
+    public static void shiftChanged(String message) {
+        notify("EMPLOYEE_SHIFT_ASSIGNMENTS", AppEventType.SHIFT_CHANGED, null, "SHIFT_CHANGED", message);
+    }
+
+    public static void ordersChanged(String message) {
+        notify("ORDERS", AppEventType.ORDER_CHANGED, AppEventType.ORDERS, "ORDERS_CHANGED", message);
+        scheduleDashboard("FROM_ORDERS");
+        scheduleReport("FROM_ORDERS");
+    }
+
+    public static void promotionsChanged(String message) {
+        notify("PROMOTIONS", AppEventType.PROMOTION_CHANGED, null, "PROMOTION_CHANGED", message);
     }
 
     public static void storesChanged(String message) {
-        notify("STORES", AppEventType.STORE_INFO, "STORE_INFO_CHANGED", message, "STORE_UPDATED");
-        scheduleDashboardAndStatistics("FROM_STORES:" + normalize(message, "STORE_UPDATED"));
+        notify("STORES", AppEventType.STORE_CHANGED, AppEventType.STORE_INFO, "STORE_CHANGED", message);
+        scheduleDashboard("FROM_STORES");
+    }
+
+    public static void accountChanged(String message) {
+        notify("ACCOUNTS", AppEventType.ACCOUNT_CHANGED, AppEventType.ACCOUNT_SECURITY, "ACCOUNT_CHANGED", message);
+    }
+
+    public static void roleChanged(String message) {
+        notify("ROLES", AppEventType.ROLE_CHANGED, AppEventType.ACCOUNT_SECURITY, "ROLE_CHANGED", message);
     }
 
     public static void accountSecurityChanged(String message) {
-        notify("ACCOUNTS", AppEventType.ACCOUNT_SECURITY, "ACCOUNT_SECURITY_CHANGED", message, "ACCOUNT_UPDATED");
-        scheduleDashboardOnly("FROM_ACCOUNT_SECURITY:" + normalize(message, "ACCOUNT_UPDATED"));
+        accountChanged(message);
     }
 
     public static void systemConfigChanged(String message) {
-        notify("SYSTEM_CONFIG", AppEventType.SYSTEM_CONFIG, "SYSTEM_CONFIG_CHANGED", message, "SYSTEM_CONFIG_UPDATED");
-        scheduleDashboardAndStatistics("FROM_SYSTEM_CONFIG:" + normalize(message, "SYSTEM_CONFIG_UPDATED"));
+        notify("SYSTEM_CONFIG", AppEventType.SYSTEM_CONFIG_CHANGED, AppEventType.SYSTEM_CONFIG, "SYSTEM_CONFIG_CHANGED", message);
+        scheduleDashboard("FROM_SYSTEM_CONFIG");
     }
 
     public static void dashboardChanged(String message) {
-        notifyNoBump(AppEventType.DASHBOARD, "DASHBOARD_CHANGED", message, "DASHBOARD_UPDATED");
+        publish(AppEventType.DASHBOARD_CHANGED, normalize(message, "DASHBOARD_CHANGED"));
+        publish(AppEventType.DASHBOARD, normalize(message, "DASHBOARD_CHANGED"));
+        sendRemote("DASHBOARD_CHANGED:" + normalize(message, "DASHBOARD_CHANGED"));
+    }
+
+    public static void reportChanged(String message) {
+        publish(AppEventType.REPORT_CHANGED, normalize(message, "REPORT_CHANGED"));
+        publish(AppEventType.STATISTICS, normalize(message, "REPORT_CHANGED"));
+        sendRemote("REPORT_CHANGED:" + normalize(message, "REPORT_CHANGED"));
     }
 
     public static void statisticsChanged(String message) {
-        notifyNoBump(AppEventType.STATISTICS, "STATISTICS_CHANGED", message, "STATISTICS_UPDATED");
+        reportChanged(message);
     }
 
     public static void inventoryAlert(String message) {
-        notifyNoBump(AppEventType.INVENTORY_ALERT, "INVENTORY_ALERT", message, "LOW_STOCK");
-        scheduleDashboardOnly("FROM_INVENTORY_ALERT:" + normalize(message, "LOW_STOCK"));
+        publish(AppEventType.INVENTORY_ALERT, normalize(message, "INVENTORY_ALERT"));
+        sendRemote("INVENTORY_ALERT:" + normalize(message, "INVENTORY_ALERT"));
     }
 
-    private static void notify(String syncKey, AppEventType type, String remotePrefix, String message, String fallback) {
+    private static void notify(
+            String syncKey,
+            AppEventType newType,
+            AppEventType legacyType,
+            String remotePrefix,
+            String message
+    ) {
+        String msg = normalize(message, remotePrefix);
+
         bump(syncKey);
-        String normalized = normalize(message, fallback);
-        publishLocal(type, normalized);
-        sendRemote(remotePrefix + ":" + normalized);
-    }
+        publish(newType, msg);
 
-    private static void notifyNoBump(AppEventType type, String remotePrefix, String message, String fallback) {
-        String normalized = normalize(message, fallback);
-        publishLocal(type, normalized);
-        sendRemote(remotePrefix + ":" + normalized);
-    }
-
-    private static void scheduleDashboardAndStatistics(String reason) {
-        scheduleDashboardOnly(reason);
-        scheduleStatisticsOnly(reason);
-    }
-
-    private static void scheduleDashboardOnly(String reason) {
-        synchronized (SUMMARY_LOCK) {
-            pendingDashboardReason = normalize(reason, "SUMMARY_UPDATED");
-            if (pendingDashboardTask != null && !pendingDashboardTask.isDone()) {
-                pendingDashboardTask.cancel(false);
-            }
-            pendingDashboardTask = SUMMARY_SCHEDULER.schedule(
-                    () -> dashboardChanged(pendingDashboardReason),
-                    SUMMARY_DEBOUNCE_MS,
-                    TimeUnit.MILLISECONDS
-            );
+        if (legacyType != null) {
+            publish(legacyType, msg);
         }
+
+        sendRemote(remotePrefix + ":" + msg);
     }
 
-    private static void scheduleStatisticsOnly(String reason) {
-        synchronized (SUMMARY_LOCK) {
-            pendingStatisticsReason = normalize(reason, "SUMMARY_UPDATED");
-            if (pendingStatisticsTask != null && !pendingStatisticsTask.isDone()) {
-                pendingStatisticsTask.cancel(false);
-            }
-            pendingStatisticsTask = SUMMARY_SCHEDULER.schedule(
-                    () -> statisticsChanged(pendingStatisticsReason),
-                    SUMMARY_DEBOUNCE_MS,
-                    TimeUnit.MILLISECONDS
-            );
+    private static void publish(AppEventType type, String message) {
+        try {
+            EventBus.publish(new AppDataChangedEvent(type, message));
+        } catch (Exception e) {
+            System.err.println("[RealtimeNotifier] publish error: " + e.getMessage());
         }
     }
 
     private static void bump(String key) {
         try {
             SyncVersionDao.bumpVersion(key);
-        } catch (Exception ex) {
-            System.err.println("[RealtimeNotifier] bump version error for " + key + ": " + ex.getMessage());
-        }
-    }
-
-    private static void publishLocal(AppEventType type, String message) {
-        try {
-            EventBus.publish(new AppDataChangedEvent(type, message));
-        } catch (Exception ex) {
-            System.err.println("[RealtimeNotifier] local publish error: " + ex.getMessage());
+        } catch (Exception e) {
+            System.err.println("[RealtimeNotifier] bump error " + key + ": " + e.getMessage());
         }
     }
 
     private static void sendRemote(String message) {
         try {
             if (DEBUG_LOG) {
-                System.out.println("[RealtimeNotifier] send: " + message);
+                System.out.println("[RealtimeNotifier] " + message);
             }
             RealtimeClient.send(message);
-        } catch (Exception ex) {
-            System.err.println("[RealtimeNotifier] remote send error: " + ex.getMessage());
+        } catch (Exception e) {
+            System.err.println("[RealtimeNotifier] remote send error: " + e.getMessage());
+        }
+    }
+
+    private static void scheduleDashboard(String reason) {
+        synchronized (SUMMARY_LOCK) {
+            if (dashboardPending) {
+                return;
+            }
+
+            dashboardPending = true;
+            SCHEDULER.schedule(() -> {
+                synchronized (SUMMARY_LOCK) {
+                    dashboardPending = false;
+                }
+                dashboardChanged(reason);
+            }, 900, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void scheduleReport(String reason) {
+        synchronized (SUMMARY_LOCK) {
+            if (reportPending) {
+                return;
+            }
+
+            reportPending = true;
+            SCHEDULER.schedule(() -> {
+                synchronized (SUMMARY_LOCK) {
+                    reportPending = false;
+                }
+                reportChanged(reason);
+            }, 1200, TimeUnit.MILLISECONDS);
         }
     }
 
     private static String normalize(String message, String fallback) {
-        if (message == null || message.trim().isEmpty()) {
-            return fallback;
-        }
+        return message == null || message.trim().isEmpty()
+                ? fallback
+                : message.trim();
+    }
 
-        return message.trim();
+    public static void orderDetailsChanged(String message) {
+        ordersChanged(message == null ? "ORDER_DETAILS_CHANGED" : message);
     }
 }

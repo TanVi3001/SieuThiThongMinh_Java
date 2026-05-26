@@ -344,4 +344,46 @@ public class AuditLogService {
         timer.setRepeats(true);
         timer.start();
     }
+    // Thêm vào cuối AuditLogService.java
+
+public static void logActionAsync(
+        String actionType,
+        String entityType,
+        String entityId,
+        String oldValue,
+        String newValue,
+        String reason
+) {
+    Thread t = new Thread(() -> {
+        try {
+            logAction(actionType, entityType, entityId, oldValue, newValue, reason);
+        } catch (Exception e) {
+            System.err.println("[AuditLog] async error: " + e.getMessage());
+        }
+    }, "audit-log-async");
+    t.setDaemon(true);
+    t.start();
+}
+
+public static void logActionWithStoreAsync(
+        String actionType,
+        String entityType,
+        String entityId,
+        String oldValue,
+        String newValue,
+        String reason,
+        String storeId
+) {
+    Thread t = new Thread(() -> {
+        try {
+            logActionWithStore(actionType, entityType, entityId, oldValue, newValue, reason, storeId);
+        } catch (Exception e) {
+            System.err.println("[AuditLog] async store error: " + e.getMessage());
+        }
+    }, "audit-log-store-async");
+    t.setDaemon(true);
+    t.start();
+}
+    
+    
 }

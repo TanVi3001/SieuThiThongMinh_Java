@@ -208,10 +208,7 @@ public class PaymentService {
             """;
 
             try (
-                    PreparedStatement psCheckStock = con.prepareStatement(checkStockSql);
-                    PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql);
-                    PreparedStatement psDetail = con.prepareStatement(insertDetailSql)
-            ) {
+                    PreparedStatement psCheckStock = con.prepareStatement(checkStockSql); PreparedStatement psUpdateStock = con.prepareStatement(updateStockSql); PreparedStatement psDetail = con.prepareStatement(insertDetailSql)) {
                 for (OrderDetail d : details) {
                     normalizeOrderDetailBeforeInsert(d, order.getOrderId());
 
@@ -403,9 +400,7 @@ public class PaymentService {
         """;
 
         try (
-                PreparedStatement psDetail = con.prepareStatement(insertDetailSql);
-                PreparedStatement psStock = con.prepareStatement(updateStockSql)
-        ) {
+                PreparedStatement psDetail = con.prepareStatement(insertDetailSql); PreparedStatement psStock = con.prepareStatement(updateStockSql)) {
             for (OrderDetail ct : details) {
                 normalizeOrderDetailBeforeInsert(ct, order.getOrderId());
 
@@ -510,13 +505,19 @@ public class PaymentService {
                     ? "PAYMENT_CHANGED"
                     : message.trim();
 
-            RealtimeNotifier.customersChanged("CUSTOMERS_UPDATED_BY_" + baseMessage);
+            /*
+         * Thanh toán / hủy đơn ảnh hưởng chính:
+         * - ORDERS: danh sách hóa đơn
+         * - INVENTORY: tồn kho bị trừ hoặc hoàn lại
+         * - CUSTOMERS: điểm/hạng khách hàng thay đổi nếu có customer_id
+         *
+         * Không bắn quá nhiều event PRODUCTS / STATISTICS / DASHBOARD trực tiếp nữa.
+         * RealtimeNotifier.ordersChanged(...) đã tự debounce dashboard/report rồi.
+             */
             RealtimeNotifier.ordersChanged("ORDERS_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.orderDetailsChanged("ORDER_DETAILS_UPDATED_BY_" + baseMessage);
             RealtimeNotifier.inventoryChanged("INVENTORY_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.productsChanged("PRODUCTS_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.statisticsChanged("STATISTICS_UPDATED_BY_" + baseMessage);
-            RealtimeNotifier.dashboardChanged("DASHBOARD_UPDATED_BY_" + baseMessage);
+            RealtimeNotifier.customersChanged("CUSTOMERS_UPDATED_BY_" + baseMessage);
+
         } catch (Exception ex) {
             System.err.println("[PaymentService] realtime notify error: " + ex.getMessage());
         }
