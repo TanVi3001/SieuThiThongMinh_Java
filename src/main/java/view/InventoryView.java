@@ -52,6 +52,15 @@ public class InventoryView extends JPanel {
     private DefaultTableModel tableModel;
 
     /*
+     * FIX LAG REALTIME:
+     * Không tắt realtime. Chỉ defer/debounce reload sau import CSV để popup OK không bị đứng.
+     */
+    private volatile long deferRealtimeReloadUntil = 0L;
+    private javax.swing.Timer deferredInventoryReloadTimer;
+    private volatile boolean inventoryReloadRunning = false;
+    private volatile boolean pendingInventoryReload = false;
+
+    /*
      * Đã bỏ combobox "Lọc theo kho" khỏi UI.
      * Vẫn giữ biến này để tránh phá các hàm cũ nếu nơi khác còn gọi,
      * nhưng nó không còn được add lên header nữa.
@@ -102,9 +111,49 @@ public class InventoryView extends JPanel {
                     || e.getType() == AppEventType.ORDERS
                     || e.getType() == AppEventType.INVENTORY_ALERT) {
 
-                SwingUtilities.invokeLater(this::loadInventoryData);
+                SwingUtilities.invokeLater(() -> {
+                    /*
+                     * FIX LAG:
+                     * Vẫn giữ realtime, nhưng nếu vừa import CSV xong thì không reload ngay.
+                     * Reload được gom lại và chạy nền sau một khoảng ngắn.
+                     */
+                    if (System.currentTimeMillis() < deferRealtimeReloadUntil) {
+                        scheduleDeferredInventoryReload();
+                        return;
+                    }
+
+                    loadInventoryDataAsync();
+                });
             }
         });
+    }
+
+    private void scheduleDeferredInventoryReload() {
+        int delayMs = 1500;
+
+        long remaining = deferRealtimeReloadUntil - System.currentTimeMillis();
+        if (remaining > 0) {
+            delayMs = (int) Math.max(800, Math.min(5000, remaining + 250));
+        }
+
+        if (deferredInventoryReloadTimer != null && deferredInventoryReloadTimer.isRunning()) {
+            deferredInventoryReloadTimer.setInitialDelay(delayMs);
+            deferredInventoryReloadTimer.setDelay(delayMs);
+            deferredInventoryReloadTimer.restart();
+            return;
+        }
+
+        deferredInventoryReloadTimer = new javax.swing.Timer(delayMs, e -> {
+            if (System.currentTimeMillis() < deferRealtimeReloadUntil) {
+                scheduleDeferredInventoryReload();
+                return;
+            }
+
+            loadInventoryDataAsync();
+        });
+
+        deferredInventoryReloadTimer.setRepeats(false);
+        deferredInventoryReloadTimer.start();
     }
 
     private JPanel buildHeader() {
@@ -636,63 +685,17 @@ public class InventoryView extends JPanel {
     }
 
     private void refreshRecentActivities() {
-        recentActivityPanel.removeAll();
-
         try {
             String storeId = currentInventoryStoreId();
 
             List<InventoryTransactionSql.InventoryTransactionDTO> list
                     = InventoryTransactionSql.getInstance().getRecentTransactionsByStore(storeId, 3);
 
-            if (list == null || list.isEmpty()) {
-                recentActivityPanel.add(createActivityItem(
-                        "Chưa có dữ liệu",
-                        "Hãy nhập kho, nhập CSV hoặc xuất/hủy để phát sinh lịch sử.",
-                        storeId == null ? "Chưa xác định chi nhánh" : "Chi nhánh: " + storeId,
-                        ORANGE
-                ));
-            } else {
-                for (int i = 0; i < list.size(); i++) {
-                    InventoryTransactionSql.InventoryTransactionDTO x = list.get(i);
-
-                    boolean inbound = "INBOUND".equalsIgnoreCase(x.transactionType);
-
-                    recentActivityPanel.add(createActivityItem(
-                            inbound ? "Nhập kho" : "Xuất / Hủy",
-                            safe(x.productName, x.productId) + " • SL: " + x.quantity,
-                            x.receiptId == null || x.receiptId.trim().isEmpty()
-                            ? "Chi nhánh: " + safe(x.storeId, storeId == null ? "—" : storeId)
-                            : "Phiếu: " + x.receiptId,
-                            inbound ? GREEN : RED
-                    ));
-
-                    if (i < list.size() - 1) {
-                        JSeparator sep = new JSeparator();
-                        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
-                        sep.setForeground(new Color(225, 225, 225));
-
-                        JPanel sepWrap = new JPanel(new BorderLayout());
-                        sepWrap.setOpaque(false);
-                        sepWrap.setBorder(new EmptyBorder(4, 0, 4, 0));
-                        sepWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 10));
-                        sepWrap.add(sep, BorderLayout.CENTER);
-
-                        recentActivityPanel.add(sepWrap);
-                    }
-                }
-            }
+            renderRecentActivities(list, storeId);
 
         } catch (Exception e) {
-            recentActivityPanel.add(createActivityItem(
-                    "Chưa có bảng lịch sử",
-                    "Kiểm tra INVENTORY_TRANSACTIONS trong database.",
-                    "Database chưa sẵn sàng",
-                    RED
-            ));
+            renderRecentActivities(new ArrayList<>(), currentInventoryStoreId());
         }
-
-        recentActivityPanel.revalidate();
-        recentActivityPanel.repaint();
     }
 
     private void initEvents() {
@@ -971,6 +974,235 @@ public class InventoryView extends JPanel {
         }
     }
 
+    private void loadInventoryDataAsync() {
+        if (inventoryReloadRunning) {
+            pendingInventoryReload = true;
+            return;
+        }
+
+        inventoryReloadRunning = true;
+
+        String keyword = txtSearch == null || txtSearch.getText() == null
+                ? ""
+                : txtSearch.getText().trim().toLowerCase();
+
+        String currentStoreId = currentInventoryStoreId();
+
+        CompletableFuture
+                .supplyAsync(() -> buildInventoryLoadSnapshot(currentStoreId, keyword))
+                .thenAccept(snapshot -> SwingUtilities.invokeLater(() -> {
+            inventoryReloadRunning = false;
+
+            if (snapshot == null) {
+                return;
+            }
+
+            cachedInventory.clear();
+            cachedInventory.addAll(snapshot.fullList);
+
+            rebuildStoreFilter(cachedInventory);
+            fillInventoryTableRows(snapshot.tableRows);
+            updateKpi(snapshot.filteredList);
+            refreshAlertZone(snapshot.filteredList);
+            renderRecentActivities(snapshot.recentActivities, snapshot.storeId);
+
+            if (pendingInventoryReload) {
+                pendingInventoryReload = false;
+                scheduleDeferredInventoryReload();
+            }
+        }))
+                .exceptionally(ex -> {
+                    SwingUtilities.invokeLater(() -> {
+                        inventoryReloadRunning = false;
+                        pendingInventoryReload = false;
+                        System.err.println("[InventoryView] Async inventory reload error: " + getRootMessage(ex));
+                    });
+                    return null;
+                });
+    }
+
+    private InventoryLoadSnapshot buildInventoryLoadSnapshot(String currentStoreId, String keyword) {
+        try {
+            List<Product> list;
+
+            if (currentStoreId == null || currentStoreId.isBlank()) {
+                if (!business.service.SessionManager.isAdmin()) {
+                    return new InventoryLoadSnapshot(
+                            new ArrayList<>(),
+                            new ArrayList<>(),
+                            new ArrayList<>(),
+                            new ArrayList<>(),
+                            currentStoreId
+                    );
+                }
+
+                list = ProductsSql.getInstance().selectAll();
+            } else {
+                list = ProductsSql.getInstance().selectAllByStore(currentStoreId);
+            }
+
+            List<Product> filtered = filterInventoryForUi(list, keyword, currentStoreId);
+            List<Object[]> rows = buildInventoryTableRows(filtered);
+
+            List<InventoryTransactionSql.InventoryTransactionDTO> recent = new ArrayList<>();
+            try {
+                recent = InventoryTransactionSql.getInstance().getRecentTransactionsByStore(currentStoreId, 3);
+            } catch (Exception ignored) {
+            }
+
+            return new InventoryLoadSnapshot(list, filtered, rows, recent, currentStoreId);
+
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private List<Product> filterInventoryForUi(List<Product> source, String keyword, String currentStoreId) {
+        List<Product> result = new ArrayList<>();
+
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+
+        if (source == null) {
+            return result;
+        }
+
+        for (Product p : source) {
+            String id = safe(p.getProductId(), "").toLowerCase();
+            String name = safe(p.getProductName(), "").toLowerCase();
+            String storeId = safe(p.getStoreId(), "Chưa xác định");
+            String normalizedProductStoreId = normalizeStoreId(storeId);
+
+            boolean matchKeyword = kw.isEmpty()
+                    || id.contains(kw)
+                    || name.contains(kw);
+
+            boolean matchStore = currentStoreId == null
+                    || (normalizedProductStoreId != null
+                    && currentStoreId.equalsIgnoreCase(normalizedProductStoreId));
+
+            if (matchKeyword && matchStore) {
+                result.add(p);
+            }
+        }
+
+        return result;
+    }
+
+    private List<Object[]> buildInventoryTableRows(List<Product> list) {
+        List<Object[]> rows = new ArrayList<>();
+
+        if (list == null) {
+            return rows;
+        }
+
+        for (Product p : list) {
+            int qty = p.getQuantity();
+
+            String status;
+            String threshold;
+
+            if (qty <= 0) {
+                status = "Hết hàng";
+                threshold = "Khẩn cấp";
+            } else if (qty <= 10) {
+                status = "Nguy hiểm";
+                threshold = "≤ 10";
+            } else if (qty <= 30) {
+                status = "Sắp hết";
+                threshold = "≤ 30";
+            } else {
+                status = "Ổn định";
+                threshold = "> 30";
+            }
+
+            ImageIcon thumb = loadInventoryThumb(p.getImagePath());
+
+            rows.add(new Object[]{
+                thumb,
+                safe(p.getProductId(), ""),
+                safe(p.getProductName(), ""),
+                qty,
+                threshold,
+                safe(p.getUnit(), "Cái"),
+                safe(p.getStoreId(), "Chưa xác định"),
+                status,
+                formatLastUpdated(p.getLastUpdated())
+            });
+        }
+
+        return rows;
+    }
+
+    private void fillInventoryTableRows(List<Object[]> rows) {
+        tableModel.setRowCount(0);
+
+        if (rows == null) {
+            return;
+        }
+
+        for (Object[] row : rows) {
+            tableModel.addRow(row);
+        }
+    }
+
+    private void renderRecentActivities(
+            List<InventoryTransactionSql.InventoryTransactionDTO> list,
+            String storeId
+    ) {
+        recentActivityPanel.removeAll();
+
+        try {
+            if (list == null || list.isEmpty()) {
+                recentActivityPanel.add(createActivityItem(
+                        "Chưa có dữ liệu",
+                        "Hãy nhập kho, nhập CSV hoặc xuất/hủy để phát sinh lịch sử.",
+                        storeId == null ? "Chưa xác định chi nhánh" : "Chi nhánh: " + storeId,
+                        ORANGE
+                ));
+            } else {
+                for (int i = 0; i < list.size(); i++) {
+                    InventoryTransactionSql.InventoryTransactionDTO x = list.get(i);
+
+                    boolean inbound = "INBOUND".equalsIgnoreCase(x.transactionType);
+
+                    recentActivityPanel.add(createActivityItem(
+                            inbound ? "Nhập kho" : "Xuất / Hủy",
+                            safe(x.productName, x.productId) + " • SL: " + x.quantity,
+                            x.receiptId == null || x.receiptId.trim().isEmpty()
+                            ? "Chi nhánh: " + safe(x.storeId, storeId == null ? "—" : storeId)
+                            : "Phiếu: " + x.receiptId,
+                            inbound ? GREEN : RED
+                    ));
+
+                    if (i < list.size() - 1) {
+                        JSeparator sep = new JSeparator();
+                        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+                        sep.setForeground(new Color(225, 225, 225));
+
+                        JPanel sepWrap = new JPanel(new BorderLayout());
+                        sepWrap.setOpaque(false);
+                        sepWrap.setBorder(new EmptyBorder(4, 0, 4, 0));
+                        sepWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 10));
+                        sepWrap.add(sep, BorderLayout.CENTER);
+
+                        recentActivityPanel.add(sepWrap);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            recentActivityPanel.add(createActivityItem(
+                    "Chưa có bảng lịch sử",
+                    "Kiểm tra INVENTORY_TRANSACTIONS trong database.",
+                    "Database chưa sẵn sàng",
+                    RED
+            ));
+        }
+
+        recentActivityPanel.revalidate();
+        recentActivityPanel.repaint();
+    }
+
     private void loadInventoryData() {
         cachedInventory.clear();
 
@@ -1173,9 +1405,9 @@ public class InventoryView extends JPanel {
             fileChooser.setSelectedFile(defaultFile);
         }
 
-        int result = fileChooser.showOpenDialog(this);
+        int chooserResult = fileChooser.showOpenDialog(this);
 
-        if (result != JFileChooser.APPROVE_OPTION) {
+        if (chooserResult != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
@@ -1190,6 +1422,13 @@ public class InventoryView extends JPanel {
             );
             return;
         }
+
+        /*
+         * FIX LAG:
+         * Không tắt realtime. Chỉ defer reload trong lúc import để các event realtime
+         * không gọi loadInventoryData() đúng lúc popup OK.
+         */
+        deferRealtimeReloadUntil = System.currentTimeMillis() + 120_000L;
 
         JDialog dialog = new JDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this),
@@ -1231,20 +1470,12 @@ public class InventoryView extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 dialog.dispose();
 
-                try {
-                    SyncVersionDao.bumpVersion("PRODUCTS");
-                    SyncVersionDao.bumpVersion("INVENTORY");
-
-                    RealtimeClient.send("PRODUCTS_CHANGED");
-                    RealtimeClient.send("INVENTORY_CHANGED");
-                } catch (Exception ignored) {
-                }
-
-                loadInventoryData();
-
                 ProductImportService.ImportResult rs = importResult[0];
 
                 if (rs == null) {
+                    deferRealtimeReloadUntil = System.currentTimeMillis() + 800L;
+                    scheduleDeferredInventoryReload();
+
                     JOptionPane.showMessageDialog(
                             this,
                             "Import CSV hoàn tất nhưng không nhận được kết quả phiếu nhập.",
@@ -1254,6 +1485,12 @@ public class InventoryView extends JPanel {
                     return;
                 }
 
+                /*
+                 * Trong lúc popup đang mở, vẫn tiếp tục defer realtime reload.
+                 * Sau khi người dùng bấm OK, mới schedule refresh nền.
+                 */
+                deferRealtimeReloadUntil = System.currentTimeMillis() + 60_000L;
+
                 JOptionPane.showMessageDialog(
                         this,
                         "Nhập CSV thành công!\n"
@@ -1262,17 +1499,30 @@ public class InventoryView extends JPanel {
                         + "Số dòng bỏ qua: " + rs.skippedRows + "\n"
                         + "Tổng trước thuế: " + formatMoney(rs.totalBeforeTax) + " VNĐ\n"
                         + "Tổng VAT: " + formatMoney(rs.totalTax) + " VNĐ\n"
-                        + "Tổng sau thuế: " + formatMoney(rs.totalAfterTax) + " VNĐ",
+                        + "Tổng sau thuế: " + formatMoney(rs.totalAfterTax) + " VNĐ\n\n"
+                        + "Phiếu nhập đã được lưu. Bảng tồn kho sẽ tự cập nhật sau vài giây.",
                         "Import CSV hoàn tất",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
-                Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
-                new PurchaseReceiptInvoiceDialog(owner, rs.receiptId).setVisible(true);
+                /*
+                 * FIX LAG SAU OK:
+                 * Không gọi trực tiếp:
+                 * - loadInventoryData()
+                 * - SyncVersionDao.bumpVersion(...)
+                 * - RealtimeClient.send(...)
+                 * - PurchaseReceiptInvoiceDialog
+                 *
+                 * Realtime vẫn do ProductImportService bắn.
+                 * InventoryView chỉ gom event và refresh nền sau khi popup đã đóng.
+                 */
+                deferRealtimeReloadUntil = System.currentTimeMillis() + 800L;
+                scheduleDeferredInventoryReload();
             });
         }).exceptionally(ex -> {
             SwingUtilities.invokeLater(() -> {
                 dialog.dispose();
+                deferRealtimeReloadUntil = 0L;
 
                 JOptionPane.showMessageDialog(
                         this,
@@ -1373,6 +1623,29 @@ public class InventoryView extends JPanel {
         }
 
         return t.getMessage() == null ? t.toString() : t.getMessage();
+    }
+
+    private static class InventoryLoadSnapshot {
+
+        final List<Product> fullList;
+        final List<Product> filteredList;
+        final List<Object[]> tableRows;
+        final List<InventoryTransactionSql.InventoryTransactionDTO> recentActivities;
+        final String storeId;
+
+        InventoryLoadSnapshot(
+                List<Product> fullList,
+                List<Product> filteredList,
+                List<Object[]> tableRows,
+                List<InventoryTransactionSql.InventoryTransactionDTO> recentActivities,
+                String storeId
+        ) {
+            this.fullList = fullList == null ? new ArrayList<>() : fullList;
+            this.filteredList = filteredList == null ? new ArrayList<>() : filteredList;
+            this.tableRows = tableRows == null ? new ArrayList<>() : tableRows;
+            this.recentActivities = recentActivities == null ? new ArrayList<>() : recentActivities;
+            this.storeId = storeId;
+        }
     }
 
     class RoundedPanel extends JPanel {

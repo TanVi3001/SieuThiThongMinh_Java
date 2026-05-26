@@ -340,3 +340,37 @@ WHERE NVL(is_deleted, 0) = 0
      OR LOWER(TRIM(image_path)) IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
   )
 ORDER BY product_id;
+
+___ Chạy lại nếu lỗi ___
+
+MERGE INTO CATEGORIES c
+USING (
+    SELECT 'CAT006' AS category_id, N'Sữa & Sản phẩm từ sữa' AS category_name, N'Sữa tươi, sữa chua, phô mai, bơ sữa' AS description FROM dual UNION ALL
+    SELECT 'CAT007', N'Đông lạnh & Chế biến sẵn', N'Xúc xích, cá viên, chả giò, thực phẩm đông lạnh' FROM dual UNION ALL
+    SELECT 'CAT008', N'Gia dụng nhà bếp', N'Khăn giấy, túi rác, màng bọc, hộp đựng thực phẩm' FROM dual UNION ALL
+    SELECT 'CAT009', N'Chăm sóc cá nhân', N'Kem đánh răng, bàn chải, dao cạo, nước súc miệng' FROM dual UNION ALL
+    SELECT 'CAT010', N'Mẹ & Bé', N'Tã, khăn ướt, sữa tắm em bé, đồ dùng trẻ em' FROM dual UNION ALL
+    SELECT 'CAT011', N'Văn phòng phẩm', N'Tập, bút, giấy note, hồ sơ, dụng cụ học tập' FROM dual UNION ALL
+    SELECT 'CAT012', N'Thức ăn thú cưng', N'Hạt chó mèo, pate, cát vệ sinh, đồ chăm sóc thú cưng' FROM dual UNION ALL
+    SELECT 'CAT013', N'Thực phẩm hữu cơ', N'Rau củ, ngũ cốc, hạt dinh dưỡng, sản phẩm organic' FROM dual UNION ALL
+    SELECT 'CAT014', N'Đồ hộp & Ăn liền', N'Cá hộp, thịt hộp, cháo ăn liền, mì ly, đồ ăn nhanh' FROM dual UNION ALL
+    SELECT 'CAT015', N'Vệ sinh nhà cửa', N'Nước lau sàn, nước tẩy, xịt phòng, dụng cụ vệ sinh' FROM dual
+) src
+ON (c.category_id = src.category_id)
+WHEN MATCHED THEN UPDATE SET
+    c.category_name = src.category_name,
+    c.description = src.description,
+    c.is_deleted = 0
+WHEN NOT MATCHED THEN INSERT (
+    category_id,
+    category_name,
+    description,
+    is_deleted
+) VALUES (
+    src.category_id,
+    src.category_name,
+    src.description,
+    0
+);
+
+COMMIT;

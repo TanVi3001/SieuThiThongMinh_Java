@@ -127,9 +127,13 @@
                       AND order_date >= $P{P_FILTER_FROM}
                       AND order_date < $P{P_FILTER_TO}
                       AND (
-                           UPPER(NVL(status, '')) = 'COMPLETED'
-                           OR UPPER(NVL(status, '')) LIKE '%HOÀN THÀNH%'
-                           OR UPPER(NVL(status, '')) LIKE '%HOAN THANH%'
+                           UPPER(NVL(TO_CHAR(status), '')) IN ('COMPLETED', 'PAID', 'DONE')
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%HOÀN THÀNH%'
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%HOAN THANH%'
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%ĐÃ THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%DA THANH TOAN%'
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(status), '')) LIKE '%THANH TOAN%'
                       )
                     GROUP BY store_id
                 ) sales ON sales.store_id = s.store_id
@@ -161,7 +165,7 @@
                 UNION ALL
 
                 SELECT 3 AS section_no,
-                       CAST('NHAN_VIEN_CO_DOANH_THU_CAO_NHAT' AS VARCHAR2(100)) AS section_name,
+                       CAST('TOP_NHAN_VIEN_THEO_DOANH_THU' AS VARCHAR2(100)) AS section_name,
                        CAST(store_name AS VARCHAR2(180)) AS col1,
                        CAST(employee_id AS VARCHAR2(80)) AS col2,
                        CAST(employee_name AS VARCHAR2(180)) AS col3,
@@ -172,25 +176,72 @@
                     SELECT NVL(TO_CHAR(s.store_name), e.store_id) AS store_name,
                            e.employee_id,
                            TO_CHAR(e.employee_name) AS employee_name,
-                           COUNT(o.order_id) AS total_orders,
+                           COUNT(DISTINCT o.order_id) AS total_orders,
                            NVL(SUM(o.total_amount), 0) AS revenue
-                    FROM employees e
-                    LEFT JOIN stores s ON s.store_id = e.store_id
-                    LEFT JOIN orders o
-                        ON o.employee_id = e.employee_id
-                       AND o.store_id = e.store_id
-                       AND NVL(o.is_deleted, 0) = 0
-                       AND o.order_date >= $P{P_FILTER_FROM}
-                       AND o.order_date < $P{P_FILTER_TO}
-                       AND (
-                            UPPER(NVL(o.status, '')) = 'COMPLETED'
-                            OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                            OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-                       )
-                    WHERE NVL(e.is_deleted, 0) = 0
-                      AND e.role_id IN ('R_STAFF_SALE', 'R_STAFF_VIEW_PROD')
+                    FROM orders o
+                    JOIN employees e
+                        ON e.employee_id = o.employee_id
+                       AND NVL(e.is_deleted, 0) = 0
+                    LEFT JOIN stores s
+                        ON s.store_id = NVL(o.store_id, e.store_id)
+                    WHERE NVL(o.is_deleted, 0) = 0
+                      AND o.order_date >= $P{P_FILTER_FROM}
+                      AND o.order_date < $P{P_FILTER_TO}
+                      AND (
+                           UPPER(NVL(TO_CHAR(o.status), '')) IN ('COMPLETED', 'PAID', 'DONE')
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOÀN THÀNH%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOAN THANH%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%ĐÃ THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%DA THANH TOAN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOAN%'
+                      )
+                      AND UPPER(NVL(TO_CHAR(e.role_id), '')) NOT LIKE '%MANAGER%'
+                      AND UPPER(NVL(TO_CHAR(e.role_id), '')) NOT IN ('R_MANAGER', 'MANAGER', 'R_STORE_MANAGER')
                     GROUP BY NVL(TO_CHAR(s.store_name), e.store_id), e.employee_id, e.employee_name
+                    HAVING COUNT(DISTINCT o.order_id) > 0
                     ORDER BY revenue DESC, total_orders DESC
+                )
+                WHERE ROWNUM <= 10
+
+                UNION ALL
+
+                SELECT 4 AS section_no,
+                       CAST('TOP_SAN_PHAM_THEO_DOANH_THU' AS VARCHAR2(100)) AS section_name,
+                       CAST(product_id AS VARCHAR2(80)) AS col1,
+                       CAST(product_name AS VARCHAR2(180)) AS col2,
+                       CAST(TO_CHAR(quantity_sold) AS VARCHAR2(80)) AS col3,
+                       CAST(TO_CHAR(total_orders) AS VARCHAR2(80)) AS col4,
+                       CAST(TO_CHAR(revenue, 'FM999G999G999G999') || ' VND' AS VARCHAR2(100)) AS col5,
+                       revenue AS sort_value
+                FROM (
+                    SELECT od.product_id,
+                           NVL(MAX(TO_CHAR(p.product_name)), od.product_id) AS product_name,
+                           SUM(NVL(od.quantity, 0)) AS quantity_sold,
+                           COUNT(DISTINCT o.order_id) AS total_orders,
+                           SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) AS revenue
+                    FROM orders o
+                    JOIN order_details od
+                        ON od.order_id = o.order_id
+                       AND NVL(od.is_deleted, 0) = 0
+                    LEFT JOIN products p
+                        ON p.product_id = od.product_id
+                    WHERE NVL(o.is_deleted, 0) = 0
+                      AND o.order_date >= $P{P_FILTER_FROM}
+                      AND o.order_date < $P{P_FILTER_TO}
+                      AND (
+                           UPPER(NVL(TO_CHAR(o.status), '')) IN ('COMPLETED', 'PAID', 'DONE')
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOÀN THÀNH%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOAN THANH%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%ĐÃ THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%DA THANH TOAN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOÁN%'
+                           OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOAN%'
+                      )
+                    GROUP BY od.product_id
+                    HAVING SUM(NVL(od.quantity, 0)) > 0
+                       AND SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) > 0
+                    ORDER BY revenue DESC, quantity_sold DESC
                 )
                 WHERE ROWNUM <= 10
 
@@ -239,7 +290,7 @@
                             isPdfEmbedded="true" />
                     </textElement>
                     <textFieldExpression>
-                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "HIỆU QUẢ NHẬP - BÁN THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : "TOP NHÂN VIÊN THEO DOANH THU")]]>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "HIỆU QUẢ NHẬP - BÁN THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 2 ? "TỒN KHO THEO CHI NHÁNH" : ($F{SECTION_NO}.intValue() == 3 ? "TOP NHÂN VIÊN BÁN HÀNG THEO DOANH THU" : "TOP SẢN PHẨM THEO DOANH THU"))]]>
                     </textFieldExpression>
                 </textField>
                 <rectangle radius="8">
@@ -256,7 +307,7 @@
                             isPdfEmbedded="true" />
                     </textElement>
                     <textFieldExpression>
-                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : "Mã CN"]]>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Chi nhánh" : ($F{SECTION_NO}.intValue() == 4 ? "Mã SP" : "Mã CN")]]>
                     </textFieldExpression>
                 </textField>
                 <textField>
@@ -267,7 +318,7 @@
                             isPdfEmbedded="true" />
                     </textElement>
                     <textFieldExpression>
-                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : "Chi nhánh"]]>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 3 ? "Mã NV" : ($F{SECTION_NO}.intValue() == 4 ? "Sản phẩm" : "Chi nhánh")]]>
                     </textFieldExpression>
                 </textField>
                 <textField>
@@ -278,7 +329,7 @@
                             isPdfEmbedded="true" />
                     </textElement>
                     <textFieldExpression>
-                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : "Nhân viên")]]>
+                        <![CDATA[$F{SECTION_NO}.intValue() == 1 ? "Doanh thu" : ($F{SECTION_NO}.intValue() == 2 ? "Mặt hàng" : ($F{SECTION_NO}.intValue() == 3 ? "Nhân viên" : "Số lượng"))]]>
                     </textFieldExpression>
                 </textField>
                 <textField>

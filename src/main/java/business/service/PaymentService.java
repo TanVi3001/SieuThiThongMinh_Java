@@ -8,6 +8,8 @@ import common.exception.ConcurrentCheckoutException;
 import common.realtime.RealtimeNotifier;
 import model.order.Order;
 import model.order.OrderDetail;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import java.sql.*;
 import java.util.HashMap;
@@ -284,6 +286,13 @@ public class PaymentService {
         }
     }
 
+    private static final ExecutorService REALTIME_NOTIFY_EXECUTOR
+            = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "payment-realtime-notifier");
+                t.setDaemon(true);
+                return t;
+            });
+
     private static void validateCheckoutInput(Order order, List<OrderDetail> details) throws SQLException {
         if (order == null) {
             throw new SQLException("Hóa đơn không hợp lệ.");
@@ -528,26 +537,34 @@ public class PaymentService {
             String storeId,
             String customerId
     ) {
-        try {
-            String baseMessage = !hasText(message) ? "PAYMENT_CHANGED" : message.trim();
-            String orderToken = hasText(orderId) ? ":ORDER:" + orderId.trim() : "";
-            String storeToken = hasText(storeId) ? ":STORE:" + storeId.trim() : "";
+        REALTIME_NOTIFY_EXECUTOR.submit(() -> {
+            try {
+                String baseMessage = !hasText(message) ? "PAYMENT_CHANGED" : message.trim();
+                String orderToken = hasText(orderId) ? ":ORDER:" + orderId.trim() : "";
+                String storeToken = hasText(storeId) ? ":STORE:" + storeId.trim() : "";
 
-            RealtimeNotifier.ordersChanged("ORDER_PAYMENT_CHANGED:" + baseMessage + orderToken + storeToken);
-            RealtimeNotifier.inventoryChanged("INVENTORY_BY_ORDER:" + baseMessage + orderToken + storeToken);
-
-            if (hasText(customerId)) {
-                RealtimeNotifier.customersChanged(
-                        "CUSTOMER_BY_ORDER:" + baseMessage
-                        + ":CUSTOMER:" + customerId.trim()
-                        + orderToken
-                        + storeToken
+                // Chỉ bắn sự kiện cần thiết, chạy nền nên không chặn thanh toán/xuất hóa đơn
+                RealtimeNotifier.ordersChanged(
+                        "ORDER_PAYMENT_CHANGED:" + baseMessage + orderToken + storeToken
                 );
-            }
 
-        } catch (Exception ex) {
-            System.err.println("[PaymentService] realtime notify error: " + ex.getMessage());
-        }
+                RealtimeNotifier.inventoryChanged(
+                        "INVENTORY_BY_ORDER:" + baseMessage + orderToken + storeToken
+                );
+
+                if (hasText(customerId)) {
+                    RealtimeNotifier.customersChanged(
+                            "CUSTOMER_BY_ORDER:" + baseMessage
+                            + ":CUSTOMER:" + customerId.trim()
+                            + orderToken
+                            + storeToken
+                    );
+                }
+
+            } catch (Exception ex) {
+                System.err.println("[PaymentService] realtime notify async error: " + ex.getMessage());
+            }
+        });
     }
 
     private static void logStatusChange(

@@ -49,7 +49,7 @@ public class SellPanel extends JPanel {
 
     private final DecimalFormat moneyFormat = new DecimalFormat("#,##0 đ");
     // Đổi Hint hiển thị đẹp hơn
-    private static final String SEARCH_HINT = "🔍 Gõ mã hoặc tên SP vào đây để tìm nè...";
+    private static final String SEARCH_HINT = "Gõ mã hoặc tên SP vào đây để tìm nè...";
     private volatile boolean paymentProcessing = false;
     private volatile boolean paymentJustSucceeded = false;
 

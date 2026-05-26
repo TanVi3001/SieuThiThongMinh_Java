@@ -1,6 +1,5 @@
 package business.service;
 
-import business.sql.prod_inventory.ProductsSql;
 import common.db.DatabaseConnection;
 import common.realtime.RealtimeNotifier;
 
@@ -18,6 +17,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ProductImportService {
 
@@ -94,11 +95,19 @@ public class ProductImportService {
             WHERE receipt_id = ?
         """;
 
+        /*
+         * FIX IMPORT CSV:
+         * Không được chỉ tìm sản phẩm active.
+         * Nếu sản phẩm từng bị xóa mềm thì vẫn phải tìm ra để khôi phục,
+         * nếu không code sẽ INSERT lại và dễ đụng UNIQUE PRODUCT_ID / PRODUCT_NAME.
+         */
         String sqlCheckProduct = """
             SELECT product_id
             FROM PRODUCTS
             WHERE LOWER(TRIM(product_name)) = LOWER(TRIM(?))
-              AND NVL(is_deleted, 0) = 0
+            ORDER BY
+                CASE WHEN NVL(is_deleted, 0) = 0 THEN 0 ELSE 1 END,
+                product_id
             FETCH FIRST 1 ROWS ONLY
         """;
 
@@ -133,9 +142,9 @@ public class ProductImportService {
                 image_path = CASE
                     WHEN ? IS NULL OR TRIM(?) = '' THEN image_path
                     ELSE ?
-                END
+                END,
+                is_deleted = 0
             WHERE product_id = ?
-              AND NVL(is_deleted, 0) = 0
         """;
 
         String sqlUpsertInventory = """
@@ -348,6 +357,7 @@ public class ProductImportService {
                         }
 
                         String productId = findOrCreateProduct(
+                                conn,
                                 row,
                                 psCheckProduct,
                                 psInsertProduct,
@@ -435,9 +445,7 @@ public class ProductImportService {
 
                 conn.commit();
 
-                RealtimeNotifier.inventoryChanged("PURCHASE_RECEIPT_CREATED:" + result.receiptId + ":STORE:" + currentStoreId);
-                RealtimeNotifier.productsChanged("PRODUCT_STOCK_INCREASED_BY_RECEIPT:" + result.receiptId + ":STORE:" + currentStoreId);
-                RealtimeNotifier.statisticsChanged("PURCHASE_RECEIPT_CREATED:" + result.receiptId + ":STORE:" + currentStoreId);
+                publishImportRealtimeAsync(result.receiptId, currentStoreId);
 
                 if (progressCallback != null) {
                     progressCallback.accept(100);
@@ -465,6 +473,28 @@ public class ProductImportService {
         }
     }
 
+    private void publishImportRealtimeAsync(String receiptId, String storeId) {
+        IMPORT_REALTIME_EXECUTOR.submit(() -> {
+            try {
+                String msg = "PURCHASE_RECEIPT_CREATED:" + receiptId + ":STORE:" + storeId;
+
+                // Chỉ notify 2 cái cần thiết.
+                // Không gọi statisticsChanged trực tiếp để tránh dashboard/report reload nặng sau import.
+                RealtimeNotifier.inventoryChanged(msg);
+                RealtimeNotifier.productsChanged("PRODUCT_STOCK_INCREASED_BY_RECEIPT:" + receiptId + ":STORE:" + storeId);
+
+            } catch (Exception ex) {
+                System.err.println("[ProductImportService] realtime notify async error: " + ex.getMessage());
+            }
+        });
+    }
+    private static final ExecutorService IMPORT_REALTIME_EXECUTOR
+            = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "import-realtime-notifier");
+                t.setDaemon(true);
+                return t;
+            });
+
     private boolean isValidBasicRow(CsvProductRow row) {
         if (row == null) {
             return false;
@@ -482,6 +512,7 @@ public class ProductImportService {
     }
 
     private String findOrCreateProduct(
+            Connection conn,
             CsvProductRow row,
             PreparedStatement psCheckProduct,
             PreparedStatement psInsertProduct,
@@ -489,6 +520,11 @@ public class ProductImportService {
     ) throws SQLException {
         String productId = null;
 
+        /*
+         * FIX:
+         * Tìm theo tên sản phẩm kể cả dòng is_deleted = 1.
+         * Nếu có thì UPDATE + khôi phục, tuyệt đối không INSERT trùng.
+         */
         psCheckProduct.setString(1, row.productName);
 
         try (ResultSet rs = psCheckProduct.executeQuery()) {
@@ -498,19 +534,16 @@ public class ProductImportService {
         }
 
         if (productId != null && !productId.isBlank()) {
-            psUpdateProduct.setBigDecimal(1, row.salePrice);
-            psUpdateProduct.setString(2, row.categoryId);
-            psUpdateProduct.setString(3, row.supplierId);
-            psUpdateProduct.setString(4, row.imagePath);
-            psUpdateProduct.setString(5, row.imagePath);
-            psUpdateProduct.setString(6, row.imagePath);
-            psUpdateProduct.setString(7, productId);
-            psUpdateProduct.executeUpdate();
-
+            updateExistingProduct(row, psUpdateProduct, productId);
             return productId;
         }
 
-        productId = ProductsSql.getInstance().generateNextProductId();
+        /*
+         * FIX ORA-00001 PRODUCT_ID:
+         * Không dùng generator cũ vì có thể sinh lại mã đã tồn tại.
+         * Sinh mã mới dựa trên MAX số trong PRODUCTS và kiểm tra lại trước khi INSERT.
+         */
+        productId = generateNextProductIdSafe(conn);
 
         psInsertProduct.setString(1, productId);
         psInsertProduct.setString(2, row.productName);
@@ -519,9 +552,115 @@ public class ProductImportService {
         psInsertProduct.setString(5, row.supplierId);
         psInsertProduct.setString(6, DEFAULT_UNIT_ID);
         psInsertProduct.setString(7, row.imagePath);
-        psInsertProduct.executeUpdate();
 
-        return productId;
+        try {
+            psInsertProduct.executeUpdate();
+            return productId;
+        } catch (SQLException ex) {
+            /*
+             * Trường hợp rất hiếm: trong lúc import bị đụng unique do DB cũ/trigger.
+             * Thử tìm lại theo tên, nếu có thì update và return thay vì skip dòng.
+             */
+            if (isUniqueViolation(ex)) {
+                String existingId = findProductIdByNameIncludingDeleted(conn, row.productName);
+                if (existingId != null && !existingId.isBlank()) {
+                    updateExistingProduct(row, psUpdateProduct, existingId);
+                    return existingId;
+                }
+            }
+
+            throw ex;
+        }
+    }
+
+    private void updateExistingProduct(
+            CsvProductRow row,
+            PreparedStatement psUpdateProduct,
+            String productId
+    ) throws SQLException {
+        psUpdateProduct.setBigDecimal(1, row.salePrice);
+        psUpdateProduct.setString(2, row.categoryId);
+        psUpdateProduct.setString(3, row.supplierId);
+        psUpdateProduct.setString(4, row.imagePath);
+        psUpdateProduct.setString(5, row.imagePath);
+        psUpdateProduct.setString(6, row.imagePath);
+        psUpdateProduct.setString(7, productId);
+        psUpdateProduct.executeUpdate();
+    }
+
+    private String findProductIdByNameIncludingDeleted(Connection conn, String productName) throws SQLException {
+        String sql = """
+            SELECT product_id
+            FROM PRODUCTS
+            WHERE LOWER(TRIM(product_name)) = LOWER(TRIM(?))
+            ORDER BY
+                CASE WHEN NVL(is_deleted, 0) = 0 THEN 0 ELSE 1 END,
+                product_id
+            FETCH FIRST 1 ROWS ONLY
+        """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, productName);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("product_id");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String generateNextProductIdSafe(Connection conn) throws SQLException {
+        String sql = """
+            SELECT NVL(MAX(TO_NUMBER(SUBSTR(product_id, 3))), 0) + 1 AS next_no
+            FROM PRODUCTS
+            WHERE REGEXP_LIKE(product_id, '^SP[0-9]+$')
+        """;
+
+        int nextNo = 1;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                nextNo = rs.getInt("next_no");
+            }
+        }
+
+        /*
+         * Check vòng lặp để chống DB có mã rác hoặc transaction sinh trùng.
+         */
+        while (productIdExists(conn, String.format("SP%06d", nextNo))) {
+            nextNo++;
+        }
+
+        return String.format("SP%06d", nextNo);
+    }
+
+    private boolean productIdExists(Connection conn, String productId) throws SQLException {
+        String sql = "SELECT 1 FROM PRODUCTS WHERE product_id = ? FETCH FIRST 1 ROWS ONLY";
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, productId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private boolean isUniqueViolation(SQLException ex) {
+        SQLException cur = ex;
+
+        while (cur != null) {
+            if (cur.getErrorCode() == 1) {
+                return true;
+            }
+
+            cur = cur.getNextException();
+        }
+
+        return false;
     }
 
     private void upsertInventory(

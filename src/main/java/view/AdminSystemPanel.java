@@ -1236,35 +1236,42 @@ public class AdminSystemPanel extends JPanel {
     private BufferedImage createProductRevenuePie3DChartImage() {
         DefaultPieDataset dataset = new DefaultPieDataset();
 
+        /*
+     * FIX REPORT CHART TRẮNG:
+     * Không lọc p.is_deleted = 0 ở report lịch sử.
+     * Vì ORDER_DETAILS có thể đang tham chiếu sản phẩm đã bị soft-delete do dọn trùng.
+     * Report doanh thu phải đọc lịch sử bán hàng, không phụ thuộc sản phẩm còn active hay không.
+         */
         String sql = """
-            SELECT product_name, revenue
-            FROM (
-                SELECT p.product_name AS product_name,
-                       SUM(od.quantity * od.unit_price) AS revenue
-                FROM stores s
-                JOIN orders o
-                    ON o.store_id = s.store_id
-                   AND NVL(o.is_deleted, 0) = 0
-                   AND o.store_id IS NOT NULL
-                   AND o.order_date >= ?
-                   AND o.order_date < ?
-                   AND (
-                        UPPER(NVL(o.status, '')) = 'COMPLETED'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-                   )
-                JOIN order_details od
-                    ON od.order_id = o.order_id
-                   AND NVL(od.is_deleted, 0) = 0
-                JOIN products p
-                    ON p.product_id = od.product_id
-                   AND NVL(p.is_deleted, 0) = 0
-                WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY p.product_name
-                ORDER BY revenue DESC
-            )
-            WHERE ROWNUM <= 5
-        """;
+        SELECT product_name, revenue
+        FROM (
+            SELECT NVL(MAX(p.product_name), od.product_id) AS product_name,
+                   SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) AS revenue
+            FROM orders o
+            JOIN order_details od
+                ON od.order_id = o.order_id
+               AND NVL(od.is_deleted, 0) = 0
+            LEFT JOIN products p
+                ON p.product_id = od.product_id
+            WHERE NVL(o.is_deleted, 0) = 0
+              AND o.store_id IS NOT NULL
+              AND o.order_date >= ?
+              AND o.order_date < ?
+              AND (
+                    UPPER(NVL(TO_CHAR(o.status), '')) IN ('COMPLETED', 'PAID', 'DONE')
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOÀN THÀNH%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOAN THANH%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%ĐÃ THANH TOÁN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%DA THANH TOAN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOÁN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOAN%'
+              )
+            GROUP BY od.product_id
+            HAVING SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) > 0
+            ORDER BY revenue DESC
+        )
+        WHERE ROWNUM <= 5
+    """;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
@@ -1278,15 +1285,25 @@ public class AdminSystemPanel extends JPanel {
 
                     if (revenue > 0) {
                         String shortName = productName == null ? "Không rõ" : productName.trim();
+
                         if (shortName.length() > 24) {
                             shortName = shortName.substring(0, 24) + "...";
                         }
+
                         dataset.setValue(shortName, revenue);
                     }
                 }
             }
+
         } catch (Exception e) {
             System.err.println("[AdminSystemPanel] createProductRevenuePie3DChartImage error: " + e.getMessage());
+        }
+
+        /*
+     * Không để pie chart trắng nếu thật sự không có dữ liệu.
+         */
+        if (dataset.getItemCount() == 0) {
+            dataset.setValue("Không có dữ liệu", 1);
         }
 
         JFreeChart chart = ChartFactory.createPieChart3D(
@@ -1298,6 +1315,7 @@ public class AdminSystemPanel extends JPanel {
         );
 
         chart.setBackgroundPaint(Color.WHITE);
+
         if (chart.getLegend() != null) {
             chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 15));
             chart.getLegend().setBackgroundPaint(Color.WHITE);
@@ -1609,37 +1627,44 @@ public class AdminSystemPanel extends JPanel {
         double maxQuantity = 0;
         double maxRevenueMillion = 0;
 
+        /*
+     * FIX REPORT CHART TRẮNG:
+     * LEFT JOIN products và bỏ điều kiện p.is_deleted = 0.
+     * Báo cáo lịch sử bán hàng phải tính theo ORDER_DETAILS, kể cả sản phẩm đã soft-delete.
+         */
         String sql = """
-            SELECT *
-            FROM (
-                SELECT p.product_name AS product_name,
-                       SUM(od.quantity) AS quantity_sold,
-                       SUM(od.quantity * od.unit_price) AS revenue,
-                       COUNT(DISTINCT o.order_id) AS bubble_size
-                FROM stores s
-                JOIN orders o
-                    ON o.store_id = s.store_id
-                   AND NVL(o.is_deleted, 0) = 0
-                   AND o.store_id IS NOT NULL
-                   AND o.order_date >= ?
-                   AND o.order_date < ?
-                   AND (
-                        UPPER(NVL(o.status, '')) = 'COMPLETED'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOÀN THÀNH%'
-                        OR UPPER(NVL(o.status, '')) LIKE '%HOAN THANH%'
-                   )
-                JOIN order_details od
-                    ON od.order_id = o.order_id
-                   AND NVL(od.is_deleted, 0) = 0
-                JOIN products p
-                    ON p.product_id = od.product_id
-                   AND NVL(p.is_deleted, 0) = 0
-                WHERE NVL(s.is_deleted, 0) = 0
-                GROUP BY p.product_name
-                ORDER BY revenue DESC
-            )
-            WHERE ROWNUM <= 10
-        """;
+        SELECT *
+        FROM (
+            SELECT NVL(MAX(p.product_name), od.product_id) AS product_name,
+                   SUM(NVL(od.quantity, 0)) AS quantity_sold,
+                   SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) AS revenue,
+                   COUNT(DISTINCT o.order_id) AS bubble_size
+            FROM orders o
+            JOIN order_details od
+                ON od.order_id = o.order_id
+               AND NVL(od.is_deleted, 0) = 0
+            LEFT JOIN products p
+                ON p.product_id = od.product_id
+            WHERE NVL(o.is_deleted, 0) = 0
+              AND o.store_id IS NOT NULL
+              AND o.order_date >= ?
+              AND o.order_date < ?
+              AND (
+                    UPPER(NVL(TO_CHAR(o.status), '')) IN ('COMPLETED', 'PAID', 'DONE')
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOÀN THÀNH%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%HOAN THANH%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%ĐÃ THANH TOÁN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%DA THANH TOAN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOÁN%'
+                    OR UPPER(NVL(TO_CHAR(o.status), '')) LIKE '%THANH TOAN%'
+              )
+            GROUP BY od.product_id
+            HAVING SUM(NVL(od.quantity, 0)) > 0
+               AND SUM(NVL(od.quantity, 0) * NVL(od.unit_price, 0)) > 0
+            ORDER BY revenue DESC
+        )
+        WHERE ROWNUM <= 10
+    """;
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
 
@@ -1654,6 +1679,11 @@ public class AdminSystemPanel extends JPanel {
                     double orderCount = Math.max(1.0, rs.getDouble("bubble_size"));
 
                     String seriesName = productName == null ? "Không rõ" : productName.trim();
+
+                    if (seriesName.length() > 28) {
+                        seriesName = seriesName.substring(0, 28) + "...";
+                    }
+
                     XYSeries series = new XYSeries(seriesName);
                     series.add(quantitySold, revenueMillion);
                     dataset.addSeries(series);
@@ -1664,15 +1694,21 @@ public class AdminSystemPanel extends JPanel {
                     maxRevenueMillion = Math.max(maxRevenueMillion, revenueMillion);
                 }
             }
+
         } catch (Exception e) {
             System.err.println("[AdminSystemPanel] createProductBubbleChartImage error: " + e.getMessage());
         }
 
+        /*
+     * Không để bubble chart trắng nếu thật sự không có data.
+         */
         if (dataset.getSeriesCount() == 0) {
             XYSeries empty = new XYSeries("Không có dữ liệu");
             empty.add(0, 0);
             dataset.addSeries(empty);
             bubbleSizes.add(1.0);
+            maxQuantity = 10;
+            maxRevenueMillion = 10;
         }
 
         JFreeChart chart = ChartFactory.createScatterPlot(
@@ -1687,6 +1723,7 @@ public class AdminSystemPanel extends JPanel {
         );
 
         chart.setBackgroundPaint(Color.WHITE);
+
         if (chart.getLegend() != null) {
             chart.getLegend().setItemFont(new Font("Segoe UI", Font.BOLD, 13));
             chart.getLegend().setBackgroundPaint(Color.WHITE);
@@ -1727,12 +1764,12 @@ public class AdminSystemPanel extends JPanel {
         plot.setRenderer(renderer);
 
         NumberAxis domain = (NumberAxis) plot.getDomainAxis();
-        compactNumberAxis(domain, maxQuantity);
+        compactNumberAxis(domain, maxQuantity <= 0 ? 10 : maxQuantity);
         domain.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
         domain.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
 
         NumberAxis range = (NumberAxis) plot.getRangeAxis();
-        compactNumberAxis(range, maxRevenueMillion);
+        compactNumberAxis(range, maxRevenueMillion <= 0 ? 10 : maxRevenueMillion);
         range.setTickLabelFont(new Font("Segoe UI", Font.BOLD, 12));
         range.setLabelFont(new Font("Segoe UI", Font.BOLD, 14));
 
