@@ -136,7 +136,7 @@ public class WarehouseDashboardView extends JFrame {
                     return;
                 }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_PRODUCTS);
-                showMenuPanel(WarehouseSidebar.MENU_PRODUCTS, ProductView::new);
+                showMenuPanel(WarehouseSidebar.MENU_PRODUCTS, CenteredProductView::new);
             }
 
             case WarehouseSidebar.MENU_SUPPLIERS -> {
