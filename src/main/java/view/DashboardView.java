@@ -8,14 +8,20 @@ import common.security.SecurityGuard;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import view.components.NotificationBell;
 import view.components.Sidebar;
@@ -36,6 +42,8 @@ public class DashboardView extends JFrame {
     private final Color BACKGROUND_COLOR = new Color(245, 245, 247);
 
     private String currentMenu = "Tổng quan";
+    private volatile SwingWorker<JPanel, Void> currentPanelWorker;
+    private final Map<String, JPanel> panelCache = new HashMap<>();
 
     public DashboardView() {
         setupUI();
@@ -50,9 +58,22 @@ public class DashboardView extends JFrame {
                     return;
                 }
 
+                if (e.getType() == AppEventType.ORDERS) {
+                    panelCache.remove("Hóa đơn");
+                    return;
+                }
+
+                if (e.getType() == AppEventType.PRODUCTS || e.getType() == AppEventType.INVENTORY) {
+                    panelCache.remove("Bán hàng");
+                    panelCache.remove("Quản lý sản phẩm");
+                    panelCache.remove("Quản lý tồn kho");
+                    return;
+                }
+
                 if ("Báo cáo & Thống kê".equals(currentMenu)
                         && AuthorizationService.canAccessReports()) {
-                    showPanel(new StatisticView());
+                    panelCache.remove("Báo cáo & Thống kê");
+                    showMenuPanel("Báo cáo & Thống kê", StatisticView::new);
                 }
             });
         });
@@ -99,6 +120,10 @@ public class DashboardView extends JFrame {
 
         Sidebar sidebar = new Sidebar(roleForSidebar);
         sidebar.setMenuClickListener(title -> {
+            if (title != null && title.equals(currentMenu) && mainContentPanel.getComponentCount() > 0) {
+                return;
+            }
+
             currentMenu = title;
             handleMenuClick(title);
         });
@@ -124,7 +149,7 @@ public class DashboardView extends JFrame {
         getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
         if (AuthorizationService.canAccessDashboard()) {
-            showPanel(new TongQuanPanel());
+            showMenuPanel("Tổng quan", TongQuanPanel::new);
         } else {
             showAccessDenied();
         }
@@ -137,7 +162,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new TongQuanPanel());
+                showMenuPanel("Tổng quan", TongQuanPanel::new);
                 break;
 
             case "Bán hàng":
@@ -145,7 +170,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new SellPanel());
+                showMenuPanel("Bán hàng", SellPanel::new);
                 break;
 
             case "Quản lý sản phẩm":
@@ -153,7 +178,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new ProductView());
+                showMenuPanel("Quản lý sản phẩm", ProductView::new);
                 break;
 
             case "Quản lý tồn kho":
@@ -161,7 +186,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new InventoryView());
+                showMenuPanel("Quản lý tồn kho", InventoryView::new);
                 break;
 
             case "Quản lý nhà cung cấp":
@@ -169,7 +194,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new SupplierManagementView());
+                showMenuPanel("Quản lý nhà cung cấp", SupplierManagementView::new);
                 break;
 
             case "Danh mục & Thuế VAT":
@@ -177,7 +202,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new CategoryTaxView());
+                showMenuPanel("Danh mục & Thuế VAT", CategoryTaxView::new);
                 break;
 
             case "Quản lý nhân viên":
@@ -185,7 +210,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new EmployeeView());
+                showMenuPanel("Quản lý nhân viên", EmployeeView::new);
                 break;
 
             case "Khách hàng":
@@ -193,7 +218,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new CustomerView());
+                showMenuPanel("Khách hàng", CustomerView::new);
                 break;
 
             case "Hóa đơn":
@@ -201,7 +226,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new OrderView());
+                showMenuPanel("Hóa đơn", OrderView::new);
                 break;
 
             case "Báo cáo & Thống kê":
@@ -209,7 +234,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new StatisticView());
+                showMenuPanel("Báo cáo & Thống kê", StatisticView::new);
                 break;
 
             case "Cài đặt":
@@ -217,7 +242,7 @@ public class DashboardView extends JFrame {
                     showAccessDenied();
                     return;
                 }
-                showPanel(new view.components.UnifiedSettingsPanel());
+                showMenuPanel("Cài đặt", view.components.UnifiedSettingsPanel::new);
                 break;
 
             case "Đăng xuất":
@@ -262,13 +287,96 @@ public class DashboardView extends JFrame {
         }
     }
 
+    private void showMenuPanel(String cacheKey, Supplier<JPanel> panelFactory) {
+        if (cacheKey == null || panelFactory == null) {
+            return;
+        }
+
+        if (currentPanelWorker != null && !currentPanelWorker.isDone()) {
+            currentPanelWorker.cancel(true);
+        }
+
+        JPanel cached = panelCache.get(cacheKey);
+        if (cached != null) {
+            showPanel(cached);
+            return;
+        }
+
+        showLoadingPanel(cacheKey);
+
+        SwingWorker<JPanel, Void> worker = new SwingWorker<>() {
+            @Override
+            protected JPanel doInBackground() {
+                return panelFactory.get();
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled()) {
+                    return;
+                }
+
+                try {
+                    JPanel panel = get();
+                    panelCache.put(cacheKey, panel);
+
+                    if (cacheKey.equals(currentMenu)) {
+                        showPanel(panel);
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    showErrorPanel(cacheKey, ex);
+                }
+            }
+        };
+
+        currentPanelWorker = worker;
+        worker.execute();
+    }
+
+    private void showLoadingPanel(String title) {
+        JPanel loading = new JPanel(new BorderLayout());
+        loading.setBackground(BACKGROUND_COLOR);
+
+        JLabel label = new JLabel("Đang tải " + title + "...", JLabel.CENTER);
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 16));
+        label.setForeground(new Color(80, 90, 110));
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+        loading.add(label, BorderLayout.CENTER);
+        showPanel(loading, false);
+    }
+
+    private void showErrorPanel(String title, Exception ex) {
+        JPanel error = new JPanel(new BorderLayout());
+        error.setBackground(BACKGROUND_COLOR);
+
+        String message = ex == null || ex.getMessage() == null ? "Không rõ lỗi" : ex.getMessage();
+        JLabel label = new JLabel(
+                "<html><div style='text-align:center;'>Không thể tải " + title
+                + ".<br>" + message + "</div></html>",
+                JLabel.CENTER
+        );
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+        label.setForeground(new Color(220, 53, 69));
+
+        error.add(label, BorderLayout.CENTER);
+        showPanel(error, false);
+    }
+
     public void showPanel(JPanel childPanel) {
+        showPanel(childPanel, true);
+    }
+
+    private void showPanel(JPanel childPanel, boolean applyPermissionGuard) {
         mainContentPanel.removeAll();
 
         childPanel.setMinimumSize(new Dimension(900, 600));
         childPanel.setBackground(BACKGROUND_COLOR);
 
-        RolePermissionButtonGuard.applyTo(childPanel);
+        if (applyPermissionGuard) {
+            RolePermissionButtonGuard.applyTo(childPanel);
+        }
 
         JScrollPane scrollPane = new JScrollPane(childPanel);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -282,7 +390,9 @@ public class DashboardView extends JFrame {
         mainContentPanel.revalidate();
         mainContentPanel.repaint();
 
-        SwingUtilities.invokeLater(() -> RolePermissionButtonGuard.applyTo(childPanel));
+        if (applyPermissionGuard) {
+            SwingUtilities.invokeLater(() -> RolePermissionButtonGuard.applyTo(childPanel));
+        }
     }
 
     private void handleLogout() {
