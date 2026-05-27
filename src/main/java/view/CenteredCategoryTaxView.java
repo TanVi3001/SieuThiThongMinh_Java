@@ -6,7 +6,6 @@ import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.AbstractButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -16,8 +15,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
 /**
- * Wrapper riêng cho Warehouse Portal: căn giữa + phóng to nhẹ màn Danh mục & Thuế VAT.
- * Không đổi logic thêm/sửa/xóa/lọc, không đè mất icon danh mục.
+ * Wrapper riêng cho Warehouse Portal: bảng Danh mục & Thuế VAT giữ style rõ nét,
+ * form thông tin căn trái để dễ đọc. Không đổi logic thêm/sửa/xóa/lọc.
  */
 public class CenteredCategoryTaxView extends CategoryTaxView {
 
@@ -27,7 +26,7 @@ public class CenteredCategoryTaxView extends CategoryTaxView {
     }
 
     private void applyWarehouseCategoryStyling() {
-        enlargeFormAndButtons(this);
+        styleFormInfoControls(this);
 
         JTable table = findCategoryTable(this);
         if (table == null || table.getColumnCount() < 5) {
@@ -40,7 +39,7 @@ public class CenteredCategoryTaxView extends CategoryTaxView {
         table.setFont(new Font("Segoe UI", Font.BOLD, 15));
         centerHeader(table);
 
-        // 0 = Mã DM có icon, wrap renderer cũ để giữ icon nhưng vẫn căn giữa.
+        // 0 = Mã DM có icon, wrap renderer cũ để giữ icon nhưng vẫn căn giữa trong bảng.
         centerColumn(table, 0, true);
         centerColumn(table, 1, false);
         centerColumn(table, 2, false);
@@ -51,7 +50,7 @@ public class CenteredCategoryTaxView extends CategoryTaxView {
         repaint();
     }
 
-    private void enlargeFormAndButtons(Component component) {
+    private void styleFormInfoControls(Component component) {
         if (component == null) {
             return;
         }
@@ -64,19 +63,27 @@ public class CenteredCategoryTaxView extends CategoryTaxView {
             button.setHorizontalAlignment(SwingConstants.CENTER);
         } else if (component instanceof JTextField textField) {
             textField.setFont(new Font("Segoe UI", Font.BOLD, 14));
-            textField.setHorizontalAlignment(JTextField.CENTER);
+            textField.setHorizontalAlignment(JTextField.LEFT);
+            textField.setPreferredSize(new Dimension(textField.getPreferredSize().width, 42));
+            textField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         } else if (component instanceof JComboBox<?> comboBox) {
             comboBox.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            Component editor = comboBox.isEditable() ? comboBox.getEditor().getEditorComponent() : null;
+            if (editor instanceof JTextField textField) {
+                textField.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                textField.setHorizontalAlignment(JTextField.LEFT);
+            }
         } else if (component instanceof JLabel label) {
             Font old = label.getFont();
             if (old != null && old.getSize() <= 14) {
                 label.setFont(new Font("Segoe UI", old.getStyle() | Font.BOLD, old.getSize() + 1));
             }
+            label.setHorizontalAlignment(SwingConstants.LEFT);
         }
 
         if (component instanceof Container container) {
             for (Component child : container.getComponents()) {
-                enlargeFormAndButtons(child);
+                styleFormInfoControls(child);
             }
         }
     }
