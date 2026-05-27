@@ -695,6 +695,46 @@ public class PromotionManagementPanel extends JPanel {
         return STATUS_ACTIVE;
     }
 
+    private String resolvePromotionStatusByDate(String rawStatus, String startDateText, String endDateText) {
+        String normalized = normalizeDbStatus(rawStatus);
+
+        // Chỉ Tạm ngưng là trạng thái admin tự set, luôn giữ nguyên.
+        if (STATUS_PAUSED.equals(normalized)) {
+            return STATUS_PAUSED;
+        }
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate startDate = parseLocalDate(startDateText);
+        java.time.LocalDate endDate = parseLocalDate(endDateText);
+
+        // Nếu chưa có ngày thì fallback theo DB, tránh tự đoán sai.
+        if (startDate == null || endDate == null) {
+            return normalized;
+        }
+
+        if (today.isBefore(startDate)) {
+            return STATUS_UPCOMING;      // hôm nay nằm bên trái khoảng
+        }
+
+        if (today.isAfter(endDate)) {
+            return STATUS_ENDED;         // hôm nay nằm bên phải khoảng
+        }
+
+        return STATUS_ACTIVE;            // hôm nay nằm trong khoảng, tính cả ngày đầu/cuối
+    }
+
+    private java.time.LocalDate parseLocalDate(String dateText) {
+        if (dateText == null || dateText.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return java.time.LocalDate.parse(dateText.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private int statusPriority(String status) {
         String normalized = normalizeDbStatus(status);
 
@@ -760,7 +800,11 @@ public class PromotionManagementPanel extends JPanel {
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String trangThai = normalizeDbStatus(rs.getString("trangthai"));
+                    String trangThai = resolvePromotionStatusByDate(
+                            rs.getString("trangthai"),
+                            rs.getString("tungay"),
+                            rs.getString("denngay")
+                    );
 
                     if (!STATUS_ALL.equals(statusFilter) && !statusFilter.equals(trangThai)) {
                         continue;
@@ -847,7 +891,11 @@ public class PromotionManagementPanel extends JPanel {
                         spinMinOrderAmount.setValue(rs.getInt("min_order_amount"));
                     }
 
-                    cbTrangThai.setSelectedItem(normalizeDbStatus(rs.getString("status")));
+                    cbTrangThai.setSelectedItem(resolvePromotionStatusByDate(
+                            rs.getString("status"),
+                            rs.getString("start_date"),
+                            rs.getString("end_date")
+                    ));
 
                     java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
 
@@ -910,8 +958,8 @@ public class PromotionManagementPanel extends JPanel {
             return status;
         }
 
-        if (STATUS_PAUSED.equals(status) || STATUS_ENDED.equals(status)) {
-            return status;
+        if (STATUS_PAUSED.equals(status)) {
+            return STATUS_PAUSED;
         }
 
         if (startDate != null && today.isBefore(startDate)) {
@@ -922,7 +970,9 @@ public class PromotionManagementPanel extends JPanel {
             return STATUS_ENDED;
         }
 
-        if (STATUS_UPCOMING.equals(status)) {
+        if (startDate != null && endDate != null
+                && !today.isBefore(startDate)
+                && !today.isAfter(endDate)) {
             return STATUS_ACTIVE;
         }
 
