@@ -26,13 +26,28 @@ import javax.swing.JOptionPane;
  */
 public class LoginService {
 
-    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V8_STORE_SCOPE_STAFF_SHIFT_GUARD_2026-05-24";
+    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V9_STORE_SCOPE_STAFF_SHIFT_GUARD_REASON_2026-05-27";
     private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.login");
 
+    public static final String FAIL_SHIFT_NOT_ALLOWED = "SHIFT_NOT_ALLOWED";
+    private static final ThreadLocal<String> LAST_FAILURE_REASON = new ThreadLocal<>();
+
+    public static String consumeLastFailureReason() {
+        String reason = LAST_FAILURE_REASON.get();
+        LAST_FAILURE_REASON.remove();
+        return reason;
+    }
+
+    private static void setFailureReason(String reason) {
+        LAST_FAILURE_REASON.set(reason);
+    }
+
     public static Account authenticate(String username, String password) {
+        LAST_FAILURE_REASON.remove();
         debug("[" + LOGIN_VERSION + "] authenticate called, username=" + username);
 
         if (username == null || username.isBlank() || password == null) {
+            setFailureReason("INVALID_INPUT");
             debug("[" + LOGIN_VERSION + "] FAIL: invalid input");
             return null;
         }
@@ -41,6 +56,7 @@ public class LoginService {
         Account acc = accountSql.selectByUsername(username);
 
         if (acc == null) {
+            setFailureReason("ACCOUNT_NOT_FOUND");
             LoginHistorySql.getInstance().log(null, "LOGIN_FAILED", "FAILURE", "ACCOUNT_NOT_FOUND", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] FAIL: ACCOUNT_NOT_FOUND");
             return null;
@@ -55,6 +71,7 @@ public class LoginService {
         }
 
         if (storedHash == null || storedHash.isBlank()) {
+            setFailureReason("EMPTY_PASSWORD_HASH");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "EMPTY_PASSWORD_HASH", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] FAIL: EMPTY_PASSWORD_HASH");
             return null;
@@ -64,6 +81,7 @@ public class LoginService {
         debug("[" + LOGIN_VERSION + "] isBCrypt=" + isBcrypt);
 
         if (!isBcrypt) {
+            setFailureReason("INVALID_PASSWORD_HASH");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "INVALID_PASSWORD_HASH", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] FAIL: INVALID_PASSWORD_HASH");
             return null;
@@ -73,12 +91,14 @@ public class LoginService {
         try {
             ok = PasswordUtils.checkPassword(password, storedHash);
         } catch (Exception ex) {
+            setFailureReason("BCRYPT_VERIFY_ERROR");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "BCRYPT_VERIFY_ERROR", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] FAIL: BCRYPT_VERIFY_ERROR - " + ex.getMessage());
             return null;
         }
 
         if (!ok) {
+            setFailureReason("WRONG_PASSWORD");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "WRONG_PASSWORD", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] FAIL: WRONG_PASSWORD");
             return null;
@@ -91,11 +111,12 @@ public class LoginService {
         // Staff muốn vào mọi lúc để test thì gán SHIFT_FULLTIME.
         // =========================================================
         if (!canLoginByCurrentShift(acc)) {
+            setFailureReason(FAIL_SHIFT_NOT_ALLOWED);
             LoginHistorySql.getInstance().log(
                     acc.getAccountId(),
                     "LOGIN_FAILED",
                     "FAILURE",
-                    "SHIFT_NOT_ALLOWED",
+                    FAIL_SHIFT_NOT_ALLOWED,
                     localIp(),
                     deviceInfo()
             );
@@ -123,6 +144,7 @@ public class LoginService {
 
         int inserted = TokenSql.getInstance().insert(token);
         if (inserted <= 0) {
+            setFailureReason("TOKEN_INSERT_FAILED");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "TOKEN_INSERT_FAILED", localIp(), deviceInfo());
             debug("[" + LOGIN_VERSION + "] WARN: token insert failed");
             return null;
@@ -138,6 +160,7 @@ public class LoginService {
         if (SessionManager.isStoreScopedUser()
                 && !AccountSql.getInstance().isAccountStoreActive(acc.getAccountId())) {
 
+            setFailureReason("STORE_INACTIVE");
             LoginHistorySql.getInstance().log(
                     acc.getAccountId(),
                     "LOGIN_FAILED",
@@ -164,6 +187,7 @@ public class LoginService {
         }
 
         if (SessionManager.isStoreScopedUser() && !SessionManager.hasStoreScope()) {
+            setFailureReason("STORE_USER_WITHOUT_STORE");
             LoginHistorySql.getInstance().log(acc.getAccountId(), "LOGIN_FAILED", "FAILURE", "STORE_USER_WITHOUT_STORE", localIp(), deviceInfo());
             TokenSql.getInstance().revokeToken(tokenValue);
             SessionManager.clear();
