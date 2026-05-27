@@ -1,14 +1,17 @@
 package common.security;
 
+import business.service.LoginService;
+import common.db.DatabaseConnection;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
-import business.sql.rbac.AccountSql;
-import business.service.LoginService;
+import java.awt.Window;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import javax.swing.*;
 import model.account.Account;
 import view.LoginView;
-import javax.swing.*;
-import java.awt.Window;
 
 public class SecurityGuard {
 
@@ -38,6 +41,19 @@ public class SecurityGuard {
                 verifyCurrentSession(view);
             }
         });
+    }
+
+    /**
+     * Dùng cho HeartbeatService khi phát hiện session bị force logout / tài khoản bị khóa.
+     * Hàm này public để mọi portal tự văng về Login khi Admin khóa tài khoản từ máy khác.
+     */
+    public static void forceLogoutCurrentSession(String message) {
+        if (isProcessingLogout) {
+            return;
+        }
+
+        isProcessingLogout = true;
+        SwingUtilities.invokeLater(() -> forceLogout(null, message));
     }
 
     private static void verifyCurrentSession(JPanel view) {
@@ -72,24 +88,29 @@ public class SecurityGuard {
 
         new Thread(() -> {
             try {
-                String[] latestData = AccountSql.getInstance().getAccountDetails(accId);
+                AccountSecurityState latestData = loadAccountSecurityState(accId);
 
                 if (latestData == null) {
                     return;
                 }
 
-                String dbRoleId = latestData[4];
-                boolean isActive = "0".equals(String.valueOf(latestData[5]).trim());
-
-                boolean roleChanged = dbRoleId == null
+                boolean roleChanged = latestData.roleId == null
                         || finalCurrentRole == null
-                        || !dbRoleId.trim().equalsIgnoreCase(finalCurrentRole.trim());
+                        || !latestData.roleId.trim().equalsIgnoreCase(finalCurrentRole.trim());
 
-                if (!isActive || roleChanged) {
+                if (!latestData.loginAllowed || roleChanged) {
                     if (!isProcessingLogout) {
                         isProcessingLogout = true;
-                        debug("[SecurityGuard] KICK USER currentRole=" + finalCurrentRole + ", dbRoleId=" + dbRoleId);
-                        SwingUtilities.invokeLater(() -> forceLogout(view));
+                        debug("[SecurityGuard] KICK USER currentRole=" + finalCurrentRole
+                                + ", dbRoleId=" + latestData.roleId
+                                + ", status=" + latestData.status
+                                + ", isDeleted=" + latestData.isDeleted);
+
+                        String message = !latestData.loginAllowed
+                                ? "Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động.\nVui lòng liên hệ quản trị viên."
+                                : "Quyền truy cập của bạn đã thay đổi.\nVui lòng đăng nhập lại để cập nhật!";
+
+                        SwingUtilities.invokeLater(() -> forceLogout(view, message));
                     }
                 }
             } catch (Exception e) {
@@ -98,12 +119,78 @@ public class SecurityGuard {
         }, "security-guard-check-thread").start();
     }
 
-    private static void forceLogout(JPanel view) {
+    private static AccountSecurityState loadAccountSecurityState(String accountId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return null;
+        }
+
+        String sql = """
+            SELECT a.account_id,
+                   COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) AS role_value,
+                   NVL(a.is_deleted, 0) AS is_deleted,
+                   NVL(a.status, N'Hoạt động') AS account_status
+            FROM ACCOUNTS a
+            LEFT JOIN ACCOUNT_ASSIGN_ROLE aar
+                   ON a.account_id = aar.account_id
+                  AND NVL(aar.is_deleted, 0) = 0
+            LEFT JOIN ACCOUNT_ASSIGN_ROLE_GROUP aarg
+                   ON a.account_id = aarg.account_id
+                  AND NVL(aarg.is_deleted, 0) = 0
+            LEFT JOIN ROLE_GROUPS rg
+                   ON aarg.role_group_id = rg.role_group_id
+                  AND NVL(rg.is_deleted, 0) = 0
+            WHERE a.account_id = ?
+            FETCH FIRST 1 ROWS ONLY
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                AccountSecurityState state = new AccountSecurityState();
+                state.roleId = rs.getString("role_value");
+                state.isDeleted = rs.getInt("is_deleted");
+                state.status = rs.getString("account_status");
+                state.loginAllowed = state.isDeleted == 0 && !isLockedStatus(state.status);
+                return state;
+            }
+
+        } catch (Exception e) {
+            System.err.println("[SecurityGuard] loadAccountSecurityState error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static boolean isLockedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+
+        String s = status.trim().toUpperCase();
+        return s.equals("BỊ KHÓA")
+                || s.equals("BI KHOA")
+                || s.equals("LOCKED")
+                || s.equals("DISABLED")
+                || s.equals("INACTIVE")
+                || s.equals("TẠM KHÓA")
+                || s.equals("TAM KHOA");
+    }
+
+    private static void forceLogout(JPanel view, String message) {
+        String finalMessage = message == null || message.trim().isEmpty()
+                ? "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\nVui lòng đăng nhập lại để cập nhật!"
+                : message;
+
         try {
             JOptionPane.showMessageDialog(
                     view,
-                    "Quyền truy cập của bạn đã thay đổi hoặc tài khoản đã bị khóa.\n"
-                    + "Vui lòng đăng nhập lại để cập nhật!",
+                    finalMessage,
                     "Cảnh báo bảo mật",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -161,34 +248,11 @@ public class SecurityGuard {
         });
     }
 
-    private static boolean isCurrentAccountRoleChanged() {
-        try {
-            model.account.Account currentUser = business.service.SessionManager.getCurrentUser();
-
-            if (currentUser == null || currentUser.getAccountId() == null) {
-                return false;
-            }
-
-            String[] latestData = business.sql.rbac.AccountSql.getInstance()
-                    .getAccountDetails(currentUser.getAccountId());
-
-            if (latestData == null) {
-                return true;
-            }
-
-            String dbRoleId = latestData[4];
-            String currentRole = business.service.SessionManager.getCurrentRole();
-
-            if (dbRoleId == null || currentRole == null) {
-                return true;
-            }
-
-            return !dbRoleId.trim().equalsIgnoreCase(currentRole.trim());
-
-        } catch (Exception e) {
-            System.err.println("[SecurityGuard] Cannot check current role: " + e.getMessage());
-            return false;
-        }
+    private static class AccountSecurityState {
+        String roleId;
+        String status;
+        int isDeleted;
+        boolean loginAllowed;
     }
 
     private static void debug(String message) {
