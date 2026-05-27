@@ -1,4 +1,4 @@
-package business.service.invoice;
+package business.service;
 
 import business.sql.sales_order.CustomersSql;
 import common.realtime.RealtimeNotifier;
@@ -21,22 +21,45 @@ public class InvoiceUpdateService {
 
     public static class EditedOrderDetail {
 
+        private final String orderDetailId;
         private final String productId;
+        private final String unitId;
         private final int quantity;
+        private final int quantityBase;
         private final double unitPrice;
 
         public EditedOrderDetail(String productId, int quantity, double unitPrice) {
+            this(null, productId, null, quantity, quantity, unitPrice);
+        }
+
+        public EditedOrderDetail(String orderDetailId, String productId, String unitId,
+                int quantity, int quantityBase, double unitPrice) {
+            this.orderDetailId = orderDetailId;
             this.productId = productId;
+            this.unitId = unitId;
             this.quantity = quantity;
+            this.quantityBase = quantityBase;
             this.unitPrice = unitPrice;
+        }
+
+        public String getOrderDetailId() {
+            return orderDetailId;
         }
 
         public String getProductId() {
             return productId;
         }
 
+        public String getUnitId() {
+            return unitId;
+        }
+
         public int getQuantity() {
             return quantity;
+        }
+
+        public int getQuantityBase() {
+            return quantityBase > 0 ? quantityBase : quantity;
         }
 
         public double getUnitPrice() {
@@ -63,31 +86,39 @@ public class InvoiceUpdateService {
             conn.setAutoCommit(false);
 
             OrderHeaderInfo orderInfo = lockOrder(orderId);
-            Map<String, Integer> oldQtyMap = loadOldQuantities(orderId);
+
+            /*
+             * Lưu số lượng tồn kho cũ theo đơn vị gốc.
+             * Ví dụ cũ: 1 thùng mì = quantity_base 30.
+             * Nếu sửa thành 2 gói = quantity_base 2 thì hoàn lại 28.
+             */
+            Map<String, OldDetailInfo> oldDetailMap = loadOldDetails(orderId);
 
             for (EditedOrderDetail detail : editedDetails) {
                 validateDetail(detail);
 
-                int oldQty = oldQtyMap.getOrDefault(detail.getProductId(), 0);
-                int newQty = detail.getQuantity();
-                int diff = newQty - oldQty;
+                String detailKey = normalizeDetailKey(detail);
+                OldDetailInfo old = oldDetailMap.get(detailKey);
+
+                int oldBaseQty = old != null ? old.quantityBase : 0;
+                int newBaseQty = detail.getQuantityBase();
+                int diffBaseQty = newBaseQty - oldBaseQty;
 
                 upsertOrderDetail(orderId, detail);
 
-                if (diff != 0) {
-                    updateInventoryByDiff(orderInfo.storeId, detail.getProductId(), diff);
+                if (diffBaseQty != 0) {
+                    updateInventoryByDiff(orderInfo.storeId, detail.getProductId(), diffBaseQty);
                 }
 
-                oldQtyMap.remove(detail.getProductId());
+                oldDetailMap.remove(detailKey);
             }
 
-            // Những sản phẩm cũ không còn trong bảng UI thì xóa mềm và hoàn kho.
-            for (Map.Entry<String, Integer> removed : oldQtyMap.entrySet()) {
-                String removedProductId = removed.getKey();
-                int oldQty = removed.getValue();
+            // Những dòng cũ không còn trong bảng UI thì xóa mềm và hoàn kho theo quantity_base.
+            for (Map.Entry<String, OldDetailInfo> removed : oldDetailMap.entrySet()) {
+                OldDetailInfo old = removed.getValue();
 
-                softDeleteOrderDetail(orderId, removedProductId);
-                restoreInventory(orderInfo.storeId, removedProductId, oldQty);
+                softDeleteOrderDetail(old.orderDetailId);
+                restoreInventory(orderInfo.storeId, old.productId, old.quantityBase);
             }
 
             double newTotal = recalculateOrderTotal(orderId);
@@ -106,6 +137,7 @@ public class InvoiceUpdateService {
         } catch (Exception ex) {
             conn.rollback();
             throw ex;
+
         } finally {
             conn.setAutoCommit(oldAutoCommit);
         }
@@ -122,6 +154,10 @@ public class InvoiceUpdateService {
 
         if (detail.getQuantity() <= 0) {
             throw new IllegalArgumentException("Số lượng phải lớn hơn 0: " + detail.getProductId());
+        }
+
+        if (detail.getQuantityBase() <= 0) {
+            throw new IllegalArgumentException("Số lượng quy đổi phải lớn hơn 0: " + detail.getProductId());
         }
 
         if (detail.getUnitPrice() < 0) {
@@ -169,12 +205,15 @@ public class InvoiceUpdateService {
         }
     }
 
-    private Map<String, Integer> loadOldQuantities(String orderId) throws SQLException {
-        Map<String, Integer> map = new HashMap<>();
+    private Map<String, OldDetailInfo> loadOldDetails(String orderId) throws SQLException {
+        Map<String, OldDetailInfo> map = new HashMap<>();
 
         String sql = """
-            SELECT product_id,
-                   NVL(quantity, 0) AS quantity
+            SELECT order_detail_id,
+                   product_id,
+                   unit_id,
+                   NVL(quantity, 0) AS quantity,
+                   NVL(quantity_base, NVL(quantity, 0)) AS quantity_base
             FROM ORDER_DETAILS
             WHERE order_id = ?
               AND NVL(is_deleted, 0) = 0
@@ -186,7 +225,14 @@ public class InvoiceUpdateService {
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    map.put(rs.getString("product_id"), rs.getInt("quantity"));
+                    OldDetailInfo info = new OldDetailInfo();
+                    info.orderDetailId = rs.getString("order_detail_id");
+                    info.productId = rs.getString("product_id");
+                    info.unitId = rs.getString("unit_id");
+                    info.quantity = rs.getInt("quantity");
+                    info.quantityBase = rs.getInt("quantity_base");
+
+                    map.put(normalizeDetailKey(info.orderDetailId, info.productId, info.unitId), info);
                 }
             }
         }
@@ -194,21 +240,71 @@ public class InvoiceUpdateService {
         return map;
     }
 
+    private String normalizeDetailKey(EditedOrderDetail detail) {
+        return normalizeDetailKey(detail.getOrderDetailId(), detail.getProductId(), detail.getUnitId());
+    }
+
+    private String normalizeDetailKey(String orderDetailId, String productId, String unitId) {
+        if (orderDetailId != null && !orderDetailId.trim().isEmpty()) {
+            return "ID:" + orderDetailId.trim();
+        }
+
+        return "PU:" + safe(productId) + ":" + safe(unitId);
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private void upsertOrderDetail(String orderId, EditedOrderDetail detail) throws SQLException {
-        String updateSql = """
+        if (detail.getOrderDetailId() != null && !detail.getOrderDetailId().trim().isEmpty()) {
+            String updateByIdSql = """
+                UPDATE ORDER_DETAILS
+                SET product_id = ?,
+                    unit_id = ?,
+                    quantity = ?,
+                    quantity_base = ?,
+                    unit_price = ?,
+                    is_deleted = 0
+                WHERE order_id = ?
+                  AND order_detail_id = ?
+            """;
+
+            try (PreparedStatement ps = conn.prepareStatement(updateByIdSql)) {
+                ps.setString(1, detail.getProductId());
+                ps.setString(2, detail.getUnitId());
+                ps.setInt(3, detail.getQuantity());
+                ps.setInt(4, detail.getQuantityBase());
+                ps.setDouble(5, detail.getUnitPrice());
+                ps.setString(6, orderId);
+                ps.setString(7, detail.getOrderDetailId());
+
+                int updated = ps.executeUpdate();
+
+                if (updated > 0) {
+                    return;
+                }
+            }
+        }
+
+        String updateByProductUnitSql = """
             UPDATE ORDER_DETAILS
             SET quantity = ?,
+                quantity_base = ?,
                 unit_price = ?,
                 is_deleted = 0
             WHERE order_id = ?
               AND product_id = ?
+              AND NVL(unit_id, 'NULL') = NVL(?, 'NULL')
         """;
 
-        try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+        try (PreparedStatement ps = conn.prepareStatement(updateByProductUnitSql)) {
             ps.setInt(1, detail.getQuantity());
-            ps.setDouble(2, detail.getUnitPrice());
-            ps.setString(3, orderId);
-            ps.setString(4, detail.getProductId());
+            ps.setInt(2, detail.getQuantityBase());
+            ps.setDouble(3, detail.getUnitPrice());
+            ps.setString(4, orderId);
+            ps.setString(5, detail.getProductId());
+            ps.setString(6, detail.getUnitId());
 
             int updated = ps.executeUpdate();
 
@@ -223,48 +319,56 @@ public class InvoiceUpdateService {
                 order_id,
                 product_id,
                 quantity,
+                unit_id,
+                quantity_base,
                 unit_price,
                 is_deleted
             )
-            VALUES (?, ?, ?, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
         """;
 
         try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
-            ps.setString(1, "OD" + System.nanoTime());
+            ps.setString(1, detail.getOrderDetailId() != null && !detail.getOrderDetailId().trim().isEmpty()
+                    ? detail.getOrderDetailId()
+                    : "OD" + System.nanoTime());
             ps.setString(2, orderId);
             ps.setString(3, detail.getProductId());
             ps.setInt(4, detail.getQuantity());
-            ps.setDouble(5, detail.getUnitPrice());
+            ps.setString(5, detail.getUnitId());
+            ps.setInt(6, detail.getQuantityBase());
+            ps.setDouble(7, detail.getUnitPrice());
             ps.executeUpdate();
         }
     }
 
-    private void softDeleteOrderDetail(String orderId, String productId) throws SQLException {
+    private void softDeleteOrderDetail(String orderDetailId) throws SQLException {
+        if (orderDetailId == null || orderDetailId.trim().isEmpty()) {
+            return;
+        }
+
         String sql = """
             UPDATE ORDER_DETAILS
             SET is_deleted = 1
-            WHERE order_id = ?
-              AND product_id = ?
+            WHERE order_detail_id = ?
         """;
 
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, orderId);
-            ps.setString(2, productId);
+            ps.setString(1, orderDetailId);
             ps.executeUpdate();
         }
     }
 
-    private void updateInventoryByDiff(String storeId, String productId, int diff) throws SQLException {
-        // diff > 0 nghĩa là tăng số lượng trong hóa đơn, phải trừ thêm kho.
-        // diff < 0 nghĩa là giảm số lượng trong hóa đơn, phải hoàn lại kho.
-        if (diff > 0) {
-            decreaseInventory(storeId, productId, diff);
+    private void updateInventoryByDiff(String storeId, String productId, int diffBaseQty) throws SQLException {
+        // diff > 0 nghĩa là tăng số lượng quy đổi, phải trừ thêm kho.
+        // diff < 0 nghĩa là giảm số lượng quy đổi, phải hoàn lại kho.
+        if (diffBaseQty > 0) {
+            decreaseInventory(storeId, productId, diffBaseQty);
         } else {
-            restoreInventory(storeId, productId, Math.abs(diff));
+            restoreInventory(storeId, productId, Math.abs(diffBaseQty));
         }
     }
 
-    private void decreaseInventory(String storeId, String productId, int qty) throws SQLException {
+    private void decreaseInventory(String storeId, String productId, int qtyBase) throws SQLException {
         String sql = """
             UPDATE INVENTORY
             SET quantity = quantity - ?,
@@ -276,20 +380,21 @@ public class InvoiceUpdateService {
         """;
 
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, qty);
+            ps.setInt(1, qtyBase);
             ps.setString(2, storeId);
             ps.setString(3, productId);
-            ps.setInt(4, qty);
+            ps.setInt(4, qtyBase);
 
             int updated = ps.executeUpdate();
 
             if (updated <= 0) {
-                throw new SQLException("Không đủ tồn kho để tăng số lượng sản phẩm: " + productId);
+                throw new SQLException("Không đủ tồn kho để cập nhật sản phẩm: " + productId
+                        + ". Cần thêm " + qtyBase + " đơn vị gốc.");
             }
         }
     }
 
-    private void restoreInventory(String storeId, String productId, int qty) throws SQLException {
+    private void restoreInventory(String storeId, String productId, int qtyBase) throws SQLException {
         String sql = """
             MERGE INTO INVENTORY i
             USING (
@@ -320,7 +425,7 @@ public class InvoiceUpdateService {
                     src.store_id,
                     src.product_id,
                     src.qty,
-                    'Cái',
+                    'Đơn vị gốc',
                     SYSDATE,
                     0
                 )
@@ -329,7 +434,7 @@ public class InvoiceUpdateService {
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, storeId);
             ps.setString(2, productId);
-            ps.setInt(3, qty);
+            ps.setInt(3, qtyBase);
             ps.executeUpdate();
         }
     }
@@ -393,5 +498,14 @@ public class InvoiceUpdateService {
         String orderId;
         String customerId;
         String storeId;
+    }
+
+    private static class OldDetailInfo {
+
+        String orderDetailId;
+        String productId;
+        String unitId;
+        int quantity;
+        int quantityBase;
     }
 }

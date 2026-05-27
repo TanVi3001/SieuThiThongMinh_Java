@@ -26,7 +26,7 @@
         isPdfEmbedded="true" />
 
 
-<style name="Base"
+    <style name="Base"
         fontName="Arial"
         fontSize="10"
         forecolor="#1F2937"
@@ -133,19 +133,28 @@ WITH order_lines AS (
         od.order_id,
         od.product_id,
         NVL(TO_CHAR(p.product_name), TO_CHAR(od.product_id)) AS product_name,
+        NVL(TO_CHAR(u.unit_name), NVL(TO_CHAR(od.unit_id), N'Đơn vị')) AS unit_name,
         NVL(od.quantity, 0) AS quantity,
         NVL(od.unit_price, 0) AS unit_price,
-        NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0) AS line_total,
+
+        -- unit_price là giá theo đơn vị bán đã chọn.
+        -- quantity là số lượng theo đơn vị bán.
+        -- quantity_base chỉ dùng để trừ kho, không dùng để tính tiền hóa đơn.
+        NVL(od.quantity, 0) * NVL(od.unit_price, 0) AS line_total,
+
         NVL(od.program_discount_percent, 0) AS line_discount_percent,
         NVL(od.program_discount_amount, 0) AS line_discount_amount,
         NVL(
             od.line_net_total,
-            NVL(NVL(od.quantity_base, od.quantity), 0) * NVL(od.unit_price, 0)
+            NVL(od.quantity, 0) * NVL(od.unit_price, 0)
             - NVL(od.program_discount_amount, 0)
         ) AS line_net_total
     FROM ORDER_DETAILS od
     LEFT JOIN PRODUCTS p
         ON od.product_id = p.product_id
+    LEFT JOIN UNITS u
+        ON od.unit_id = u.unit_id
+       AND NVL(u.is_deleted, 0) = 0
     WHERE NVL(od.is_deleted, 0) = 0
 ),
 order_totals AS (
@@ -208,6 +217,7 @@ SELECT
     ol.order_detail_id,
     ol.product_id,
     ol.product_name,
+    ol.unit_name,
     ol.quantity,
     ol.unit_price,
     ol.line_total,
@@ -264,6 +274,7 @@ ORDER BY ol.order_detail_id
     <field name="order_detail_id" class="java.lang.String" />
     <field name="product_id" class="java.lang.String" />
     <field name="product_name" class="java.lang.String" />
+    <field name="unit_name" class="java.lang.String" />
     <field name="quantity" class="java.math.BigDecimal" />
     <field name="unit_price" class="java.math.BigDecimal" />
     <field name="line_total" class="java.math.BigDecimal" />
@@ -512,9 +523,9 @@ ORDER BY ol.order_detail_id
 
     <columnHeader>
         <band height="28" splitType="Stretch">
-            <!-- BẢNG KHÔNG CÓ GIẢM GIÁ: ẩn % giảm và Sau giảm -->
+            <!-- BẢNG KHÔNG CÓ GIẢM GIÁ: có thêm cột ĐV -->
             <staticText>
-                <reportElement style="TableHeader" x="0" y="0" width="245" height="26">
+                <reportElement style="TableHeader" x="0" y="0" width="210" height="26">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
@@ -524,8 +535,20 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
+
             <staticText>
-                <reportElement style="TableHeader" x="245" y="0" width="60" height="26">
+                <reportElement style="TableHeader" x="210" y="0" width="45" height="26">
+                    <printWhenExpression><![CDATA[
+$F{program_discount_amount} == null
+|| $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
+]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[ĐV]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement style="TableHeader" x="255" y="0" width="50" height="26">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
@@ -534,6 +557,7 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[SL]]></text>
             </staticText>
+
             <staticText>
                 <reportElement style="TableHeader" x="305" y="0" width="105" height="26">
                     <printWhenExpression><![CDATA[
@@ -544,6 +568,7 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Giá SP]]></text>
             </staticText>
+
             <staticText>
                 <reportElement style="TableHeader" x="410" y="0" width="125" height="26">
                     <printWhenExpression><![CDATA[
@@ -556,9 +581,9 @@ $F{program_discount_amount} == null
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
 
-            <!-- BẢNG CÓ GIẢM GIÁ: hiện % giảm và Sau giảm -->
+            <!-- BẢNG CÓ GIẢM GIÁ: có thêm cột ĐV -->
             <staticText>
-                <reportElement style="TableHeader" x="0" y="0" width="185" height="26">
+                <reportElement style="TableHeader" x="0" y="0" width="150" height="26">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
@@ -568,18 +593,20 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Sản phẩm]]></text>
             </staticText>
+
             <staticText>
-                <reportElement style="TableHeader" x="185" y="0" width="70" height="26">
+                <reportElement style="TableHeader" x="150" y="0" width="35" height="26">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
-                <text><![CDATA[Giá SP]]></text>
+                <text><![CDATA[ĐV]]></text>
             </staticText>
+
             <staticText>
-                <reportElement style="TableHeader" x="255" y="0" width="35" height="26">
+                <reportElement style="TableHeader" x="185" y="0" width="35" height="26">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
@@ -588,6 +615,18 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[SL]]></text>
             </staticText>
+
+            <staticText>
+                <reportElement style="TableHeader" x="220" y="0" width="70" height="26">
+                    <printWhenExpression><![CDATA[
+$F{program_discount_amount} != null
+&& $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
+]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <text><![CDATA[Giá SP]]></text>
+            </staticText>
+
             <staticText>
                 <reportElement style="TableHeader" x="290" y="0" width="90" height="26">
                     <printWhenExpression><![CDATA[
@@ -598,6 +637,7 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[Thành tiền]]></text>
             </staticText>
+
             <staticText>
                 <reportElement style="TableHeader" x="380" y="0" width="60" height="26">
                     <printWhenExpression><![CDATA[
@@ -608,6 +648,7 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <text><![CDATA[% giảm]]></text>
             </staticText>
+
             <staticText>
                 <reportElement style="TableHeader" x="440" y="0" width="95" height="26">
                     <printWhenExpression><![CDATA[
@@ -633,7 +674,7 @@ $F{program_discount_amount} != null
 
             <!-- DÒNG KHÔNG GIẢM GIÁ -->
             <textField isBlankWhenNull="true" textAdjust="StretchHeight">
-                <reportElement style="TableCell" x="0" y="5" width="245" height="16">
+                <reportElement style="TableCell" x="0" y="5" width="210" height="16">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
@@ -643,8 +684,20 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
+
+            <textField isBlankWhenNull="true">
+                <reportElement style="TableCell" x="210" y="5" width="45" height="16">
+                    <printWhenExpression><![CDATA[
+$F{program_discount_amount} == null
+|| $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
+]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <textFieldExpression><![CDATA[$F{unit_name}]]></textFieldExpression>
+            </textField>
+
             <textField pattern="#,##0">
-                <reportElement style="TableCell" x="245" y="5" width="60" height="16">
+                <reportElement style="TableCell" x="255" y="5" width="50" height="16">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} == null
 || $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) <= 0
@@ -653,6 +706,7 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
+
             <textField pattern="#,##0">
                 <reportElement style="Money" x="305" y="5" width="105" height="16">
                     <printWhenExpression><![CDATA[
@@ -663,6 +717,7 @@ $F{program_discount_amount} == null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
             </textField>
+
             <textField pattern="#,##0">
                 <reportElement style="Money" x="410" y="5" width="125" height="16">
                     <printWhenExpression><![CDATA[
@@ -677,7 +732,7 @@ $F{program_discount_amount} == null
 
             <!-- DÒNG CÓ GIẢM GIÁ -->
             <textField isBlankWhenNull="true" textAdjust="StretchHeight">
-                <reportElement style="TableCell" x="0" y="5" width="185" height="16">
+                <reportElement style="TableCell" x="0" y="5" width="150" height="16">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
@@ -687,18 +742,20 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{product_name}]]></textFieldExpression>
             </textField>
-            <textField pattern="#,##0">
-                <reportElement style="Money" x="185" y="5" width="70" height="16">
+
+            <textField isBlankWhenNull="true">
+                <reportElement style="TableCell" x="150" y="5" width="35" height="16">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
 ]]></printWhenExpression>
                 </reportElement>
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
-                <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$F{unit_name}]]></textFieldExpression>
             </textField>
+
             <textField pattern="#,##0">
-                <reportElement style="TableCell" x="255" y="5" width="35" height="16">
+                <reportElement style="TableCell" x="185" y="5" width="35" height="16">
                     <printWhenExpression><![CDATA[
 $F{program_discount_amount} != null
 && $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
@@ -707,6 +764,18 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{quantity}]]></textFieldExpression>
             </textField>
+
+            <textField pattern="#,##0">
+                <reportElement style="Money" x="220" y="5" width="70" height="16">
+                    <printWhenExpression><![CDATA[
+$F{program_discount_amount} != null
+&& $F{program_discount_amount}.compareTo(java.math.BigDecimal.ZERO) > 0
+]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle" />
+                <textFieldExpression><![CDATA[$F{unit_price}]]></textFieldExpression>
+            </textField>
+
             <textField pattern="#,##0">
                 <reportElement style="Money" x="290" y="5" width="90" height="16">
                     <printWhenExpression><![CDATA[
@@ -717,6 +786,7 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_total}]]></textFieldExpression>
             </textField>
+
             <textField pattern="#,##0.##'%'">
                 <reportElement style="TableCell" x="380" y="5" width="60" height="16">
                     <printWhenExpression><![CDATA[
@@ -727,6 +797,7 @@ $F{program_discount_amount} != null
                 <textElement textAlignment="Center" verticalAlignment="Middle" />
                 <textFieldExpression><![CDATA[$F{line_discount_percent} == null ? java.math.BigDecimal.ZERO : $F{line_discount_percent}]]></textFieldExpression>
             </textField>
+
             <textField pattern="#,##0">
                 <reportElement style="Money" x="440" y="5" width="95" height="16">
                     <printWhenExpression><![CDATA[

@@ -1,30 +1,47 @@
 package view;
 
-import business.service.invoice.InvoiceUpdateService;
+import business.service.InvoiceUpdateService;
+import business.sql.prod_inventory.ProductUnitsSql;
 import business.sql.sales_order.DeliveryManagementSql;
 import model.order.Order;
 import model.order.Customer;
+import model.product.ProductUnit;
 
 import java.awt.*;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.table.*;
-import java.text.DecimalFormat;
+import javax.swing.event.TableModelEvent;
+
 import view.components.IconHelper;
 
 public class OrderDetailDialog extends JDialog {
 
+    private static final int COL_DETAIL_ID = 0;
+    private static final int COL_PRODUCT_ID = 1;
+    private static final int COL_PRODUCT_NAME = 2;
+    private static final int COL_UNIT = 3;
+    private static final int COL_QTY = 4;
+    private static final int COL_UNIT_PRICE = 5;
+    private static final int COL_TOTAL = 6;
+
     private final DecimalFormat df = new DecimalFormat("#,##0 đ");
+
     private final Color primaryBlue = new Color(26, 35, 126);
     private final Color successGreen = new Color(46, 125, 50);
     private final Color errorRed = new Color(198, 40, 40);
     private final Color warningBg = new Color(255, 235, 238);
+    private final Color headerBg = new Color(26, 35, 126);
+    private final Color lightBg = new Color(248, 250, 252);
+    private final Color borderGray = new Color(209, 213, 219);
 
     private DefaultTableModel modOrderDetail;
     private JTable tableChiTiet;
@@ -41,6 +58,8 @@ public class OrderDetailDialog extends JDialog {
     private final String orderId;
     private final Runnable onSavedCallback;
 
+    private final Map<String, List<ProductUnit>> productUnitCache = new HashMap<>();
+
     public OrderDetailDialog(
             Frame parent,
             Connection conn,
@@ -55,7 +74,8 @@ public class OrderDetailDialog extends JDialog {
         this.orderId = order.getOrderId();
         this.onSavedCallback = onSavedCallback;
 
-        setSize(850, 850);
+        setSize(920, 850);
+        setMinimumSize(new Dimension(880, 720));
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
@@ -64,12 +84,15 @@ public class OrderDetailDialog extends JDialog {
         }
 
         String status = order.getStatus() != null ? order.getStatus() : "";
-        this.isCancelled = status.equalsIgnoreCase("Đã hủy") || status.equalsIgnoreCase("Đã huỷ");
+        this.isCancelled = status.equalsIgnoreCase("Đã hủy")
+                || status.equalsIgnoreCase("Đã huỷ")
+                || status.equalsIgnoreCase("CANCELLED");
 
         add(createHeaderPanel(order), BorderLayout.NORTH);
 
         JPanel pnlBody = new JPanel();
         pnlBody.setLayout(new BoxLayout(pnlBody, BoxLayout.Y_AXIS));
+        pnlBody.setBackground(Color.WHITE);
         pnlBody.setBorder(new EmptyBorder(15, 20, 15, 20));
 
         if (isCancelled) {
@@ -79,13 +102,12 @@ public class OrderDetailDialog extends JDialog {
 
         pnlBody.add(createInfoGrid(customer, order));
         pnlBody.add(Box.createVerticalStrut(15));
-
         pnlBody.add(createDeliveryCard(order.getOrderId()));
-        pnlBody.add(Box.createVerticalStrut(20));
-
+        pnlBody.add(Box.createVerticalStrut(18));
+        pnlBody.add(createUnitHelpPanel());
+        pnlBody.add(Box.createVerticalStrut(10));
         pnlBody.add(createProductTable(details));
         pnlBody.add(Box.createVerticalStrut(20));
-
         pnlBody.add(createSummaryPanel());
 
         JScrollPane scrollPane = new JScrollPane(pnlBody);
@@ -131,7 +153,7 @@ public class OrderDetailDialog extends JDialog {
 
     private JPanel createHeaderPanel(Order order) {
         JPanel pnl = new JPanel(new GridLayout(1, 2, 10, 10));
-        pnl.setBackground(primaryBlue);
+        pnl.setBackground(headerBg);
         pnl.setBorder(new EmptyBorder(15, 25, 15, 25));
 
         JPanel pnlLeft = new JPanel(new GridLayout(2, 1));
@@ -142,7 +164,7 @@ public class OrderDetailDialog extends JDialog {
         lblId.setForeground(Color.WHITE);
 
         JLabel lblDate = new JLabel("Ngày tạo: " + order.getOrderDate());
-        lblDate.setForeground(new Color(200, 200, 200));
+        lblDate.setForeground(new Color(220, 220, 220));
 
         pnlLeft.add(lblId);
         pnlLeft.add(lblDate);
@@ -150,19 +172,17 @@ public class OrderDetailDialog extends JDialog {
         JPanel pnlRight = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         pnlRight.setOpaque(false);
 
-        String statusText = order.getStatus() != null
-                ? order.getStatus().toUpperCase()
-                : "KHÔNG XÁC ĐỊNH";
+        String statusText = order.getStatus() != null ? order.getStatus().toUpperCase() : "KHÔNG XÁC ĐỊNH";
 
         JLabel lblStatus = new JLabel(statusText);
         lblStatus.setOpaque(true);
         lblStatus.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblStatus.setBorder(new EmptyBorder(5, 15, 5, 15));
 
-        if (statusText.contains("HOÀN THÀNH")) {
+        if (statusText.contains("HOÀN THÀNH") || statusText.contains("COMPLETED")) {
             lblStatus.setBackground(new Color(232, 245, 233));
             lblStatus.setForeground(successGreen);
-        } else if (statusText.contains("HỦY") || statusText.contains("HUỶ")) {
+        } else if (statusText.contains("HỦY") || statusText.contains("HUỶ") || statusText.contains("CANCEL")) {
             lblStatus.setBackground(new Color(255, 235, 238));
             lblStatus.setForeground(errorRed);
         } else {
@@ -187,6 +207,7 @@ public class OrderDetailDialog extends JDialog {
         pnl.setOpaque(false);
 
         JPanel pnlCus = new JPanel(new GridLayout(4, 1, 5, 5));
+        pnlCus.setBackground(Color.WHITE);
         pnlCus.setBorder(createTitledBorder("THÔNG TIN KHÁCH HÀNG"));
 
         if (cus != null) {
@@ -202,6 +223,7 @@ public class OrderDetailDialog extends JDialog {
         }
 
         JPanel pnlPromo = new JPanel(new GridLayout(4, 1, 5, 5));
+        pnlPromo.setBackground(Color.WHITE);
         pnlPromo.setBorder(createTitledBorder("ƯU ĐÃI & NHÂN VIÊN"));
 
         pnlPromo.add(new JLabel("🎁 Mức giảm giá: " + (int) (currentDiscountRate * 100) + "%"));
@@ -299,46 +321,100 @@ public class OrderDetailDialog extends JDialog {
         return card;
     }
 
+    private JPanel createUnitHelpPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(239, 246, 255));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(191, 219, 254)),
+                new EmptyBorder(8, 12, 8, 12)
+        ));
+
+        JLabel lbl = new JLabel(
+                isCancelled
+                        ? "Hóa đơn đã hủy nên chỉ được xem chi tiết đơn vị bán."
+                        : "Có thể chọn lại Đơn vị bán cho từng dòng. Khi đổi đơn vị, hệ thống tự đổi đơn giá và quy đổi tồn kho theo đơn vị gốc."
+        );
+        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lbl.setForeground(new Color(30, 64, 175));
+        panel.add(lbl, BorderLayout.CENTER);
+
+        return panel;
+    }
+
     private JScrollPane createProductTable(List<Map<String, Object>> details) {
-        String[] cols = {"Mã SP", "Tên Sản Phẩm", "SL", "Đơn Giá", "Thành Tiền"};
+        String[] cols = {"Mã CT", "Mã SP", "Tên Sản Phẩm", "Đơn vị", "SL", "Đơn Giá", "Thành Tiền"};
 
         modOrderDetail = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 2 && !isCancelled;
+                if (isCancelled) {
+                    return false;
+                }
+                return column == COL_UNIT || column == COL_QTY;
             }
         };
 
         for (Map<String, Object> d : details) {
+            Object detailId = getValueIgnoreCase(d, "order_detail_id", "ORDER_DETAIL_ID");
             Object pId = getValueIgnoreCase(d, "product_id", "PRODUCT_ID");
             Object pName = getValueIgnoreCase(d, "product_name", "PRODUCT_NAME");
+            Object unitId = getValueIgnoreCase(d, "unit_id", "UNIT_ID");
             Object qty = getValueIgnoreCase(d, "quantity", "QUANTITY");
             Object price = getValueIgnoreCase(d, "unit_price", "UNIT_PRICE");
             Object total = getValueIgnoreCase(d, "line_total", "LINE_TOTAL", "total_price", "TOTAL_PRICE");
 
-            double dPrice = parseMoneyToDouble(price);
-            double dTotal = parseMoneyToDouble(total);
+            String productId = pId != null ? pId.toString() : "";
+            ProductUnit selectedUnit = resolveProductUnit(productId, unitId != null ? unitId.toString() : null);
 
-            if (dTotal <= 0 && qty != null) {
-                try {
-                    dTotal = Integer.parseInt(qty.toString()) * dPrice;
-                } catch (Exception ignored) {
+            double dPrice = parseMoneyToDouble(price);
+            if (selectedUnit != null && selectedUnit.getSellingPrice() != null) {
+                // Nếu DB có giá trong order_detail thì ưu tiên giữ giá lịch sử hóa đơn.
+                if (dPrice <= 0) {
+                    dPrice = selectedUnit.getSellingPrice().doubleValue();
                 }
             }
 
+            int iQty = 1;
+            try {
+                if (qty != null) {
+                    iQty = Integer.parseInt(qty.toString());
+                }
+            } catch (Exception ignored) {
+            }
+
+            double dTotal = parseMoneyToDouble(total);
+            if (dTotal <= 0) {
+                dTotal = iQty * dPrice;
+            }
+
             modOrderDetail.addRow(new Object[]{
-                pId,
-                pName != null ? pName : pId,
-                qty != null ? qty : 1,
+                detailId != null ? detailId : "",
+                productId,
+                pName != null ? pName : productId,
+                selectedUnit,
+                iQty,
                 dPrice,
                 dTotal
             });
         }
 
         tableChiTiet = new JTable(modOrderDetail);
-        tableChiTiet.setRowHeight(35);
-        tableChiTiet.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tableChiTiet.setRowHeight(38);
+        tableChiTiet.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         tableChiTiet.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        tableChiTiet.getTableHeader().setBackground(new Color(240, 245, 255));
+        tableChiTiet.getTableHeader().setForeground(new Color(20, 30, 70));
+        tableChiTiet.getTableHeader().setReorderingAllowed(false);
+        tableChiTiet.setSelectionBackground(new Color(232, 245, 255));
+        tableChiTiet.setSelectionForeground(Color.BLACK);
+        tableChiTiet.setGridColor(new Color(226, 232, 240));
+        tableChiTiet.setShowVerticalLines(true);
+
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+
+        DefaultTableCellRenderer productRenderer = new DefaultTableCellRenderer();
+        productRenderer.setHorizontalAlignment(SwingConstants.LEFT);
 
         DefaultTableCellRenderer moneyRenderer = new DefaultTableCellRenderer() {
             @Override
@@ -355,12 +431,7 @@ public class OrderDetailDialog extends JDialog {
                 }
 
                 Component c = super.getTableCellRendererComponent(
-                        table,
-                        value,
-                        isSelected,
-                        hasFocus,
-                        row,
-                        column
+                        table, value, isSelected, hasFocus, row, column
                 );
 
                 setHorizontalAlignment(JLabel.RIGHT);
@@ -368,83 +439,112 @@ public class OrderDetailDialog extends JDialog {
             }
         };
 
-        tableChiTiet.getColumnModel().getColumn(3).setCellRenderer(moneyRenderer);
-        tableChiTiet.getColumnModel().getColumn(4).setCellRenderer(moneyRenderer);
-
-        if (!isCancelled) {
-            tableChiTiet.getColumnModel().getColumn(2).setCellRenderer(new SpinnerRenderer());
-            tableChiTiet.getColumnModel().getColumn(2).setCellEditor(new SpinnerEditor());
+        for (int i = 0; i < tableChiTiet.getColumnCount(); i++) {
+            tableChiTiet.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
 
-        tableChiTiet.getColumnModel().getColumn(0).setPreferredWidth(80);
-        tableChiTiet.getColumnModel().getColumn(1).setPreferredWidth(250);
-        tableChiTiet.getColumnModel().getColumn(2).setPreferredWidth(60);
-        tableChiTiet.getColumnModel().getColumn(3).setPreferredWidth(100);
-        tableChiTiet.getColumnModel().getColumn(4).setPreferredWidth(120);
+        tableChiTiet.getColumnModel().getColumn(COL_PRODUCT_NAME).setCellRenderer(productRenderer);
+        tableChiTiet.getColumnModel().getColumn(COL_UNIT).setCellRenderer(new ProductUnitRenderer());
+        tableChiTiet.getColumnModel().getColumn(COL_UNIT_PRICE).setCellRenderer(moneyRenderer);
+        tableChiTiet.getColumnModel().getColumn(COL_TOTAL).setCellRenderer(moneyRenderer);
+
+        if (!isCancelled) {
+            tableChiTiet.getColumnModel().getColumn(COL_QTY).setCellRenderer(new SpinnerRenderer());
+            tableChiTiet.getColumnModel().getColumn(COL_QTY).setCellEditor(new SpinnerEditor());
+            tableChiTiet.getColumnModel().getColumn(COL_UNIT).setCellEditor(new ProductUnitEditor());
+        }
+
+        tableChiTiet.getColumnModel().getColumn(COL_DETAIL_ID).setMinWidth(0);
+        tableChiTiet.getColumnModel().getColumn(COL_DETAIL_ID).setMaxWidth(0);
+        tableChiTiet.getColumnModel().getColumn(COL_DETAIL_ID).setPreferredWidth(0);
+
+        tableChiTiet.getColumnModel().getColumn(COL_PRODUCT_ID).setPreferredWidth(80);
+        tableChiTiet.getColumnModel().getColumn(COL_PRODUCT_NAME).setPreferredWidth(230);
+        tableChiTiet.getColumnModel().getColumn(COL_UNIT).setPreferredWidth(115);
+        tableChiTiet.getColumnModel().getColumn(COL_QTY).setPreferredWidth(55);
+        tableChiTiet.getColumnModel().getColumn(COL_UNIT_PRICE).setPreferredWidth(100);
+        tableChiTiet.getColumnModel().getColumn(COL_TOTAL).setPreferredWidth(120);
 
         modOrderDetail.addTableModelListener(e -> {
             if (isUpdatingTotal) {
                 return;
             }
 
-            if (e.getColumn() == 2 && e.getType() == javax.swing.event.TableModelEvent.UPDATE) {
-                int row = e.getFirstRow();
+            if (e.getType() != TableModelEvent.UPDATE) {
+                return;
+            }
 
-                if (row < 0 || row >= modOrderDetail.getRowCount()) {
-                    return;
-                }
+            int row = e.getFirstRow();
+            int col = e.getColumn();
 
-                try {
-                    int newQty = Integer.parseInt(modOrderDetail.getValueAt(row, 2).toString());
+            if (row < 0 || row >= modOrderDetail.getRowCount()) {
+                return;
+            }
 
-                    if (newQty <= 0) {
-                        SwingUtilities.invokeLater(() -> {
-                            int confirm = JOptionPane.showConfirmDialog(
-                                    this,
-                                    "Xóa sản phẩm này khỏi đơn hàng?",
-                                    "Xác nhận xóa",
-                                    JOptionPane.YES_NO_OPTION
-                            );
-
-                            if (confirm == JOptionPane.YES_OPTION) {
-                                if (row >= 0 && row < modOrderDetail.getRowCount()) {
-                                    modOrderDetail.removeRow(row);
-                                }
-                            } else {
-                                if (row >= 0 && row < modOrderDetail.getRowCount()) {
-                                    modOrderDetail.setValueAt(1, row, 2);
-                                }
-                            }
-
-                            calculateOrderTotal();
-                        });
-                        return;
-                    }
-
-                    double price = parseMoneyToDouble(modOrderDetail.getValueAt(row, 3));
-
-                    isUpdatingTotal = true;
-                    modOrderDetail.setValueAt(price * newQty, row, 4);
-                    isUpdatingTotal = false;
-
-                    calculateOrderTotal();
-
-                } catch (Exception ex) {
-                    isUpdatingTotal = false;
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Số lượng không hợp lệ!",
-                            "Lỗi dữ liệu",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                }
+            if (col == COL_QTY || col == COL_UNIT) {
+                updateRowAfterUnitOrQuantityChanged(row, col);
             }
         });
 
         JScrollPane sp = new JScrollPane(tableChiTiet);
         sp.setPreferredSize(new Dimension(0, 250));
+        sp.setBorder(BorderFactory.createLineBorder(borderGray));
         return sp;
+    }
+
+    private void updateRowAfterUnitOrQuantityChanged(int row, int col) {
+        try {
+            int newQty = Integer.parseInt(modOrderDetail.getValueAt(row, COL_QTY).toString());
+
+            if (newQty <= 0) {
+                SwingUtilities.invokeLater(() -> {
+                    int confirm = JOptionPane.showConfirmDialog(
+                            this,
+                            "Xóa sản phẩm này khỏi đơn hàng?",
+                            "Xác nhận xóa",
+                            JOptionPane.YES_NO_OPTION
+                    );
+
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        if (row >= 0 && row < modOrderDetail.getRowCount()) {
+                            modOrderDetail.removeRow(row);
+                        }
+                    } else {
+                        if (row >= 0 && row < modOrderDetail.getRowCount()) {
+                            modOrderDetail.setValueAt(1, row, COL_QTY);
+                        }
+                    }
+
+                    calculateOrderTotal();
+                });
+                return;
+            }
+
+            ProductUnit unit = getUnitFromCell(row);
+
+            double price = parseMoneyToDouble(modOrderDetail.getValueAt(row, COL_UNIT_PRICE));
+
+            if (col == COL_UNIT && unit != null && unit.getSellingPrice() != null) {
+                price = unit.getSellingPrice().doubleValue();
+            }
+
+            isUpdatingTotal = true;
+            modOrderDetail.setValueAt(price, row, COL_UNIT_PRICE);
+            modOrderDetail.setValueAt(price * newQty, row, COL_TOTAL);
+            isUpdatingTotal = false;
+
+            calculateOrderTotal();
+
+        } catch (Exception ex) {
+            isUpdatingTotal = false;
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Số lượng hoặc đơn vị không hợp lệ!",
+                    "Lỗi dữ liệu",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 
     private JPanel createSummaryPanel() {
@@ -515,7 +615,7 @@ public class OrderDetailDialog extends JDialog {
         double subTotal = 0;
 
         for (int i = 0; i < modOrderDetail.getRowCount(); i++) {
-            subTotal += parseMoneyToDouble(modOrderDetail.getValueAt(i, 4));
+            subTotal += parseMoneyToDouble(modOrderDetail.getValueAt(i, COL_TOTAL));
         }
 
         double discountAmount = subTotal * currentDiscountRate;
@@ -550,7 +650,7 @@ public class OrderDetailDialog extends JDialog {
         btnSave.setBackground(primaryBlue);
         btnSave.setForeground(Color.WHITE);
         btnSave.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnSave.addActionListener(e -> saveInvoiceChanges());
+        btnSave.addActionListener(e -> saveInvoiceChanges(btnSave));
 
         if (!isCancelled) {
             pnl.add(btnSave);
@@ -560,7 +660,7 @@ public class OrderDetailDialog extends JDialog {
         return pnl;
     }
 
-    private void saveInvoiceChanges() {
+    private void saveInvoiceChanges(JButton btnSave) {
         try {
             if (conn == null) {
                 throw new IllegalStateException("Connection đang null. Hãy truyền conn khi mở OrderDetailDialog.");
@@ -577,42 +677,90 @@ public class OrderDetailDialog extends JDialog {
             List<InvoiceUpdateService.EditedOrderDetail> editedDetails = new ArrayList<>();
 
             for (int i = 0; i < modOrderDetail.getRowCount(); i++) {
-                Object productObj = modOrderDetail.getValueAt(i, 0);
-                Object quantityObj = modOrderDetail.getValueAt(i, 2);
-                Object unitPriceObj = modOrderDetail.getValueAt(i, 3);
+                Object detailObj = modOrderDetail.getValueAt(i, COL_DETAIL_ID);
+                Object productObj = modOrderDetail.getValueAt(i, COL_PRODUCT_ID);
+                Object quantityObj = modOrderDetail.getValueAt(i, COL_QTY);
+                Object unitPriceObj = modOrderDetail.getValueAt(i, COL_UNIT_PRICE);
 
                 if (productObj == null) {
                     throw new IllegalArgumentException("Mã sản phẩm ở dòng " + (i + 1) + " đang trống.");
                 }
 
+                String orderDetailId = detailObj == null ? "" : detailObj.toString().trim();
                 String productId = productObj.toString().trim();
                 int quantity = Integer.parseInt(quantityObj.toString().trim());
                 double unitPrice = parseMoneyToDouble(unitPriceObj);
+
+                ProductUnit unit = getUnitFromCell(i);
+
+                String unitId = unit != null && unit.getUnitId() != null
+                        ? unit.getUnitId()
+                        : null;
+
+                int quantityBase = calculateQuantityBase(unit, quantity);
 
                 if (quantity <= 0) {
                     throw new IllegalArgumentException("Số lượng sản phẩm phải lớn hơn 0: " + productId);
                 }
 
                 editedDetails.add(
-                        new InvoiceUpdateService.EditedOrderDetail(productId, quantity, unitPrice)
+                        new InvoiceUpdateService.EditedOrderDetail(
+                                orderDetailId,
+                                productId,
+                                unitId,
+                                quantity,
+                                quantityBase,
+                                unitPrice
+                        )
                 );
             }
 
-            InvoiceUpdateService service = new InvoiceUpdateService(conn);
-            service.saveInvoiceChanges(orderId, editedDetails);
+            btnSave.setEnabled(false);
+            setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Lưu thay đổi hóa đơn thành công!",
-                    "Thành công",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+            new SwingWorker<Void, Void>() {
+                private Exception error;
 
-            if (onSavedCallback != null) {
-                onSavedCallback.run();
-            }
+                @Override
+                protected Void doInBackground() {
+                    try {
+                        InvoiceUpdateService service = new InvoiceUpdateService(conn);
+                        service.saveInvoiceChanges(orderId, editedDetails);
+                    } catch (Exception ex) {
+                        error = ex;
+                    }
+                    return null;
+                }
 
-            dispose();
+                @Override
+                protected void done() {
+                    btnSave.setEnabled(true);
+                    setCursor(Cursor.getDefaultCursor());
+
+                    if (error != null) {
+                        JOptionPane.showMessageDialog(
+                                OrderDetailDialog.this,
+                                "Lỗi khi lưu thay đổi hóa đơn:\n" + error.getMessage(),
+                                "Lỗi",
+                                JOptionPane.ERROR_MESSAGE
+                        );
+                        return;
+                    }
+
+                    JOptionPane.showMessageDialog(
+                            OrderDetailDialog.this,
+                            "Lưu thay đổi hóa đơn thành công!",
+                            "Thành công",
+                            JOptionPane.INFORMATION_MESSAGE
+                    );
+
+                    if (onSavedCallback != null) {
+                        onSavedCallback.run();
+                    }
+
+                    dispose();
+                }
+            }.execute();
 
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(
@@ -645,6 +793,99 @@ public class OrderDetailDialog extends JDialog {
         return null;
     }
 
+    private List<ProductUnit> getUnitsForProduct(String productId) {
+        if (productId == null || productId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String key = productId.trim();
+
+        if (productUnitCache.containsKey(key)) {
+            return productUnitCache.get(key);
+        }
+
+        List<ProductUnit> units = ProductUnitsSql.getInstance().selectByProductId(key);
+
+        if (units == null) {
+            units = new ArrayList<>();
+        }
+
+        productUnitCache.put(key, units);
+        return units;
+    }
+
+    private ProductUnit resolveProductUnit(String productId, String unitId) {
+        List<ProductUnit> units = getUnitsForProduct(productId);
+
+        if (units == null || units.isEmpty()) {
+            return null;
+        }
+
+        if (unitId != null && !unitId.trim().isEmpty()) {
+            for (ProductUnit u : units) {
+                if (u != null && u.getUnitId() != null
+                        && u.getUnitId().equalsIgnoreCase(unitId.trim())) {
+                    return u;
+                }
+            }
+        }
+
+        for (ProductUnit u : units) {
+            if (u != null && u.getIsBaseUnit() == 1) {
+                return u;
+            }
+        }
+
+        return units.get(0);
+    }
+
+    private ProductUnit getUnitFromCell(int row) {
+        Object value = modOrderDetail.getValueAt(row, COL_UNIT);
+
+        if (value instanceof ProductUnit) {
+            return (ProductUnit) value;
+        }
+
+        String productId = String.valueOf(modOrderDetail.getValueAt(row, COL_PRODUCT_ID));
+        String unitId = value == null ? null : value.toString();
+
+        return resolveProductUnit(productId, unitId);
+    }
+
+    private int calculateQuantityBase(ProductUnit unit, int quantity) {
+        if (quantity <= 0) {
+            return 0;
+        }
+
+        if (unit == null || unit.getConversionRateToBase() == null) {
+            return quantity;
+        }
+
+        try {
+            BigDecimal base = BigDecimal.valueOf(quantity).multiply(unit.getConversionRateToBase());
+            return base.setScale(0, java.math.RoundingMode.CEILING).intValueExact();
+        } catch (Exception e) {
+            return quantity;
+        }
+    }
+
+    private String getUnitDisplayText(ProductUnit unit) {
+        if (unit == null) {
+            return "Đơn vị";
+        }
+
+        String name = unit.getUnitName();
+        if (name == null || name.trim().isEmpty()) {
+            name = unit.getUnitId();
+        }
+
+        if (unit.getSellingPrice() != null) {
+            return name + " - " + df.format(unit.getSellingPrice());
+        }
+
+        return name;
+    }
+
     private double parseMoneyToDouble(Object value) {
         if (value == null) {
             return 0;
@@ -657,6 +898,7 @@ public class OrderDetailDialog extends JDialog {
         String s = value.toString()
                 .replace("đ", "")
                 .replace("₫", "")
+                .replace(".", "")
                 .replace(",", "")
                 .trim();
 
@@ -693,6 +935,92 @@ public class OrderDetailDialog extends JDialog {
                 return "💎";
             default:
                 return "👤";
+        }
+    }
+
+    class ProductUnitRenderer extends DefaultTableCellRenderer {
+
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                boolean hasFocus,
+                int row,
+                int column
+        ) {
+            String text;
+
+            if (value instanceof ProductUnit) {
+                ProductUnit unit = (ProductUnit) value;
+                text = unit.getUnitName() != null ? unit.getUnitName() : unit.getUnitId();
+            } else {
+                text = value == null ? "" : value.toString();
+            }
+
+            Component c = super.getTableCellRendererComponent(
+                    table, text, isSelected, hasFocus, row, column
+            );
+
+            setHorizontalAlignment(SwingConstants.CENTER);
+            return c;
+        }
+    }
+
+    class ProductUnitEditor extends AbstractCellEditor implements TableCellEditor {
+
+        private JComboBox<ProductUnit> comboBox;
+
+        @Override
+        public Component getTableCellEditorComponent(
+                JTable table,
+                Object value,
+                boolean isSelected,
+                int row,
+                int column
+        ) {
+            int modelRow = table.convertRowIndexToModel(row);
+            String productId = String.valueOf(modOrderDetail.getValueAt(modelRow, COL_PRODUCT_ID));
+
+            comboBox = new JComboBox<>();
+
+            List<ProductUnit> units = getUnitsForProduct(productId);
+
+            for (ProductUnit unit : units) {
+                comboBox.addItem(unit);
+            }
+
+            comboBox.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(
+                        JList<?> list,
+                        Object value,
+                        int index,
+                        boolean isSelected,
+                        boolean cellHasFocus
+                ) {
+                    super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+
+                    if (value instanceof ProductUnit) {
+                        setText(getUnitDisplayText((ProductUnit) value));
+                    }
+
+                    return this;
+                }
+            });
+
+            if (value instanceof ProductUnit) {
+                comboBox.setSelectedItem(value);
+            } else if (comboBox.getItemCount() > 0) {
+                comboBox.setSelectedIndex(0);
+            }
+
+            return comboBox;
+        }
+
+        @Override
+        public Object getCellEditorValue() {
+            return comboBox != null ? comboBox.getSelectedItem() : null;
         }
     }
 
