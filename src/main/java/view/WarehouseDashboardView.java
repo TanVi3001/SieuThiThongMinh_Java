@@ -10,16 +10,27 @@ import common.security.UIPermissionGuard;
 import common.security.SecurityGuard;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.GridBagLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import model.account.Account;
 import view.components.NotificationBell;
 import view.components.TongQuanPanel;
@@ -34,6 +45,10 @@ public class WarehouseDashboardView extends JFrame {
 
     private final Color BACKGROUND_COLOR = new Color(246, 247, 251);
     private final Color TOPBAR_BORDER = new Color(230, 230, 230);
+
+    private volatile SwingWorker<JPanel, Void> currentPanelWorker;
+    private final Map<String, JPanel> panelCache = new HashMap<>();
+    private String currentMenu = WarehouseSidebar.MENU_INVENTORY;
 
     public WarehouseDashboardView() {
         if (!AuthorizationService.isAdmin() && !AuthorizationService.isProductStaff()) {
@@ -99,6 +114,12 @@ public class WarehouseDashboardView extends JFrame {
     }
 
     private void handleSidebarMenuClick(String title) {
+        if (title != null && title.equals(currentMenu) && mainContentPanel.getComponentCount() > 0) {
+            return;
+        }
+
+        currentMenu = title;
+
         switch (title) {
             case WarehouseSidebar.MENU_INVENTORY -> {
                 if (!AuthorizationService.canManageStock()) {
@@ -115,7 +136,7 @@ public class WarehouseDashboardView extends JFrame {
                     return;
                 }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_PRODUCTS);
-                showPanel(new ProductView());
+                showMenuPanel(WarehouseSidebar.MENU_PRODUCTS, ProductView::new);
             }
 
             case WarehouseSidebar.MENU_SUPPLIERS -> {
@@ -124,7 +145,8 @@ public class WarehouseDashboardView extends JFrame {
                     return;
                 }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SUPPLIERS);
-                showPanel(new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
+                showMenuPanel(WarehouseSidebar.MENU_SUPPLIERS,
+                        () -> new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
             }
 
             case WarehouseSidebar.MENU_CATEGORY_TAX -> {
@@ -134,12 +156,12 @@ public class WarehouseDashboardView extends JFrame {
                 }
 
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_CATEGORY_TAX);
-                showPanel(new CategoryTaxView());
+                showMenuPanel(WarehouseSidebar.MENU_CATEGORY_TAX, CategoryTaxView::new);
             }
 
             case WarehouseSidebar.MENU_SETTINGS -> {
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SETTINGS);
-                showPanel(new UnifiedSettingsPanel());
+                showMenuPanel(WarehouseSidebar.MENU_SETTINGS, UnifiedSettingsPanel::new);
             }
 
             case WarehouseSidebar.MENU_LOGOUT ->
@@ -174,17 +196,6 @@ public class WarehouseDashboardView extends JFrame {
 
         notificationBell = new NotificationBell(NotificationBell.Audience.WAREHOUSE);
 
-        /*
-         * Khi nhân viên kho bấm vào thông báo tồn kho:
-         * 1. NotificationBell tự đóng popup.
-         * 2. Dashboard chuyển sang menu Quản lý tồn kho.
-         * 3. Mở InventoryView mới.
-         * 4. Focus đúng productId trong bảng tồn kho.
-         *
-         * Điều kiện:
-         * - NotificationBell phải có setProductClickListener(...).
-         * - InventoryView phải có public void focusProduct(String productId).
-         */
         notificationBell.setProductClickListener(productId -> {
             if (productId == null || productId.trim().isEmpty()) {
                 JOptionPane.showMessageDialog(
@@ -197,6 +208,7 @@ public class WarehouseDashboardView extends JFrame {
             }
 
             warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_INVENTORY);
+            currentMenu = WarehouseSidebar.MENU_INVENTORY;
             showInventoryPanel(productId.trim());
         });
 
@@ -206,15 +218,130 @@ public class WarehouseDashboardView extends JFrame {
     }
 
     private void showInventoryPanel(String focusProductId) {
-        InventoryView inventoryView = new InventoryView();
-        showPanel(inventoryView);
+        String cacheKey = focusProductId == null || focusProductId.trim().isEmpty()
+                ? WarehouseSidebar.MENU_INVENTORY
+                : WarehouseSidebar.MENU_INVENTORY + ":" + focusProductId.trim();
 
-        if (focusProductId != null && !focusProductId.trim().isEmpty()) {
-            SwingUtilities.invokeLater(() -> inventoryView.focusProduct(focusProductId.trim()));
+        showMenuPanel(cacheKey, () -> {
+            InventoryView inventoryView = new InventoryView();
+
+            if (focusProductId != null && !focusProductId.trim().isEmpty()) {
+                SwingUtilities.invokeLater(() -> inventoryView.focusProduct(focusProductId.trim()));
+            }
+
+            return inventoryView;
+        });
+    }
+
+    private void showMenuPanel(String cacheKey, Supplier<JPanel> panelFactory) {
+        if (cacheKey == null || panelFactory == null) {
+            return;
         }
+
+        if (currentPanelWorker != null && !currentPanelWorker.isDone()) {
+            currentPanelWorker.cancel(true);
+        }
+
+        JPanel cached = panelCache.get(cacheKey);
+        if (cached != null) {
+            showPanel(cached);
+            return;
+        }
+
+        showLoadingPanel(cacheKey);
+
+        SwingWorker<JPanel, Void> worker = new SwingWorker<>() {
+            @Override
+            protected JPanel doInBackground() {
+                return panelFactory.get();
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled()) {
+                    return;
+                }
+
+                try {
+                    JPanel panel = get();
+                    panelCache.put(cacheKey, panel);
+                    showPanel(panel);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    showErrorPanel(cacheKey, ex);
+                }
+            }
+        };
+
+        currentPanelWorker = worker;
+        worker.execute();
+    }
+
+    private void showLoadingPanel(String title) {
+        JPanel loading = new JPanel(new BorderLayout());
+        loading.setBackground(BACKGROUND_COLOR);
+        loading.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(225, 229, 235)),
+                BorderFactory.createEmptyBorder(24, 32, 24, 32)
+        ));
+
+        JLabel label = new JLabel("Đang tải " + title + "...");
+        label.setAlignmentX(Component.CENTER_ALIGNMENT);
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 16));
+        label.setForeground(new Color(35, 45, 75));
+
+        JLabel hint = new JLabel("Vui lòng chờ trong giây lát, hệ thống đang chuẩn bị dữ liệu.");
+        hint.setAlignmentX(Component.CENTER_ALIGNMENT);
+        hint.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        hint.setForeground(new Color(100, 110, 125));
+
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+        progressBar.setPreferredSize(new Dimension(320, 10));
+        progressBar.setMaximumSize(new Dimension(320, 10));
+        progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        card.add(label);
+        card.add(Box.createVerticalStrut(10));
+        card.add(progressBar);
+        card.add(Box.createVerticalStrut(10));
+        card.add(hint);
+
+        JPanel wrapper = new JPanel(new GridBagLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(card);
+
+        loading.add(wrapper, BorderLayout.CENTER);
+        showPanel(loading, false);
+    }
+
+    private void showErrorPanel(String title, Exception ex) {
+        JPanel error = new JPanel(new BorderLayout());
+        error.setBackground(BACKGROUND_COLOR);
+
+        String message = ex == null || ex.getMessage() == null ? "Không rõ lỗi" : ex.getMessage();
+        JLabel label = new JLabel(
+                "<html><div style='text-align:center;'>Không thể tải " + title
+                + ".<br>" + message + "</div></html>",
+                JLabel.CENTER
+        );
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+        label.setForeground(new Color(220, 53, 69));
+
+        error.add(label, BorderLayout.CENTER);
+        showPanel(error, false);
     }
 
     public void showPanel(JPanel panel) {
+        showPanel(panel, true);
+    }
+
+    private void showPanel(JPanel panel, boolean applyGuard) {
         if (panel == null) {
             return;
         }
@@ -223,11 +350,6 @@ public class WarehouseDashboardView extends JFrame {
 
         JPanel panelToDisplay = panel;
 
-        /*
-         * Warehouse Portal:
-         * - Nhân viên kho được thao tác đầy đủ ở các màn nghiệp vụ kho.
-         * - Không bọc UIPermissionGuard cho các màn này để tránh khóa nút Thêm/Sửa/Xóa/Nhập kho.
-         */
         boolean isWarehouseAllowedPanel
                 = (panel instanceof InventoryView)
                 || (panel instanceof ProductView)
@@ -236,7 +358,7 @@ public class WarehouseDashboardView extends JFrame {
                 || (panel instanceof UnifiedSettingsPanel)
                 || (panel instanceof TongQuanPanel);
 
-        if (!isWarehouseAllowedPanel) {
+        if (applyGuard && !isWarehouseAllowedPanel) {
             panelToDisplay = UIPermissionGuard.protect(panel);
         }
 
