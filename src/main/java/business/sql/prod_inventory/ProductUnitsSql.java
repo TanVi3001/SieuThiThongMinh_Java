@@ -132,8 +132,6 @@ public class ProductUnitsSql {
             return BigDecimal.ONE;
         }
 
-        // Khi nhập kho tay, INVENTORY/unit cũ có thể là Cái trong khi PRODUCT_UNITS đã cấu hình Túi/Thùng.
-        // Cái/Đơn vị/Unit là fallback chung, cho qua tỷ lệ 1 để không chặn nhập kho thủ công.
         if (isGenericBaseUnitFallback(cleanUnitId) || isGenericBaseUnitFallback(resolvedUnitId)) {
             return BigDecimal.ONE;
         }
@@ -408,8 +406,8 @@ public class ProductUnitsSql {
                     unit.setUnitName(rs.getString("unit_name"));
                     unit.setConversionRateToBase(rs.getBigDecimal("conversion_rate_to_base"));
                     unit.setSellingPrice(rs.getBigDecimal("selling_price"));
-                    unit.setBaseUnit(rs.getInt("is_base_unit") == 1);
-                    unit.setDeleted(rs.getInt("is_deleted") == 1);
+                    unit.setIsBaseUnit(rs.getInt("is_base_unit"));
+                    unit.setIsDeleted(rs.getInt("is_deleted"));
 
                     List<ProductUnit> list = groupedUnits.get(unit.getProductId());
                     if (list != null) {
@@ -544,7 +542,6 @@ public class ProductUnitsSql {
         return true;
     }
 
-    // Giữ lại overload cũ để các màn hình đang gọi không bị lỗi compile.
     public boolean updateProductUnitWithConnStyle(String productId, String oldUnitId, String newUnitId,
             BigDecimal conversionRateToBase, BigDecimal sellingPrice, boolean isBaseUnit) {
 
