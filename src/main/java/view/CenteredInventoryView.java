@@ -2,6 +2,7 @@ package view;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Font;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.SwingConstants;
@@ -10,7 +11,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
 /**
- * Wrapper riêng cho Warehouse Portal: chỉ căn giữa một số cột text của bảng tồn kho.
+ * Wrapper riêng cho Warehouse Portal: căn giữa một số cột text và in đậm bảng tồn kho.
  * Không dùng căn giữa global nên không đè renderer cột ảnh.
  */
 public class CenteredInventoryView extends InventoryView {
@@ -26,12 +27,18 @@ public class CenteredInventoryView extends InventoryView {
             return;
         }
 
+        table.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        table.setRowHeight(Math.max(table.getRowHeight(), 42));
+
         centerHeader(table);
 
         // Bảng tồn kho: 2 = Tên sản phẩm, 7 = Trạng thái.
         // Các cột số/đơn vị/chi nhánh đã được InventoryView căn giữa sẵn.
         centerColumn(table, 2);
         centerColumn(table, 7);
+
+        revalidate();
+        repaint();
     }
 
     private JTable findFirstTable(Component component) {
@@ -59,7 +66,7 @@ public class CenteredInventoryView extends InventoryView {
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
         headerRenderer.setVerticalAlignment(SwingConstants.CENTER);
-        headerRenderer.setFont(table.getTableHeader().getFont());
+        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 13));
         headerRenderer.setBackground(table.getTableHeader().getBackground());
         headerRenderer.setForeground(table.getTableHeader().getForeground());
         table.getTableHeader().setDefaultRenderer(headerRenderer);
@@ -112,6 +119,7 @@ public class CenteredInventoryView extends InventoryView {
             if (component instanceof JLabel label) {
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setVerticalAlignment(SwingConstants.CENTER);
+                label.setFont(new Font("Segoe UI", Font.BOLD, 13));
                 return;
             }
 
