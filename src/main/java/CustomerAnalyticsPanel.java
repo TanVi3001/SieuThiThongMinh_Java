@@ -19,6 +19,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import model.order.Customer;
 import business.service.SessionManager;
+import view.components.AnimatedRevealPanel;
 
 public class CustomerAnalyticsPanel extends JPanel {
 
@@ -38,6 +39,8 @@ public class CustomerAnalyticsPanel extends JPanel {
     private final List<Customer> customers = new ArrayList<>();
     private int newCustomersThisMonth = 0;
     private String analyticsScopeLabel = "Toàn hệ thống";
+
+    private final List<AnimatedRevealPanel> customerAnimations = new ArrayList<>();
 
     public CustomerAnalyticsPanel() {
         setLayout(new BorderLayout());
@@ -94,6 +97,22 @@ public class CustomerAnalyticsPanel extends JPanel {
         }
     }
 
+    private JPanel animateCustomerPanel(Component child, int delayMs, int distance) {
+        AnimatedRevealPanel animated = new AnimatedRevealPanel(child, 900, delayMs, distance);
+        customerAnimations.add(animated);
+        return animated;
+    }
+
+    private void restartCustomerAnimations() {
+        SwingUtilities.invokeLater(() -> {
+            for (AnimatedRevealPanel p : customerAnimations) {
+                if (p != null && p.isShowing()) {
+                    p.restartAnimation();
+                }
+            }
+        });
+    }
+
     private void buildUI() {
         JPanel root = new JPanel();
         root.setOpaque(false);
@@ -102,7 +121,7 @@ public class CustomerAnalyticsPanel extends JPanel {
         root.add(buildHeader());
         root.add(Box.createRigidArea(new Dimension(0, 14)));
 
-        root.add(buildCustomerKpiPanel());
+        root.add(animateCustomerPanel(buildCustomerKpiPanel(), 0, 90));
         root.add(Box.createRigidArea(new Dimension(0, 16)));
 
         JPanel chartsRow = new JPanel(new GridLayout(1, 3, 16, 0));
@@ -110,53 +129,58 @@ public class CustomerAnalyticsPanel extends JPanel {
         chartsRow.setPreferredSize(new Dimension(1000, 330));
         chartsRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 330));
 
-        chartsRow.add(buildCustomerRankChartPanel());
-        chartsRow.add(buildTopSpendingCustomersPanel());
-        chartsRow.add(buildCustomerTrendChartPanel());
+        chartsRow.add(animateCustomerPanel(buildCustomerRankChartPanel(), 0, 150));
+        chartsRow.add(animateCustomerPanel(buildTopSpendingCustomersPanel(), 140, 150));
+        chartsRow.add(animateCustomerPanel(buildCustomerTrendChartPanel(), 280, 150));
 
         root.add(chartsRow);
         root.add(Box.createRigidArea(new Dimension(0, 16)));
 
-        root.add(buildCustomerInsightPanel());
+        root.add(animateCustomerPanel(buildCustomerInsightPanel(), 420, 100));
 
         add(root, BorderLayout.CENTER);
+
+        restartCustomerAnimations();
     }
 
     private JPanel buildHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+        header.setPreferredSize(new Dimension(1000, 70));
 
-        JPanel textBox = new JPanel();
-        textBox.setOpaque(false);
-        textBox.setLayout(new BoxLayout(textBox, BoxLayout.Y_AXIS));
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
 
         JLabel title = new JLabel("Phân tích khách hàng");
         title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(TEXT_DARK);
 
-        JLabel sub = new JLabel(
-                "Theo dõi hành vi chi tiêu, hạng thành viên và nhóm khách hàng tiềm năng"
-                + " | Phạm vi: "
+        JLabel subtitle = new JLabel(
+                "Theo dõi hành vi chi tiêu, hạng thành viên và nhóm khách hàng tiềm năng | Phạm vi: "
                 + analyticsScopeLabel
         );
-        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        sub.setForeground(TEXT_GRAY);
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitle.setForeground(TEXT_GRAY);
 
-        textBox.add(title);
-        textBox.add(Box.createRigidArea(new Dimension(0, 4)));
-        textBox.add(sub);
+        titleBox.add(title);
+        titleBox.add(Box.createRigidArea(new Dimension(0, 6)));
+        titleBox.add(subtitle);
 
-        JLabel tag = new JLabel(SessionManager.isAdmin() ? "GLOBAL ANALYTICS" : "STORE ANALYTICS");
-        tag.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        tag.setForeground(PRIMARY);
-        tag.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(new Color(210, 220, 245), 18),
-                new EmptyBorder(7, 14, 7, 14)
+        JButton btnAnalytics = new JButton("STORE ANALYTICS");
+        btnAnalytics.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnAnalytics.setForeground(PRIMARY);
+        btnAnalytics.setBackground(WHITE);
+        btnAnalytics.setFocusPainted(false);
+        btnAnalytics.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btnAnalytics.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(new Color(219, 225, 255), 14),
+                new EmptyBorder(10, 18, 10, 18)
         ));
 
-        header.add(textBox, BorderLayout.WEST);
-        header.add(tag, BorderLayout.EAST);
+        header.add(titleBox, BorderLayout.WEST);
+        header.add(btnAnalytics, BorderLayout.EAST);
 
         return header;
     }
