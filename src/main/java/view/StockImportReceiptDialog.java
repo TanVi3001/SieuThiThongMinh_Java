@@ -2,6 +2,7 @@ package view;
 
 import business.service.InventoryPricePolicyService;
 import business.sql.prod_inventory.InventoryTransactionSql;
+import business.sql.prod_inventory.ProductUnitsSql;
 import business.sql.prod_inventory.ProductsSql;
 import common.db.DatabaseConnection;
 import common.realtime.RealtimeClient;
@@ -12,9 +13,11 @@ import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import model.product.Product;
+import model.product.ProductUnit;
 
 public class StockImportReceiptDialog extends JDialog {
 
@@ -36,6 +39,7 @@ public class StockImportReceiptDialog extends JDialog {
     private JTextField txtQuantity;
     private JTextField txtNote;
 
+    private JComboBox<UnitItem> cbUnit;
     private JComboBox<SupplierItem> cbSupplier;
 
     private final Color NAVY = new Color(23, 52, 99);
@@ -52,6 +56,7 @@ public class StockImportReceiptDialog extends JDialog {
 
         loadProduct();
         initUI();
+        loadProductUnits();
         loadSuppliers();
         bindEvents();
         recalc();
@@ -66,29 +71,29 @@ public class StockImportReceiptDialog extends JDialog {
     }
 
     private void initUI() {
-        setSize(640, 660);
-        setMinimumSize(new Dimension(620, 620));
+        setSize(760, 780);
+        setMinimumSize(new Dimension(720, 700));
         setLocationRelativeTo(getOwner());
         setLayout(new BorderLayout());
         getContentPane().setBackground(new Color(246, 247, 251));
 
         JPanel root = new JPanel(new BorderLayout(0, 16));
         root.setBackground(new Color(246, 247, 251));
-        root.setBorder(new EmptyBorder(22, 24, 22, 24));
+        root.setBorder(new EmptyBorder(24, 28, 24, 28));
 
         JLabel title = new JLabel("Tạo phiếu nhập hàng");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 26));
         title.setForeground(NAVY);
 
-        JLabel sub = new JLabel("Nhập số lượng, chọn nhà cung cấp. Giá nhập và VAT được hệ thống tự tính.");
-        sub.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        JLabel sub = new JLabel("Nhập số lượng, chọn đơn vị và nhà cung cấp. Giá nhập và VAT được hệ thống tự tính.");
+        sub.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         sub.setForeground(MUTED);
 
         JPanel titleBox = new JPanel();
         titleBox.setOpaque(false);
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
         titleBox.add(title);
-        titleBox.add(Box.createVerticalStrut(4));
+        titleBox.add(Box.createVerticalStrut(5));
         titleBox.add(sub);
 
         root.add(titleBox, BorderLayout.NORTH);
@@ -97,7 +102,7 @@ public class StockImportReceiptDialog extends JDialog {
         form.setBackground(Color.WHITE);
         form.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BORDER),
-                new EmptyBorder(20, 22, 20, 22)
+                new EmptyBorder(22, 26, 22, 26)
         ));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -109,12 +114,11 @@ public class StockImportReceiptDialog extends JDialog {
         lblProductInfo.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblProductInfo.setForeground(NAVY);
 
-        lblSalePrice = new JLabel("Giá bán hiện tại: " + money(product.getBasePrice()) + " VNĐ");
+        lblSalePrice = new JLabel();
         lblSalePrice.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblSalePrice.setForeground(GREEN);
 
-        BigDecimal fixedImportPrice = getFixedImportPriceBeforeVat();
-        lblFixedImportPrice = new JLabel("Giá nhập cố định chưa VAT: " + money(fixedImportPrice) + " VNĐ");
+        lblFixedImportPrice = new JLabel();
         lblFixedImportPrice.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblFixedImportPrice.setForeground(new Color(255, 153, 0));
 
@@ -134,18 +138,24 @@ public class StockImportReceiptDialog extends JDialog {
         txtQuantity = createTextField("VD: 20");
         txtNote = createTextField("VD: Nhập bổ sung theo cảnh báo tồn kho");
 
+        cbUnit = new JComboBox<>();
+        cbUnit.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbUnit.setBackground(Color.WHITE);
+        cbUnit.setPreferredSize(new Dimension(0, 40));
+
         cbSupplier = new JComboBox<>();
         cbSupplier.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbSupplier.setBackground(Color.WHITE);
-        cbSupplier.setPreferredSize(new Dimension(0, 38));
+        cbSupplier.setPreferredSize(new Dimension(0, 40));
 
-        addRow(form, gbc, 8, "Số lượng nhập (*)", txtQuantity);
-        addRow(form, gbc, 10, "Nhà cung cấp", cbSupplier);
-        addRow(form, gbc, 12, "Ghi chú", txtNote);
+        addRow(form, gbc, 8, "Đơn vị nhập (*)", cbUnit);
+        addRow(form, gbc, 10, "Số lượng nhập (*)", txtQuantity);
+        addRow(form, gbc, 12, "Nhà cung cấp", cbSupplier);
+        addRow(form, gbc, 14, "Ghi chú", txtNote);
 
-        JPanel summary = new JPanel(new GridLayout(5, 1, 0, 6));
+        JPanel summary = new JPanel(new GridLayout(5, 1, 0, 7));
         summary.setOpaque(false);
-        summary.setBorder(new EmptyBorder(12, 0, 0, 0));
+        summary.setBorder(new EmptyBorder(14, 0, 0, 0));
 
         lblImportAfterVat = createSummaryLabel("Giá nhập sau VAT / đơn vị: 0");
         lblBeforeTax = createSummaryLabel("Tiền hàng trước thuế: 0");
@@ -159,13 +169,17 @@ public class StockImportReceiptDialog extends JDialog {
         summary.add(lblAfterTax);
         summary.add(lblProfitHint);
 
-        gbc.gridy = 14;
+        gbc.gridy = 16;
         gbc.insets = new Insets(12, 0, 0, 0);
         form.add(summary, gbc);
 
-        root.add(form, BorderLayout.CENTER);
+        JScrollPane scrollPane = new JScrollPane(form);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setBackground(new Color(246, 247, 251));
+        root.add(scrollPane, BorderLayout.CENTER);
 
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
         bottom.setOpaque(false);
 
         JButton btnCancel = createButton("Hủy", new Color(142, 153, 176));
@@ -182,6 +196,31 @@ public class StockImportReceiptDialog extends JDialog {
         add(root, BorderLayout.CENTER);
     }
 
+    private void loadProductUnits() {
+        cbUnit.removeAllItems();
+
+        try {
+            List<ProductUnit> units = ProductUnitsSql.getInstance().selectByProductId(productId);
+
+            if (units != null) {
+                for (ProductUnit unit : units) {
+                    if (unit != null && unit.getIsDeleted() == 0) {
+                        cbUnit.addItem(new UnitItem(unit));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        if (cbUnit.getItemCount() == 0) {
+            cbUnit.addItem(UnitItem.fallback(product));
+        }
+
+        cbUnit.setSelectedIndex(0);
+        updatePriceLabels();
+    }
+
     private void loadSuppliers() {
         cbSupplier.removeAllItems();
 
@@ -192,8 +231,9 @@ public class StockImportReceiptDialog extends JDialog {
             ORDER BY supplier_id
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 cbSupplier.addItem(new SupplierItem(
                         rs.getString("supplier_id"),
@@ -238,7 +278,7 @@ public class StockImportReceiptDialog extends JDialog {
 
     private JTextField createTextField(String placeholder) {
         JTextField txt = new JTextField();
-        txt.setPreferredSize(new Dimension(0, 38));
+        txt.setPreferredSize(new Dimension(0, 40));
         txt.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         txt.putClientProperty("JTextField.placeholderText", placeholder);
         txt.setBorder(BorderFactory.createCompoundBorder(
@@ -257,8 +297,8 @@ public class StockImportReceiptDialog extends JDialog {
 
     private JButton createButton(String text, Color bg) {
         JButton btn = new JButton(text);
-        btn.setPreferredSize(new Dimension(145, 40));
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setPreferredSize(new Dimension(165, 44));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setForeground(Color.WHITE);
         btn.setBackground(bg);
         btn.setFocusPainted(false);
@@ -286,9 +326,12 @@ public class StockImportReceiptDialog extends JDialog {
         };
 
         txtQuantity.getDocument().addDocumentListener(listener);
+        cbUnit.addActionListener(e -> recalc());
     }
 
     private void recalc() {
+        updatePriceLabels();
+
         try {
             int qty = Integer.parseInt(txtQuantity.getText().trim());
 
@@ -296,7 +339,7 @@ public class StockImportReceiptDialog extends JDialog {
                 throw new IllegalArgumentException("Số lượng phải lớn hơn 0");
             }
 
-            BigDecimal salePrice = product.getBasePrice();
+            BigDecimal salePrice = getSelectedSalePrice();
             BigDecimal importPriceBeforeVat = getFixedImportPriceBeforeVat();
             BigDecimal vatRate = getVatRate();
 
@@ -320,7 +363,7 @@ public class StockImportReceiptDialog extends JDialog {
                     tax
             );
 
-            lblImportAfterVat.setText("Giá nhập sau VAT / đơn vị: " + money(importAfterVat) + " VNĐ");
+            lblImportAfterVat.setText("Giá nhập sau VAT / " + getSelectedUnitName() + ": " + money(importAfterVat) + " VNĐ");
             lblBeforeTax.setText("Tiền hàng trước thuế: " + money(beforeTax) + " VNĐ");
             lblTaxAmount.setText("Tiền thuế VAT: " + money(tax) + " VNĐ");
             lblAfterTax.setText("Tổng tiền nhập: " + money(afterTax) + " VNĐ");
@@ -329,7 +372,7 @@ public class StockImportReceiptDialog extends JDialog {
                 BigDecimal profit = salePrice.subtract(importAfterVat);
                 lblProfitHint.setForeground(GREEN);
                 lblProfitHint.setText("Logic giá: Hợp lệ, lãi gộp dự kiến "
-                        + money(profit) + " VNĐ / sản phẩm");
+                        + money(profit) + " VNĐ / " + getSelectedUnitName());
             } else {
                 lblProfitHint.setForeground(RED);
                 lblProfitHint.setText("Logic giá: Sai, giá nhập sau VAT phải nhỏ hơn giá bán");
@@ -342,13 +385,22 @@ public class StockImportReceiptDialog extends JDialog {
                     getVatRate()
             );
 
-            lblImportAfterVat.setText("Giá nhập sau VAT / đơn vị: " + money(importAfterVat) + " VNĐ");
+            lblImportAfterVat.setText("Giá nhập sau VAT / " + getSelectedUnitName() + ": " + money(importAfterVat) + " VNĐ");
             lblBeforeTax.setText("Tiền hàng trước thuế: 0");
             lblTaxAmount.setText("Tiền thuế VAT: 0");
             lblAfterTax.setText("Tổng tiền nhập: 0");
             lblProfitHint.setForeground(MUTED);
             lblProfitHint.setText("Logic giá: Chưa nhập số lượng");
         }
+    }
+
+    private void updatePriceLabels() {
+        BigDecimal salePrice = getSelectedSalePrice();
+        BigDecimal fixedImportPrice = getFixedImportPriceBeforeVat();
+        String unitName = getSelectedUnitName();
+
+        lblSalePrice.setText("Giá bán hiện tại / " + unitName + ": " + money(salePrice) + " VNĐ");
+        lblFixedImportPrice.setText("Giá nhập cố định chưa VAT / " + unitName + ": " + money(fixedImportPrice) + " VNĐ");
     }
 
     private void saveReceipt() {
@@ -360,7 +412,9 @@ public class StockImportReceiptDialog extends JDialog {
                 return;
             }
 
-            if (product.getBasePrice() == null || product.getBasePrice().compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal salePrice = getSelectedSalePrice();
+
+            if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
                 JOptionPane.showMessageDialog(
                         this,
                         "Sản phẩm chưa có giá bán hợp lệ.",
@@ -376,10 +430,11 @@ public class StockImportReceiptDialog extends JDialog {
             InventoryPricePolicyService.validateImportPriceLessThanSalePrice(
                     importPriceBeforeVat,
                     vatRate,
-                    product.getBasePrice()
+                    salePrice
             );
 
             String supplierId = getSelectedSupplierId();
+            String unitName = getSelectedUnitName();
 
             String receiptId = InventoryTransactionSql.getInstance().createPurchaseReceiptAndIncreaseStock(
                     productId,
@@ -387,7 +442,9 @@ public class StockImportReceiptDialog extends JDialog {
                     importPriceBeforeVat,
                     vatRate,
                     supplierId,
-                    txtNote.getText().trim()
+                    txtNote.getText().trim(),
+                    unitName,
+                    salePrice
             );
 
             SyncVersionDao.bumpVersion("INVENTORY");
@@ -439,7 +496,7 @@ public class StockImportReceiptDialog extends JDialog {
     }
 
     private BigDecimal getFixedImportPriceBeforeVat() {
-        BigDecimal salePrice = product.getBasePrice();
+        BigDecimal salePrice = getSelectedSalePrice();
 
         if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
@@ -448,6 +505,34 @@ public class StockImportReceiptDialog extends JDialog {
         return salePrice
                 .multiply(new BigDecimal("0.70"))
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal getSelectedSalePrice() {
+        UnitItem unit = getSelectedUnitItem();
+
+        if (unit != null && unit.sellingPrice != null && unit.sellingPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return unit.sellingPrice;
+        }
+
+        if (unit != null && unit.conversionRateToBase != null
+                && product.getBasePrice() != null
+                && unit.conversionRateToBase.compareTo(BigDecimal.ZERO) > 0) {
+            return product.getBasePrice()
+                    .multiply(unit.conversionRateToBase)
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return product.getBasePrice();
+    }
+
+    private String getSelectedUnitName() {
+        UnitItem item = getSelectedUnitItem();
+        return item == null ? "Cái" : item.unitName;
+    }
+
+    private UnitItem getSelectedUnitItem() {
+        Object selected = cbUnit == null ? null : cbUnit.getSelectedItem();
+        return selected instanceof UnitItem item ? item : null;
     }
 
     private BigDecimal getVatRate() {
@@ -474,6 +559,54 @@ public class StockImportReceiptDialog extends JDialog {
 
     private String safe(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private static class UnitItem {
+
+        private final String unitId;
+        private final String unitName;
+        private final BigDecimal conversionRateToBase;
+        private final BigDecimal sellingPrice;
+        private final boolean baseUnit;
+
+        UnitItem(ProductUnit unit) {
+            this.unitId = unit.getUnitId();
+            this.unitName = unit.getUnitName() == null || unit.getUnitName().trim().isEmpty()
+                    ? unit.getUnitId()
+                    : unit.getUnitName().trim();
+            this.conversionRateToBase = unit.getConversionRateToBase() == null
+                    ? BigDecimal.ONE
+                    : unit.getConversionRateToBase();
+            this.sellingPrice = unit.getSellingPrice();
+            this.baseUnit = unit.getIsBaseUnit() == 1;
+        }
+
+        static UnitItem fallback(Product product) {
+            ProductUnit unit = new ProductUnit();
+            unit.setUnitId("U_CAI");
+            unit.setUnitName(product.getUnit() == null || product.getUnit().trim().isEmpty() ? "Cái" : product.getUnit().trim());
+            unit.setConversionRateToBase(BigDecimal.ONE);
+            unit.setSellingPrice(product.getBasePrice());
+            unit.setIsBaseUnit(1);
+            unit.setIsDeleted(0);
+            return new UnitItem(unit);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(unitName);
+            if (conversionRateToBase != null && conversionRateToBase.compareTo(BigDecimal.ONE) != 0) {
+                sb.append(" = ").append(conversionRateToBase.stripTrailingZeros().toPlainString()).append(" đơn vị gốc");
+            }
+            if (sellingPrice != null && sellingPrice.compareTo(BigDecimal.ZERO) > 0) {
+                sb.append(" - ").append(String.format("%,.0f", sellingPrice)).append(" VNĐ");
+            }
+            if (baseUnit) {
+                sb.append(" [Gốc]");
+            }
+            return sb.toString();
+        }
     }
 
     private static class SupplierItem {
