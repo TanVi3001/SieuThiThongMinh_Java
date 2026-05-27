@@ -935,7 +935,7 @@ public class ProductView extends JPanel {
         ));
 
         JLabel icon = new JLabel(getCategoryEmoji(categoryId), SwingConstants.CENTER);
-        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 34));
+        icon.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 34));
         icon.setPreferredSize(new Dimension(64, 70));
 
         JPanel infoPanel = new JPanel();
@@ -1203,15 +1203,35 @@ public class ProductView extends JPanel {
 
         return switch (categoryId.trim()) {
             case "CAT001" ->
-                "🍚";
+                "🍜"; // Thực phẩm khô
             case "CAT002" ->
-                "🥤";
+                "🥤"; // Đồ uống & Giải khát
             case "CAT003" ->
-                "🧴";
+                "🧴"; // Hóa mỹ phẩm
             case "CAT004" ->
-                "🍪";
+                "🍪"; // Bánh kẹo
             case "CAT005" ->
-                "🥩";
+                "🥩"; // Thực phẩm tươi sống
+            case "CAT006" ->
+                "🥛"; // Sữa & Sản phẩm từ sữa
+            case "CAT007" ->
+                "🧊"; // Đông lạnh & Chế biến sẵn
+            case "CAT008" ->
+                "🍳"; // Gia dụng nhà bếp
+            case "CAT009" ->
+                "🪥"; // Chăm sóc cá nhân
+            case "CAT010" ->
+                "🍼"; // Mẹ & Bé
+            case "CAT011" ->
+                "📚"; // Văn phòng phẩm
+            case "CAT012" ->
+                "🐾"; // Thức ăn thú cưng
+            case "CAT013" ->
+                "🥬"; // Thực phẩm hữu cơ
+            case "CAT014" ->
+                "🥫"; // Đồ hộp & Ăn liền
+            case "CAT015" ->
+                "🧽"; // Vệ sinh nhà cửa
             default ->
                 "📦";
         };
