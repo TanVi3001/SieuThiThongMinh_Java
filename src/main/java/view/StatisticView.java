@@ -74,6 +74,10 @@ public class StatisticView extends JPanel {
     private MiniLineChartPanel revenueChart;
     private TopStaffPanel topStaffPanel;
 
+    private view.components.AnimatedRevealPanel revenueChartRevealPanel;
+    private view.components.AnimatedRevealPanel topStaffRevealPanel;
+    private view.components.AnimatedRevealPanel kpiTableRevealPanel;
+
     private JTable tblKpi, tblRevenue, tblImportSalesEfficiency, tblProducts;
     private DefaultTableModel modKpi, modRevenue, modImportSalesEfficiency, modProducts;
     private JTabbedPane detailTabs;
@@ -246,6 +250,22 @@ public class StatisticView extends JPanel {
         return grid;
     }
 
+    private void restartStatisticAnimations() {
+        SwingUtilities.invokeLater(() -> {
+            if (revenueChartRevealPanel != null && revenueChartRevealPanel.isShowing()) {
+                revenueChartRevealPanel.restartAnimation();
+            }
+
+            if (topStaffRevealPanel != null && topStaffRevealPanel.isShowing()) {
+                topStaffRevealPanel.restartAnimation();
+            }
+
+            if (kpiTableRevealPanel != null && kpiTableRevealPanel.isShowing()) {
+                kpiTableRevealPanel.restartAnimation();
+            }
+        });
+    }
+
     private JPanel buildAnalyticsArea() {
         JPanel row = new JPanel(new GridBagLayout());
         row.setOpaque(false);
@@ -260,16 +280,24 @@ public class StatisticView extends JPanel {
                 "Tổng hợp doanh thu theo từng tháng trong khoảng lọc",
                 IconHelper.lineChart(18)
         );
+
         revenueChart = new MiniLineChartPanel();
-        chartCard.add(revenueChart, BorderLayout.CENTER);
+        revenueChartRevealPanel = new view.components.AnimatedRevealPanel(revenueChart, 950, 0, 160);
+        chartCard.add(revenueChartRevealPanel, BorderLayout.CENTER);
 
         gbc.gridx = 0;
         gbc.weightx = 0.68;
         row.add(chartCard, gbc);
 
-        JPanel topCard = createTitledCard("Top nhân viên hiệu suất cao", "Ranking KPI với progress bar", IconHelper.employee(18));
+        JPanel topCard = createTitledCard(
+                "Top nhân viên hiệu suất cao",
+                "Ranking KPI với progress bar",
+                IconHelper.employee(18)
+        );
+
         topStaffPanel = new TopStaffPanel();
-        topCard.add(topStaffPanel, BorderLayout.CENTER);
+        topStaffRevealPanel = new view.components.AnimatedRevealPanel(topStaffPanel, 900, 160, 140);
+        topCard.add(topStaffRevealPanel, BorderLayout.CENTER);
 
         gbc.gridx = 1;
         gbc.weightx = 0.32;
@@ -280,7 +308,11 @@ public class StatisticView extends JPanel {
     }
 
     private JPanel buildKpiTableArea() {
-        JPanel card = createTitledCard("Bảng phân tích KPI nhân viên", "Màu KPI: xanh >= 80, vàng 60-79, đỏ < 60", IconHelper.barChart(18));
+        JPanel card = createTitledCard(
+                "Bảng phân tích KPI nhân viên",
+                "Màu KPI: xanh >= 80, vàng 60-79, đỏ < 60",
+                IconHelper.barChart(18)
+        );
 
         modKpi = new DefaultTableModel(new Object[]{"Nhân viên", "KPI", "Doanh thu", "Đơn hàng", "Trạng thái", "Xu hướng"}, 0) {
             @Override
@@ -336,7 +368,9 @@ public class StatisticView extends JPanel {
         detailTabs.addTab("Hàng hóa", wrapTable(tblProducts));
         detailTabs.setBorder(BorderFactory.createEmptyBorder());
 
-        card.add(detailTabs, BorderLayout.CENTER);
+        kpiTableRevealPanel = new view.components.AnimatedRevealPanel(detailTabs, 850, 260, 100);
+        card.add(kpiTableRevealPanel, BorderLayout.CENTER);
+
         return card;
     }
 
@@ -345,7 +379,7 @@ public class StatisticView extends JPanel {
         panel.setLayout(new BorderLayout(16, 0));
         panel.setBorder(new EmptyBorder(14, 18, 14, 18));
 
-        JLabel icon = new JLabel("💡");
+        JLabel icon = new JLabel("");
         icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 28));
 
         JPanel text = new JPanel(new GridLayout(3, 1, 0, 4));
@@ -461,6 +495,8 @@ public class StatisticView extends JPanel {
         updateSummaryCards(data);
         updateCharts(data);
         updateInsights(data);
+
+        restartStatisticAnimations();
     }
 
     private void fillRevenueTable(List<Object[]> rows) {

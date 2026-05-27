@@ -74,6 +74,7 @@ public class TongQuanPanel extends JPanel {
 
     private JPanel statsPanel;
     private DefaultTableModel tableModel;
+    private final List<AnimatedRevealPanel> animatedRevealPanels = new ArrayList<>();
 
     // =============================================
     // FIELDS — ĐỒNG HỒ THỜI GIAN THỰC
@@ -160,10 +161,23 @@ public class TongQuanPanel extends JPanel {
         middleChartsPanel.setPreferredSize(new Dimension(1000, 380));
         middleChartsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 380));
 
-        middleChartsPanel.add(wrapChart(createBarChartPanel(), "DOANH THU 5 THÁNG QUA", IconHelper.barChart(16)));
-        middleChartsPanel.add(wrapChart(createLineChartPanel(), "LƯỢT KHÁCH TRONG TUẦN", IconHelper.lineChart(16)));
-        middleChartsPanel.add(wrapChart(createPieChartPanel(), "TỶ TRỌNG NGÀNH HÀNG", IconHelper.pieChart(16)));
+        middleChartsPanel.add(wrapChart(
+                new AnimatedRevealPanel(createBarChartPanel(), 850, 0, 150),
+                "DOANH THU 5 THÁNG QUA",
+                IconHelper.barChart(16)
+        ));
 
+        middleChartsPanel.add(wrapChart(
+                new AnimatedRevealPanel(createLineChartPanel(), 850, 120, 150),
+                "LƯỢT KHÁCH TRONG TUẦN",
+                IconHelper.lineChart(16)
+        ));
+
+        middleChartsPanel.add(wrapChart(
+                new AnimatedRevealPanel(createPieChartPanel(), 850, 240, 150),
+                "TỶ TRỌNG NGÀNH HÀNG",
+                IconHelper.pieChart(16)
+        ));
         add(middleChartsPanel);
         add(Box.createRigidArea(new Dimension(0, 20)));
 
@@ -183,7 +197,7 @@ public class TongQuanPanel extends JPanel {
                 new EmptyBorder(16, 16, 16, 16)
         ));
 
-        bottomPanel.add(statsPanel);
+        bottomPanel.add(animatePanel(statsPanel));
         bottomPanel.add(createOrderTablePanel());
         add(bottomPanel);
 
@@ -329,6 +343,22 @@ public class TongQuanPanel extends JPanel {
         wrapper.add(header, BorderLayout.NORTH);
         wrapper.add(chartPanel, BorderLayout.CENTER);
         return wrapper;
+    }
+
+    private JPanel animatePanel(Component child) {
+        AnimatedRevealPanel animated = new AnimatedRevealPanel(child);
+        animatedRevealPanels.add(animated);
+        return animated;
+    }
+
+    private void restartChartAnimations() {
+        SwingUtilities.invokeLater(() -> {
+            for (AnimatedRevealPanel panel : animatedRevealPanels) {
+                if (panel != null && panel.isShowing()) {
+                    panel.restartAnimation();
+                }
+            }
+        });
     }
 
     // =============================================
@@ -910,6 +940,7 @@ public class TongQuanPanel extends JPanel {
 
             statsPanel.revalidate();
             statsPanel.repaint();
+            restartChartAnimations();
 
             // =========================================================
             // 6. BẢNG ĐƠN HÀNG MỚI NHẤT - THEO CHI NHÁNH

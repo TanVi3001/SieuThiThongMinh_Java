@@ -71,6 +71,7 @@ public class EmployeeView extends JPanel {
     private JTextField txtShiftFilterToDate;
     private JTextArea txtAssignmentNote;
     private ShiftTimelinePanel shiftTimelinePanel;
+    private view.components.AnimatedRevealPanel shiftTimelineRevealPanel;
     private JLabel lblSelectedShiftEmployeeName;
     private JLabel lblSelectedShiftEmployeeId;
     private JLabel lblSelectedShiftEmployeeType;
@@ -732,8 +733,11 @@ public class EmployeeView extends JPanel {
         scrollPane.getHorizontalScrollBar().setUnitIncrement(24);
         scrollPane.getVerticalScrollBar().setUnitIncrement(18);
 
+        shiftTimelineRevealPanel = new view.components.AnimatedRevealPanel(scrollPane, 900, 0, 150);
+
         card.add(header, BorderLayout.NORTH);
-        card.add(scrollPane, BorderLayout.CENTER);
+        card.add(shiftTimelineRevealPanel, BorderLayout.CENTER);
+
         return card;
     }
 
@@ -1295,6 +1299,9 @@ public class EmployeeView extends JPanel {
             LocalDate displayTo = filterToDate != null ? filterToDate.toLocalDate() : displayFrom;
             shiftTimelinePanel.setDisplayRange(displayFrom, displayTo);
             shiftTimelinePanel.setAssignments(currentShiftAssignments);
+            if (shiftTimelineRevealPanel != null && shiftTimelineRevealPanel.isShowing()) {
+                shiftTimelineRevealPanel.restartAnimation();
+            }
         }
     }
 

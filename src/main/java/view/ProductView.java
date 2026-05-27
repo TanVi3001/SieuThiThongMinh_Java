@@ -78,6 +78,7 @@ public class ProductView extends JPanel {
     private JScrollPane categoryScrollPane;
     private JLabel lblCurrentCategory;
     private JButton btnShowAllProducts;
+    private final java.util.List<view.components.AnimatedRevealPanel> productOverviewAnimations = new java.util.ArrayList<>();
 
     private String selectedCategoryId = null;
     private final Map<String, String> categoryNameMap = new java.util.LinkedHashMap<>();
@@ -554,6 +555,10 @@ public class ProductView extends JPanel {
             btnDetailTab.repaint();
         }
 
+        if ("OVERVIEW".equals(tab)) {
+            restartProductOverviewAnimations();
+        }
+
         revalidate();
         repaint();
     }
@@ -612,6 +617,23 @@ public class ProductView extends JPanel {
         return wrapper;
     }
 
+    private JPanel animateProductOverview(Component child, int delayMs, int distance) {
+        view.components.AnimatedRevealPanel animated
+                = new view.components.AnimatedRevealPanel(child, 900, delayMs, distance);
+        productOverviewAnimations.add(animated);
+        return animated;
+    }
+
+    private void restartProductOverviewAnimations() {
+        SwingUtilities.invokeLater(() -> {
+            for (view.components.AnimatedRevealPanel p : productOverviewAnimations) {
+                if (p != null && p.isShowing()) {
+                    p.restartAnimation();
+                }
+            }
+        });
+    }
+
     private JPanel buildOverviewPanel() {
         JPanel root = new JPanel(new BorderLayout(0, 15));
         root.setOpaque(false);
@@ -636,18 +658,41 @@ public class ProductView extends JPanel {
             }
         }
 
-        kpiPanel.add(createOverviewKpiCard("Tổng danh mục", String.valueOf(totalCategories), new Color(67, 97, 238)));
-        kpiPanel.add(createOverviewKpiCard("Tổng mặt hàng", String.valueOf(totalProducts), new Color(0, 163, 108)));
-        kpiPanel.add(createOverviewKpiCard("Tổng tồn kho", String.valueOf(totalQuantity), new Color(103, 58, 183)));
-        kpiPanel.add(createOverviewKpiCard("Hết hàng", String.valueOf(outOfStock), new Color(220, 53, 69)));
-        kpiPanel.add(createOverviewKpiCard("Sắp hết", String.valueOf(lowStock), new Color(255, 153, 0)));
+        kpiPanel.add(animateProductOverview(
+                createOverviewKpiCard("Tổng danh mục", String.valueOf(totalCategories), new Color(67, 97, 238)),
+                0,
+                80
+        ));
+        kpiPanel.add(animateProductOverview(
+                createOverviewKpiCard("Tổng mặt hàng", String.valueOf(totalProducts), new Color(0, 163, 108)),
+                80,
+                80
+        ));
+        kpiPanel.add(animateProductOverview(
+                createOverviewKpiCard("Tổng tồn kho", String.valueOf(totalQuantity), new Color(103, 58, 183)),
+                160,
+                80
+        ));
+        kpiPanel.add(animateProductOverview(
+                createOverviewKpiCard("Hết hàng", String.valueOf(outOfStock), new Color(220, 53, 69)),
+                240,
+                80
+        ));
+        kpiPanel.add(animateProductOverview(
+                createOverviewKpiCard("Sắp hết", String.valueOf(lowStock), new Color(255, 153, 0)),
+                320,
+                80
+        ));
 
         JPanel analyticsPanel = buildPowerBIPlaceholderPanel();
 
         JPanel centerContent = new JPanel(new BorderLayout(0, 15));
         centerContent.setOpaque(false);
 
-        centerContent.add(buildOverviewCategoryAnalyticsPanel(), BorderLayout.NORTH);
+        centerContent.add(
+                animateProductOverview(buildOverviewCategoryAnalyticsPanel(), 120, 110),
+                BorderLayout.NORTH
+        );
         centerContent.add(analyticsPanel, BorderLayout.CENTER);
 
         root.add(kpiPanel, BorderLayout.NORTH);
@@ -687,29 +732,44 @@ public class ProductView extends JPanel {
         JPanel chartPanel = new InventoryCurveChartPanel();
 
         leftPanel.add(titleBox, BorderLayout.NORTH);
-        leftPanel.add(chartPanel, BorderLayout.CENTER);
+        leftPanel.add(
+                animateProductOverview(chartPanel, 0, 160),
+                BorderLayout.CENTER
+        );
 
         JPanel rightPanel = new JPanel();
         rightPanel.setOpaque(false);
         rightPanel.setPreferredSize(new Dimension(330, 0));
         rightPanel.setLayout(new GridLayout(3, 1, 0, 12));
 
-        rightPanel.add(createInsightBox(
-                "[TREND] Xu hướng tồn kho",
-                "Theo dõi mức tồn kho giữa các nhóm sản phẩm.",
-                new Color(237, 242, 255)
+        rightPanel.add(animateProductOverview(
+                createInsightBox(
+                        "[TREND] Xu hướng tồn kho",
+                        "Theo dõi mức tồn kho giữa các nhóm sản phẩm.",
+                        new Color(237, 242, 255)
+                ),
+                180,
+                120
         ));
 
-        rightPanel.add(createInsightBox(
-                "[RISK] Rủi ro thiếu hàng",
-                "Điểm thấp thể hiện nhóm hàng cần theo dõi.",
-                new Color(255, 247, 230)
+        rightPanel.add(animateProductOverview(
+                createInsightBox(
+                        "[RISK] Rủi ro thiếu hàng",
+                        "Điểm thấp thể hiện nhóm hàng cần theo dõi.",
+                        new Color(255, 247, 230)
+                ),
+                280,
+                120
         ));
 
-        rightPanel.add(createInsightBox(
-                "[BI] Tích hợp Power BI",
-                "Có thể thay bằng WebView hoặc ảnh báo cáo Power BI.",
-                new Color(255, 235, 238)
+        rightPanel.add(animateProductOverview(
+                createInsightBox(
+                        "[BI] Tích hợp Power BI",
+                        "Có thể thay bằng WebView hoặc ảnh báo cáo Power BI.",
+                        new Color(255, 235, 238)
+                ),
+                380,
+                120
         ));
 
         card.add(leftPanel, BorderLayout.CENTER);
@@ -718,7 +778,7 @@ public class ProductView extends JPanel {
         wrapper.add(title, BorderLayout.NORTH);
         wrapper.add(card, BorderLayout.CENTER);
 
-        return wrapper;
+        return animateProductOverview(wrapper, 0, 150);
     }
 
     private JPanel createInsightBox(String title, String desc, Color bg) {
