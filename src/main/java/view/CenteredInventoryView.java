@@ -11,10 +11,13 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
 /**
- * Wrapper riêng cho Warehouse Portal: căn giữa một số cột text và in đậm bảng tồn kho.
+ * Wrapper riêng cho Warehouse Portal: in đậm bảng tồn kho và căn giữa các cột text cần thiết.
  * Không dùng căn giữa global nên không đè renderer cột ảnh.
  */
 public class CenteredInventoryView extends InventoryView {
+
+    private static final Font TABLE_FONT = new Font("Segoe UI", Font.BOLD, 13);
+    private static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 13);
 
     public CenteredInventoryView() {
         super();
@@ -27,15 +30,23 @@ public class CenteredInventoryView extends InventoryView {
             return;
         }
 
-        table.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        table.setFont(TABLE_FONT);
         table.setRowHeight(Math.max(table.getRowHeight(), 42));
 
         centerHeader(table);
 
-        // Bảng tồn kho: 2 = Tên sản phẩm, 7 = Trạng thái.
-        // Các cột số/đơn vị/chi nhánh đã được InventoryView căn giữa sẵn.
-        centerColumn(table, 2);
-        centerColumn(table, 7);
+        // Bảng tồn kho:
+        // 0 = Ảnh, 1 = Mã SP, 2 = Tên sản phẩm, 3 = Tồn hiện tại,
+        // 4 = Mức cảnh báo, 5 = Đơn vị, 6 = Chi nhánh, 7 = Trạng thái, 8 = Cập nhật cuối.
+        // Không động vào cột 0 để tránh mất ảnh.
+        centerColumn(table, 1); // Mã SP
+        centerColumn(table, 2); // Tên sản phẩm
+        centerColumn(table, 3); // Tồn hiện tại
+        centerColumn(table, 4); // Mức cảnh báo
+        centerColumn(table, 5); // Đơn vị
+        centerColumn(table, 6); // Chi nhánh
+        centerColumn(table, 7); // Trạng thái
+        centerColumn(table, 8); // Cập nhật cuối
 
         revalidate();
         repaint();
@@ -66,10 +77,14 @@ public class CenteredInventoryView extends InventoryView {
         DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
         headerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
         headerRenderer.setVerticalAlignment(SwingConstants.CENTER);
-        headerRenderer.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        headerRenderer.setFont(HEADER_FONT);
         headerRenderer.setBackground(table.getTableHeader().getBackground());
         headerRenderer.setForeground(table.getTableHeader().getForeground());
         table.getTableHeader().setDefaultRenderer(headerRenderer);
+
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
+        }
     }
 
     private void centerColumn(JTable table, int columnIndex) {
@@ -119,7 +134,7 @@ public class CenteredInventoryView extends InventoryView {
             if (component instanceof JLabel label) {
                 label.setHorizontalAlignment(SwingConstants.CENTER);
                 label.setVerticalAlignment(SwingConstants.CENTER);
-                label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                label.setFont(TABLE_FONT);
                 return;
             }
 
