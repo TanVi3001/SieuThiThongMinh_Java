@@ -36,7 +36,6 @@ import view.components.NotificationBell;
 import view.components.TongQuanPanel;
 import view.components.UnifiedSettingsPanel;
 import view.components.WarehouseSidebar;
-import view.util.CenterAlignmentUtil;
 
 public class WarehouseDashboardView extends JFrame {
 
@@ -365,7 +364,6 @@ public class WarehouseDashboardView extends JFrame {
 
         panelToDisplay.setMinimumSize(new Dimension(900, 600));
         panelToDisplay.setBackground(BACKGROUND_COLOR);
-        CenterAlignmentUtil.apply(panelToDisplay);
 
         JScrollPane scrollPane = new JScrollPane(panelToDisplay);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
