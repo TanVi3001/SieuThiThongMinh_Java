@@ -223,7 +223,7 @@ public class WarehouseDashboardView extends JFrame {
                 : WarehouseSidebar.MENU_INVENTORY + ":" + focusProductId.trim();
 
         showMenuPanel(cacheKey, () -> {
-            InventoryView inventoryView = new InventoryView();
+            InventoryView inventoryView = new CenteredInventoryView();
 
             if (focusProductId != null && !focusProductId.trim().isEmpty()) {
                 SwingUtilities.invokeLater(() -> inventoryView.focusProduct(focusProductId.trim()));
