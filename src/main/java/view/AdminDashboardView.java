@@ -3,8 +3,26 @@ package view;
 import common.events.AppDataChangedEvent;
 import common.events.AppEventType;
 import common.events.EventBus;
-import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.GridBagLayout;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import view.components.AdminSidebar;
 
 public class AdminDashboardView extends javax.swing.JFrame {
@@ -13,19 +31,18 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
     private JPanel mainContentPanel;
     private AdminSidebar adminSidebar;
-    private Color bgAdmin = new Color(240, 242, 245);
+    private final Color bgAdmin = new Color(240, 242, 245);
     private String currentMenu = "Quản lý chi nhánh";
+    private volatile SwingWorker<JPanel, Void> currentPanelWorker;
+    private final Map<String, JPanel> panelCache = new HashMap<>();
 
     public AdminDashboardView() {
         initComponents();
         setupAdminUI();
         setupRealtimeSync();
 
-        // Sidebar mặc định đang active mục đầu tiên là "Quản lý chi nhánh",
-        // nên nội dung mặc định cũng phải là màn hình Quản lý chi nhánh.
-        showPanel(new view.AdminSystemPanel());
+        showMenuPanel("Quản lý chi nhánh", view.AdminSystemPanel::new);
 
-        // Đảm bảo JFrame được phóng to sau khi toàn bộ component đã add xong.
         SwingUtilities.invokeLater(() -> setExtendedState(JFrame.MAXIMIZED_BOTH));
     }
 
@@ -52,45 +69,48 @@ public class AdminDashboardView extends javax.swing.JFrame {
             }
         });
 
-        // Khởi tạo Sidebar Admin
         adminSidebar = new AdminSidebar();
 
-        // NỐI CÁC MỤC MENU VỚI PANEL TƯƠNG ỨNG
         adminSidebar.setMenuClickListener(title -> {
+            if (title != null && title.equals(currentMenu) && mainContentPanel.getComponentCount() > 0) {
+                return;
+            }
+
             currentMenu = title;
 
             switch (title) {
                 case "Quản lý chi nhánh":
-                    showPanel(new view.AdminSystemPanel());
+                    showMenuPanel("Quản lý chi nhánh", view.AdminSystemPanel::new);
                     break;
                 case "Quản lý khuyến mãi":
-                    showPanel(new view.PromotionManagementPanel());
+                    showMenuPanel("Quản lý khuyến mãi", view.PromotionManagementPanel::new);
                     break;
                 case "Quản lý cửa hàng trưởng":
-                    showPanel(new view.ManagerManagementView());
+                    showMenuPanel("Quản lý cửa hàng trưởng", view.ManagerManagementView::new);
                     break;
                 case "Quản lý tài khoản":
-                    showPanel(new view.AccountRoleAssignmentPanel());
+                    showMenuPanel("Quản lý tài khoản", view.AccountRoleAssignmentPanel::new);
                     break;
                 case "Quản lý phân quyền":
-                    showPanel(new view.RoleManagementPanel());
+                    showMenuPanel("Quản lý phân quyền", view.RoleManagementPanel::new);
                     break;
                 case "Lịch sử truy cập":
-                    showPanel(new view.LoginManagementPanel());
+                    showMenuPanel("Lịch sử truy cập", view.LoginManagementPanel::new);
                     break;
                 case "Nhật ký hệ thống":
-                    showPanel(new AuditLogPanel());
+                    showMenuPanel("Nhật ký hệ thống", AuditLogPanel::new);
                     break;
                 case "Cài đặt":
-                    showPanel(new view.components.UnifiedSettingsPanel());
+                    showMenuPanel("Cài đặt", view.components.UnifiedSettingsPanel::new);
                     break;
                 case "Đăng xuất":
                     handleLogout();
                     break;
+                default:
+                    break;
             }
         });
 
-        // Thiết lập Layout chính
         this.getContentPane().removeAll();
         this.getContentPane().setLayout(new BorderLayout());
         this.getContentPane().add(adminSidebar, BorderLayout.WEST);
@@ -99,8 +119,6 @@ public class AdminDashboardView extends javax.swing.JFrame {
         mainContentPanel.setBackground(bgAdmin);
         this.getContentPane().add(mainContentPanel, BorderLayout.CENTER);
 
-        // Sau khi add đủ sidebar + content container thì pack lại,
-        // rồi mới set maximize để tránh bị giữ kích thước 400x300 từ initComponents().
         pack();
         setLocationRelativeTo(null);
         setExtendedState(JFrame.MAXIMIZED_BOTH);
@@ -126,7 +144,8 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 if (type == AppEventType.STORE_INFO
                         || type == AppEventType.SYSTEM_CONFIG
                         || type == AppEventType.DASHBOARD) {
-                    showPanel(new view.AdminSystemPanel(1));
+                    panelCache.remove("Quản lý chi nhánh");
+                    showMenuPanel("Quản lý chi nhánh", () -> new view.AdminSystemPanel(1));
                 }
                 break;
 
@@ -134,7 +153,8 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 if (type == AppEventType.SYSTEM_CONFIG
                         || type == AppEventType.PRODUCTS
                         || type == AppEventType.DASHBOARD) {
-                    showPanel(new view.PromotionManagementPanel());
+                    panelCache.remove("Quản lý khuyến mãi");
+                    showMenuPanel("Quản lý khuyến mãi", view.PromotionManagementPanel::new);
                 }
                 break;
 
@@ -142,28 +162,32 @@ public class AdminDashboardView extends javax.swing.JFrame {
                 if (type == AppEventType.EMPLOYEES
                         || type == AppEventType.ACCOUNT_SECURITY
                         || type == AppEventType.STORE_INFO) {
-                    showPanel(new view.ManagerManagementView());
+                    panelCache.remove("Quản lý cửa hàng trưởng");
+                    showMenuPanel("Quản lý cửa hàng trưởng", view.ManagerManagementView::new);
                 }
                 break;
 
             case "Quản lý tài khoản":
                 if (type == AppEventType.ACCOUNT_SECURITY
                         || type == AppEventType.EMPLOYEES) {
-                    showPanel(new view.AccountRoleAssignmentPanel());
+                    panelCache.remove("Quản lý tài khoản");
+                    showMenuPanel("Quản lý tài khoản", view.AccountRoleAssignmentPanel::new);
                 }
                 break;
 
             case "Quản lý phân quyền":
                 if (type == AppEventType.ACCOUNT_SECURITY
                         || type == AppEventType.SYSTEM_CONFIG) {
-                    showPanel(new view.RoleManagementPanel());
+                    panelCache.remove("Quản lý phân quyền");
+                    showMenuPanel("Quản lý phân quyền", view.RoleManagementPanel::new);
                 }
                 break;
 
             case "Lịch sử truy cập":
                 if (type == AppEventType.ACCOUNT_SECURITY
                         || type == AppEventType.SYSTEM_CONFIG) {
-                    showPanel(new view.LoginManagementPanel());
+                    panelCache.remove("Lịch sử truy cập");
+                    showMenuPanel("Lịch sử truy cập", view.LoginManagementPanel::new);
                 }
                 break;
 
@@ -176,14 +200,16 @@ public class AdminDashboardView extends javax.swing.JFrame {
                         || type == AppEventType.CUSTOMERS
                         || type == AppEventType.EMPLOYEES
                         || type == AppEventType.STORE_INFO) {
-                    showPanel(new AuditLogPanel());
+                    panelCache.remove("Nhật ký hệ thống");
+                    showMenuPanel("Nhật ký hệ thống", AuditLogPanel::new);
                 }
                 break;
 
             case "Cài đặt":
                 if (type == AppEventType.SYSTEM_CONFIG
                         || type == AppEventType.ACCOUNT_SECURITY) {
-                    showPanel(new view.components.UnifiedSettingsPanel());
+                    panelCache.remove("Cài đặt");
+                    showMenuPanel("Cài đặt", view.components.UnifiedSettingsPanel::new);
                 }
                 break;
 
@@ -192,29 +218,135 @@ public class AdminDashboardView extends javax.swing.JFrame {
         }
     }
 
+    private void showMenuPanel(String cacheKey, Supplier<JPanel> panelFactory) {
+        if (cacheKey == null || panelFactory == null) {
+            return;
+        }
+
+        if (currentPanelWorker != null && !currentPanelWorker.isDone()) {
+            currentPanelWorker.cancel(true);
+        }
+
+        JPanel cached = panelCache.get(cacheKey);
+        if (cached != null) {
+            showPanel(cached);
+            return;
+        }
+
+        showLoadingPanel(cacheKey);
+
+        SwingWorker<JPanel, Void> worker = new SwingWorker<>() {
+            @Override
+            protected JPanel doInBackground() {
+                return panelFactory.get();
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled()) {
+                    return;
+                }
+
+                try {
+                    JPanel panel = get();
+                    panelCache.put(cacheKey, panel);
+
+                    if (cacheKey.equals(currentMenu)) {
+                        showPanel(panel);
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    showErrorPanel(cacheKey, ex);
+                }
+            }
+        };
+
+        currentPanelWorker = worker;
+        worker.execute();
+    }
+
+    private void showLoadingPanel(String title) {
+        JPanel loading = new JPanel(new BorderLayout());
+        loading.setBackground(bgAdmin);
+        loading.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(225, 229, 235)),
+                BorderFactory.createEmptyBorder(24, 32, 24, 32)
+        ));
+
+        JLabel label = new JLabel("Đang tải " + title + "...");
+        label.setAlignmentX(Component.CENTER_ALIGNMENT);
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 16));
+        label.setForeground(new Color(35, 45, 75));
+
+        JLabel hint = new JLabel("Vui lòng chờ trong giây lát, hệ thống đang chuẩn bị dữ liệu.");
+        hint.setAlignmentX(Component.CENTER_ALIGNMENT);
+        hint.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        hint.setForeground(new Color(100, 110, 125));
+
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+        progressBar.setPreferredSize(new Dimension(320, 10));
+        progressBar.setMaximumSize(new Dimension(320, 10));
+        progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        card.add(label);
+        card.add(Box.createVerticalStrut(10));
+        card.add(progressBar);
+        card.add(Box.createVerticalStrut(10));
+        card.add(hint);
+
+        JPanel wrapper = new JPanel(new GridBagLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(card);
+
+        loading.add(wrapper, BorderLayout.CENTER);
+        showPanel(loading, false);
+    }
+
+    private void showErrorPanel(String title, Exception ex) {
+        JPanel error = new JPanel(new BorderLayout());
+        error.setBackground(bgAdmin);
+
+        String message = ex == null || ex.getMessage() == null ? "Không rõ lỗi" : ex.getMessage();
+        JLabel label = new JLabel(
+                "<html><div style='text-align:center;'>Không thể tải " + title
+                + ".<br>" + message + "</div></html>",
+                JLabel.CENTER
+        );
+        label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
+        label.setForeground(new Color(220, 53, 69));
+
+        error.add(label, BorderLayout.CENTER);
+        showPanel(error, false);
+    }
+
     public void showPanel(JPanel panel) {
+        showPanel(panel, true);
+    }
+
+    private void showPanel(JPanel panel, boolean applyGuard) {
         mainContentPanel.removeAll();
 
         JPanel panelToDisplay = panel;
 
-        // ========================================================
-        // LOGIC MIỄN TRỪ (BYPASS):
-        // Bỏ qua Lính gác đối với các trang Tổng quan và Cài đặt cá nhân
-        // ========================================================
         boolean isBypassed = (panel instanceof view.components.TongQuanPanel)
                 || (panel instanceof view.components.UnifiedSettingsPanel);
 
-        if (!isBypassed) {
-            // Đưa cho Lính gác kiểm tra và khóa nút (Dù Admin full quyền thì vẫn qua cổng cho chuẩn luồng)
+        if (applyGuard && !isBypassed) {
             panelToDisplay = common.security.UIPermissionGuard.protect(panel);
         }
 
-        // BẢO VỆ LỚP 2: Bọc thẻ con vào Thanh cuộn để chống ép bẹp biểu đồ
-        panelToDisplay.setMinimumSize(new Dimension(900, 600)); // Kích thước an toàn cho thẻ con
+        panelToDisplay.setMinimumSize(new Dimension(900, 600));
+        panelToDisplay.setBackground(bgAdmin);
 
         JScrollPane scrollPane = new JScrollPane(panelToDisplay);
         scrollPane.setBorder(null);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Lăn chuột mượt hơn
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 
