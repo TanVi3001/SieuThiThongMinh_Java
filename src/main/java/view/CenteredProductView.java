@@ -18,10 +18,13 @@ import java.sql.ResultSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -41,6 +44,10 @@ import model.product.Supplier;
  */
 public class CenteredProductView extends ProductView {
 
+    private static final Font LABEL_FONT = new Font("Segoe UI", Font.BOLD, 13);
+    private static final Font FIELD_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private static final Font BUTTON_FONT = new Font("Segoe UI", Font.BOLD, 14);
+
     private JComboBox<String> cbSupplier;
     private final Map<String, String> supplierNameById = new LinkedHashMap<>();
     private final Map<String, String> supplierIdByProductId = new LinkedHashMap<>();
@@ -59,6 +66,7 @@ public class CenteredProductView extends ProductView {
         loadSupplierCache();
         showImageControlsAgain();
         addSupplierControlToForm();
+        forceProductFormTypography();
         wrapMutationButtonsToPersistSupplier();
         applySafeProductTableAlignment();
         bindTableSelectionToSupplierCombo();
@@ -145,7 +153,7 @@ public class CenteredProductView extends ProductView {
 
         cbSupplier = new JComboBox<>();
         cbSupplier.setEditable(true);
-        cbSupplier.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        cbSupplier.setFont(FIELD_FONT);
         cbSupplier.setPreferredSize(new Dimension(260, 40));
         cbSupplier.setBorder(BorderFactory.createEmptyBorder());
 
@@ -153,14 +161,15 @@ public class CenteredProductView extends ProductView {
             cbSupplier.addItem(e.getKey() + " - " + e.getValue());
         }
         cbSupplier.setSelectedItem(formatSupplierOption("SUP001"));
+        styleComboBox(cbSupplier);
 
         JTextField editor = (JTextField) cbSupplier.getEditor().getEditorComponent();
         editor.putClientProperty("JTextField.placeholderText", "VD: SUP_04 - Masan Consumer...");
         editor.setHorizontalAlignment(JTextField.LEFT);
-        editor.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        editor.setFont(FIELD_FONT);
 
         JLabel lblSupplier = new JLabel("Nhà cung cấp (*)");
-        lblSupplier.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblSupplier.setFont(LABEL_FONT);
         lblSupplier.setForeground(new java.awt.Color(43, 54, 116));
 
         // Đưa Nhà cung cấp lên TRÊN phần Hình ảnh.
@@ -184,6 +193,98 @@ public class CenteredProductView extends ProductView {
 
         formCard.revalidate();
         formCard.repaint();
+    }
+
+    private void forceProductFormTypography() {
+        JPanel formCard = getPrivateFieldAs("formCard", JPanel.class);
+        if (formCard != null) {
+            styleFormComponent(formCard);
+        }
+
+        styleComboBox(getPrivateFieldAs("cbCategory", JComboBox.class));
+        styleComboBox(cbSupplier);
+
+        setButtonFont("btnAdd");
+        setButtonFont("btnUpdate");
+        setButtonFont("btnDelete");
+        setButtonFont("btnClear");
+        setButtonFont("btnUnitConfig");
+        setButtonFont("btnChooseImage");
+
+        JLabel lblImagePreview = getPrivateFieldAs("lblImagePreview", JLabel.class);
+        if (lblImagePreview != null) {
+            lblImagePreview.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            lblImagePreview.setHorizontalAlignment(SwingConstants.CENTER);
+        }
+    }
+
+    private void styleFormComponent(Component component) {
+        if (component == null) {
+            return;
+        }
+
+        if (component instanceof JLabel label) {
+            label.setFont(LABEL_FONT);
+            if (label.getHorizontalAlignment() == SwingConstants.CENTER) {
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+            } else {
+                label.setHorizontalAlignment(SwingConstants.LEFT);
+            }
+        } else if (component instanceof JTextField textField) {
+            textField.setFont(FIELD_FONT);
+            textField.setHorizontalAlignment(JTextField.LEFT);
+        } else if (component instanceof JComboBox<?> comboBox) {
+            styleComboBox(comboBox);
+        } else if (component instanceof AbstractButton button) {
+            button.setFont(BUTTON_FONT);
+            button.setHorizontalAlignment(SwingConstants.CENTER);
+        }
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                styleFormComponent(child);
+            }
+        }
+    }
+
+    private void setButtonFont(String fieldName) {
+        AbstractButton button = getPrivateFieldAs(fieldName, AbstractButton.class);
+        if (button != null) {
+            button.setFont(BUTTON_FONT);
+            button.setHorizontalAlignment(SwingConstants.CENTER);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void styleComboBox(JComboBox<?> comboBox) {
+        if (comboBox == null) {
+            return;
+        }
+
+        comboBox.setFont(FIELD_FONT);
+        comboBox.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                label.setFont(FIELD_FONT);
+                label.setHorizontalAlignment(SwingConstants.LEFT);
+                return label;
+            }
+        });
+
+        if (comboBox.isEditable() && comboBox.getEditor() != null) {
+            Component editor = comboBox.getEditor().getEditorComponent();
+            if (editor instanceof JTextField textField) {
+                textField.setFont(FIELD_FONT);
+                textField.setHorizontalAlignment(JTextField.LEFT);
+            }
+        }
     }
 
     private void shiftFormRowsDownFrom(JPanel formCard, int startY, int offset) {
