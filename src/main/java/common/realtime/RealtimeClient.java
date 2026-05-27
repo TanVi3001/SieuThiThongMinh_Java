@@ -114,7 +114,10 @@ public final class RealtimeClient {
 
     public static void send(String message) {
         dispatchRealtimeMessage(message);
+        sendRemoteOnly(message);
+    }
 
+    public static void sendRemoteOnly(String message) {
         try {
             if (isOnline()) {
                 client.send(message);
@@ -209,6 +212,10 @@ public final class RealtimeClient {
 
         if (msg.startsWith("INVENTORY_ALERT")) {
             return AppEventType.INVENTORY_ALERT;
+        }
+
+        if (msg.contains("PROMOTION_CHANGED") || msg.contains("PROMOTIONS_CHANGED") || msg.contains("PROMO_UPDATED")) {
+            return AppEventType.STORE_INFO;
         }
 
         if (msg.contains("PRODUCTS_CHANGED") || msg.contains("PRODUCT_CHANGED")) {
