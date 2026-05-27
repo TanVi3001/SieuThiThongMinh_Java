@@ -1,0 +1,42 @@
+product_name,base_price,quantity,category_id,image_path,supplier_id
+Mì Hảo Hảo tôm chua cay,5000,50,CAT001,products/mi_hao_hao_tom_chua_cay.png,SUP_02
+Mì Omachi sườn hầm ngũ quả,8000,50,CAT001,products/mi_omachi_suon_ham_ngu_qua.png,SUP_04
+Phở bò Vifon túi,7500,50,CAT001,products/pho_bo_vifon_tui.png,SUP_03
+Gạo ST25 Ông Cua túi 5kg,180000,50,CAT001,products/gao_st25_ong_cua_tui_5kg.png,SUP_01
+Nước mắm Nam Ngư 750ml,35000,50,CAT001,products/nuoc_mam_nam_ngu_750ml.png,SUP_04
+Nước mắm Chinsu cá hồi,45000,50,CAT001,products/nuoc_mam_chinsu_ca_hoi.png,SUP_04
+Dầu ăn Tường An 2L,52000,50,CAT001,products/dau_an_tuong_an_2l.png,SUP_05
+Dầu ăn Simply 2L,60000,50,CAT001,products/dau_an_simply_2l.png,SUP_05
+Dầu ăn Happy Koki 2L,60000,50,CAT001,products/dau_an_happy_koki_2l.png,SUP_05
+Đường tinh luyện Biên Hòa 1kg,28000,50,CAT001,products/duong_tinh_luyen_bien_hoa_1kg.png,SUP_01
+Sữa đặc Ông Thọ đỏ lon,22000,50,CAT001,products/sua_dac_ong_tho_do_lon.png,SUP_06
+Hạt nêm Knorr thịt thăn 400g,38000,50,CAT001,products/hat_nem_knorr_thit_than_400g.png,SUP_07
+Tương ớt Chinsu 250g,15000,50,CAT001,products/tuong_ot_chinsu_250g.png,SUP_04
+Nước suối Aquafina 500ml,5000,50,CAT002,products/nuoc_suoi_aquafina_500ml.png,SUP_10
+Nước khoáng Lavie 500ml,5000,50,CAT002,products/nuoc_khoang_lavie_500ml.png,SUP_08
+Coca Cola lon 330ml,10000,50,CAT002,products/coca_cola_lon_330ml.png,SUP_09
+Pepsi lon 330ml,10000,50,CAT002,products/pepsi_lon_330ml.png,SUP_10
+Sprite chai 1.5L,20000,50,CAT002,products/sprite_chai_1_5l.png,SUP_09
+Trà Ô long Tea Plus,10000,50,CAT002,products/tra_o_long_tea_plus.png,SUP_11
+Nước tăng lực Redbull lon,15000,50,CAT002,products/nuoc_tang_luc_redbull_lon.png,SUP_01
+Cà phê lon Birdy xanh,12000,50,CAT002,products/ca_phe_lon_birdy_xanh.png,SUP_01
+Dầu gội Clear Men 630g,145000,50,CAT003,products/dau_goi_clear_men_630g.png,SUP_07
+Dầu gội Sunsilk mềm mượt,135000,50,CAT003,products/dau_goi_sunsilk_mem_muot.png,SUP_07
+Kem đánh răng PS 123,35000,50,CAT003,products/kem_danh_rang_ps_123.png,SUP_07
+Sữa tắm Lifebuoy bảo vệ,160000,30,CAT003,products/sua_tam_lifebuoy_bao_ve.png,SUP_07
+Sữa rửa mặt Hazeline,55000,55,CAT003,products/sua_rua_mat_hazeline.png,SUP_07
+Giấy vệ sinh Bless You lốc 10,85000,50,CAT003,products/giay_ve_sinh_bless_you_loc_10.png,SUP_01
+Khăn ướt Baby gói 100 tờ,40000,50,CAT003,products/khan_uot_baby_goi_100_to.png,SUP_01
+Bánh Oreo nhân socola,15000,50,CAT004,products/banh_oreo_nhan_socola.png,SUP_01
+Kẹo Alpenliebe caramen,12000,50,CAT004,products/keo_alpenliebe_caramen.png,SUP_01
+Bánh Cosy quy sữa 240g,25000,50,CAT004,products/banh_cosy_quy_sua_240g.png,SUP_13
+Snack khoai tây Pringles,35000,50,CAT004,products/snack_khoai_tay_pringles.png,SUP_01
+Socola KitKat trà xanh,20000,50,CAT004,products/socola_kitkat_tra_xanh.png,SUP_08
+Bánh ChocoPie Orion hộp 6,32000,50,CAT004,products/banh_chocopie_orion_hop_6.png,SUP_12
+Bánh gạo One One phô mai,22000,50,CAT004,products/banh_gao_one_one_pho_mai.png,SUP_01
+Kẹo dẻo Haribo gấu,18000,50,CAT004,products/keo_deo_haribo_gau.png,SUP_14
+Thịt ba chỉ bò Mỹ 500g,150000,20,CAT005,products/thit_ba_chi_bo_my_500g.png,SUP_15
+Ức gà phi lê 500g,45000,25,CAT005,products/uc_ga_phi_le_500g.png,SUP_15
+Cá hồi phi lê tươi 200g,120000,15,CAT005,products/ca_hoi_phi_le_tuoi_200g.png,SUP_15
+Trứng gà ta vỉ 10 quả,45000,50,CAT005,products/trung_ga_ta_vi_10_qua.png,SUP_15
+Khoai tây vàng túi 1kg,25000,40,CAT005,products/khoai_tay_vang_tui_1kg.png,SUP_15
