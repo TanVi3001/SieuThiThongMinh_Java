@@ -8,25 +8,26 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.lang.reflect.Field;
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.util.HashMap;
+import java.sql.ResultSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.event.TableModelEvent;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -41,10 +42,13 @@ import model.product.Supplier;
 public class CenteredProductView extends ProductView {
 
     private JComboBox<String> cbSupplier;
-    private final Map<String, String> supplierNameById = new HashMap<>();
-    private final Map<String, String> supplierIdByProductId = new HashMap<>();
+    private final Map<String, String> supplierNameById = new LinkedHashMap<>();
+    private final Map<String, String> supplierIdByProductId = new LinkedHashMap<>();
     private boolean fillingSupplierColumn = false;
     private boolean actionsWrapped = false;
+    private boolean tableListenerInstalled = false;
+    private boolean selectionListenerInstalled = false;
+    private Timer supplierFillTimer;
 
     public CenteredProductView() {
         super();
@@ -82,22 +86,33 @@ public class CenteredProductView extends ProductView {
             supplierNameById.put("SUP001", "Nhà cung cấp Tổng hợp");
         }
 
-        reloadProductSupplierMap();
+        reloadProductSupplierMapFast();
     }
 
-    private void reloadProductSupplierMap() {
+    /**
+     * Chỉ đọc product_id + supplier_id để tránh lag. Không gọi ProductsSql.selectAll()
+     * vì hàm đó load thêm inventory, store product, ảnh... dễ đơ UI khi bảng đang reload.
+     */
+    private void reloadProductSupplierMapFast() {
         supplierIdByProductId.clear();
-        try {
-            List<Product> products = ProductsSql.getInstance().selectAll();
-            for (Product p : products) {
-                if (p == null || isBlank(p.getProductId())) {
-                    continue;
+        String sql = """
+            SELECT product_id, NVL(supplier_id, 'SUP001') AS supplier_id
+            FROM PRODUCTS
+            WHERE NVL(is_deleted, 0) = 0
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String productId = rs.getString("product_id");
+                String supplierId = rs.getString("supplier_id");
+                if (!isBlank(productId)) {
+                    supplierIdByProductId.put(productId.trim(), isBlank(supplierId) ? "SUP001" : supplierId.trim());
                 }
-                String supplierId = isBlank(p.getSupplierId()) ? "SUP001" : p.getSupplierId().trim();
-                supplierIdByProductId.put(p.getProductId().trim(), supplierId);
             }
         } catch (Exception ex) {
-            System.err.println("[CenteredProductView] Cannot load product suppliers: " + ex.getMessage());
+            System.err.println("[CenteredProductView] Cannot load product suppliers fast: " + ex.getMessage());
         }
     }
 
@@ -148,18 +163,22 @@ public class CenteredProductView extends ProductView {
         lblSupplier.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblSupplier.setForeground(new java.awt.Color(43, 54, 116));
 
+        // Đưa Nhà cung cấp lên TRÊN phần Hình ảnh.
+        // ProductView gốc: Loại SP nằm gridy 6-7, Hình ảnh bắt đầu gridy 8.
+        // Vì vậy ta đẩy Hình ảnh + nút phía dưới xuống 2 dòng rồi chèn NCC vào 8-9.
+        shiftFormRowsDownFrom(formCard, 8, 2);
+
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Đưa xuống cuối form để không phá layout cũ. Vẫn giữ nguyên phần chọn ảnh đã có sẵn.
-        gbc.gridy = 900;
-        gbc.insets = new Insets(10, 0, 5, 0);
+        gbc.gridy = 8;
+        gbc.insets = new Insets(0, 0, 5, 0);
         formCard.add(lblSupplier, gbc);
 
-        gbc.gridy = 901;
+        gbc.gridy = 9;
         gbc.insets = new Insets(0, 0, 15, 0);
         formCard.add(cbSupplier, gbc);
 
@@ -167,7 +186,25 @@ public class CenteredProductView extends ProductView {
         formCard.repaint();
     }
 
+    private void shiftFormRowsDownFrom(JPanel formCard, int startY, int offset) {
+        if (!(formCard.getLayout() instanceof GridBagLayout layout)) {
+            return;
+        }
+
+        for (Component component : formCard.getComponents()) {
+            GridBagConstraints constraints = layout.getConstraints(component);
+            if (constraints != null && constraints.gridy >= startY) {
+                constraints.gridy += offset;
+                layout.setConstraints(component, constraints);
+            }
+        }
+    }
+
     private void bindTableSelectionToSupplierCombo() {
+        if (selectionListenerInstalled) {
+            return;
+        }
+
         JTable table = findProductTable(this);
         if (table == null || cbSupplier == null) {
             return;
@@ -179,6 +216,7 @@ public class CenteredProductView extends ProductView {
             }
             SwingUtilities.invokeLater(() -> syncSupplierComboFromSelectedRow(table));
         });
+        selectionListenerInstalled = true;
     }
 
     private void syncSupplierComboFromSelectedRow(JTable table) {
@@ -238,7 +276,7 @@ public class CenteredProductView extends ProductView {
 
                 if (!isBlank(productId) && !isBlank(selectedSupplierId)) {
                     updateProductSupplier(productId, selectedSupplierId);
-                    reloadProductSupplierMap();
+                    supplierIdByProductId.put(productId.trim(), selectedSupplierId.trim());
                     fillSupplierColumn();
                 }
             });
@@ -330,13 +368,14 @@ public class CenteredProductView extends ProductView {
         centerColumn(table, 5);
         centerColumn(table, getSupplierColumnIndex(table));
 
-        if (table.getModel() instanceof DefaultTableModel model) {
+        if (!tableListenerInstalled && table.getModel() instanceof DefaultTableModel model) {
             model.addTableModelListener(e -> {
                 if (fillingSupplierColumn || e.getType() == TableModelEvent.DELETE) {
                     return;
                 }
-                SwingUtilities.invokeLater(this::fillSupplierColumn);
+                scheduleFillSupplierColumn();
             });
+            tableListenerInstalled = true;
         }
 
         fillSupplierColumn();
@@ -370,6 +409,14 @@ public class CenteredProductView extends ProductView {
         return -1;
     }
 
+    private void scheduleFillSupplierColumn() {
+        if (supplierFillTimer == null) {
+            supplierFillTimer = new Timer(140, e -> fillSupplierColumn());
+            supplierFillTimer.setRepeats(false);
+        }
+        supplierFillTimer.restart();
+    }
+
     private void fillSupplierColumn() {
         JTable table = findProductTable(this);
         if (table == null || !(table.getModel() instanceof DefaultTableModel model)) {
@@ -383,7 +430,6 @@ public class CenteredProductView extends ProductView {
 
         fillingSupplierColumn = true;
         try {
-            reloadProductSupplierMap();
             for (int row = 0; row < model.getRowCount(); row++) {
                 Object productValue = model.getValueAt(row, 0);
                 String productId = productValue == null ? "" : productValue.toString().trim();
