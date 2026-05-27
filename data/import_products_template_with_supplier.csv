@@ -1,0 +1,2 @@
+product_name,base_price,quantity,category_id,image_path,supplier_id
+Tên sản phẩm mẫu,10000,50,CAT001,products/ten_san_pham_mau.png,SUP_01
