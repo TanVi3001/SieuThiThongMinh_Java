@@ -82,6 +82,28 @@ public class InventoryTransactionSql {
             String supplierId,
             String note
     ) {
+        return createPurchaseReceiptAndIncreaseStock(
+                productId,
+                quantity,
+                unitImportPrice,
+                vatRate,
+                supplierId,
+                note,
+                null,
+                null
+        );
+    }
+
+    public String createPurchaseReceiptAndIncreaseStock(
+            String productId,
+            int quantity,
+            BigDecimal unitImportPrice,
+            BigDecimal vatRate,
+            String supplierId,
+            String note,
+            String unitName,
+            BigDecimal salePriceOverride
+    ) {
         if (productId == null || productId.trim().isEmpty()) {
             throw new IllegalArgumentException("Mã sản phẩm không hợp lệ.");
         }
@@ -102,7 +124,9 @@ public class InventoryTransactionSql {
             throw new IllegalArgumentException("Không tìm thấy sản phẩm: " + productId);
         }
 
-        BigDecimal salePrice = product.getBasePrice();
+        BigDecimal salePrice = salePriceOverride != null && salePriceOverride.compareTo(BigDecimal.ZERO) > 0
+                ? salePriceOverride
+                : product.getBasePrice();
 
         if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Sản phẩm chưa có giá bán hợp lệ.");
@@ -113,6 +137,7 @@ public class InventoryTransactionSql {
         }
 
         unitImportPrice = unitImportPrice.setScale(2, RoundingMode.HALF_UP);
+        salePrice = salePrice.setScale(2, RoundingMode.HALF_UP);
         vatRate = vatRate.setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal unitImportAfterVat = calculateImportPriceAfterVat(unitImportPrice, vatRate);
@@ -145,9 +170,9 @@ public class InventoryTransactionSql {
         String detailId = "PND" + System.nanoTime();
         String transactionId = "IVT" + System.nanoTime();
 
-        String unit = product.getUnit() == null || product.getUnit().trim().isEmpty()
-                ? "Cái"
-                : product.getUnit().trim();
+        String unit = unitName == null || unitName.trim().isEmpty()
+                ? (product.getUnit() == null || product.getUnit().trim().isEmpty() ? "Cái" : product.getUnit().trim())
+                : unitName.trim();
 
         String cleanSupplierId = emptyToDefault(supplierId, "SUP_01");
         String createdBy = getCurrentAccountId();
@@ -292,7 +317,11 @@ public class InventoryTransactionSql {
             con.setAutoCommit(false);
 
             try (
-                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt); PreparedStatement psDetail = con.prepareStatement(sqlDetail); PreparedStatement psTransaction = con.prepareStatement(sqlTransaction); PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier); PreparedStatement psUpsertStoreProduct = con.prepareStatement(sqlUpsertStoreProduct)) {
+                    PreparedStatement psReceipt = con.prepareStatement(sqlReceipt);
+                    PreparedStatement psDetail = con.prepareStatement(sqlDetail);
+                    PreparedStatement psTransaction = con.prepareStatement(sqlTransaction);
+                    PreparedStatement psUpdateProductSupplier = con.prepareStatement(sqlUpdateProductSupplier);
+                    PreparedStatement psUpsertStoreProduct = con.prepareStatement(sqlUpsertStoreProduct)) {
                 psReceipt.setString(1, receiptId);
                 psReceipt.setString(2, cleanSupplierId);
                 psReceipt.setString(3, storeId);
@@ -305,7 +334,7 @@ public class InventoryTransactionSql {
 
                 psDetail.setString(1, detailId);
                 psDetail.setString(2, receiptId);
-                psDetail.setString(3, productId);
+                psDetail.setString(3, productId.trim());
                 psDetail.setInt(4, quantity);
                 psDetail.setString(5, unit);
                 psDetail.setBigDecimal(6, unitImportPrice);
@@ -316,16 +345,16 @@ public class InventoryTransactionSql {
                 psDetail.setBigDecimal(11, afterTax);
                 psDetail.executeUpdate();
 
-                ProductsSql.getInstance().addStockWithConn(con, productId, quantity, unit, storeId);
+                ProductsSql.getInstance().addStockWithConn(con, productId.trim(), quantity, unit, storeId);
 
                 psUpsertStoreProduct.setString(1, storeId);
-                psUpsertStoreProduct.setString(2, productId);
+                psUpsertStoreProduct.setString(2, productId.trim());
                 psUpsertStoreProduct.setBigDecimal(3, salePrice);
                 psUpsertStoreProduct.executeUpdate();
 
                 psTransaction.setString(1, transactionId);
                 psTransaction.setString(2, receiptId);
-                psTransaction.setString(3, productId);
+                psTransaction.setString(3, productId.trim());
                 psTransaction.setInt(4, quantity);
                 psTransaction.setString(5, unit);
                 psTransaction.setString(6, storeId);
@@ -339,7 +368,7 @@ public class InventoryTransactionSql {
                 psTransaction.executeUpdate();
 
                 psUpdateProductSupplier.setString(1, cleanSupplierId);
-                psUpdateProductSupplier.setString(2, productId);
+                psUpdateProductSupplier.setString(2, productId.trim());
                 psUpdateProductSupplier.executeUpdate();
 
                 con.commit();
@@ -458,12 +487,6 @@ public class InventoryTransactionSql {
 
         String cleanStoreId = normalizeStoreId(storeId);
 
-        /*
-         * User chi nhánh luôn bị ép theo store_id trong session.
-         * Admin:
-         * - cleanStoreId == null  => xem tất cả chi nhánh.
-         * - cleanStoreId != null  => lọc đúng chi nhánh đang chọn trên UI.
-         */
         if (!SessionManager.isAdmin()) {
             cleanStoreId = currentStoreIdOrNull();
         }
@@ -581,8 +604,7 @@ public class InventoryTransactionSql {
             FETCH FIRST 1 ROWS ONLY
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             int idx = 1;
             ps.setString(idx++, receiptId.trim());
 
@@ -654,8 +676,7 @@ public class InventoryTransactionSql {
             ORDER BY d.created_at ASC
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             int idx = 1;
             ps.setString(idx++, receiptId.trim());
 
@@ -706,8 +727,7 @@ public class InventoryTransactionSql {
               AND NVL(is_deleted, 0) = 0
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, productId.trim());
 
             try (ResultSet rs = ps.executeQuery()) {
