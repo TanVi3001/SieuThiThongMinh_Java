@@ -123,6 +123,19 @@ public class ProductUnitsSql {
             return BigDecimal.ONE;
         }
 
+        /*
+         * Nhập kho thủ công đang đi qua ProductsSql.addStockWithConn(..., unit, ...).
+         * Một số sản phẩm cũ có PRODUCT_UNITS là "Túi", "Thùng"... nhưng INVENTORY/unit
+         * hoặc Product fallback vẫn đang là "Cái". Khi bấm Nhập kho tay, hệ thống không nên
+         * chặn chỉ vì unit fallback "Cái" chưa nằm trong PRODUCT_UNITS.
+         *
+         * Với các đơn vị chung/chưa map rõ như Cái/Đơn vị, coi là đơn vị gốc tạm thời = 1.
+         * Các đơn vị nghiệp vụ thật như Thùng/Lốc/Hộp vẫn phải được cấu hình đúng tỷ lệ.
+         */
+        if (isGenericBaseUnitFallback(unitId) || isGenericBaseUnitFallback(resolvedUnitId)) {
+            return BigDecimal.ONE;
+        }
+
         throw new SQLException("Chua cau hinh don vi " + unitId + " cho san pham " + productId);
     }
 
@@ -290,6 +303,26 @@ public class ProductUnitsSql {
         }
     }
 
+    private boolean isGenericBaseUnitFallback(String unitIdOrName) {
+        if (unitIdOrName == null || unitIdOrName.trim().isEmpty()) {
+            return true;
+        }
+
+        String normalized = java.text.Normalizer
+                .normalize(unitIdOrName.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase();
+
+        return normalized.equals("CAI")
+                || normalized.equals("U_CAI")
+                || normalized.equals("DON_VI")
+                || normalized.equals("U_DON_VI")
+                || normalized.equals("UNIT")
+                || normalized.equals("U_UNIT");
+    }
+
     private String generateUnitId(String unitName) {
         String normalized = java.text.Normalizer
                 .normalize(unitName == null ? "" : unitName, java.text.Normalizer.Form.NFD)
@@ -345,57 +378,48 @@ public class ProductUnitsSql {
             return groupedUnits;
         }
 
-        StringBuilder placeholders = new StringBuilder();
-        for (int i = 0; i < ids.size(); i++) {
-            if (i > 0) {
-                placeholders.append(",");
-            }
-            placeholders.append("?");
-        }
+        String placeholders = ids.stream().map(x -> "?").collect(java.util.stream.Collectors.joining(","));
 
         String sql = """
-            SELECT
-                pu.product_id,
-                pu.unit_id,
-                u.unit_name,
-                pu.conversion_rate_to_base,
-                NVL(pu.selling_price, p.base_price) AS selling_price,
-                pu.is_base_unit,
-                pu.is_deleted
+            SELECT pu.product_id,
+                   pu.unit_id,
+                   u.unit_name,
+                   pu.conversion_rate_to_base,
+                   pu.selling_price,
+                   pu.is_base_unit,
+                   pu.is_deleted
             FROM PRODUCT_UNITS pu
-            JOIN PRODUCTS p
-                ON p.product_id = pu.product_id
             JOIN UNITS u
-                ON u.unit_id = pu.unit_id
+              ON u.unit_id = pu.unit_id
             WHERE pu.product_id IN (%s)
               AND NVL(pu.is_deleted, 0) = 0
               AND NVL(u.is_deleted, 0) = 0
-            ORDER BY pu.product_id, pu.is_base_unit DESC, pu.conversion_rate_to_base, pu.unit_id
-        """.formatted(placeholders.toString());
+            ORDER BY pu.product_id, pu.is_base_unit DESC, pu.unit_id
+        """.formatted(placeholders);
 
-        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             for (int i = 0; i < ids.size(); i++) {
-                pst.setString(i + 1, ids.get(i));
+                ps.setString(i + 1, ids.get(i));
             }
 
-            try (ResultSet rs = pst.executeQuery()) {
+            try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    ProductUnit unit = new ProductUnit(
-                            rs.getString("product_id"),
-                            rs.getString("unit_id"),
-                            rs.getString("unit_name"),
-                            rs.getBigDecimal("conversion_rate_to_base"),
-                            rs.getBigDecimal("selling_price"),
-                            rs.getInt("is_base_unit"),
-                            rs.getInt("is_deleted")
-                    );
+                    ProductUnit unit = new ProductUnit();
+                    unit.setProductId(rs.getString("product_id"));
+                    unit.setUnitId(rs.getString("unit_id"));
+                    unit.setUnitName(rs.getString("unit_name"));
+                    unit.setConversionRateToBase(rs.getBigDecimal("conversion_rate_to_base"));
+                    unit.setSellingPrice(rs.getBigDecimal("selling_price"));
+                    unit.setBaseUnit(rs.getInt("is_base_unit") == 1);
+                    unit.setDeleted(rs.getInt("is_deleted") == 1);
 
-                    groupedUnits.computeIfAbsent(unit.getProductId(), k -> new ArrayList<>()).add(unit);
+                    List<ProductUnit> list = groupedUnits.get(unit.getProductId());
+                    if (list != null) {
+                        list.add(unit);
+                    }
                 }
             }
-
-        } catch (SQLException e) {
-            System.err.println("Loi ProductUnitsSql.selectByProductIds: " + e.getMessage());
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
@@ -403,291 +427,51 @@ public class ProductUnitsSql {
     }
 
     public void upsertProductUnitWithConn(Connection con, String productId, String unitId,
-            BigDecimal conversionRateToBase, boolean isBaseUnit) throws SQLException {
-
-        upsertProductUnitWithConn(con, productId, unitId, conversionRateToBase, null, isBaseUnit);
-    }
-
-    public void upsertProductUnitWithConn(Connection con, String productId, String unitId,
             BigDecimal conversionRateToBase, BigDecimal sellingPrice, boolean isBaseUnit) throws SQLException {
-
-        if (isBaseUnit) {
-            clearBaseUnitFlagsWithConn(con, productId);
-        }
 
         String sql = """
             MERGE INTO PRODUCT_UNITS pu
             USING (
-                SELECT
-                    ? AS product_id,
-                    ? AS unit_id,
-                    ? AS conversion_rate_to_base,
-                    ? AS selling_price,
-                    ? AS is_base_unit
+                SELECT ? AS product_id,
+                       ? AS unit_id,
+                       ? AS conversion_rate_to_base,
+                       ? AS selling_price,
+                       ? AS is_base_unit
                 FROM dual
             ) src
-            ON (
-                pu.product_id = src.product_id
-                AND pu.unit_id = src.unit_id
-            )
+            ON (pu.product_id = src.product_id AND pu.unit_id = src.unit_id)
             WHEN MATCHED THEN
                 UPDATE SET
                     pu.conversion_rate_to_base = src.conversion_rate_to_base,
-                    pu.selling_price = NVL(src.selling_price, pu.selling_price),
+                    pu.selling_price = src.selling_price,
                     pu.is_base_unit = src.is_base_unit,
                     pu.is_deleted = 0
             WHEN NOT MATCHED THEN
-                INSERT (
-                    product_id,
-                    unit_id,
-                    conversion_rate_to_base,
-                    selling_price,
-                    is_base_unit,
-                    is_deleted
-                )
-                VALUES (
-                    src.product_id,
-                    src.unit_id,
-                    src.conversion_rate_to_base,
-                    src.selling_price,
-                    src.is_base_unit,
-                    0
-                )
+                INSERT (product_id, unit_id, conversion_rate_to_base, selling_price, is_base_unit, is_deleted)
+                VALUES (src.product_id, src.unit_id, src.conversion_rate_to_base, src.selling_price, src.is_base_unit, 0)
         """;
 
-        try (PreparedStatement pst = con.prepareStatement(sql)) {
-            BigDecimal rate = conversionRateToBase == null ? BigDecimal.ONE : conversionRateToBase;
-            int base = isBaseUnit ? 1 : 0;
-
-            pst.setString(1, productId);
-            pst.setString(2, unitId);
-            pst.setBigDecimal(3, rate);
-            pst.setBigDecimal(4, sellingPrice);
-            pst.setInt(5, base);
-
-            pst.executeUpdate();
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, productId);
+            ps.setString(2, unitId);
+            ps.setBigDecimal(3, conversionRateToBase == null ? BigDecimal.ONE : conversionRateToBase);
+            ps.setBigDecimal(4, sellingPrice);
+            ps.setInt(5, isBaseUnit ? 1 : 0);
+            ps.executeUpdate();
         }
     }
 
-    private void clearBaseUnitFlagsWithConn(Connection con, String productId) throws SQLException {
-        String sql = """
-            UPDATE PRODUCT_UNITS
-            SET is_base_unit = 0
-            WHERE product_id = ?
-        """;
-
-        try (PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, productId);
-            pst.executeUpdate();
-        }
+    public void upsertProductUnitWithConn(Connection con, String productId, String unitId,
+            BigDecimal conversionRateToBase, boolean isBaseUnit) throws SQLException {
+        upsertProductUnitWithConn(con, productId, unitId, conversionRateToBase, null, isBaseUnit);
     }
 
     public void setBaseUnitWithConn(Connection con, String productId, String unitId) throws SQLException {
-        String sql = """
-            UPDATE PRODUCTS
-            SET base_unit_id = ?
-            WHERE product_id = ?
-        """;
-
-        try (PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, unitId);
-            pst.setString(2, productId);
-            pst.executeUpdate();
-        }
-    }
-
-    private boolean isMissingUomSchema(SQLException e) {
-        return e.getErrorCode() == 942 || e.getErrorCode() == 904;
-    }
-
-    public boolean updateProductUnitWithConnStyle(String productId, String oldUnitId,
-            String newUnitId, BigDecimal conversionRateToBase,
-            BigDecimal sellingPrice, boolean isBaseUnit) {
-
-        if (productId == null || productId.trim().isEmpty()
-                || oldUnitId == null || oldUnitId.trim().isEmpty()
-                || newUnitId == null || newUnitId.trim().isEmpty()
-                || conversionRateToBase == null
-                || conversionRateToBase.compareTo(BigDecimal.ZERO) <= 0) {
-            return false;
-        }
-
-        if (sellingPrice != null && sellingPrice.compareTo(BigDecimal.ZERO) < 0) {
-            return false;
-        }
-
-        try (Connection con = DatabaseConnection.getConnection()) {
-            con.setAutoCommit(false);
-
-            try {
-                if (isBaseUnit) {
-                    clearBaseUnitFlagsWithConn(con, productId);
-                }
-
-                if (oldUnitId.equals(newUnitId)) {
-                    String updateSql = """
-                        UPDATE PRODUCT_UNITS
-                        SET conversion_rate_to_base = ?,
-                            selling_price = ?,
-                            is_base_unit = ?,
-                            is_deleted = 0
-                        WHERE product_id = ?
-                          AND unit_id = ?
-                    """;
-
-                    try (PreparedStatement pst = con.prepareStatement(updateSql)) {
-                        pst.setBigDecimal(1, conversionRateToBase);
-                        pst.setBigDecimal(2, sellingPrice);
-                        pst.setInt(3, isBaseUnit ? 1 : 0);
-                        pst.setString(4, productId);
-                        pst.setString(5, oldUnitId);
-                        pst.executeUpdate();
-                    }
-
-                } else {
-                    upsertProductUnitWithConn(
-                            con,
-                            productId,
-                            newUnitId,
-                            conversionRateToBase,
-                            sellingPrice,
-                            isBaseUnit
-                    );
-
-                    String deleteOldSql = """
-                        UPDATE PRODUCT_UNITS
-                        SET is_deleted = 1,
-                            is_base_unit = 0
-                        WHERE product_id = ?
-                          AND unit_id = ?
-                    """;
-
-                    try (PreparedStatement pst = con.prepareStatement(deleteOldSql)) {
-                        pst.setString(1, productId);
-                        pst.setString(2, oldUnitId);
-                        pst.executeUpdate();
-                    }
-                }
-
-                if (isBaseUnit) {
-                    setBaseUnitWithConn(con, productId, newUnitId);
-                }
-
-                con.commit();
-                return true;
-
-            } catch (Exception e) {
-                con.rollback();
-                System.err.println("Loi ProductUnitsSql.updateProductUnitWithConnStyle: " + e.getMessage());
-                e.printStackTrace();
-                return false;
-
-            } finally {
-                con.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            System.err.println("Loi ket noi ProductUnitsSql.updateProductUnitWithConnStyle: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    public boolean softDeleteProductUnit(String productId, String unitId) {
-        if (productId == null || productId.trim().isEmpty()
-                || unitId == null || unitId.trim().isEmpty()) {
-            return false;
-        }
-
-        String countSql = """
-            SELECT COUNT(*)
-            FROM PRODUCT_UNITS
-            WHERE product_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
-
-        String checkBaseSql = """
-            SELECT NVL(is_base_unit, 0) AS is_base_unit
-            FROM PRODUCT_UNITS
-            WHERE product_id = ?
-              AND unit_id = ?
-              AND NVL(is_deleted, 0) = 0
-        """;
-
-        String deleteSql = """
+        String resetSql = """
             UPDATE PRODUCT_UNITS
-            SET is_deleted = 1,
-                is_base_unit = 0
+            SET is_base_unit = 0
             WHERE product_id = ?
-              AND unit_id = ?
+              AND NVL(is_deleted, 0) = 0
         """;
 
-        try (Connection con = DatabaseConnection.getConnection()) {
-            con.setAutoCommit(false);
-
-            try {
-                int activeCount = 0;
-
-                try (PreparedStatement pst = con.prepareStatement(countSql)) {
-                    pst.setString(1, productId);
-
-                    try (ResultSet rs = pst.executeQuery()) {
-                        if (rs.next()) {
-                            activeCount = rs.getInt(1);
-                        }
-                    }
-                }
-
-                if (activeCount <= 1) {
-                    throw new SQLException("Không thể xóa đơn vị cuối cùng của sản phẩm.");
-                }
-
-                int isBaseUnit = 0;
-
-                try (PreparedStatement pst = con.prepareStatement(checkBaseSql)) {
-                    pst.setString(1, productId);
-                    pst.setString(2, unitId);
-
-                    try (ResultSet rs = pst.executeQuery()) {
-                        if (rs.next()) {
-                            isBaseUnit = rs.getInt("is_base_unit");
-                        } else {
-                            throw new SQLException("Không tìm thấy đơn vị cần xóa.");
-                        }
-                    }
-                }
-
-                if (isBaseUnit == 1) {
-                    throw new SQLException("Không thể xóa đơn vị gốc. Hãy chọn đơn vị khác làm gốc trước.");
-                }
-
-                try (PreparedStatement pst = con.prepareStatement(deleteSql)) {
-                    pst.setString(1, productId);
-                    pst.setString(2, unitId);
-                    int affected = pst.executeUpdate();
-
-                    if (affected <= 0) {
-                        throw new SQLException("Không xóa được đơn vị.");
-                    }
-                }
-
-                con.commit();
-                return true;
-
-            } catch (Exception e) {
-                con.rollback();
-                System.err.println("Loi ProductUnitsSql.softDeleteProductUnit: " + e.getMessage());
-                e.printStackTrace();
-                return false;
-
-            } finally {
-                con.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            System.err.println("Loi ket noi ProductUnitsSql.softDeleteProductUnit: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-}
+    ... (truncated)
