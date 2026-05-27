@@ -934,9 +934,13 @@ public class ProductView extends JPanel {
                 new EmptyBorder(15, 16, 15, 16)
         ));
 
-        JLabel icon = new JLabel(getCategoryEmoji(categoryId), SwingConstants.CENTER);
-        icon.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 34));
-        icon.setPreferredSize(new Dimension(64, 70));
+        JLabel iconLabel = new JLabel(loadCategoryIcon(categoryId, 48, 48), SwingConstants.CENTER);
+        iconLabel.setPreferredSize(new Dimension(64, 70));
+
+        JPanel iconWrap = new JPanel(new GridBagLayout());
+        iconWrap.setOpaque(false);
+        iconWrap.setPreferredSize(new Dimension(70, 70));
+        iconWrap.add(iconLabel);
 
         JPanel infoPanel = new JPanel();
         infoPanel.setOpaque(false);
@@ -977,7 +981,7 @@ public class ProductView extends JPanel {
         infoPanel.add(Box.createVerticalStrut(6));
         infoPanel.add(lblStatus);
 
-        card.add(icon, BorderLayout.WEST);
+        card.add(iconWrap, BorderLayout.WEST);
         card.add(infoPanel, BorderLayout.CENTER);
 
         Color normalBg = Color.WHITE;
@@ -1083,14 +1087,13 @@ public class ProductView extends JPanel {
         ));
         card.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        JLabel icon = new JLabel(getCategoryEmoji(categoryId), SwingConstants.CENTER);
-        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 34));
-        icon.setPreferredSize(new Dimension(54, 70));
+        JLabel iconLabel = new JLabel(loadCategoryIcon(categoryId, 46, 46), SwingConstants.CENTER);
+        iconLabel.setPreferredSize(new Dimension(54, 70));
 
         JPanel iconWrap = new JPanel(new GridBagLayout());
         iconWrap.setOpaque(false);
         iconWrap.setPreferredSize(new Dimension(62, 70));
-        iconWrap.add(icon);
+        iconWrap.add(iconLabel);
 
         JPanel textPanel = new JPanel();
         textPanel.setOpaque(false);
@@ -1196,45 +1199,54 @@ public class ProductView extends JPanel {
         return name;
     }
 
-    private String getCategoryEmoji(String categoryId) {
-        if (categoryId == null) {
-            return "📦";
+    private ImageIcon loadCategoryIcon(String categoryId, int width, int height) {
+        String id = categoryId == null || categoryId.trim().isEmpty()
+                ? "default"
+                : categoryId.trim();
+
+        String[] resourcePaths = {
+            "view/image/categories/" + id + ".png",
+            "view/image/categories/" + id.toUpperCase() + ".png",
+            "view/image/categories/" + id.toLowerCase() + ".png",
+            "view/image/categories/default.png",
+            "view/image/categories/milk.png"
+        };
+
+        for (String resourcePath : resourcePaths) {
+            try {
+                java.net.URL url = getClass().getClassLoader().getResource(resourcePath);
+                if (url != null) {
+                    Image img = new ImageIcon(url)
+                            .getImage()
+                            .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                    return new ImageIcon(img);
+                }
+            } catch (Exception ignored) {
+            }
         }
 
-        return switch (categoryId.trim()) {
-            case "CAT001" ->
-                "🍜"; // Thực phẩm khô
-            case "CAT002" ->
-                "🥤"; // Đồ uống & Giải khát
-            case "CAT003" ->
-                "🧴"; // Hóa mỹ phẩm
-            case "CAT004" ->
-                "🍪"; // Bánh kẹo
-            case "CAT005" ->
-                "🥩"; // Thực phẩm tươi sống
-            case "CAT006" ->
-                "🥛"; // Sữa & Sản phẩm từ sữa
-            case "CAT007" ->
-                "🧊"; // Đông lạnh & Chế biến sẵn
-            case "CAT008" ->
-                "🍳"; // Gia dụng nhà bếp
-            case "CAT009" ->
-                "🪥"; // Chăm sóc cá nhân
-            case "CAT010" ->
-                "🍼"; // Mẹ & Bé
-            case "CAT011" ->
-                "📚"; // Văn phòng phẩm
-            case "CAT012" ->
-                "🐾"; // Thức ăn thú cưng
-            case "CAT013" ->
-                "🥬"; // Thực phẩm hữu cơ
-            case "CAT014" ->
-                "🥫"; // Đồ hộp & Ăn liền
-            case "CAT015" ->
-                "🧽"; // Vệ sinh nhà cửa
-            default ->
-                "📦";
+        String[] filePaths = {
+            "src/main/resources/view/image/categories/" + id + ".png",
+            "src/main/resources/view/image/categories/" + id.toUpperCase() + ".png",
+            "src/main/resources/view/image/categories/" + id.toLowerCase() + ".png",
+            "src/main/resources/view/image/categories/default.png",
+            "src/main/resources/view/image/categories/milk.png"
         };
+
+        for (String filePath : filePaths) {
+            try {
+                File file = new File(filePath);
+                if (file.exists()) {
+                    Image img = new ImageIcon(file.getAbsolutePath())
+                            .getImage()
+                            .getScaledInstance(width, height, Image.SCALE_SMOOTH);
+                    return new ImageIcon(img);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return null;
     }
 
     private ImageIcon loadProductImageIcon(String imageNameOrPath) {

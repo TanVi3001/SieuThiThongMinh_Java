@@ -169,12 +169,17 @@ public class AdminDashboardView extends javax.swing.JFrame {
 
             case "Quản lý tài khoản":
                 if (type == AppEventType.ACCOUNT_SECURITY
-                        || type == AppEventType.EMPLOYEES) {
+                        || type == AppEventType.EMPLOYEES
+                        || type == AppEventType.STORE_INFO) {
+
+                    if (currentPanelWorker != null && !currentPanelWorker.isDone()) {
+                        return;
+                    }
+
                     panelCache.remove("Quản lý tài khoản");
                     showMenuPanel("Quản lý tài khoản", view.AccountRoleAssignmentPanel::new);
                 }
                 break;
-
             case "Quản lý phân quyền":
                 if (type == AppEventType.ACCOUNT_SECURITY
                         || type == AppEventType.SYSTEM_CONFIG) {
@@ -224,9 +229,8 @@ public class AdminDashboardView extends javax.swing.JFrame {
         }
 
         if (currentPanelWorker != null && !currentPanelWorker.isDone()) {
-            currentPanelWorker.cancel(true);
+            currentPanelWorker.cancel(false);
         }
-
         JPanel cached = panelCache.get(cacheKey);
         if (cached != null) {
             showPanel(cached);

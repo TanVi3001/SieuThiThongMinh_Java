@@ -600,7 +600,10 @@ public class InventoryNotificationSql {
                             GROUP BY product_id, store_id
                         ) inv
                             ON inv.product_id = n.product_id
-                           AND inv.store_id = n.store_id
+                           AND (
+                               n.store_id IS NULL
+                               OR inv.store_id = n.store_id
+                           )
                     """
                     : """
                         LEFT JOIN (
@@ -636,6 +639,7 @@ public class InventoryNotificationSql {
                 WHERE n.target_role = 'WAREHOUSE'
                   AND n.status = 'PENDING'
                   AND NVL(n.is_deleted, 0) = 0
+                  AND NVL(inv.current_quantity, 0) <= 20
             """.formatted(
                     storeSelectExpr,
                     productNameExpr,
@@ -644,7 +648,7 @@ public class InventoryNotificationSql {
                     countExpr,
                     createdByExpr,
                     invJoin
-            ) + (hasStoreId && cleanStoreId != null ? " AND n.store_id = ? " : "")
+            ) + (hasStoreId && cleanStoreId != null ? " AND (n.store_id = ? OR n.store_id IS NULL) " : "")
                     + """
                 ORDER BY n.updated_at DESC, n.created_at DESC
             """;
@@ -760,7 +764,7 @@ public class InventoryNotificationSql {
                 WHERE product_id = ?
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
-            """ + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+            """ + (hasStoreId && cleanStoreId != null ? " AND (store_id = ? OR store_id IS NULL) " : "");
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 int idx = 1;
@@ -813,6 +817,161 @@ public class InventoryNotificationSql {
             }
 
             ps.executeUpdate();
+        }
+    }
+
+    public int resolveRecoveredPendingNotificationsByStore(String storeId, int safeQuantity) {
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
+                return 0;
+            }
+
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+
+            String cleanStoreId = normalizeStoreId(storeId);
+            if (!SessionManager.isAdmin()) {
+                cleanStoreId = currentStoreIdOrNull();
+            }
+
+            String sql;
+
+            if (hasStoreId) {
+                sql = """
+                UPDATE INVENTORY_NOTIFICATIONS n
+                SET n.status = 'RESOLVED',
+                    n.resolved_at = CURRENT_TIMESTAMP,
+                    n.updated_at = CURRENT_TIMESTAMP
+                WHERE n.target_role = 'WAREHOUSE'
+                  AND n.status = 'PENDING'
+                  AND NVL(n.is_deleted, 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM (
+                          SELECT product_id,
+                                 store_id,
+                                 SUM(NVL(quantity, 0)) AS total_quantity
+                          FROM INVENTORY
+                          WHERE NVL(is_deleted, 0) = 0
+                          GROUP BY product_id, store_id
+                      ) inv
+                      WHERE inv.product_id = n.product_id
+                        AND (
+                            n.store_id IS NULL
+                            OR inv.store_id = n.store_id
+                        )
+                        AND inv.total_quantity > ?
+                  )
+            """ + (cleanStoreId != null ? " AND (n.store_id = ? OR n.store_id IS NULL) " : "");
+            } else {
+                sql = """
+                UPDATE INVENTORY_NOTIFICATIONS n
+                SET n.status = 'RESOLVED',
+                    n.resolved_at = CURRENT_TIMESTAMP,
+                    n.updated_at = CURRENT_TIMESTAMP
+                WHERE n.target_role = 'WAREHOUSE'
+                  AND n.status = 'PENDING'
+                  AND NVL(n.is_deleted, 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM (
+                          SELECT product_id,
+                                 SUM(NVL(quantity, 0)) AS total_quantity
+                          FROM INVENTORY
+                          WHERE NVL(is_deleted, 0) = 0
+                          GROUP BY product_id
+                      ) inv
+                      WHERE inv.product_id = n.product_id
+                        AND inv.total_quantity > ?
+                  )
+            """;
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                int idx = 1;
+                ps.setInt(idx++, safeQuantity);
+
+                if (hasStoreId && cleanStoreId != null) {
+                    ps.setString(idx++, cleanStoreId);
+                }
+
+                return ps.executeUpdate();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public int resolveRecoveredPendingNotifications(int safeQuantity) {
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
+                return 0;
+            }
+
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+
+            String sql;
+
+            if (hasStoreId) {
+                sql = """
+                UPDATE INVENTORY_NOTIFICATIONS n
+                SET n.status = 'RESOLVED',
+                    n.resolved_at = CURRENT_TIMESTAMP,
+                    n.updated_at = CURRENT_TIMESTAMP
+                WHERE n.target_role = 'WAREHOUSE'
+                  AND n.status = 'PENDING'
+                  AND NVL(n.is_deleted, 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM (
+                          SELECT product_id,
+                                 store_id,
+                                 SUM(NVL(quantity, 0)) AS total_quantity
+                          FROM INVENTORY
+                          WHERE NVL(is_deleted, 0) = 0
+                          GROUP BY product_id, store_id
+                      ) inv
+                      WHERE inv.product_id = n.product_id
+                        AND (
+                            n.store_id IS NULL
+                            OR inv.store_id = n.store_id
+                        )
+                        AND inv.total_quantity > ?
+                  )
+            """;
+            } else {
+                sql = """
+                UPDATE INVENTORY_NOTIFICATIONS n
+                SET n.status = 'RESOLVED',
+                    n.resolved_at = CURRENT_TIMESTAMP,
+                    n.updated_at = CURRENT_TIMESTAMP
+                WHERE n.target_role = 'WAREHOUSE'
+                  AND n.status = 'PENDING'
+                  AND NVL(n.is_deleted, 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM (
+                          SELECT product_id,
+                                 SUM(NVL(quantity, 0)) AS total_quantity
+                          FROM INVENTORY
+                          WHERE NVL(is_deleted, 0) = 0
+                          GROUP BY product_id
+                      ) inv
+                      WHERE inv.product_id = n.product_id
+                        AND inv.total_quantity > ?
+                  )
+            """;
+            }
+
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                ps.setInt(1, safeQuantity);
+                return ps.executeUpdate();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
         }
     }
 
