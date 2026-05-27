@@ -19,16 +19,17 @@ import java.awt.image.BufferedImage;
 import java.sql.*;
 
 /**
- * Unified Settings Panel - mỗi mục là một phần riêng: - Thông tin cửa hàng: chỉ
- * Admin được chỉnh. - Giao diện: đổi theme riêng. - Bảo mật: đổi mật khẩu
- * riêng. - Email: cấu hình email riêng.
+ * Unified Settings Panel - mỗi mục là một phần riêng:
+ * - Thông tin cửa hàng: chỉ Admin được chỉnh.
+ * - Giao diện: đổi theme riêng.
+ * - Bảo mật: đổi mật khẩu riêng.
+ * - Email: cấu hình email riêng.
  */
 public class UnifiedSettingsPanel extends JPanel {
 
     private static final Color BG_APP = new Color(241, 245, 249);
     private static final Color BG_PANEL = Color.WHITE;
     private static final Color COLOR_PRIMARY = new Color(79, 70, 229);
-    private static final Color COLOR_PRIMARY_SOFT = new Color(224, 231, 255);
     private static final Color COLOR_TEXT = new Color(15, 23, 42);
     private static final Color COLOR_MUTED = new Color(100, 116, 139);
     private static final Color COLOR_BORDER = new Color(226, 232, 240);
@@ -79,8 +80,8 @@ public class UnifiedSettingsPanel extends JPanel {
     private JLabel lblCurrentSectionHint;
 
     private String activeSection = STORE_KEY;
-
     private AutoCloseable eventSub;
+    private boolean suppressThemeEvents = false;
 
     public UnifiedSettingsPanel() {
         initUI();
@@ -93,7 +94,6 @@ public class UnifiedSettingsPanel extends JPanel {
     private void initUI() {
         setLayout(new BorderLayout());
         setBackground(BG_APP);
-
         add(createTopBar(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
     }
@@ -120,7 +120,6 @@ public class UnifiedSettingsPanel extends JPanel {
         titleWrap.setOpaque(false);
         titleWrap.add(title);
         titleWrap.add(subtitle);
-
         left.add(titleWrap);
 
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 12));
@@ -153,7 +152,6 @@ public class UnifiedSettingsPanel extends JPanel {
         JPanel body = new JPanel(new BorderLayout(18, 0));
         body.setBackground(BG_APP);
         body.setBorder(new EmptyBorder(14, 14, 14, 14));
-
         body.add(createNavPanel(), BorderLayout.WEST);
         body.add(createContentShell(), BorderLayout.CENTER);
         return body;
@@ -332,7 +330,11 @@ public class UnifiedSettingsPanel extends JPanel {
 
         cbTheme = new JComboBox<>(new String[]{"Sáng (Light Mode)", "Tối (Dark Mode)"});
         cbTheme.setFont(FONT_TEXT);
-        cbTheme.addActionListener(e -> applyTheme());
+        cbTheme.addActionListener(e -> {
+            if (!suppressThemeEvents) {
+                applyTheme();
+            }
+        });
 
         card.add(fieldRow("Chế độ giao diện", cbTheme));
         card.add(Box.createVerticalGlue());
@@ -475,7 +477,10 @@ public class UnifiedSettingsPanel extends JPanel {
     }
 
     private void loadSettings() {
-        try (Connection con = DatabaseConnection.getConnection(); Statement stmt = con.createStatement(); ResultSet rs = stmt.executeQuery("SELECT config_key, config_value FROM SYSTEM_CONFIG")) {
+        suppressThemeEvents = true;
+        try (Connection con = DatabaseConnection.getConnection();
+             Statement stmt = con.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT config_key, config_value FROM SYSTEM_CONFIG")) {
 
             while (rs.next()) {
                 String key = rs.getString("config_key");
@@ -492,17 +497,23 @@ public class UnifiedSettingsPanel extends JPanel {
                         txtStorePhone.setText(val != null ? val : "");
                         break;
                     case "theme_mode":
-                        cbTheme.setSelectedIndex("Dark".equals(val) ? 1 : 0);
+                        if (cbTheme != null) {
+                            cbTheme.setSelectedIndex("Dark".equals(val) ? 1 : 0);
+                        }
                         break;
                     case "email_sender":
                         if (txtEmailSender != null) {
                             txtEmailSender.setText(val != null ? val : "");
                         }
                         break;
+                    default:
+                        break;
                 }
             }
         } catch (Exception e) {
             System.err.println("Lỗi tải cấu hình: " + e.getMessage());
+        } finally {
+            suppressThemeEvents = false;
         }
 
         if (txtOldPass != null) {
@@ -588,10 +599,6 @@ public class UnifiedSettingsPanel extends JPanel {
         showMessage("✅ Đã lưu cấu hình email!", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void saveSettings() {
-        saveCurrentSection();
-    }
-
     private void saveConfig(String key, String value) throws SQLException {
         String sql = "MERGE INTO SYSTEM_CONFIG t USING (SELECT ? as k, ? as v FROM dual) s "
                 + "ON (t.config_key = s.k) "
@@ -628,7 +635,6 @@ public class UnifiedSettingsPanel extends JPanel {
         }
 
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement("SELECT password FROM ACCOUNTS WHERE username = ? AND is_deleted = 0")) {
-
             ps.setString(1, user.getUsername());
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
@@ -664,17 +670,35 @@ public class UnifiedSettingsPanel extends JPanel {
     }
 
     private void applyTheme() {
+        if (suppressThemeEvents || cbTheme == null) {
+            return;
+        }
+
+        boolean isDark = cbTheme.getSelectedIndex() == 1;
+
         try {
-            boolean isDark = cbTheme.getSelectedIndex() == 1;
             UIManager.setLookAndFeel(isDark ? new FlatDarkLaf() : new FlatLightLaf());
 
-            for (Window w : Window.getWindows()) {
-                SwingUtilities.updateComponentTreeUI(w);
-            }
+            SwingUtilities.invokeLater(() -> {
+                for (Window w : Window.getWindows()) {
+                    if (w == null || !w.isDisplayable()) {
+                        continue;
+                    }
+
+                    try {
+                        SwingUtilities.updateComponentTreeUI(w);
+                        w.invalidate();
+                        w.validate();
+                        w.repaint();
+                    } catch (Exception uiEx) {
+                        System.err.println("Bỏ qua lỗi cập nhật UI cho window: " + uiEx.getMessage());
+                    }
+                }
+            });
 
             saveConfig("theme_mode", isDark ? "Dark" : "Light");
         } catch (Exception e) {
-            showMessage("❌ Lỗi thay đổi giao diện: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+            System.err.println("Lỗi thay đổi giao diện: " + e.getMessage());
         }
     }
 
@@ -840,8 +864,10 @@ public class UnifiedSettingsPanel extends JPanel {
         try {
             eventSub = EventBus.subscribe(AppDataChangedEvent.class, e -> {
                 if (e != null && e.getType() == AppEventType.SYSTEM_CONFIG) {
-                    loadSettings();
-                    applyStoreEditPermission();
+                    SwingUtilities.invokeLater(() -> {
+                        loadSettings();
+                        applyStoreEditPermission();
+                    });
                 }
             });
         } catch (Exception e) {
