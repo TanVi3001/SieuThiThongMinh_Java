@@ -61,14 +61,24 @@ public class HeartbeatService {
                 AccountSql accountSql = AccountSql.getInstance();
                 cleanupDeadSessionsIfNeeded(accountSql);
 
-                boolean updated = accountSql.heartbeatSession(
+                boolean sessionAlive = accountSql.heartbeatSession(
                         currentAccountId,
                         currentSessionId
                 );
 
-                if (!updated) {
-                    accountSql.createLoginSession(currentAccountId, currentSessionId);
-                    accountSql.heartbeatSession(currentAccountId, currentSessionId);
+                /*
+                 * Nếu Admin khóa tài khoản hoặc đổi quyền/chi nhánh, forceLogoutAccount()
+                 * sẽ đóng ACCOUNT_SESSIONS. Khi đó heartbeatSession trả false.
+                 * Trước đây code tự createLoginSession lại nên tài khoản bị khóa không văng ra.
+                 * Bây giờ phải kiểm tra session hiện tại còn hợp lệ không, nếu không thì logout UI.
+                 */
+                if (!sessionAlive || !accountSql.isCurrentSessionValid(currentAccountId, currentSessionId)) {
+                    stopOnlyScheduler();
+                    common.security.SecurityGuard.forceLogoutCurrentSession(
+                            "Tài khoản của bạn đã bị khóa hoặc phiên đăng nhập đã bị thu hồi.\n"
+                            + "Vui lòng liên hệ quản trị viên nếu cần mở lại tài khoản."
+                    );
+                    return;
                 }
 
                 accountSql.heartbeat(currentAccountId);
