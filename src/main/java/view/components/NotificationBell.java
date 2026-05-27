@@ -45,6 +45,14 @@ public class NotificationBell extends JPanel {
     private JWindow popup;
     private final JPanel popupList;
 
+    // Không để chuông thông báo query DB trên Event Dispatch Thread.
+    // Các event tồn kho có thể bắn dồn dập, nên debounce + chạy nền để tránh trắng màn hình/đơ UI.
+    private Timer refreshDebounceTimer;
+    private SwingWorker<RefreshResult, Void> refreshWorker;
+    private boolean pendingIncreaseUnread = false;
+    private boolean refreshAgainAfterWorker = false;
+    private AWTEventListener popupOutsideClickListener;
+
     private static final Color COLOR_DANGER = new Color(220, 53, 69);
     private static final Color COLOR_WARNING = new Color(255, 152, 0);
     private static final Color COLOR_INFO = new Color(67, 97, 238);
@@ -134,7 +142,7 @@ public class NotificationBell extends JPanel {
             if (event.getType() == AppEventType.INVENTORY_ALERT) {
                 SwingUtilities.invokeLater(() -> {
                     handleInventoryAlert(event.getMessage());
-                    refreshPersistentWarehouseAlerts(false);
+                    requestRefresh(false);
                 });
                 return;
             }
@@ -142,17 +150,11 @@ public class NotificationBell extends JPanel {
             if (event.getType() == AppEventType.INVENTORY
                     || event.getType() == AppEventType.PRODUCTS
                     || event.getType() == AppEventType.ORDERS) {
-                SwingUtilities.invokeLater(() -> {
-                    checkLowStock();
-                    refreshPersistentWarehouseAlerts(false);
-                });
+                requestRefresh(false);
             }
         });
 
-        SwingUtilities.invokeLater(() -> {
-            checkLowStock();
-            refreshPersistentWarehouseAlerts(false);
-        });
+        requestRefresh(false);
     }
 
     private String currentStoreIdOrNull() {
@@ -191,8 +193,13 @@ public class NotificationBell extends JPanel {
         }
 
         try {
-            Product p = ProductsSql.getInstance().findByIdInStore(productId.trim(), storeId);
-            return p != null;
+            String targetKey = normalizeProductKey(productId);
+            for (Product p : ProductsSql.getInstance().selectAllByStore(storeId)) {
+                if (p != null && targetKey.equals(normalizeProductKey(p.getProductId()))) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Exception e) {
             return false;
         }
@@ -203,126 +210,107 @@ public class NotificationBell extends JPanel {
     }
 
     /**
-     * Load lại cảnh báo PENDING trong DB. Chỉ áp dụng cho Warehouse/ALL.
+     * API cũ còn được các màn khác gọi. Không query trực tiếp ở đây nữa, chỉ
+     * gom request để chạy nền.
      */
     private void refreshPersistentWarehouseAlerts(boolean increaseUnread) {
-        if (this.audience != Audience.WAREHOUSE && this.audience != Audience.ALL) {
-            return;
-        }
-
-        String storeKey = currentStoreKey();
-        String storeId = currentStoreIdOrNull();
-        Map<String, Integer> currentQtyByProduct = loadCurrentQuantityMap();
-
-        /*
-         * Rebuild lại toàn bộ lời nhắc Manager/Staff của chi nhánh hiện tại.
-         * Nếu sản phẩm đã nhập lại > THRESHOLD_WARNING thì không add lại vào UI
-         * và đồng thời resolve PENDING trong DB.
-         */
-        notifications.removeIf(n -> n.urgentManagerAlert
-                && n.key != null
-                && n.key.startsWith("MANAGER_STOCK_ALERT_")
-                && (storeKey.equals("ALL")
-                || n.key.contains("_STORE_" + storeKey + "_")));
-
-        try {
-            List<?> rawList = storeId == null
-                    ? InventoryNotificationSql.getInstance().getPendingWarehouseAlerts()
-                    : InventoryNotificationSql.getInstance().getPendingWarehouseAlertsByStore(storeId);
-
-            for (Object raw : rawList) {
-                String productId = readStringField(raw, "productId");
-                String productName = readStringField(raw, "productName");
-                String message = readStringField(raw, "message");
-                String rawStoreId = readStringField(raw, "storeId");
-                int remindCount = readIntField(raw, "remindCount", 1);
-                int currentQty = readIntField(raw, "currentQuantity", Integer.MIN_VALUE);
-
-                if (productId == null || productId.isBlank()) {
-                    continue;
-                }
-
-                productId = productId.trim();
-
-                if (currentQty == Integer.MIN_VALUE) {
-                    currentQty = currentQtyByProduct.getOrDefault(productId.toUpperCase(), Integer.MIN_VALUE);
-                }
-
-                /*
-                 * Quan trọng:
-                 * Nếu hàng đã nhập lại vượt ngưỡng cảnh báo thì xóa khỏi UI
-                 * và resolve luôn lời nhắc Manager/Staff trong DB.
-                 */
-                if (currentQty != Integer.MIN_VALUE && currentQty > THRESHOLD_WARNING) {
-                    resolveProductNotifications(productId, rawStoreId == null || rawStoreId.isBlank() ? storeId : rawStoreId);
-                    continue;
-                }
-
-                if (productName == null || productName.isBlank()) {
-                    productName = "Sản phẩm";
-                }
-
-                String key = "MANAGER_STOCK_ALERT_STORE_" + storeKey + "_" + productId;
-                String title = "Nhắc nhập hàng: " + productName;
-
-                /*
-                 * Luôn nhét mã SP vào body để click thông báo mở đúng sản phẩm.
-                 */
-                String body = "Mã sản phẩm [" + productId + "]. "
-                        + (message == null ? "" : message);
-
-                if (remindCount >= 2) {
-                    body += "<br><br><b style='color:#DC3545'>"
-                            + "Đã nhắc " + remindCount
-                            + " lần. Thông báo này sẽ chỉ mất khi sản phẩm được nhập thêm."
-                            + "</b>";
-                }
-
-                addOrUpdateNotification(
-                        key,
-                        NotifItem.Type.DANGER,
-                        title,
-                        body,
-                        Audience.WAREHOUSE,
-                        true,
-                        increaseUnread,
-                        remindCount
-                );
-            }
-
-            clampUnreadCount();
-            updateBadge();
-            rebuildPopupList();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        requestRefresh(increaseUnread);
     }
 
     /**
-     * Kiểm tra tồn kho tự động. Cảnh báo auto chỉ nằm ở UI, có thể xóa bằng
-     * "Xóa tất cả".
+     * API cũ còn được các màn khác gọi. Không query trực tiếp ở đây nữa, chỉ
+     * gom request để chạy nền.
      */
     public void checkLowStock() {
-        try {
-            String storeId = currentStoreIdOrNull();
+        requestRefresh(false);
+    }
 
-            List<Product> products;
-            if (storeId == null) {
-                products = ProductsSql.getInstance().selectAll();
-            } else {
-                products = ProductsSql.getInstance().selectAllByStore(storeId);
+    private void requestRefresh(boolean increaseUnread) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> requestRefresh(increaseUnread));
+            return;
+        }
+
+        pendingIncreaseUnread = pendingIncreaseUnread || increaseUnread;
+
+        if (refreshDebounceTimer == null) {
+            refreshDebounceTimer = new Timer(350, e -> startBackgroundRefresh());
+            refreshDebounceTimer.setRepeats(false);
+        }
+
+        refreshDebounceTimer.restart();
+    }
+
+    private void forceRefreshNow() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::forceRefreshNow);
+            return;
+        }
+
+        pendingIncreaseUnread = false;
+
+        if (refreshDebounceTimer != null && refreshDebounceTimer.isRunning()) {
+            refreshDebounceTimer.stop();
+        }
+
+        if (refreshWorker != null && !refreshWorker.isDone()) {
+            refreshAgainAfterWorker = true;
+            return;
+        }
+
+        startBackgroundRefresh();
+    }
+
+    private void startBackgroundRefresh() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::startBackgroundRefresh);
+            return;
+        }
+
+        if (refreshWorker != null && !refreshWorker.isDone()) {
+            refreshAgainAfterWorker = true;
+            return;
+        }
+
+        boolean increaseUnread = pendingIncreaseUnread;
+        pendingIncreaseUnread = false;
+
+        refreshWorker = new SwingWorker<>() {
+            @Override
+            protected RefreshResult doInBackground() {
+                return buildRefreshResult();
             }
 
-            String storeKey = currentStoreKey();
+            @Override
+            protected void done() {
+                try {
+                    RefreshResult result = get();
+                    applyRefreshResult(result, increaseUnread);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    if (refreshAgainAfterWorker) {
+                        refreshAgainAfterWorker = false;
+                        requestRefresh(false);
+                    }
+                }
+            }
+        };
 
-            /*
-             * Xóa cảnh báo tự động cũ của chi nhánh hiện tại.
-             * Sau đó rebuild theo tồn kho mới nhất.
-             */
-            notifications.removeIf(n -> !n.urgentManagerAlert
-                    && n.key != null
-                    && n.key.startsWith("AUTO_STORE_" + storeKey + "_"));
+        refreshWorker.execute();
+    }
+
+    private RefreshResult buildRefreshResult() {
+        RefreshResult result = new RefreshResult();
+
+        String storeId = currentStoreIdOrNull();
+        String storeKey = currentStoreKey();
+        Map<String, Integer> qtyByProduct = new HashMap<>();
+
+        try {
+            List<Product> products = storeId == null
+                    ? ProductsSql.getInstance().selectAll()
+                    : ProductsSql.getInstance().selectAllByStore(storeId);
 
             for (Product p : products) {
                 if (p == null) {
@@ -337,47 +325,162 @@ public class NotificationBell extends JPanel {
                     continue;
                 }
 
-                if (qty <= 0) {
-                    addNotification(
-                            NotifItem.Type.DANGER,
-                            "Hết hàng: " + productName,
-                            "Sản phẩm [" + productId + "] đã hết hoàn toàn. Cần nhập khẩn!",
-                            Audience.ALL,
-                            false
-                    );
-                } else if (qty <= THRESHOLD_DANGER) {
-                    addNotification(
-                            NotifItem.Type.DANGER,
-                            "Sắp hết: " + productName,
-                            "Sản phẩm [" + productId + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!",
-                            Audience.ALL,
-                            false
-                    );
-                } else if (qty <= THRESHOLD_WARNING) {
-                    addNotification(
-                            NotifItem.Type.WARNING,
-                            "Tồn kho thấp: " + productName,
-                            "Sản phẩm [" + productId + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.",
-                            Audience.WAREHOUSE,
-                            false
-                    );
-                } else {
-                    /*
-                     * Hàng đã nhập lại vượt ngưỡng cảnh báo.
-                     * Xóa cả:
-                     * - thông báo tự động trên UI
-                     * - lời nhắc Manager/Staff đang PENDING trong DB
-                     */
-                    resolveProductNotifications(productId, storeId);
+                qtyByProduct.put(normalizeProductKey(productId), qty);
+
+                NotifItem auto = createAutoStockItem(storeKey, productId, productName, qty);
+                if (auto != null) {
+                    result.items.add(auto);
                 }
             }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
 
+        if (audience == Audience.WAREHOUSE || audience == Audience.ALL) {
+            try {
+                // Dọn PENDING đã hết cảnh báo ở DB bằng 1 câu SQL duy nhất, không resolve từng sản phẩm trên EDT.
+                InventoryNotificationSql.getInstance()
+                        .resolveRecoveredPendingNotificationsByStore(storeId, THRESHOLD_WARNING);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            try {
+                List<?> rawList = storeId == null
+                        ? InventoryNotificationSql.getInstance().getPendingWarehouseAlerts()
+                        : InventoryNotificationSql.getInstance().getPendingWarehouseAlertsByStore(storeId);
+
+                for (Object raw : rawList) {
+                    String productId = readStringField(raw, "productId");
+                    String productName = readStringField(raw, "productName");
+                    String message = readStringField(raw, "message");
+                    String rawStoreId = readStringField(raw, "storeId");
+                    int remindCount = readIntField(raw, "remindCount", 1);
+                    int currentQty = readIntField(raw, "currentQuantity", Integer.MIN_VALUE);
+
+                    if (productId == null || productId.isBlank()) {
+                        continue;
+                    }
+
+                    productId = canonicalizeProductId(productId.trim());
+                    String productKey = normalizeProductKey(productId);
+
+                    if (currentQty == Integer.MIN_VALUE) {
+                        currentQty = qtyByProduct.getOrDefault(productKey, Integer.MIN_VALUE);
+                    }
+
+                    /*
+                     * Không tự ẩn lời nhắc do Staff/Manager gửi chỉ vì tồn kho hiện tại > 20.
+                     * Việc tự resolve thông báo đã nhập đủ hàng được xử lý ở InventoryNotificationSql,
+                     * dựa trên thời điểm cập nhật kho sau lúc thông báo được gửi.
+                     */
+                    if (productName == null || productName.isBlank()) {
+                        productName = "Sản phẩm";
+                    }
+
+                    String keyStore = (rawStoreId == null || rawStoreId.isBlank()) ? storeKey : rawStoreId.trim();
+                    String key = "MANAGER_STOCK_ALERT_STORE_" + keyStore + "_" + productId;
+                    String title = "Nhắc nhập hàng: " + productName;
+                    String body = "Mã sản phẩm [" + productId + "]. " + (message == null ? "" : message);
+
+                    if (remindCount >= 2) {
+                        body += "<br><br><b style='color:#DC3545'>"
+                                + "Đã nhắc " + remindCount
+                                + " lần. Thông báo này sẽ chỉ mất khi sản phẩm được nhập thêm."
+                                + "</b>";
+                    }
+
+                    NotifItem item = new NotifItem(
+                            key,
+                            NotifItem.Type.DANGER,
+                            title,
+                            body,
+                            LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")),
+                            true
+                    );
+                    item.remindCount = remindCount;
+                    result.items.add(item);
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        if (!result.productIdsToResolve.isEmpty()) {
+            for (String productId : result.productIdsToResolve) {
+                try {
+                    InventoryNotificationSql.getInstance().resolveByProductIdAndStore(productId, storeId);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private NotifItem createAutoStockItem(String storeKey, String productId, String productName, int qty) {
+        NotifItem.Type type;
+        String title;
+        String body;
+        Audience target;
+
+        if (qty <= 0) {
+            type = NotifItem.Type.DANGER;
+            title = "Hết hàng: " + productName;
+            body = "Sản phẩm [" + productId + "] đã hết hoàn toàn. Cần nhập khẩn!";
+            target = Audience.ALL;
+        } else if (qty <= THRESHOLD_DANGER) {
+            type = NotifItem.Type.DANGER;
+            title = "Sắp hết: " + productName;
+            body = "Sản phẩm [" + productId + "] chỉ còn " + qty + " sản phẩm. Cần nhập ngay!";
+            target = Audience.ALL;
+        } else if (qty <= THRESHOLD_WARNING) {
+            type = NotifItem.Type.WARNING;
+            title = "Tồn kho thấp: " + productName;
+            body = "Sản phẩm [" + productId + "] còn " + qty + " sản phẩm. Nên lên kế hoạch nhập thêm.";
+            target = Audience.WAREHOUSE;
+        } else {
+            return null;
+        }
+
+        if (!isForCurrentAudience(target)) {
+            return null;
+        }
+
+        String key = "AUTO_STORE_" + storeKey + "_" + productId;
+        return new NotifItem(
+                key,
+                type,
+                title,
+                body,
+                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")),
+                false
+        );
+    }
+
+    private boolean isForCurrentAudience(Audience target) {
+        return target == Audience.ALL || target == this.audience;
+    }
+
+    private void applyRefreshResult(RefreshResult result, boolean increaseUnread) {
+        if (result == null) {
+            return;
+        }
+
+        notifications.clear();
+        notifications.addAll(result.items);
+
+        if (increaseUnread) {
+            unreadCount = Math.min(notifications.size(), unreadCount + 1);
+        } else {
             clampUnreadCount();
-            updateBadge();
-            rebuildPopupList();
+        }
 
-        } catch (Exception e) {
-            e.printStackTrace();
+        updateBadge();
+
+        if (popup != null && popup.isVisible()) {
+            rebuildPopupList();
         }
     }
 
@@ -387,14 +490,8 @@ public class NotificationBell extends JPanel {
         }
 
         String cleanProductId = productId.trim();
-        String storeKey = currentStoreKey();
+        removeProductNotificationsFromUI(cleanProductId, currentStoreKey());
 
-        removeProductNotificationsFromUI(cleanProductId, storeKey);
-
-        /*
-         * Resolve trong DB để refresh lại không hiện lời nhắc cũ nữa.
-         * Hàm này chuyển PENDING -> RESOLVED cho product/store tương ứng.
-         */
         try {
             InventoryNotificationSql.getInstance()
                     .resolveByProductIdAndStore(cleanProductId, storeId);
@@ -403,34 +500,10 @@ public class NotificationBell extends JPanel {
         }
 
         clampUnreadCount();
-    }
-
-    private Map<String, Integer> loadCurrentQuantityMap() {
-        Map<String, Integer> map = new HashMap<>();
-
-        try {
-            String storeId = currentStoreIdOrNull();
-
-            List<Product> products;
-            if (storeId == null) {
-                products = ProductsSql.getInstance().selectAll();
-            } else {
-                products = ProductsSql.getInstance().selectAllByStore(storeId);
-            }
-
-            for (Product p : products) {
-                if (p == null || p.getProductId() == null || p.getProductId().trim().isEmpty()) {
-                    continue;
-                }
-
-                map.put(p.getProductId().trim().toUpperCase(), p.getQuantity());
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        updateBadge();
+        if (popup != null && popup.isVisible()) {
+            rebuildPopupList();
         }
-
-        return map;
     }
 
     private void removeProductNotificationsFromUI(String productId, String storeKey) {
@@ -495,7 +568,7 @@ public class NotificationBell extends JPanel {
             String[] parts = rawMessage.split(":", 4);
 
             if (parts.length >= 2) {
-                productId = parts[1].trim();
+                productId = canonicalizeProductId(parts[1].trim());
             }
 
             if (parts.length >= 3) {
@@ -570,7 +643,9 @@ public class NotificationBell extends JPanel {
         }
 
         updateBadge();
-        rebuildPopupList();
+        if (popup != null && popup.isVisible()) {
+            rebuildPopupList();
+        }
     }
 
     private void addOrUpdateNotification(
@@ -613,7 +688,9 @@ public class NotificationBell extends JPanel {
                     unreadCount++;
                 }
                 updateBadge();
-                rebuildPopupList();
+                if (popup != null && popup.isVisible()) {
+                    rebuildPopupList();
+                }
                 return;
             }
         }
@@ -636,7 +713,9 @@ public class NotificationBell extends JPanel {
         }
 
         updateBadge();
-        rebuildPopupList();
+        if (popup != null && popup.isVisible()) {
+            rebuildPopupList();
+        }
     }
 
     private void updateBadge() {
@@ -653,20 +732,64 @@ public class NotificationBell extends JPanel {
 
     private void togglePopup() {
         if (popup != null && popup.isVisible()) {
-            popup.setVisible(false);
+            hidePopup();
             return;
         }
-
-        /*
-         * Mỗi lần mở chuông thì refresh lại theo tồn kho mới nhất,
-         * tránh giữ thông báo cũ đã được nhập hàng.
-         */
-        checkLowStock();
-        refreshPersistentWarehouseAlerts(false);
 
         unreadCount = 0;
         updateBadge();
         showPopup();
+        requestRefresh(false);
+    }
+
+    private void hidePopup() {
+        if (popup != null) {
+            popup.setVisible(false);
+            popup.dispose();
+            popup = null;
+        }
+        uninstallOutsideClickListener();
+    }
+
+    private void installOutsideClickListener() {
+        uninstallOutsideClickListener();
+
+        popupOutsideClickListener = event -> {
+            if (!(event instanceof MouseEvent me)) {
+                return;
+            }
+
+            if (me.getID() != MouseEvent.MOUSE_PRESSED) {
+                return;
+            }
+
+            if (popup == null || !popup.isVisible()) {
+                uninstallOutsideClickListener();
+                return;
+            }
+
+            Component source = me.getComponent();
+            if (source != null && SwingUtilities.isDescendingFrom(source, NotificationBell.this)) {
+                return;
+            }
+
+            Point p = me.getLocationOnScreen();
+            if (!popup.getBounds().contains(p)) {
+                hidePopup();
+            }
+        };
+
+        Toolkit.getDefaultToolkit().addAWTEventListener(
+                popupOutsideClickListener,
+                AWTEvent.MOUSE_EVENT_MASK
+        );
+    }
+
+    private void uninstallOutsideClickListener() {
+        if (popupOutsideClickListener != null) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(popupOutsideClickListener);
+            popupOutsideClickListener = null;
+        }
     }
 
     private void showPopup() {
@@ -674,6 +797,12 @@ public class NotificationBell extends JPanel {
 
         if (parentWindow == null) {
             return;
+        }
+
+        if (popup != null) {
+            popup.setVisible(false);
+            popup.dispose();
+            popup = null;
         }
 
         popup = new JWindow(parentWindow);
@@ -717,13 +846,13 @@ public class NotificationBell extends JPanel {
         lblCount.setOpaque(false);
         lblCount.setBorder(new EmptyBorder(4, 10, 4, 10));
 
-        JButton btnClear = new JButton("  Xóa tất cả  ") {
+        JButton btnRefresh = new JButton("  Làm mới  ") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
 
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(220, 53, 69));
+                g2.setColor(new Color(107, 119, 140));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
 
                 g2.dispose();
@@ -731,34 +860,30 @@ public class NotificationBell extends JPanel {
             }
         };
 
-        ImageIcon delIcon = IconHelper.delete(13);
+        ImageIcon refreshIcon = IconHelper.refresh(13);
 
-        if (delIcon != null) {
-            btnClear.setIcon(delIcon);
-            btnClear.setIconTextGap(5);
+        if (refreshIcon != null) {
+            btnRefresh.setIcon(refreshIcon);
+            btnRefresh.setIconTextGap(5);
         }
 
-        btnClear.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btnClear.setForeground(Color.WHITE);
-        btnClear.setContentAreaFilled(false);
-        btnClear.setBorderPainted(false);
-        btnClear.setFocusPainted(false);
-        btnClear.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnClear.setBorder(new EmptyBorder(4, 10, 4, 10));
-
-        // Chỉ xóa thông báo tự động. Thông báo từ Manager/Staff vẫn giữ cho tới khi kho xử lý/resolve.
-        btnClear.addActionListener(e -> {
-            notifications.removeIf(n -> !n.urgentManagerAlert);
-
+        btnRefresh.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnRefresh.setForeground(Color.WHITE);
+        btnRefresh.setContentAreaFilled(false);
+        btnRefresh.setBorderPainted(false);
+        btnRefresh.setFocusPainted(false);
+        btnRefresh.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnRefresh.setBorder(new EmptyBorder(4, 10, 4, 10));
+        btnRefresh.addActionListener(e -> {
             unreadCount = 0;
             updateBadge();
-            rebuildPopupList();
+            forceRefreshNow();
         });
 
         JPanel rightGroup = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         rightGroup.setOpaque(false);
         rightGroup.add(lblCount);
-        rightGroup.add(btnClear);
+        rightGroup.add(btnRefresh);
 
         header.add(titleGroup, BorderLayout.WEST);
         header.add(rightGroup, BorderLayout.EAST);
@@ -796,19 +921,7 @@ public class NotificationBell extends JPanel {
         popup.setLocation(x, y);
         popup.setVisible(true);
 
-        Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
-            if (event instanceof MouseEvent) {
-                MouseEvent me = (MouseEvent) event;
-
-                if (me.getID() == MouseEvent.MOUSE_PRESSED) {
-                    if (popup != null && popup.isVisible()) {
-                        if (!popup.getBounds().contains(me.getLocationOnScreen())) {
-                            popup.setVisible(false);
-                        }
-                    }
-                }
-            }
-        }, AWTEvent.MOUSE_EVENT_MASK);
+        installOutsideClickListener();
     }
 
     private void rebuildPopupList() {
@@ -1113,9 +1226,9 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        if (popup != null) {
-            popup.setVisible(false);
-        }
+        targetProductId = resolveActualProductIdForClick(n, targetProductId);
+
+        hidePopup();
 
         if (productClickListener == null) {
             JOptionPane.showMessageDialog(
@@ -1127,7 +1240,102 @@ public class NotificationBell extends JPanel {
             return;
         }
 
-        productClickListener.accept(targetProductId.trim().toUpperCase());
+        productClickListener.accept(targetProductId.trim());
+    }
+
+    private String resolveActualProductIdForClick(NotifItem n, String candidateId) {
+        String cleanCandidate = canonicalizeProductId(candidateId);
+        String candidateKey = normalizeProductKey(cleanCandidate);
+        String storeId = currentStoreIdOrNull();
+
+        try {
+            List<Product> products = storeId == null
+                    ? ProductsSql.getInstance().selectAll()
+                    : ProductsSql.getInstance().selectAllByStore(storeId);
+
+            if (products != null) {
+                for (Product p : products) {
+                    if (p == null || p.getProductId() == null) {
+                        continue;
+                    }
+
+                    if (!candidateKey.isBlank()
+                            && candidateKey.equals(normalizeProductKey(p.getProductId()))) {
+                        return p.getProductId().trim();
+                    }
+                }
+
+                String notifName = extractProductNameForMatching(n);
+
+                if (!notifName.isBlank()) {
+                    String normalizedNotifName = normalizeName(notifName);
+
+                    for (Product p : products) {
+                        String productName = p == null ? "" : safe(p.getProductName());
+
+                        if (!productName.isBlank()
+                                && normalizeName(productName).equals(normalizedNotifName)) {
+                            return p.getProductId().trim();
+                        }
+                    }
+
+                    for (Product p : products) {
+                        String productName = p == null ? "" : safe(p.getProductName());
+                        String normalizedProductName = normalizeName(productName);
+
+                        if (!productName.isBlank()
+                                && (normalizedProductName.contains(normalizedNotifName)
+                                || normalizedNotifName.contains(normalizedProductName))) {
+                            return p.getProductId().trim();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return cleanCandidate;
+    }
+
+    private String extractProductNameForMatching(NotifItem n) {
+        if (n == null) {
+            return "";
+        }
+
+        String title = safe(n.title)
+                .replaceFirst("(?i)^Nhắc\\s+nhập\\s+hàng\\s*:\\s*", "")
+                .replaceFirst("(?i)^Hết\\s+hàng\\s*:\\s*", "")
+                .replaceFirst("(?i)^Sắp\\s+hết\\s*:\\s*", "")
+                .replaceFirst("(?i)^Tồn\\s+kho\\s+thấp\\s*:\\s*", "")
+                .trim();
+
+        if (!title.isBlank() && !"Sản phẩm".equalsIgnoreCase(title)) {
+            return title;
+        }
+
+        String body = safe(n.body);
+
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("Sản phẩm\\s+(.+?)(?:\\s+đã hết hàng|\\s+đang còn|\\s+hiện còn|\\.|$)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE)
+                .matcher(body.replace("<br>", " "));
+
+        if (m.find()) {
+            return m.group(1).trim();
+        }
+
+        return "";
+    }
+
+    private static String normalizeName(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value.trim()
+                .toLowerCase()
+                .replaceAll("\\s+", " ");
     }
 
     private String extractProductIdFromNotification(NotifItem n) {
@@ -1156,10 +1364,42 @@ public class NotificationBell extends JPanel {
                 .matcher(text);
 
         if (matcher.find()) {
-            return matcher.group(1).toUpperCase();
+            return canonicalizeProductId(matcher.group(1));
         }
 
         return "";
+    }
+
+    private static String normalizeProductKey(String productId) {
+        String canonical = canonicalizeProductId(productId);
+        if (canonical.isBlank()) {
+            return "";
+        }
+
+        return canonical.replaceFirst("^SP0+", "SP").toUpperCase();
+    }
+
+    private static String canonicalizeProductId(String productId) {
+        if (productId == null) {
+            return "";
+        }
+
+        String text = productId.trim().toUpperCase();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("^SP0*(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(text);
+
+        if (!matcher.find()) {
+            return text;
+        }
+
+        String number = matcher.group(1);
+        try {
+            long value = Long.parseLong(number);
+            return String.format("SP%06d", value);
+        } catch (Exception ex) {
+            return text;
+        }
     }
 
     private String toAllowedHtml(String input) {
@@ -1237,6 +1477,12 @@ public class NotificationBell extends JPanel {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    private static class RefreshResult {
+
+        final List<NotifItem> items = new ArrayList<>();
+        final List<String> productIdsToResolve = new ArrayList<>();
     }
 
     private static class NotifItem {

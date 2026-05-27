@@ -193,7 +193,9 @@ public class AccountSql implements SqlInterface<Account> {
                 + "       ON aarg.role_group_id = rg.role_group_id "
                 + "      AND NVL(rg.is_deleted, 0) = 0 "
                 + "WHERE a.username = ? "
-                + "  AND NVL(a.is_deleted, 0) = 0";
+                + "  AND NVL(a.is_deleted, 0) = 0 "
+                + "  AND UPPER(TRIM(NVL(a.status, N'Hoạt động'))) NOT IN "
+                + "      (N'BỊ KHÓA', 'BI KHOA', 'LOCKED', 'DISABLED', 'INACTIVE', N'TẠM KHÓA', 'TAM KHOA')";
 
         try (
                 Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
