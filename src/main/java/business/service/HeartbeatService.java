@@ -1,6 +1,10 @@
 package business.service;
 
 import business.sql.rbac.AccountSql;
+import common.db.DatabaseConnection;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -66,19 +70,34 @@ public class HeartbeatService {
                         currentSessionId
                 );
 
-                /*
-                 * Nếu Admin khóa tài khoản hoặc đổi quyền/chi nhánh, forceLogoutAccount()
-                 * sẽ đóng ACCOUNT_SESSIONS. Khi đó heartbeatSession trả false.
-                 * Trước đây code tự createLoginSession lại nên tài khoản bị khóa không văng ra.
-                 * Bây giờ phải kiểm tra session hiện tại còn hợp lệ không, nếu không thì logout UI.
-                 */
                 if (!sessionAlive || !accountSql.isCurrentSessionValid(currentAccountId, currentSessionId)) {
-                    stopOnlyScheduler();
-                    common.security.SecurityGuard.forceLogoutCurrentSession(
-                            "Tài khoản của bạn đã bị khóa hoặc phiên đăng nhập đã bị thu hồi.\n"
-                            + "Vui lòng liên hệ quản trị viên nếu cần mở lại tài khoản."
-                    );
-                    return;
+                    if (!isAccountLoginAllowed(currentAccountId)) {
+                        stopOnlyScheduler();
+                        common.security.SecurityGuard.forceLogoutCurrentSession(
+                                "Tài khoản của bạn đã bị khóa hoặc phiên đăng nhập đã bị thu hồi.\n"
+                                + "Vui lòng liên hệ quản trị viên nếu cần mở lại tài khoản."
+                        );
+                        return;
+                    }
+
+                    /*
+                     * Session có thể bị expire do app đứng lâu/debug, hoặc do vừa restart DB.
+                     * Nếu tài khoản vẫn đang Hoạt động thì không đá người dùng ra ngay;
+                     * tạo lại chính session hiện tại để tránh Admin/Manager đang thao tác bị văng nhầm.
+                     * Nếu Admin thật sự khóa tài khoản, isAccountLoginAllowed() ở trên sẽ false.
+                     */
+                    boolean recreated = accountSql.createLoginSession(currentAccountId, currentSessionId);
+                    boolean recovered = recreated
+                            && accountSql.heartbeatSession(currentAccountId, currentSessionId)
+                            && accountSql.isCurrentSessionValid(currentAccountId, currentSessionId);
+
+                    if (!recovered) {
+                        stopOnlyScheduler();
+                        common.security.SecurityGuard.forceLogoutCurrentSession(
+                                "Phiên đăng nhập không còn hợp lệ.\nVui lòng đăng nhập lại."
+                        );
+                        return;
+                    }
                 }
 
                 accountSql.heartbeat(currentAccountId);
@@ -150,6 +169,54 @@ public class HeartbeatService {
                 || currentAccountId.trim().isEmpty()
                 || currentSessionId == null
                 || currentSessionId.trim().isEmpty();
+    }
+
+    private static boolean isAccountLoginAllowed(String accountId) {
+        if (accountId == null || accountId.trim().isEmpty()) {
+            return false;
+        }
+
+        String sql = """
+            SELECT NVL(is_deleted, 0) AS is_deleted,
+                   NVL(status, N'Hoạt động') AS account_status
+            FROM ACCOUNTS
+            WHERE account_id = ?
+        """;
+
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, accountId.trim());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return false;
+                }
+
+                int isDeleted = rs.getInt("is_deleted");
+                String status = rs.getString("account_status");
+                return isDeleted == 0 && !isLockedStatus(status);
+            }
+
+        } catch (Exception e) {
+            System.err.println("[HeartbeatService] isAccountLoginAllowed error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static boolean isLockedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+
+        String s = status.trim().toUpperCase();
+        return s.equals("BỊ KHÓA")
+                || s.equals("BI KHOA")
+                || s.equals("LOCKED")
+                || s.equals("DISABLED")
+                || s.equals("INACTIVE")
+                || s.equals("TẠM KHÓA")
+                || s.equals("TAM KHOA");
     }
 
     private static String clean(String value) {
