@@ -3,10 +3,11 @@ package view.util;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Font;
-import java.awt.Rectangle;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -90,31 +91,10 @@ public final class CenterAlignmentUtil {
             return;
         }
 
-        comboBox.setRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(
-                    JTable table,
-                    Object value,
-                    boolean isSelected,
-                    boolean hasFocus,
-                    int row,
-                    int column
-            ) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                        table,
-                        value,
-                        isSelected,
-                        hasFocus,
-                        row,
-                        column
-                );
-                label.setHorizontalAlignment(SwingConstants.CENTER);
-                return label;
-            }
-
+        comboBox.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(
-                    javax.swing.JList<?> list,
+                    JList<?> list,
                     Object value,
                     int index,
                     boolean isSelected,
