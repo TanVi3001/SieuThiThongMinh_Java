@@ -8,7 +8,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import model.product.ProductUnit;
 
 public class ProductUnitsSql {
@@ -309,6 +312,47 @@ public class ProductUnitsSql {
     public List<ProductUnit> selectByProductId(String productId) {
         List<ProductUnit> units = new ArrayList<>();
 
+        if (productId == null || productId.trim().isEmpty()) {
+            return units;
+        }
+
+        Map<String, List<ProductUnit>> grouped = selectByProductIds(java.util.List.of(productId.trim()));
+        List<ProductUnit> found = grouped.get(productId.trim());
+
+        if (found != null) {
+            units.addAll(found);
+        }
+
+        return units;
+    }
+
+    public Map<String, List<ProductUnit>> selectByProductIds(Collection<String> productIds) {
+        Map<String, List<ProductUnit>> groupedUnits = new LinkedHashMap<>();
+
+        if (productIds == null || productIds.isEmpty()) {
+            return groupedUnits;
+        }
+
+        List<String> ids = new ArrayList<>();
+        for (String id : productIds) {
+            if (id != null && !id.trim().isEmpty() && !ids.contains(id.trim())) {
+                ids.add(id.trim());
+                groupedUnits.put(id.trim(), new ArrayList<>());
+            }
+        }
+
+        if (ids.isEmpty()) {
+            return groupedUnits;
+        }
+
+        StringBuilder placeholders = new StringBuilder();
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                placeholders.append(",");
+            }
+            placeholders.append("?");
+        }
+
         String sql = """
             SELECT
                 pu.product_id,
@@ -323,19 +367,20 @@ public class ProductUnitsSql {
                 ON p.product_id = pu.product_id
             JOIN UNITS u
                 ON u.unit_id = pu.unit_id
-            WHERE pu.product_id = ?
+            WHERE pu.product_id IN (%s)
               AND NVL(pu.is_deleted, 0) = 0
               AND NVL(u.is_deleted, 0) = 0
-            ORDER BY pu.is_base_unit DESC, pu.unit_id
-        """;
+            ORDER BY pu.product_id, pu.is_base_unit DESC, pu.conversion_rate_to_base, pu.unit_id
+        """.formatted(placeholders.toString());
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
-            pst.setString(1, productId);
+        try (Connection con = DatabaseConnection.getConnection(); PreparedStatement pst = con.prepareStatement(sql)) {
+            for (int i = 0; i < ids.size(); i++) {
+                pst.setString(i + 1, ids.get(i));
+            }
 
             try (ResultSet rs = pst.executeQuery()) {
                 while (rs.next()) {
-                    units.add(new ProductUnit(
+                    ProductUnit unit = new ProductUnit(
                             rs.getString("product_id"),
                             rs.getString("unit_id"),
                             rs.getString("unit_name"),
@@ -343,16 +388,18 @@ public class ProductUnitsSql {
                             rs.getBigDecimal("selling_price"),
                             rs.getInt("is_base_unit"),
                             rs.getInt("is_deleted")
-                    ));
+                    );
+
+                    groupedUnits.computeIfAbsent(unit.getProductId(), k -> new ArrayList<>()).add(unit);
                 }
             }
 
         } catch (SQLException e) {
-            System.err.println("Loi ProductUnitsSql.selectByProductId: " + e.getMessage());
+            System.err.println("Loi ProductUnitsSql.selectByProductIds: " + e.getMessage());
             e.printStackTrace();
         }
 
-        return units;
+        return groupedUnits;
     }
 
     public void upsertProductUnitWithConn(Connection con, String productId, String unitId,
@@ -479,14 +526,14 @@ public class ProductUnitsSql {
 
                 if (oldUnitId.equals(newUnitId)) {
                     String updateSql = """
-                    UPDATE PRODUCT_UNITS
-                    SET conversion_rate_to_base = ?,
-                        selling_price = ?,
-                        is_base_unit = ?,
-                        is_deleted = 0
-                    WHERE product_id = ?
-                      AND unit_id = ?
-                """;
+                        UPDATE PRODUCT_UNITS
+                        SET conversion_rate_to_base = ?,
+                            selling_price = ?,
+                            is_base_unit = ?,
+                            is_deleted = 0
+                        WHERE product_id = ?
+                          AND unit_id = ?
+                    """;
 
                     try (PreparedStatement pst = con.prepareStatement(updateSql)) {
                         pst.setBigDecimal(1, conversionRateToBase);
@@ -508,12 +555,12 @@ public class ProductUnitsSql {
                     );
 
                     String deleteOldSql = """
-                    UPDATE PRODUCT_UNITS
-                    SET is_deleted = 1,
-                        is_base_unit = 0
-                    WHERE product_id = ?
-                      AND unit_id = ?
-                """;
+                        UPDATE PRODUCT_UNITS
+                        SET is_deleted = 1,
+                            is_base_unit = 0
+                        WHERE product_id = ?
+                          AND unit_id = ?
+                    """;
 
                     try (PreparedStatement pst = con.prepareStatement(deleteOldSql)) {
                         pst.setString(1, productId);
@@ -553,27 +600,27 @@ public class ProductUnitsSql {
         }
 
         String countSql = """
-        SELECT COUNT(*)
-        FROM PRODUCT_UNITS
-        WHERE product_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+            SELECT COUNT(*)
+            FROM PRODUCT_UNITS
+            WHERE product_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
 
         String checkBaseSql = """
-        SELECT NVL(is_base_unit, 0) AS is_base_unit
-        FROM PRODUCT_UNITS
-        WHERE product_id = ?
-          AND unit_id = ?
-          AND NVL(is_deleted, 0) = 0
-    """;
+            SELECT NVL(is_base_unit, 0) AS is_base_unit
+            FROM PRODUCT_UNITS
+            WHERE product_id = ?
+              AND unit_id = ?
+              AND NVL(is_deleted, 0) = 0
+        """;
 
         String deleteSql = """
-        UPDATE PRODUCT_UNITS
-        SET is_deleted = 1,
-            is_base_unit = 0
-        WHERE product_id = ?
-          AND unit_id = ?
-    """;
+            UPDATE PRODUCT_UNITS
+            SET is_deleted = 1,
+                is_base_unit = 0
+            WHERE product_id = ?
+              AND unit_id = ?
+        """;
 
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
