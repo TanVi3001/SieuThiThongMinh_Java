@@ -19,31 +19,38 @@ import javax.swing.JOptionPane;
 /**
  * LoginService (BCrypt-only)
  *
- * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ. - Nếu hash bị sửa /
- * xóa / sai format -> đăng nhập thất bại. - Sau login thành công phải load
- * currentEmployeeId/currentStoreId/currentStoreName. - Admin không bị giới hạn
- * store. - Manager/Staff không có store_id bị chặn vào Store Portal.
+ * - Chỉ chấp nhận password lưu trong DB là BCrypt hợp lệ.
+ * - Nếu hash bị sửa / xóa / sai format -> đăng nhập thất bại.
+ * - Sau login thành công phải load currentEmployeeId/currentStoreId/currentStoreName.
+ * - Admin không bị giới hạn store.
+ * - Manager/Staff không có store_id bị chặn vào Store Portal.
  */
 public class LoginService {
 
-    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V9_STORE_SCOPE_STAFF_SHIFT_GUARD_REASON_2026-05-27";
+    private static final String LOGIN_VERSION = "BCRYPT_ONLY_V10_STORE_SCOPE_STAFF_SHIFT_GUARD_REASON_2026-05-27";
     private static final boolean DEBUG_LOG = Boolean.getBoolean("app.debug.login");
 
     public static final String FAIL_SHIFT_NOT_ALLOWED = "SHIFT_NOT_ALLOWED";
-    private static final ThreadLocal<String> LAST_FAILURE_REASON = new ThreadLocal<>();
 
-    public static String consumeLastFailureReason() {
-        String reason = LAST_FAILURE_REASON.get();
-        LAST_FAILURE_REASON.remove();
+    /*
+     * Không dùng ThreadLocal ở đây.
+     * authenticate() chạy trong thread login-auth-thread, còn LoginView đọc reason ở EDT.
+     * ThreadLocal sẽ làm EDT đọc ra null => vẫn hiện popup "sai tài khoản/mật khẩu".
+     */
+    private static String lastFailureReason;
+
+    public static synchronized String consumeLastFailureReason() {
+        String reason = lastFailureReason;
+        lastFailureReason = null;
         return reason;
     }
 
-    private static void setFailureReason(String reason) {
-        LAST_FAILURE_REASON.set(reason);
+    private static synchronized void setFailureReason(String reason) {
+        lastFailureReason = reason;
     }
 
     public static Account authenticate(String username, String password) {
-        LAST_FAILURE_REASON.remove();
+        setFailureReason(null);
         debug("[" + LOGIN_VERSION + "] authenticate called, username=" + username);
 
         if (username == null || username.isBlank() || password == null) {
@@ -311,8 +318,8 @@ public class LoginService {
               )
         """;
 
-        try (
-                Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, acc.getAccountId());
 
             try (ResultSet rs = ps.executeQuery()) {
