@@ -339,7 +339,12 @@ public class LoginView extends JFrame {
                             dispose();
                         }
                     } else {
-                        showLoginFailedMessage(user);
+                        String failureReason = business.service.LoginService.consumeLastFailureReason();
+
+                        if (!business.service.LoginService.FAIL_SHIFT_NOT_ALLOWED.equals(failureReason)) {
+                            showLoginFailedMessage(user);
+                        }
+
                         btnLogin.setEnabled(true);
                     }
                 });
