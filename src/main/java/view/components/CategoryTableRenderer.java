@@ -41,14 +41,19 @@ public class CategoryTableRenderer extends DefaultTableCellRenderer {
             setText("");
         }
 
-        setHorizontalAlignment(SwingConstants.LEFT);
+        // Căn giữa nội dung cột loại hàng nhưng vẫn giữ icon.
+        setHorizontalAlignment(SwingConstants.CENTER);
+        setVerticalAlignment(SwingConstants.CENTER);
+        setHorizontalTextPosition(SwingConstants.RIGHT);
         setIconTextGap(8); // Khoảng cách icon với text
         return this;
     }
 
     // Tách "CAT001" từ "CAT001 - Nước giải khát"
     private String extractCategoryId(String text) {
-        if (text == null) return "default";
+        if (text == null) {
+            return "default";
+        }
         String trimmed = text.trim();
         if (trimmed.contains(" - ")) {
             return trimmed.split(" - ")[0].trim();
