@@ -48,7 +48,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
     private final Color textGray = new Color(163, 174, 208);
     private final Color primaryBlue = new Color(67, 97, 238);
     private final Color borderGray = new Color(230, 235, 241);
-    private final Color green = new Color(16, 185, 129);
     private final Color red = new Color(239, 68, 68);
 
     private JLabel lblSelectedUser;
@@ -138,7 +137,7 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 new EmptyBorder(5, 15, 5, 15)
         ));
 
-        JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         rightHeader.setBackground(bgLight);
         rightHeader.add(signedInBadge);
 
@@ -160,7 +159,7 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
         JPanel leftCol = createAccountListColumn();
         JPanel rightCol = createAssignmentColumn();
-        rightCol.setPreferredSize(new Dimension(430, rightCol.getPreferredSize().height));
+        rightCol.setPreferredSize(new Dimension(420, 10));
 
         content.add(leftCol, BorderLayout.CENTER);
         content.add(rightCol, BorderLayout.EAST);
@@ -174,12 +173,9 @@ public class AccountRoleAssignmentPanel extends JPanel {
         RoundedPanel panel = new RoundedPanel(20, cardWhite);
         panel.setLayout(new GridBagLayout());
         panel.setBorder(new EmptyBorder(40, 40, 40, 40));
-
         JLabel label = new JLabel(
-                "<html><div style='text-align:center;'>"
-                + "<h2>Không có quyền truy cập</h2>"
-                + "<p>Chức năng phân quyền chỉ dành cho Quản trị viên hoặc Quản lý cửa hàng.</p>"
-                + "</div></html>",
+                "<html><div style='text-align:center;'><h2>Không có quyền truy cập</h2>"
+                + "<p>Chức năng phân quyền chỉ dành cho Quản trị viên hoặc Quản lý cửa hàng.</p></div></html>",
                 SwingConstants.CENTER
         );
         label.setFont(new Font("Segoe UI", Font.PLAIN, 15));
@@ -200,9 +196,9 @@ public class AccountRoleAssignmentPanel extends JPanel {
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         filterPanel.setBackground(cardWhite);
 
-        txtSearch = new JTextField(15);
+        txtSearch = new JTextField(17);
         txtSearch.putClientProperty("JTextField.placeholderText", "Tìm theo tên, email hoặc chi nhánh...");
-        txtSearch.setPreferredSize(new Dimension(230, 35));
+        txtSearch.setPreferredSize(new Dimension(240, 35));
         txtSearch.setBorder(BorderFactory.createCompoundBorder(
                 new RoundBorder(borderGray, 10),
                 new EmptyBorder(5, 15, 5, 15)
@@ -220,34 +216,7 @@ public class AccountRoleAssignmentPanel extends JPanel {
         topSection.setBackground(cardWhite);
         topSection.add(lblList, BorderLayout.NORTH);
         topSection.add(filterPanel, BorderLayout.CENTER);
-
-        JPanel tableHeader = new JPanel(new GridLayout(1, 6, 10, 0));
-        tableHeader.setBackground(new Color(248, 249, 252));
-        tableHeader.setBorder(BorderFactory.createCompoundBorder(
-                new RoundBorder(borderGray, 10),
-                new EmptyBorder(10, 15, 10, 15)
-        ));
-
-        String[] headers = {
-            "Tài khoản",
-            "Chi nhánh",
-            "Vai trò hiện tại",
-            "Trạng thái tài khoản",
-            "Hoạt động",
-            "Khóa / Mở"
-        };
-
-        for (String h : headers) {
-            JLabel l = new JLabel(h);
-            l.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            l.setForeground(textGray);
-            if (!"Tài khoản".equals(h) && !"Vai trò hiện tại".equals(h)) {
-                l.setHorizontalAlignment(SwingConstants.CENTER);
-            }
-            tableHeader.add(l);
-        }
-
-        topSection.add(tableHeader, BorderLayout.SOUTH);
+        topSection.add(createAccountHeaderRow(), BorderLayout.SOUTH);
         container.add(topSection, BorderLayout.NORTH);
 
         listItems = new JPanel();
@@ -279,65 +248,79 @@ public class AccountRoleAssignmentPanel extends JPanel {
         scroll.getViewport().setBackground(cardWhite);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         container.add(scroll, BorderLayout.CENTER);
-
         return container;
+    }
+
+    private JPanel createAccountHeaderRow() {
+        JPanel header = new JPanel(new GridBagLayout());
+        header.setBackground(new Color(248, 249, 252));
+        header.setBorder(BorderFactory.createCompoundBorder(
+                new RoundBorder(borderGray, 10),
+                new EmptyBorder(10, 15, 10, 15)
+        ));
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+
+        addHeaderCell(header, "Tài khoản", 0, 1.55, SwingConstants.LEFT);
+        addHeaderCell(header, "Chi nhánh", 1, 1.35, SwingConstants.CENTER);
+        addHeaderCell(header, "Vai trò hiện tại", 2, 1.20, SwingConstants.LEFT);
+        addHeaderCell(header, "Trạng thái tài khoản", 3, 1.15, SwingConstants.CENTER);
+        addHeaderCell(header, "Hoạt động", 4, 0.85, SwingConstants.CENTER);
+        addHeaderCell(header, "Khóa / Mở", 5, 0.75, SwingConstants.CENTER);
+        return header;
+    }
+
+    private void addHeaderCell(JPanel row, String text, int gridx, double weightx, int align) {
+        JLabel label = new JLabel(text, align);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        label.setForeground(textGray);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = gridx;
+        gbc.gridy = 0;
+        gbc.weightx = weightx;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(0, gridx == 0 ? 0 : 10, 0, 0);
+        row.add(label, gbc);
     }
 
     private String[] buildRoleFilterItems() {
         if (isAdmin(currentRoleId)) {
-            return new String[]{
-                "Tất cả vai trò",
-                "Quản trị viên",
-                "Quản lý cửa hàng",
-                "Nhân viên kho",
-                "Nhân viên bán hàng"
-            };
+            return new String[]{"Tất cả vai trò", "Quản trị viên", "Quản lý cửa hàng", "Nhân viên kho", "Nhân viên bán hàng"};
         }
-
         if (isManager(currentRoleId)) {
-            return new String[]{
-                "Tất cả vai trò",
-                "Nhân viên kho",
-                "Nhân viên bán hàng"
-            };
+            return new String[]{"Tất cả vai trò", "Nhân viên kho", "Nhân viên bán hàng"};
         }
-
         return new String[]{"Tất cả vai trò"};
     }
 
     private JPanel createAccountRow(AccountRowData acc) {
-        JPanel row = new JPanel(new GridLayout(1, 6, 10, 0));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
+        JPanel row = new JPanel(new GridBagLayout());
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 66));
+        row.setPreferredSize(new Dimension(100, 66));
         row.setBackground(cardWhite);
         row.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, borderGray),
                 new EmptyBorder(10, 15, 10, 15)
         ));
 
-        JPanel pnlName = new JPanel(new GridLayout(2, 1));
+        JPanel pnlName = new JPanel(new GridLayout(2, 1, 0, 2));
         pnlName.setBackground(cardWhite);
-
         JLabel lblName = new JLabel(acc.displayName);
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 13));
         lblName.setForeground(textDark);
-
         JLabel lblEmail = new JLabel(acc.displayEmail);
         lblEmail.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         lblEmail.setForeground(textGray);
-
         pnlName.add(lblName);
         pnlName.add(lblEmail);
-        row.add(pnlName);
+        addRowCell(row, pnlName, 0, 1.55, GridBagConstraints.HORIZONTAL, new Insets(0, 0, 0, 0));
 
-        JPanel pnlStore = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
-        pnlStore.setBackground(cardWhite);
-        pnlStore.add(createStoreBadge(acc.storeId, acc.storeName, isAdmin(acc.roleId)));
-        row.add(pnlStore);
+        JPanel pnlStore = wrapCenter(createStoreBadge(acc.storeId, acc.storeName, isAdmin(acc.roleId)));
+        addRowCell(row, pnlStore, 1, 1.35, GridBagConstraints.HORIZONTAL, new Insets(0, 10, 0, 0));
 
-        JPanel pnlRoleBadge = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 10));
+        JPanel pnlRoleBadge = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         pnlRoleBadge.setBackground(cardWhite);
         pnlRoleBadge.add(createBadge(acc.displayRole));
-        row.add(pnlRoleBadge);
+        addRowCell(row, pnlRoleBadge, 2, 1.20, GridBagConstraints.HORIZONTAL, new Insets(0, 10, 0, 0));
 
         String colorHex = acc.active ? "#10B981" : "#EF4444";
         String statusText = acc.active ? "Hoạt động" : "Bị khóa";
@@ -347,20 +330,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 SwingConstants.CENTER
         );
         lblStatus.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        addRowCell(row, wrapCenter(lblStatus), 3, 1.15, GridBagConstraints.HORIZONTAL, new Insets(0, 10, 0, 0));
 
-        JPanel pnlAccountStatus = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
-        pnlAccountStatus.setBackground(cardWhite);
-        pnlAccountStatus.add(lblStatus);
-        row.add(pnlAccountStatus);
+        addRowCell(row, wrapCenter(createOnlineStatusBadge(acc.onlineStatus)), 4, 0.85, GridBagConstraints.HORIZONTAL, new Insets(0, 10, 0, 0));
 
-        JPanel pnlOnlineStatus = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
-        pnlOnlineStatus.setBackground(cardWhite);
-        pnlOnlineStatus.add(createOnlineStatusBadge(acc.onlineStatus));
-        row.add(pnlOnlineStatus);
-
-        JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
+        JPanel pnlToggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         pnlToggle.setBackground(cardWhite);
-
         if (isAdmin(acc.roleId)) {
             JLabel protectedBadge = createAdminProtectedBadge();
             protectedBadge.setToolTipText("Tài khoản Quản trị viên được bảo vệ, không thể khóa/mở tại màn này.");
@@ -375,16 +350,14 @@ public class AccountRoleAssignmentPanel extends JPanel {
             toggleBtn.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    if (!toggleBtn.isEnabled()) {
-                        return;
+                    if (toggleBtn.isEnabled()) {
+                        toggleAccountStatus(acc, toggleBtn);
                     }
-                    toggleAccountStatus(acc, toggleBtn);
                 }
             });
             pnlToggle.add(toggleBtn);
         }
-
-        row.add(pnlToggle);
+        addRowCell(row, pnlToggle, 5, 0.75, GridBagConstraints.HORIZONTAL, new Insets(0, 10, 0, 0));
 
         row.setCursor(new Cursor(Cursor.HAND_CURSOR));
         row.addMouseListener(new MouseAdapter() {
@@ -396,13 +369,31 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 selectAccount(acc);
             }
         });
-
         return row;
+    }
+
+    private void addRowCell(JPanel row, Component comp, int gridx, double weightx, int fill, Insets insets) {
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = gridx;
+        gbc.gridy = 0;
+        gbc.weightx = weightx;
+        gbc.weighty = 1.0;
+        gbc.fill = fill;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = insets;
+        row.add(comp, gbc);
+    }
+
+    private JPanel wrapCenter(Component comp) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        p.setBackground(cardWhite);
+        p.add(comp);
+        return p;
     }
 
     private JPanel createAssignmentColumn() {
         RoundedPanel container = new RoundedPanel(20, cardWhite);
-        container.setLayout(new BorderLayout(0, 20));
+        container.setLayout(new BorderLayout(0, 16));
         container.setBorder(new EmptyBorder(25, 25, 25, 25));
 
         JLabel lblAssign = new JLabel("Gán Vai Trò / Chi Nhánh");
@@ -422,45 +413,14 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
         JPanel infoGrid = new JPanel(new GridBagLayout());
         infoGrid.setBackground(cardWhite);
-        infoGrid.setBorder(new EmptyBorder(0, 0, 18, 0));
+        infoGrid.setBorder(new EmptyBorder(0, 0, 16, 0));
         infoGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
+        infoGrid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 125));
 
-        GridBagConstraints gbcInfo = new GridBagConstraints();
-        gbcInfo.fill = GridBagConstraints.HORIZONTAL;
-        gbcInfo.anchor = GridBagConstraints.WEST;
-        gbcInfo.insets = new Insets(0, 0, 12, 18);
-        gbcInfo.gridx = 0;
-        gbcInfo.gridy = 0;
-        gbcInfo.weightx = 0.0;
-        infoGrid.add(createLabel("Người dùng đã chọn", textGray), gbcInfo);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
-        infoGrid.add(lblSelectedUser, gbcInfo);
-
-        gbcInfo.gridy = 1;
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
-        infoGrid.add(createLabel("Email", textGray), gbcInfo);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
-        infoGrid.add(lblSelectedEmail, gbcInfo);
-
-        gbcInfo.gridy = 2;
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
-        infoGrid.add(createLabel("Vai trò hiện tại", textGray), gbcInfo);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
-        infoGrid.add(pnlCurrRole, gbcInfo);
-
-        gbcInfo.gridy = 3;
-        gbcInfo.gridx = 0;
-        gbcInfo.weightx = 0.0;
-        infoGrid.add(createLabel("Chi nhánh hiện tại", textGray), gbcInfo);
-        gbcInfo.gridx = 1;
-        gbcInfo.weightx = 1.0;
-        infoGrid.add(lblSelectedStore, gbcInfo);
-
+        addInfoRow(infoGrid, 0, "Người dùng đã chọn", lblSelectedUser);
+        addInfoRow(infoGrid, 1, "Email", lblSelectedEmail);
+        addInfoRow(infoGrid, 2, "Vai trò hiện tại", pnlCurrRole);
+        addInfoRow(infoGrid, 3, "Chi nhánh hiện tại", lblSelectedStore);
         centerPanel.add(infoGrid);
 
         cbStoreAssign = new JComboBox<>();
@@ -476,7 +436,7 @@ public class AccountRoleAssignmentPanel extends JPanel {
         centerPanel.add(storeLabel);
         centerPanel.add(Box.createRigidArea(new Dimension(0, 6)));
         centerPanel.add(cbStoreAssign);
-        centerPanel.add(Box.createRigidArea(new Dimension(0, 18)));
+        centerPanel.add(Box.createRigidArea(new Dimension(0, 14)));
 
         roleGroup = new ButtonGroup();
         radioMap.clear();
@@ -486,31 +446,49 @@ public class AccountRoleAssignmentPanel extends JPanel {
         roleCardsContainer.setLayout(new BoxLayout(roleCardsContainer, BoxLayout.Y_AXIS));
         roleCardsContainer.setBackground(cardWhite);
         roleCardsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        roleCardsContainer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 250));
 
         buildRoleCards();
         renderAssignableRoleCards(null);
 
         centerPanel.add(roleCardsContainer);
-        centerPanel.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerPanel.add(Box.createRigidArea(new Dimension(0, 16)));
         centerPanel.add(createSummaryBox());
+        centerPanel.setAlignmentY(Component.TOP_ALIGNMENT);
 
-        container.add(centerPanel, BorderLayout.CENTER);
+        JPanel topWrapper = new JPanel(new BorderLayout());
+        topWrapper.setBackground(cardWhite);
+        topWrapper.add(centerPanel, BorderLayout.NORTH);
+        container.add(topWrapper, BorderLayout.CENTER);
 
-        JPanel bottomBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JPanel bottomBtns = new JPanel(new GridLayout(1, 2, 10, 0));
         bottomBtns.setBackground(cardWhite);
-
         JButton btnCancel = createCustomButton("Hủy bỏ", new Color(235, 238, 244), textDark);
         btnCancel.addActionListener(e -> clearSelection());
-
         btnSaveRole = createCustomButton("Lưu thay đổi", primaryBlue, Color.WHITE);
         btnSaveRole.setEnabled(false);
         btnSaveRole.addActionListener(e -> saveSelectedRoleAndStore());
-
         bottomBtns.add(btnCancel);
         bottomBtns.add(btnSaveRole);
         container.add(bottomBtns, BorderLayout.SOUTH);
-
         return container;
+    }
+
+    private void addInfoRow(JPanel panel, int row, String labelText, Component value) {
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = row;
+        gbc.gridx = 0;
+        gbc.weightx = 0.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(0, 0, 10, 16);
+        JLabel label = createLabel(labelText, textGray, false);
+        panel.add(label, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(0, 0, 10, 0);
+        panel.add(value, gbc);
     }
 
     private void buildRoleCards() {
@@ -520,13 +498,11 @@ public class AccountRoleAssignmentPanel extends JPanel {
             {ROLE_STAFF_WAREHOUSE, "Nhân viên kho", "Quản lý sản phẩm, lập phiếu nhập và tồn kho."},
             {ROLE_STAFF_SALE, "Nhân viên bán hàng", "Truy cập màn hình POS, tạo hóa đơn và thanh toán."}
         };
-
         for (String[] roleInfo : activeRoles) {
             JRadioButton rb = new JRadioButton();
             rb.setActionCommand(roleInfo[0]);
             radioMap.put(roleInfo[0], rb);
             radioMap.put(roleInfo[1], rb);
-
             JPanel card = createRoleCard(roleInfo[1], roleInfo[2], roleGroup, rb);
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
             roleCardMap.put(roleInfo[0], card);
@@ -539,16 +515,14 @@ public class AccountRoleAssignmentPanel extends JPanel {
         summaryBox.setLayout(new BorderLayout());
         summaryBox.setBorder(BorderFactory.createCompoundBorder(
                 new DashedBorder(textGray, 1, 5),
-                new EmptyBorder(15, 15, 15, 15)
+                new EmptyBorder(14, 14, 14, 14)
         ));
-        summaryBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 95));
+        summaryBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 86));
         summaryBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-
         JLabel lblSum = new JLabel(
                 "<html><b>Tóm tắt thay đổi:</b><br>"
-                + "<span style='font-size:10px; color:#666;'>"
-                + "Có thể đổi vai trò và chi nhánh trong cùng một lần lưu. Manager chỉ được chuyển vào chi nhánh chưa có Manager chủ trì."
-                + "</span></html>"
+                + "<span style='font-size:10px; color:#666;'>Có thể đổi vai trò và chi nhánh trong cùng một lần lưu. "
+                + "Manager chỉ được chuyển vào chi nhánh chưa có Manager chủ trì.</span></html>"
         );
         lblSum.setForeground(textDark);
         summaryBox.add(lblSum, BorderLayout.CENTER);
@@ -558,7 +532,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
     private void renderAssignableRoleCards(AccountRowData selected) {
         roleCardsContainer.removeAll();
         roleGroup.clearSelection();
-
         List<String> assignable = getAssignableRoleIds(currentRoleId);
         boolean canModifySelected = selected != null && canModifyTargetAccount(selected);
 
@@ -583,13 +556,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
                     continue;
                 }
                 if (!first) {
-                    roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+                    roleCardsContainer.add(Box.createRigidArea(new Dimension(0, 8)));
                 }
                 rb.setEnabled(canAssignRole(currentRoleId, roleId));
                 roleCardsContainer.add(card);
                 first = false;
             }
-
             JRadioButton currentRb = radioMap.get(normalizeRoleId(selected.roleId));
             if (currentRb != null && currentRb.isEnabled()) {
                 currentRb.setSelected(true);
@@ -600,11 +572,9 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (cbStoreAssign != null) {
             cbStoreAssign.setEnabled(enableStore);
         }
-
         if (btnSaveRole != null) {
             btnSaveRole.setEnabled(selected != null && canModifySelected);
         }
-
         roleCardsContainer.revalidate();
         roleCardsContainer.repaint();
     }
@@ -613,13 +583,9 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (listItems == null) {
             return;
         }
-
         listItems.removeAll();
         List<AccountRowData> accounts = loadAccountsForCurrentScope();
-
-        String selectedRoleFilter = cbRole != null && cbRole.getSelectedItem() != null
-                ? cbRole.getSelectedItem().toString()
-                : "Tất cả vai trò";
+        String selectedRoleFilter = cbRole != null && cbRole.getSelectedItem() != null ? cbRole.getSelectedItem().toString() : "Tất cả vai trò";
         String searchText = txtSearch != null ? txtSearch.getText().toLowerCase().trim() : "";
 
         List<AccountRowData> filteredAccounts = new ArrayList<>();
@@ -627,19 +593,16 @@ public class AccountRoleAssignmentPanel extends JPanel {
             if (acc == null || !canCurrentUserSeeAccount(acc)) {
                 continue;
             }
-
             String displayName = fallback(acc.displayName, acc.username);
             String displayEmail = fallback(acc.displayEmail, "Chưa có email");
             String displayRole = roleIdToDisplay(acc.roleId);
             String storeDisplay = getStoreDisplayName(acc.storeId, acc.storeName, isAdmin(acc.roleId));
-
             boolean matchRole = "Tất cả vai trò".equals(selectedRoleFilter) || displayRole.equals(selectedRoleFilter);
             boolean matchSearch = searchText.isEmpty()
                     || displayName.toLowerCase().contains(searchText)
                     || displayEmail.toLowerCase().contains(searchText)
                     || storeDisplay.toLowerCase().contains(searchText)
                     || fallback(acc.storeId, "").toLowerCase().contains(searchText);
-
             if (matchRole && matchSearch) {
                 acc.displayName = displayName;
                 acc.displayEmail = displayEmail;
@@ -654,22 +617,18 @@ public class AccountRoleAssignmentPanel extends JPanel {
             if (adminCompare != 0) {
                 return adminCompare;
             }
-
             int storeCompare = fallback(a.storeDisplay, "").compareToIgnoreCase(fallback(b.storeDisplay, ""));
             if (storeCompare != 0) {
                 return storeCompare;
             }
-
             int levelCompare = Integer.compare(levelOf(b.roleId), levelOf(a.roleId));
             if (levelCompare != 0) {
                 return levelCompare;
             }
-
             int activeCompare = Boolean.compare(b.active, a.active);
             if (activeCompare != 0) {
                 return activeCompare;
             }
-
             return fallback(a.displayName, a.username).compareToIgnoreCase(fallback(b.displayName, b.username));
         });
 
@@ -682,7 +641,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
             }
             listItems.add(createAccountRow(acc));
         }
-
         listItems.revalidate();
         listItems.repaint();
     }
@@ -696,12 +654,11 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
     private JPanel createStoreGroupHeader(String title, String storeId, boolean adminGroup) {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        panel.setPreferredSize(new Dimension(100, 36));
         panel.setBackground(adminGroup ? new Color(255, 247, 237) : new Color(237, 242, 255));
         panel.setBorder(new EmptyBorder(8, 15, 8, 15));
-
-        String text = adminGroup ? "QUẢN TRỊ HỆ THỐNG" : title;
-        JLabel label = new JLabel(text);
+        JLabel label = new JLabel(adminGroup ? "QUẢN TRỊ HỆ THỐNG" : title);
         label.setFont(new Font("Segoe UI", Font.BOLD, 13));
         label.setForeground(adminGroup ? new Color(194, 65, 12) : storeColor(storeId));
         panel.add(label, BorderLayout.WEST);
@@ -710,12 +667,10 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
     private List<AccountRowData> loadAccountsForCurrentScope() {
         List<AccountRowData> rows = new ArrayList<>();
-
         try {
             AccountSql.getInstance().syncOnlineStatusFromSessions();
         } catch (Exception ignored) {
         }
-
         StringBuilder sql = new StringBuilder("""
             SELECT a.account_id,
                    a.user_id,
@@ -759,7 +714,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                   AND NVL(rg.is_deleted, 0) = 0
             WHERE 1 = 1
         """);
-
         boolean managerScoped = isManager(currentRoleId);
         if (managerScoped) {
             sql.append("""
@@ -768,26 +722,20 @@ public class AccountRoleAssignmentPanel extends JPanel {
                       IN ('R_STAFF_SALE', 'R_STAFF_VIEW_PROD', 'R_STAFF_STOCK')
             """);
         }
-
         sql.append(" ORDER BY NVL(a.is_deleted, 0), LOWER(NVL(u.full_name, a.username)) ");
-
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             if (managerScoped) {
                 ps.setString(1, currentStoreId);
             }
-
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    AccountRowData row = mapAccountRow(rs);
-                    rows.add(row);
+                    rows.add(mapAccountRow(rs));
                 }
             }
-
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Lỗi tải danh sách tài khoản: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
-
         return rows;
     }
 
@@ -816,16 +764,13 @@ public class AccountRoleAssignmentPanel extends JPanel {
         selectedStoreId = acc.storeId;
         selectedOldRoleId = normalizeRoleId(acc.roleId);
         selectedOldRoleDisplay = acc.displayRole;
-
         lblSelectedUser.setText(acc.displayName);
-        lblSelectedEmail.setText(acc.displayEmail);
-        lblSelectedStore.setText(getStoreDisplayName(acc.storeId, acc.storeName, isAdmin(acc.roleId)));
-
+        lblSelectedEmail.setText(shortText(acc.displayEmail, 26));
+        lblSelectedStore.setText(shortText(getStoreDisplayName(acc.storeId, acc.storeName, isAdmin(acc.roleId)), 28));
         pnlCurrRole.removeAll();
         pnlCurrRole.add(createBadge(acc.displayRole));
         pnlCurrRole.revalidate();
         pnlCurrRole.repaint();
-
         reloadStoreCombo(acc.storeId);
         renderAssignableRoleCards(acc);
     }
@@ -836,15 +781,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
         selectedStoreId = "";
         selectedOldRoleId = "";
         selectedOldRoleDisplay = "";
-
         lblSelectedUser.setText("-");
         lblSelectedEmail.setText("-");
         lblSelectedStore.setText("-");
-
         pnlCurrRole.removeAll();
         pnlCurrRole.revalidate();
         pnlCurrRole.repaint();
-
         reloadStoreCombo(null);
         if (cbStoreAssign != null) {
             cbStoreAssign.setEnabled(false);
@@ -857,28 +799,23 @@ public class AccountRoleAssignmentPanel extends JPanel {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một tài khoản từ danh sách bên trái!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         ButtonModel selectedModel = roleGroup.getSelection();
         if (selectedModel == null) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn một vai trò mới để gán!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         String newRoleId = normalizeRoleId(selectedModel.getActionCommand());
         AccountRowData latest = loadAccountById(selectedAccountId);
-
         if (latest == null) {
             JOptionPane.showMessageDialog(this, "Tài khoản không còn tồn tại hoặc đã bị thay đổi.", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
             initTableData();
             clearSelection();
             return;
         }
-
         if (!canModifyTargetAccount(latest)) {
             JOptionPane.showMessageDialog(this, "Bạn không có quyền phân quyền tài khoản này!", "Không đủ quyền", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         if (!canAssignRole(currentRoleId, newRoleId)) {
             JOptionPane.showMessageDialog(this, "Bạn không được gán vai trò này!", "Không đủ quyền", JOptionPane.WARNING_MESSAGE);
             return;
@@ -886,7 +823,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
         String oldRoleId = normalizeRoleId(latest.roleId);
         String newStoreId = latest.storeId;
-
         if (isAdmin(currentRoleId) && !isAdmin(newRoleId)) {
             StoreItem selectedStore = getSelectedStoreItem();
             if (selectedStore == null || selectedStore.storeId == null || selectedStore.storeId.isBlank()) {
@@ -897,18 +833,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
         }
 
         if (isManager(newRoleId) && isStoreManagedByAnotherAccount(newStoreId, selectedAccountId)) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Chi nhánh này đã có Manager chủ trì.\nVui lòng chọn chi nhánh khác chưa có Manager.",
-                    "Trùng Manager chi nhánh",
-                    JOptionPane.WARNING_MESSAGE
-            );
+            JOptionPane.showMessageDialog(this, "Chi nhánh này đã có Manager chủ trì.\nVui lòng chọn chi nhánh khác chưa có Manager.", "Trùng Manager chi nhánh", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         boolean roleChanged = !newRoleId.equalsIgnoreCase(oldRoleId);
         boolean storeChanged = !isSameStore(fallback(latest.storeId, ""), fallback(newStoreId, ""));
-
         if (!roleChanged && !storeChanged) {
             JOptionPane.showMessageDialog(this, "Vai trò và chi nhánh không thay đổi nên không cần cập nhật.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             return;
@@ -916,10 +846,8 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
         boolean success = updateAccountRoleAndStore(latest, newRoleId, newStoreId);
         if (success) {
-            String newRoleDisplay = roleIdToDisplay(newRoleId);
             String oldValue = roleIdToDisplay(oldRoleId) + " | " + getStoreDisplayName(latest.storeId, latest.storeName, isAdmin(oldRoleId));
-            String newValue = newRoleDisplay + " | " + getStoreDisplayName(newStoreId, getStoreNameById(newStoreId), isAdmin(newRoleId));
-
+            String newValue = roleIdToDisplay(newRoleId) + " | " + getStoreDisplayName(newStoreId, getStoreNameById(newStoreId), isAdmin(newRoleId));
             business.service.AuditLogService.logAction(
                     "CẬP NHẬT",
                     "ACCOUNTS",
@@ -928,17 +856,14 @@ public class AccountRoleAssignmentPanel extends JPanel {
                     newValue,
                     roleIdToDisplay(currentRoleId) + " thay đổi phân quyền/chi nhánh tài khoản"
             );
-
             business.service.AccountService.logChangeRole(
                     selectedAccountId,
                     oldRoleId,
                     newRoleId,
                     roleIdToDisplay(currentRoleId) + " thay đổi phân quyền tài khoản"
             );
-
             RealtimeNotifier.accountSecurityChanged("ACCOUNT_ROLE_STORE_UPDATED:" + selectedAccountId);
             RealtimeNotifier.employeesChanged("EMPLOYEE_STORE_ROLE_UPDATED:" + fallback(selectedEmployeeId, selectedAccountId));
-
             JOptionPane.showMessageDialog(this, "Cập nhật phân quyền / chi nhánh thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
             clearSelection();
             initTableData();
@@ -949,7 +874,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
     private boolean updateAccountRoleAndStore(AccountRowData latest, String newRoleId, String newStoreId) {
         String employeeId = fallback(latest.employeeId, latest.userId);
-
         try (Connection con = DatabaseConnection.getConnection()) {
             con.setAutoCommit(false);
             try {
@@ -958,7 +882,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                     con.rollback();
                     return false;
                 }
-
                 if (employeeId != null && !employeeId.isBlank() && !isAdmin(newRoleId)) {
                     String updateEmployee = """
                         UPDATE EMPLOYEES
@@ -975,7 +898,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                         ps.executeUpdate();
                     }
                 }
-
                 con.commit();
                 return true;
             } catch (Exception e) {
@@ -994,12 +916,10 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (accountId == null || accountId.trim().isEmpty()) {
             return null;
         }
-
         try {
             AccountSql.getInstance().syncOnlineStatusFromSessions();
         } catch (Exception ignored) {
         }
-
         String sql = """
             SELECT a.account_id,
                    a.user_id,
@@ -1043,7 +963,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                   AND NVL(rg.is_deleted, 0) = 0
             WHERE a.account_id = ?
         """;
-
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, accountId.trim());
             try (ResultSet rs = ps.executeQuery()) {
@@ -1064,23 +983,19 @@ public class AccountRoleAssignmentPanel extends JPanel {
             initTableData();
             return;
         }
-
         if (!canToggleAccount(latest)) {
             JOptionPane.showMessageDialog(this, "Bạn không có quyền khóa/mở tài khoản này!", "Không đủ quyền", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         boolean nextState = !latest.active;
         String actionName = nextState ? "Mở khóa" : "Khóa";
         String confirmMsg = nextState
                 ? "Bạn có chắc chắn muốn MỞ KHÓA tài khoản [" + latest.displayName + "]?"
                 : "KHÓA tài khoản [" + latest.displayName + "]?\nNgười dùng sẽ bị đăng xuất khỏi hệ thống ngay lập tức.";
-
         int confirm = JOptionPane.showConfirmDialog(this, confirmMsg, "Xác nhận " + actionName, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) {
             return;
         }
-
         String sql = """
             UPDATE ACCOUNTS
             SET is_deleted = ?,
@@ -1092,7 +1007,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 updated_at = CURRENT_TIMESTAMP
             WHERE account_id = ?
         """;
-
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             int deletedValue = nextState ? 0 : 1;
             ps.setInt(1, deletedValue);
@@ -1102,14 +1016,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
             ps.setInt(5, deletedValue);
             ps.setInt(6, deletedValue);
             ps.setString(7, latest.accountId);
-
             int updated = ps.executeUpdate();
             if (updated > 0) {
                 toggleBtn.setOn(nextState);
                 if (!nextState) {
                     AccountSql.getInstance().forceLogoutAccount(latest.accountId);
                 }
-
                 business.service.AuditLogService.logAction(
                         "CẬP NHẬT",
                         "ACCOUNTS",
@@ -1118,7 +1030,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                         nextState ? "Hoạt động" : "Bị khóa",
                         roleIdToDisplay(currentRoleId) + " " + actionName.toLowerCase() + " tài khoản"
                 );
-
                 RealtimeNotifier.accountSecurityChanged("ACCOUNT_LOCK_UPDATED:" + latest.accountId);
                 RealtimeNotifier.employeesChanged("EMPLOYEE_ACCOUNT_LOCK_UPDATED:" + fallback(latest.employeeId, latest.userId));
                 SwingUtilities.invokeLater(this::initTableData);
@@ -1135,13 +1046,11 @@ public class AccountRoleAssignmentPanel extends JPanel {
             FROM STORES
             WHERE NVL(is_deleted, 0) = 0
         """);
-
         boolean managerScoped = isManager(currentRoleId) && currentStoreId != null && !currentStoreId.isBlank();
         if (managerScoped) {
             sql.append(" AND store_id = ? ");
         }
         sql.append(" ORDER BY store_id ");
-
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql.toString())) {
             if (managerScoped) {
                 ps.setString(1, currentStoreId);
@@ -1164,7 +1073,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
         for (StoreItem store : stores) {
             cbStoreAssign.addItem(store);
         }
-
         if (selectedStoreId != null) {
             for (int i = 0; i < cbStoreAssign.getItemCount(); i++) {
                 StoreItem item = cbStoreAssign.getItemAt(i);
@@ -1174,7 +1082,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 }
             }
         }
-
         if (cbStoreAssign.getItemCount() > 0) {
             cbStoreAssign.setSelectedIndex(0);
         }
@@ -1182,7 +1089,10 @@ public class AccountRoleAssignmentPanel extends JPanel {
 
     private StoreItem getSelectedStoreItem() {
         Object selected = cbStoreAssign == null ? null : cbStoreAssign.getSelectedItem();
-        return selected instanceof StoreItem item ? item : null;
+        if (selected instanceof StoreItem) {
+            return (StoreItem) selected;
+        }
+        return null;
     }
 
     private String getStoreNameById(String storeId) {
@@ -1201,7 +1111,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (storeId == null || storeId.isBlank()) {
             return false;
         }
-
         String sql = """
             SELECT COUNT(*) AS cnt
             FROM ACCOUNTS a
@@ -1222,7 +1131,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
               AND NVL(a.is_deleted, 0) = 0
               AND COALESCE(aar.role_id, CAST(rg.group_name AS VARCHAR2(100)), aarg.role_group_id) IN ('R_STORE_MNG', 'R_MANAGER')
         """;
-
         try (Connection con = DatabaseConnection.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, storeId);
             ps.setString(2, accountId == null ? "" : accountId);
@@ -1239,15 +1147,12 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (acc == null) {
             return false;
         }
-
         if (isAdmin(currentRoleId)) {
             return true;
         }
-
         if (isManager(currentRoleId)) {
             return isSameStore(currentStoreId, acc.storeId) && levelOf(acc.roleId) < levelOf(currentRoleId);
         }
-
         return false;
     }
 
@@ -1255,23 +1160,18 @@ public class AccountRoleAssignmentPanel extends JPanel {
         if (acc == null || !canAccessRoleAssignment(currentRoleId)) {
             return false;
         }
-
         if (isSameAccount(currentAccountId, acc.accountId)) {
             return false;
         }
-
         if (levelOf(currentRoleId) <= levelOf(acc.roleId)) {
             return false;
         }
-
         if (isAdmin(currentRoleId)) {
             return true;
         }
-
         if (isManager(currentRoleId)) {
             return isSameStore(currentStoreId, acc.storeId);
         }
-
         return false;
     }
 
@@ -1427,7 +1327,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
             bg = new Color(237, 242, 255);
             fg = primaryBlue;
         }
-
         JLabel badge = new JLabel(role, SwingConstants.CENTER) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -1447,7 +1346,7 @@ public class AccountRoleAssignmentPanel extends JPanel {
     }
 
     private JLabel createStoreBadge(String storeId, String storeName, boolean adminAccount) {
-        String text = getStoreDisplayName(storeId, storeName, adminAccount);
+        String text = shortText(getStoreDisplayName(storeId, storeName, adminAccount), 24);
         Color fg = adminAccount ? new Color(194, 65, 12) : storeColor(storeId);
         JLabel label = new JLabel(text, SwingConstants.CENTER);
         label.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -1465,6 +1364,16 @@ public class AccountRoleAssignmentPanel extends JPanel {
             return id;
         }
         return name.isBlank() ? id : id + " - " + name;
+    }
+
+    private String shortText(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength - 3)) + "...";
     }
 
     private Color storeColor(String storeId) {
@@ -1508,7 +1417,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
         String text = online ? "Online" : "Offline";
         Color bg = online ? new Color(220, 252, 231) : new Color(254, 226, 226);
         Color fg = online ? new Color(5, 150, 105) : new Color(220, 38, 38);
-
         JLabel badge = new JLabel("<html><span style='font-size:13px;'>●</span> " + text + "</html>", SwingConstants.CENTER) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -1530,11 +1438,10 @@ public class AccountRoleAssignmentPanel extends JPanel {
     private JPanel createRoleCard(String title, String desc, ButtonGroup group, JRadioButton rb) {
         JPanel card = new RoundedPanel(10, cardWhite);
         card.setLayout(new BorderLayout(10, 0));
-        card.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 10), new EmptyBorder(12, 15, 12, 15)));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 75));
+        card.setBorder(BorderFactory.createCompoundBorder(new RoundBorder(borderGray, 10), new EmptyBorder(10, 12, 10, 12)));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 66));
         rb.setBackground(cardWhite);
         group.add(rb);
-
         JLabel lblText = new JLabel(
                 "<html><b style='color:#2B3674; font-size:12px;'>" + escapeHtml(title)
                 + "</b><br><span style='color:#A3AED0; font-size:10px;'>" + escapeHtml(desc)
@@ -1542,7 +1449,6 @@ public class AccountRoleAssignmentPanel extends JPanel {
         );
         card.add(rb, BorderLayout.WEST);
         card.add(lblText, BorderLayout.CENTER);
-
         card.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -1551,11 +1457,10 @@ public class AccountRoleAssignmentPanel extends JPanel {
                 }
             }
         });
-
         rb.addItemListener(e -> {
             card.setBorder(BorderFactory.createCompoundBorder(
                     new RoundBorder(rb.isSelected() ? primaryBlue : borderGray, 10),
-                    new EmptyBorder(12, 15, 12, 15)
+                    new EmptyBorder(10, 12, 10, 12)
             ));
             card.revalidate();
             card.repaint();
