@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -104,6 +106,9 @@ public class OrderDetailDialog extends JDialog {
         pnlBody.add(Box.createVerticalStrut(15));
         pnlBody.add(createDeliveryCard(order.getOrderId()));
         pnlBody.add(Box.createVerticalStrut(18));
+
+        preloadProductUnits(details);
+
         pnlBody.add(createUnitHelpPanel());
         pnlBody.add(Box.createVerticalStrut(10));
         pnlBody.add(createProductTable(details));
@@ -331,8 +336,8 @@ public class OrderDetailDialog extends JDialog {
 
         JLabel lbl = new JLabel(
                 isCancelled
-                        ? "Hóa đơn đã hủy nên chỉ được xem chi tiết đơn vị bán."
-                        : "Có thể chọn lại Đơn vị bán cho từng dòng. Khi đổi đơn vị, hệ thống tự đổi đơn giá và quy đổi tồn kho theo đơn vị gốc."
+                ? "Hóa đơn đã hủy nên chỉ được xem chi tiết đơn vị bán."
+                : "Có thể chọn lại Đơn vị bán cho từng dòng. Khi đổi đơn vị, hệ thống tự đổi đơn giá và quy đổi tồn kho theo đơn vị gốc."
         );
         lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lbl.setForeground(new Color(30, 64, 175));
@@ -368,7 +373,6 @@ public class OrderDetailDialog extends JDialog {
 
             double dPrice = parseMoneyToDouble(price);
             if (selectedUnit != null && selectedUnit.getSellingPrice() != null) {
-                // Nếu DB có giá trong order_detail thì ưu tiên giữ giá lịch sử hóa đơn.
                 if (dPrice <= 0) {
                     dPrice = selectedUnit.getSellingPrice().doubleValue();
                 }
@@ -776,6 +780,37 @@ public class OrderDetailDialog extends JDialog {
                     "Lỗi",
                     JOptionPane.ERROR_MESSAGE
             );
+        }
+    }
+
+    private void preloadProductUnits(List<Map<String, Object>> details) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+
+        Set<String> productIds = new LinkedHashSet<>();
+
+        for (Map<String, Object> row : details) {
+            Object productObj = getValueIgnoreCase(row, "product_id", "PRODUCT_ID");
+            if (productObj == null) {
+                continue;
+            }
+
+            String productId = productObj.toString().trim();
+            if (!productId.isEmpty()) {
+                productIds.add(productId);
+            }
+        }
+
+        if (productIds.isEmpty()) {
+            return;
+        }
+
+        Map<String, List<ProductUnit>> batchUnits = ProductUnitsSql.getInstance().selectByProductIds(productIds);
+
+        for (String productId : productIds) {
+            List<ProductUnit> units = batchUnits.get(productId);
+            productUnitCache.put(productId, units == null ? new ArrayList<>() : units);
         }
     }
 
