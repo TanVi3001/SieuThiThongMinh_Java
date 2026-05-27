@@ -1266,26 +1266,6 @@ public class ProductView extends JPanel {
     }
 
     private void applyProductRolePermission() {
-        /*
-         * Quyền nghiệp vụ hiện tại:
-         *
-         * Admin:
-         * - Full quyền sản phẩm.
-         *
-         * Manager:
-         * - Được vào Quản lý sản phẩm để xem/tổng quan/theo dõi.
-         * - Không bán hàng.
-         * - Không quản lý tồn kho.
-         * - Không thêm/sửa/xóa/nhập CSV/cấu hình đơn vị ở ProductView.
-         *
-         * Staff_Sale:
-         * - Được xem/tìm kiếm sản phẩm.
-         * - Được gửi cảnh báo hết/sắp hết hàng cho Staff_Product.
-         * - Không thêm/sửa/xóa/nhập CSV/cấu hình đơn vị.
-         *
-         * Staff_Product / R_STAFF_VIEW_PROD:
-         * - Được quản lý sản phẩm/tồn kho/nhập CSV.
-         */
         boolean canManageProductData = AuthorizationService.canManageProducts();
         boolean canSendAlert = AuthorizationService.canSendInventoryAlert();
 
@@ -1326,10 +1306,6 @@ public class ProductView extends JPanel {
             btnEmergencyAlert.setEnabled(false);
         }
 
-        /*
-         * Staff_Product quản lý kho/sản phẩm, không cần quản lý ảnh trong form này.
-         * Admin vẫn có thể giữ ảnh nếu cần.
-         */
         if (!AuthorizationService.isAdmin()) {
             if (lblImagePreview != null) {
                 lblImagePreview.setVisible(false);
@@ -1346,24 +1322,6 @@ public class ProductView extends JPanel {
 
         revalidate();
         repaint();
-    }
-
-    private void setProductFormVisible(boolean visible) {
-        if (formCard != null) {
-            formCard.setVisible(visible);
-        }
-
-        if (btnChooseImage != null) {
-            btnChooseImage.setVisible(visible);
-        }
-
-        if (lblImagePreview != null) {
-            lblImagePreview.setVisible(visible);
-        }
-
-        if (lblImageSectionTitle != null) {
-            lblImageSectionTitle.setVisible(visible);
-        }
     }
 
     private void setProductMutationButtonsVisible(boolean visible) {
@@ -1387,14 +1345,55 @@ public class ProductView extends JPanel {
             btnClear.setEnabled(visible);
         }
 
+        /*
+     * Nút Đơn vị nằm trong form bên trái.
+     * Manager/Staff Sale không thấy form nhưng vẫn mở cấu hình bằng double click sản phẩm.
+     * Nhân viên kho/Admin thấy nút Đơn vị khi có quyền quản lý sản phẩm.
+         */
         if (btnUnitConfig != null) {
-            btnUnitConfig.setVisible(visible);
-            btnUnitConfig.setEnabled(visible);
+            boolean canUseButton = visible && canViewProductUnitConfig();
+            btnUnitConfig.setVisible(canUseButton);
+            btnUnitConfig.setEnabled(canUseButton);
+        }
+    }
+
+    private void setProductFormVisible(boolean visible) {
+        if (formCard != null) {
+            formCard.setVisible(visible);
+        }
+
+        if (btnChooseImage != null) {
+            btnChooseImage.setVisible(visible);
+        }
+
+        if (lblImagePreview != null) {
+            lblImagePreview.setVisible(visible);
+        }
+
+        if (lblImageSectionTitle != null) {
+            lblImageSectionTitle.setVisible(visible);
         }
     }
 
     private boolean canMutateProductData() {
         return AuthorizationService.canManageProducts();
+    }
+
+    private boolean canViewProductUnitConfig() {
+        return AuthorizationService.isAdmin()
+                || AuthorizationService.isStoreManager()
+                || AuthorizationService.isCashier()
+                || AuthorizationService.isProductStaff()
+                || AuthorizationService.canManageProducts()
+                || AuthorizationService.canManageStock();
+    }
+
+    private boolean canEditProductUnitConfig() {
+        return AuthorizationService.isAdmin()
+                || AuthorizationService.isStoreManager()
+                || AuthorizationService.isProductStaff()
+                || AuthorizationService.canManageProducts()
+                || AuthorizationService.canManageStock();
     }
 
     private boolean requireProductMutationPermission() {
@@ -2155,15 +2154,30 @@ public class ProductView extends JPanel {
             detailImage = img;
         }
 
-        if (AuthorizationService.isStoreManager() || AuthorizationService.isCashier()) {
-            if (evt.getClickCount() == 2) {
+        /*
+     * Chuẩn mới:
+     * - Double click sản phẩm => mở cấu hình đơn vị bán.
+     * - Manager / Staff Sale được xem.
+     * - Admin / Nhân viên kho được sửa.
+         */
+        if (evt.getClickCount() == 2) {
+            if (canViewProductUnitConfig()) {
+                showUnitConfigDialog();
+            } else {
                 showProductDetailDialog(productId, productName, price, quantity, categoryId, detailImage);
             }
             return;
         }
 
+        /*
+     * Manager / Staff Sale chỉ xem danh sách, không fill form sửa sản phẩm.
+         */
+        if (AuthorizationService.isStoreManager() || AuthorizationService.isCashier()) {
+            return;
+        }
+
         txtName.setText(productName);
-        txtPrice.setText(price.replace("VND", "").replace("VNĐ", "").trim());
+        txtPrice.setText(price.replace("VND", "").replace("VNĐ", "").replace("đ", "").trim());
         txtQuantity.setText(quantityText);
 
         JTextField editor = (JTextField) cbCategory.getEditor().getEditorComponent();
@@ -2180,12 +2194,7 @@ public class ProductView extends JPanel {
                 lblImagePreview.setText("Chưa có ảnh");
             }
         }
-
-        if (evt.getClickCount() == 2) {
-            showProductDetailDialog(productId, productName, price, quantity, categoryId, detailImage);
-        }
     }
-    
 
     private void showProductDetailDialog(
             String productId,
@@ -2214,6 +2223,8 @@ public class ProductView extends JPanel {
                 "Chi tiết sản phẩm",
                 true
         );
+
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         dialog.setSize(620, 430);
         dialog.setLocationRelativeTo(this);
@@ -2303,6 +2314,36 @@ public class ProductView extends JPanel {
         dialog.add(card, BorderLayout.CENTER);
         dialog.add(bottom, BorderLayout.SOUTH);
         dialog.setVisible(true);
+    }
+
+    private void fillProductUnitsToModel(List<ProductUnit> units, DefaultTableModel model) {
+        model.setRowCount(0);
+
+        java.text.DecimalFormat money = new java.text.DecimalFormat("#,##0 đ");
+
+        if (units == null) {
+            return;
+        }
+
+        for (ProductUnit unit : units) {
+            String unitId = unit.getUnitId();
+            String unitName = unit.getUnitName();
+
+            if (unitName == null || unitName.trim().isEmpty()) {
+                unitName = unitId;
+            }
+
+            BigDecimal price = unit.getSellingPrice();
+            String priceText = price == null ? "—" : money.format(price);
+
+            model.addRow(new Object[]{
+                unitId,
+                unitName,
+                unit.getConversionRateToBase(),
+                priceText,
+                unit.getIsBaseUnit() == 1 ? "Có" : ""
+            });
+        }
     }
 
     private JPanel detailLine(String label, String value) {
@@ -2509,37 +2550,74 @@ public class ProductView extends JPanel {
     }
 
     private void showUnitConfigDialog() {
-        if (!requireProductMutationPermission()) {
+        if (!canViewProductUnitConfig()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Bạn không có quyền xem cấu hình đơn vị bán.",
+                    "Không có quyền",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
         String productId = getSelectedProductId();
+
         if (productId == null || productId.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "⚠️ Vui lòng chọn một sản phẩm trong bảng để cấu hình đơn vị!", "Chưa chọn sản phẩm", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Vui lòng chọn một sản phẩm trong bảng để cấu hình đơn vị!",
+                    "Chưa chọn sản phẩm",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Cấu hình Đơn vị tính", true);
-        dialog.setSize(600, 550);
-        dialog.setLocationRelativeTo(this);
-        dialog.setLayout(new BorderLayout());
-        dialog.getContentPane().setBackground(bgLight);
+        boolean editable = canEditProductUnitConfig();
 
         int selectedRow = tblProducts.getSelectedRow();
         int selectedModelRow = tblProducts.convertRowIndexToModel(selectedRow);
         String productName = String.valueOf(tableModel.getValueAt(selectedModelRow, 2));
 
+        JDialog dialog = new JDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this),
+                "Cấu hình Đơn vị bán",
+                Dialog.ModalityType.MODELESS
+        );
+
+        final boolean[] dialogClosing = {false};
+
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                dialogClosing[0] = true;
+            }
+
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent e) {
+                dialogClosing[0] = true;
+            }
+        });
+
+        dialog.setSize(840, editable ? 650 : 500);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout(0, 12));
+        dialog.getContentPane().setBackground(bgLight);
+
         JLabel lblTitle = new JLabel("Cấu hình quy đổi: " + productName + " (" + productId + ")");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         lblTitle.setForeground(textDark);
-        lblTitle.setBorder(new EmptyBorder(15, 20, 10, 20));
+        lblTitle.setBorder(new EmptyBorder(18, 22, 8, 22));
         dialog.add(lblTitle, BorderLayout.NORTH);
 
-        RoundedPanel tablePanel = new RoundedPanel(15, Color.WHITE);
-        tablePanel.setLayout(new BorderLayout());
-        tablePanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        RoundedPanel tablePanel = new RoundedPanel(16, Color.WHITE);
+        tablePanel.setLayout(new BorderLayout(0, 8));
+        tablePanel.setBorder(new EmptyBorder(12, 12, 12, 12));
 
-        DefaultTableModel unitModel = new DefaultTableModel(new Object[]{"Tên Đơn vị", "Tỷ lệ quy đổi", "Là ĐV Gốc"}, 0) {
+        DefaultTableModel unitModel = new DefaultTableModel(
+                new Object[]{"Mã ĐV", "Tên đơn vị", "Tỷ lệ quy đổi", "Giá bán", "ĐV gốc"},
+                0
+        ) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -2547,143 +2625,525 @@ public class ProductView extends JPanel {
         };
 
         JTable unitTable = new JTable(unitModel);
-        unitTable.setRowHeight(30);
-        unitTable.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        unitTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
-        unitTable.getTableHeader().setBackground(bgLight);
+        unitTable.setRowHeight(34);
+        unitTable.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        unitTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+        unitTable.getTableHeader().setBackground(new Color(245, 247, 252));
+        unitTable.getTableHeader().setForeground(textDark);
+        unitTable.getTableHeader().setReorderingAllowed(false);
         unitTable.setShowVerticalLines(false);
+        unitTable.setShowHorizontalLines(true);
+        unitTable.setGridColor(new Color(235, 238, 245));
         unitTable.setSelectionBackground(new Color(237, 242, 255));
         unitTable.setSelectionForeground(textDark);
+
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+
+        for (int i = 0; i < unitTable.getColumnCount(); i++) {
+            unitTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
+
+        unitTable.getColumnModel().getColumn(0).setPreferredWidth(90);
+        unitTable.getColumnModel().getColumn(1).setPreferredWidth(170);
+        unitTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        unitTable.getColumnModel().getColumn(3).setPreferredWidth(130);
+        unitTable.getColumnModel().getColumn(4).setPreferredWidth(90);
 
         loadProductUnits(productId, unitModel);
 
         JScrollPane scrollPane = new JScrollPane(unitTable);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.setBorder(BorderFactory.createLineBorder(borderGray));
         scrollPane.getViewport().setBackground(Color.WHITE);
         tablePanel.add(scrollPane, BorderLayout.CENTER);
 
+        JLabel lblStatus = new JLabel(
+                editable
+                        ? "Gợi ý: Chọn một dòng để chỉnh sửa. Đơn vị gốc là đơn vị nhỏ nhất để quản lý tồn kho."
+                        : "Bạn chỉ được xem cấu hình đơn vị bán. Không được thêm/sửa/xóa."
+        );
+        lblStatus.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        lblStatus.setForeground(textGray);
+        lblStatus.setBorder(new EmptyBorder(4, 4, 0, 4));
+        tablePanel.add(lblStatus, BorderLayout.SOUTH);
+
         JPanel centerWrapper = new JPanel(new BorderLayout());
         centerWrapper.setOpaque(false);
-        centerWrapper.setBorder(new EmptyBorder(0, 20, 15, 20));
+        centerWrapper.setBorder(new EmptyBorder(0, 22, 0, 22));
         centerWrapper.add(tablePanel, BorderLayout.CENTER);
         dialog.add(centerWrapper, BorderLayout.CENTER);
 
-        RoundedPanel formPanel = new RoundedPanel(15, Color.WHITE);
-        formPanel.setLayout(new GridBagLayout());
-        formPanel.setBorder(new EmptyBorder(15, 20, 15, 20));
+        JPanel southWrapper = new JPanel(new BorderLayout());
+        southWrapper.setOpaque(false);
+        southWrapper.setBorder(new EmptyBorder(0, 22, 20, 22));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
+        if (editable) {
+            RoundedPanel formPanel = new RoundedPanel(16, Color.WHITE);
+            formPanel.setLayout(new GridBagLayout());
+            formPanel.setBorder(new EmptyBorder(16, 18, 16, 18));
 
-        JTextField txtUnitName = createTextField("VD: Thùng, Lốc, Hộp...");
-        JTextField txtRate = createTextField("VD: 1, 6, 24...");
-        JCheckBox chkBase = new JCheckBox("Đây là đơn vị gốc (Tỷ lệ = 1)");
-        chkBase.setOpaque(false);
-        chkBase.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        chkBase.setForeground(textDark);
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.insets = new Insets(5, 5, 5, 5);
 
-        chkBase.addActionListener(e -> {
-            if (chkBase.isSelected()) {
-                txtRate.setText("1");
-                txtRate.setEnabled(false);
-            } else {
-                txtRate.setEnabled(true);
-            }
-        });
+            JTextField txtUnitName = createTextField("VD: Túi, Chai, Hộp, Lốc, Thùng...");
+            JTextField txtRate = createTextField("VD: 1, 4, 6, 24...");
+            JTextField txtSellingPrice = createTextField("VD: 35000...");
 
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 0.6;
-        formPanel.add(createLabel("Tên đơn vị mới:"), gbc);
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.weightx = 0.4;
-        formPanel.add(createLabel("Tỷ lệ quy đổi:"), gbc);
+            JCheckBox chkBase = new JCheckBox("Đây là đơn vị gốc (Tỷ lệ = 1)");
+            chkBase.setOpaque(false);
+            chkBase.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            chkBase.setForeground(textDark);
 
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        formPanel.add(txtUnitName, gbc);
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        formPanel.add(txtRate, gbc);
+            final String[] editingUnitId = {null};
 
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 2;
-        formPanel.add(chkBase, gbc);
+            chkBase.addActionListener(e -> {
+                if (chkBase.isSelected()) {
+                    txtRate.setText("1");
+                    txtRate.setEnabled(false);
+                } else {
+                    txtRate.setEnabled(true);
+                }
+            });
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        btnPanel.setOpaque(false);
-
-        JButton btnCancel = createCustomButton("Đóng", new Color(165, 177, 194), Color.WHITE, null);
-        btnCancel.setPreferredSize(new Dimension(100, 40));
-        btnCancel.addActionListener(e -> dialog.dispose());
-
-        JButton btnSave = createCustomButton("Lưu đơn vị", primaryBlue, Color.WHITE, IconHelper.add(18));
-        btnSave.setPreferredSize(new Dimension(140, 40));
-
-        btnSave.addActionListener(e -> {
-            String uName = txtUnitName.getText().trim();
-            String uRate = txtRate.getText().trim();
-
-            if (uName.isEmpty() || uRate.isEmpty()) {
-                JOptionPane.showMessageDialog(dialog, "Vui lòng nhập đủ Tên đơn vị và Tỷ lệ quy đổi!", "Lỗi nhập liệu", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            try {
-                BigDecimal rate = new BigDecimal(uRate);
-                if (rate.compareTo(BigDecimal.ZERO) <= 0) {
-                    JOptionPane.showMessageDialog(dialog, "Tỷ lệ quy đổi phải là số lớn hơn 0!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            unitTable.getSelectionModel().addListSelectionListener(e -> {
+                if (e.getValueIsAdjusting()) {
                     return;
                 }
 
-                boolean ok = new UnitOfMeasureService().configureProductUnit(productId, uName, rate, chkBase.isSelected());
-                if (ok) {
-                    SyncVersionDao.bumpVersion("PRODUCTS");
-
-                    // REALTIME: báo “product metadata” đổi
-                    RealtimeClient.send("PRODUCTS_CHANGED");
-
-                    JOptionPane.showMessageDialog(dialog, "✅ Đã lưu cấu hình đơn vị tính thành công!");
-                    loadProductUnits(productId, unitModel);
-
-                    txtUnitName.setText("");
-                    txtRate.setText("");
-                    chkBase.setSelected(false);
-                    txtRate.setEnabled(true);
-                } else {
-                    JOptionPane.showMessageDialog(dialog, "❌ Lỗi cập nhật! (Tên đơn vị này có thể đã tồn tại)", "Lỗi Data", JOptionPane.ERROR_MESSAGE);
+                int viewRow = unitTable.getSelectedRow();
+                if (viewRow < 0) {
+                    return;
                 }
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(dialog, "Tỷ lệ quy đổi phải là một số hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(dialog, "Lỗi hệ thống: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        });
 
-        btnPanel.add(btnCancel);
-        btnPanel.add(btnSave);
+                int modelRow = unitTable.convertRowIndexToModel(viewRow);
 
-        gbc.gridy = 3;
-        gbc.insets = new Insets(15, 5, 5, 5);
-        formPanel.add(btnPanel, gbc);
+                editingUnitId[0] = String.valueOf(unitModel.getValueAt(modelRow, 0));
+                txtUnitName.setText(String.valueOf(unitModel.getValueAt(modelRow, 1)));
+                txtRate.setText(String.valueOf(unitModel.getValueAt(modelRow, 2)));
 
-        JPanel southWrapper = new JPanel(new BorderLayout());
-        southWrapper.setOpaque(false);
-        southWrapper.setBorder(new EmptyBorder(0, 20, 20, 20));
-        southWrapper.add(formPanel, BorderLayout.CENTER);
+                String priceText = String.valueOf(unitModel.getValueAt(modelRow, 3))
+                        .replace("đ", "")
+                        .replace(".", "")
+                        .replace(",", "")
+                        .trim();
+
+                txtSellingPrice.setText(priceText);
+
+                String baseText = String.valueOf(unitModel.getValueAt(modelRow, 4)).trim();
+                chkBase.setSelected("Có".equalsIgnoreCase(baseText));
+                txtRate.setEnabled(!chkBase.isSelected());
+
+                lblStatus.setForeground(textGray);
+                lblStatus.setText("Đang chọn đơn vị: " + editingUnitId[0] + ". Có thể bấm Cập nhật hoặc Xóa.");
+            });
+
+            gbc.gridx = 0;
+            gbc.gridy = 0;
+            gbc.weightx = 0.34;
+            formPanel.add(createLabel("Tên đơn vị:"), gbc);
+
+            gbc.gridx = 1;
+            gbc.gridy = 0;
+            gbc.weightx = 0.33;
+            formPanel.add(createLabel("Tỷ lệ quy đổi:"), gbc);
+
+            gbc.gridx = 2;
+            gbc.gridy = 0;
+            gbc.weightx = 0.33;
+            formPanel.add(createLabel("Giá bán:"), gbc);
+
+            gbc.gridx = 0;
+            gbc.gridy = 1;
+            formPanel.add(txtUnitName, gbc);
+
+            gbc.gridx = 1;
+            gbc.gridy = 1;
+            formPanel.add(txtRate, gbc);
+
+            gbc.gridx = 2;
+            gbc.gridy = 1;
+            formPanel.add(txtSellingPrice, gbc);
+
+            gbc.gridx = 0;
+            gbc.gridy = 2;
+            gbc.gridwidth = 3;
+            formPanel.add(chkBase, gbc);
+
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            btnPanel.setOpaque(false);
+
+            JButton btnClose = createCustomButton("Đóng", new Color(165, 177, 194), Color.WHITE, null);
+            btnClose.setPreferredSize(new Dimension(95, 40));
+            btnClose.addActionListener(e -> {
+                dialogClosing[0] = true;
+                dialog.dispose();
+            });
+
+            JButton btnClearEdit = createCustomButton("Làm mới", new Color(108, 117, 125), Color.WHITE, null);
+            btnClearEdit.setPreferredSize(new Dimension(105, 40));
+
+            JButton btnDeleteUnit = createCustomButton("Xóa", new Color(220, 53, 69), Color.WHITE, null);
+            btnDeleteUnit.setPreferredSize(new Dimension(90, 40));
+
+            JButton btnUpdateUnit = createCustomButton("Cập nhật", new Color(255, 153, 0), Color.BLACK, IconHelper.edit(18));
+            btnUpdateUnit.setPreferredSize(new Dimension(125, 40));
+
+            JButton btnSave = createCustomButton("Thêm", primaryBlue, Color.WHITE, IconHelper.add(18));
+            btnSave.setPreferredSize(new Dimension(105, 40));
+
+            Runnable clearEditForm = () -> {
+                editingUnitId[0] = null;
+                unitTable.clearSelection();
+                txtUnitName.setText("");
+                txtRate.setText("");
+                txtSellingPrice.setText("");
+                chkBase.setSelected(false);
+                txtRate.setEnabled(true);
+                lblStatus.setForeground(textGray);
+                lblStatus.setText("Đã làm mới form. Nhập dữ liệu để thêm đơn vị mới.");
+            };
+
+            Runnable disableMutationButtons = () -> {
+                btnSave.setEnabled(false);
+                btnUpdateUnit.setEnabled(false);
+                btnDeleteUnit.setEnabled(false);
+                btnClearEdit.setEnabled(false);
+            };
+
+            Runnable enableMutationButtons = () -> {
+                btnSave.setEnabled(true);
+                btnUpdateUnit.setEnabled(true);
+                btnDeleteUnit.setEnabled(true);
+                btnClearEdit.setEnabled(true);
+            };
+
+            btnClearEdit.addActionListener(e -> clearEditForm.run());
+
+            btnSave.addActionListener(e -> {
+                String unitName = txtUnitName.getText().trim();
+                String rateText = txtRate.getText().trim();
+                String priceText = txtSellingPrice.getText().trim();
+
+                if (unitName.isEmpty() || rateText.isEmpty() || priceText.isEmpty()) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Vui lòng nhập đủ Tên đơn vị, Tỷ lệ quy đổi và Giá bán.");
+                    return;
+                }
+
+                try {
+                    BigDecimal rate = new BigDecimal(rateText);
+                    BigDecimal sellingPrice = new BigDecimal(priceText);
+
+                    if (rate.compareTo(BigDecimal.ZERO) <= 0) {
+                        lblStatus.setForeground(new Color(220, 53, 69));
+                        lblStatus.setText("Tỷ lệ quy đổi phải lớn hơn 0.");
+                        return;
+                    }
+
+                    if (sellingPrice.compareTo(BigDecimal.ZERO) < 0) {
+                        lblStatus.setForeground(new Color(220, 53, 69));
+                        lblStatus.setText("Giá bán không được âm.");
+                        return;
+                    }
+
+                    disableMutationButtons.run();
+                    lblStatus.setForeground(textGray);
+                    lblStatus.setText("Đang thêm đơn vị...");
+
+                    new SwingWorker<List<ProductUnit>, Void>() {
+                        private boolean ok = false;
+                        private String errorMessage = null;
+
+                        @Override
+                        protected List<ProductUnit> doInBackground() {
+                            try {
+                                ok = new UnitOfMeasureService().configureProductUnit(
+                                        productId,
+                                        unitName,
+                                        rate,
+                                        sellingPrice,
+                                        chkBase.isSelected()
+                                );
+
+                                if (!ok) {
+                                    errorMessage = "Thêm thất bại. Vui lòng kiểm tra dữ liệu hoặc database.";
+                                    return null;
+                                }
+
+                                return ProductUnitsSql.getInstance().selectByProductId(productId);
+
+                            } catch (Exception ex) {
+                                errorMessage = ex.getMessage();
+                                return null;
+                            }
+                        }
+
+                        @Override
+                        protected void done() {
+                            if (dialogClosing[0] || !dialog.isDisplayable()) {
+                                return;
+                            }
+
+                            enableMutationButtons.run();
+
+                            try {
+                                List<ProductUnit> units = get();
+
+                                if (ok) {
+                                    fillProductUnitsToModel(units, unitModel);
+                                    clearEditForm.run();
+
+                                    lblStatus.setForeground(new Color(25, 135, 84));
+                                    lblStatus.setText("Đã thêm đơn vị bán thành công.");
+                                } else {
+                                    lblStatus.setForeground(new Color(220, 53, 69));
+                                    lblStatus.setText(errorMessage == null ? "Thêm thất bại." : errorMessage);
+                                }
+
+                            } catch (Exception ex) {
+                                lblStatus.setForeground(new Color(220, 53, 69));
+                                lblStatus.setText("Lỗi hệ thống: " + ex.getMessage());
+                            }
+                        }
+                    }.execute();
+
+                } catch (NumberFormatException ex) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Tỷ lệ quy đổi và Giá bán phải là số hợp lệ.");
+                }
+            });
+
+            btnUpdateUnit.addActionListener(e -> {
+                if (editingUnitId[0] == null || editingUnitId[0].trim().isEmpty()) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Vui lòng chọn một đơn vị trong bảng để cập nhật.");
+                    return;
+                }
+
+                String oldUnitId = editingUnitId[0];
+                String unitName = txtUnitName.getText().trim();
+                String rateText = txtRate.getText().trim();
+                String priceText = txtSellingPrice.getText().trim();
+
+                if (unitName.isEmpty() || rateText.isEmpty() || priceText.isEmpty()) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Vui lòng nhập đủ Tên đơn vị, Tỷ lệ quy đổi và Giá bán.");
+                    return;
+                }
+
+                try {
+                    BigDecimal rate = new BigDecimal(rateText);
+                    BigDecimal sellingPrice = new BigDecimal(priceText);
+
+                    if (rate.compareTo(BigDecimal.ZERO) <= 0) {
+                        lblStatus.setForeground(new Color(220, 53, 69));
+                        lblStatus.setText("Tỷ lệ quy đổi phải lớn hơn 0.");
+                        return;
+                    }
+
+                    if (sellingPrice.compareTo(BigDecimal.ZERO) < 0) {
+                        lblStatus.setForeground(new Color(220, 53, 69));
+                        lblStatus.setText("Giá bán không được âm.");
+                        return;
+                    }
+
+                    disableMutationButtons.run();
+                    lblStatus.setForeground(textGray);
+                    lblStatus.setText("Đang cập nhật đơn vị...");
+
+                    new SwingWorker<List<ProductUnit>, Void>() {
+                        private boolean ok = false;
+                        private String errorMessage = null;
+
+                        @Override
+                        protected List<ProductUnit> doInBackground() {
+                            try {
+                                ok = new UnitOfMeasureService().updateProductUnit(
+                                        productId,
+                                        oldUnitId,
+                                        unitName,
+                                        rate,
+                                        sellingPrice,
+                                        chkBase.isSelected()
+                                );
+
+                                if (!ok) {
+                                    errorMessage = "Cập nhật thất bại. Vui lòng kiểm tra dữ liệu hoặc database.";
+                                    return null;
+                                }
+
+                                return ProductUnitsSql.getInstance().selectByProductId(productId);
+
+                            } catch (Exception ex) {
+                                errorMessage = ex.getMessage();
+                                return null;
+                            }
+                        }
+
+                        @Override
+                        protected void done() {
+                            if (dialogClosing[0] || !dialog.isDisplayable()) {
+                                return;
+                            }
+
+                            enableMutationButtons.run();
+
+                            try {
+                                List<ProductUnit> units = get();
+
+                                if (ok) {
+                                    fillProductUnitsToModel(units, unitModel);
+                                    clearEditForm.run();
+
+                                    lblStatus.setForeground(new Color(25, 135, 84));
+                                    lblStatus.setText("Đã cập nhật đơn vị bán thành công.");
+                                } else {
+                                    lblStatus.setForeground(new Color(220, 53, 69));
+                                    lblStatus.setText(errorMessage == null ? "Cập nhật thất bại." : errorMessage);
+                                }
+
+                            } catch (Exception ex) {
+                                lblStatus.setForeground(new Color(220, 53, 69));
+                                lblStatus.setText("Lỗi hệ thống: " + ex.getMessage());
+                            }
+                        }
+                    }.execute();
+
+                } catch (NumberFormatException ex) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Tỷ lệ quy đổi và Giá bán phải là số hợp lệ.");
+                }
+            });
+
+            btnDeleteUnit.addActionListener(e -> {
+                int selectedUnitRow = unitTable.getSelectedRow();
+
+                if (selectedUnitRow < 0) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Vui lòng chọn một đơn vị trong bảng để xóa.");
+                    return;
+                }
+
+                int modelRow = unitTable.convertRowIndexToModel(selectedUnitRow);
+
+                String unitId = String.valueOf(unitModel.getValueAt(modelRow, 0));
+                String unitName = String.valueOf(unitModel.getValueAt(modelRow, 1));
+                String isBaseText = String.valueOf(unitModel.getValueAt(modelRow, 4));
+
+                if ("Có".equalsIgnoreCase(isBaseText.trim())) {
+                    lblStatus.setForeground(new Color(220, 53, 69));
+                    lblStatus.setText("Không thể xóa đơn vị gốc. Hãy chọn đơn vị khác làm gốc trước.");
+                    return;
+                }
+
+                int confirm = JOptionPane.showConfirmDialog(
+                        dialog,
+                        "Bạn có chắc muốn xóa đơn vị bán này không?\n\n"
+                        + "Sản phẩm: " + productName + "\n"
+                        + "Đơn vị: " + unitName + " (" + unitId + ")",
+                        "Xác nhận xóa đơn vị",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE
+                );
+
+                if (confirm != JOptionPane.YES_OPTION) {
+                    return;
+                }
+
+                disableMutationButtons.run();
+
+                lblStatus.setForeground(textGray);
+                lblStatus.setText("Đang xóa đơn vị...");
+
+                new SwingWorker<List<ProductUnit>, Void>() {
+                    private boolean ok = false;
+                    private String errorMessage = null;
+
+                    @Override
+                    protected List<ProductUnit> doInBackground() {
+                        try {
+                            ok = new UnitOfMeasureService().deleteProductUnit(productId, unitId);
+
+                            if (!ok) {
+                                errorMessage = "Xóa thất bại. Không được xóa đơn vị gốc hoặc đơn vị cuối cùng.";
+                                return null;
+                            }
+
+                            return ProductUnitsSql.getInstance().selectByProductId(productId);
+
+                        } catch (Exception ex) {
+                            errorMessage = ex.getMessage();
+                            return null;
+                        }
+                    }
+
+                    @Override
+                    protected void done() {
+                        if (dialogClosing[0] || !dialog.isDisplayable()) {
+                            return;
+                        }
+
+                        enableMutationButtons.run();
+
+                        try {
+                            List<ProductUnit> units = get();
+
+                            if (ok) {
+                                fillProductUnitsToModel(units, unitModel);
+                                clearEditForm.run();
+
+                                lblStatus.setForeground(new Color(25, 135, 84));
+                                lblStatus.setText("Đã xóa đơn vị bán: " + unitName + ".");
+                            } else {
+                                lblStatus.setForeground(new Color(220, 53, 69));
+                                lblStatus.setText(errorMessage == null ? "Xóa thất bại." : errorMessage);
+                            }
+
+                        } catch (Exception ex) {
+                            lblStatus.setForeground(new Color(220, 53, 69));
+                            lblStatus.setText("Lỗi hệ thống: " + ex.getMessage());
+                        }
+                    }
+                }.execute();
+            });
+
+            btnPanel.add(btnClose);
+            btnPanel.add(btnClearEdit);
+            btnPanel.add(btnDeleteUnit);
+            btnPanel.add(btnUpdateUnit);
+            btnPanel.add(btnSave);
+
+            gbc.gridy = 3;
+            gbc.gridx = 0;
+            gbc.gridwidth = 3;
+            gbc.insets = new Insets(14, 5, 5, 5);
+            formPanel.add(btnPanel, gbc);
+
+            southWrapper.add(formPanel, BorderLayout.CENTER);
+
+        } else {
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            btnPanel.setOpaque(false);
+
+            JButton btnClose = createCustomButton("Đóng", new Color(165, 177, 194), Color.WHITE, null);
+            btnClose.setPreferredSize(new Dimension(110, 40));
+            btnClose.addActionListener(e -> {
+                dialogClosing[0] = true;
+                dialog.dispose();
+            });
+
+            btnPanel.add(btnClose);
+            southWrapper.add(btnPanel, BorderLayout.CENTER);
+        }
 
         dialog.add(southWrapper, BorderLayout.SOUTH);
         dialog.setVisible(true);
     }
 
     private void loadProductUnits(String productId, DefaultTableModel model) {
-        model.setRowCount(0);
         List<ProductUnit> units = ProductUnitsSql.getInstance().selectByProductId(productId);
-        for (ProductUnit unit : units) {
-            model.addRow(new Object[]{unit.getUnitId(), unit.getConversionRateToBase(), unit.getIsBaseUnit() == 1 ? "Có" : ""});
-        }
+        fillProductUnitsToModel(units, model);
     }
 
     private void handleImportCSV() {

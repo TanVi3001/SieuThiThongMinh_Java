@@ -1,376 +1,284 @@
--- =========================================================
--- 20260526_fix_products_no_duplicate_with_images.sql
--- Mục tiêu:
--- 1) Xóa mềm sản phẩm chưa có ảnh.
--- 2) Xóa mềm sản phẩm trùng tên, ưu tiên giữ mã SP0... và có ảnh.
--- 3) Import lại danh mục + sản phẩm demo KHÔNG trùng tên.
--- 4) Mã sản phẩm mới dùng dạng SP000xxx, không dùng SP100xxx nữa.
--- =========================================================
+-- ==========================================================
+-- SMART SUPERMARKET - Seed cấu hình đơn vị bán theo danh sách sản phẩm
+-- Generated from uploaded CSV/text files: 121 products
+-- Ý tưởng:
+--   1) PRODUCT_UNITS.selling_price = giá bán theo đơn vị.
+--   2) PRODUCTS.base_unit_id = đơn vị nhỏ nhất để trừ kho.
+--   3) INVENTORY.quantity sẽ được nhân quy đổi 1 lần nếu chuyển từ đơn vị gói/lốc/hộp sang đơn vị nhỏ hơn.
+--      Điều kiện chặn nhân lại: chỉ nhân khi PRODUCTS.base_unit_id chưa bằng base unit mới.
+-- ==========================================================
 
--- A. BACKUP TRƯỚC KHI DỌN
+SET DEFINE OFF;
+
 BEGIN
-    EXECUTE IMMEDIATE 'CREATE TABLE PRODUCTS_BACKUP_BEFORE_CLEAN_20260526 AS SELECT * FROM PRODUCTS';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
+    EXECUTE IMMEDIATE 'ALTER TABLE PRODUCT_UNITS ADD (selling_price NUMBER(15,2))';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -1430 THEN -- ORA-01430: column being added already exists
+            RAISE;
+        END IF;
 END;
 /
 
+CREATE OR REPLACE PROCEDURE CFG_PRODUCT_UOM_BY_NAME (
+    p_product_name     IN NVARCHAR2,
+    p_base_unit_id     IN VARCHAR2,
+    p_base_unit_name   IN NVARCHAR2,
+    p_base_price       IN NUMBER,
+    p_pack_unit_id     IN VARCHAR2 DEFAULT NULL,
+    p_pack_unit_name   IN NVARCHAR2 DEFAULT NULL,
+    p_pack_rate        IN NUMBER DEFAULT NULL,
+    p_pack_price       IN NUMBER DEFAULT NULL
+) IS
+    v_product_id       PRODUCTS.product_id%TYPE;
+    v_old_base_unit_id PRODUCTS.base_unit_id%TYPE;
+    v_need_multiply    NUMBER := 0;
 BEGIN
-    EXECUTE IMMEDIATE 'CREATE TABLE INVENTORY_BACKUP_BEFORE_CLEAN_20260526 AS SELECT * FROM INVENTORY';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
-END;
-/
+    BEGIN
+        SELECT product_id, base_unit_id
+        INTO v_product_id, v_old_base_unit_id
+        FROM PRODUCTS
+        WHERE product_name = p_product_name
+          AND NVL(is_deleted, 0) = 0
+        FETCH FIRST 1 ROWS ONLY;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            DBMS_OUTPUT.PUT_LINE('SKIP - not found: ' || p_product_name);
+            RETURN;
+    END;
 
-BEGIN
-    EXECUTE IMMEDIATE 'CREATE TABLE STORE_PRODUCTS_BACKUP_BEFORE_CLEAN_20260526 AS SELECT * FROM STORE_PRODUCTS';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
-END;
-/
+    MERGE INTO UNITS u
+    USING (SELECT p_base_unit_id AS unit_id, p_base_unit_name AS unit_name FROM dual) src
+    ON (u.unit_id = src.unit_id)
+    WHEN MATCHED THEN
+        UPDATE SET u.unit_name = src.unit_name, u.is_deleted = 0
+    WHEN NOT MATCHED THEN
+        INSERT (unit_id, unit_name, is_deleted)
+        VALUES (src.unit_id, src.unit_name, 0);
 
--- B. ĐẢM BẢO CATEGORIES CÓ VAT_RATE / STATUS
-DECLARE
-    v_count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_count FROM USER_TAB_COLUMNS
-    WHERE TABLE_NAME = 'CATEGORIES' AND COLUMN_NAME = 'VAT_RATE';
-
-    IF v_count = 0 THEN
-        EXECUTE IMMEDIATE 'ALTER TABLE CATEGORIES ADD VAT_RATE NUMBER(5,2)';
+    IF p_pack_unit_id IS NOT NULL THEN
+        MERGE INTO UNITS u
+        USING (SELECT p_pack_unit_id AS unit_id, p_pack_unit_name AS unit_name FROM dual) src
+        ON (u.unit_id = src.unit_id)
+        WHEN MATCHED THEN
+            UPDATE SET u.unit_name = src.unit_name, u.is_deleted = 0
+        WHEN NOT MATCHED THEN
+            INSERT (unit_id, unit_name, is_deleted)
+            VALUES (src.unit_id, src.unit_name, 0);
     END IF;
 
-    SELECT COUNT(*) INTO v_count FROM USER_TAB_COLUMNS
-    WHERE TABLE_NAME = 'CATEGORIES' AND COLUMN_NAME = 'STATUS';
-
-    IF v_count = 0 THEN
-        EXECUTE IMMEDIATE 'ALTER TABLE CATEGORIES ADD STATUS NVARCHAR2(30) DEFAULT N''Hoạt động''';
+    IF p_pack_unit_id IS NOT NULL
+       AND NVL(p_pack_rate, 1) > 1
+       AND (v_old_base_unit_id IS NULL OR v_old_base_unit_id <> p_base_unit_id) THEN
+        v_need_multiply := 1;
     END IF;
+
+    IF v_need_multiply = 1 THEN
+        UPDATE INVENTORY
+        SET quantity = quantity * p_pack_rate,
+            unit = p_base_unit_name,
+            last_updated = SYSDATE
+        WHERE product_id = v_product_id
+          AND NVL(is_deleted, 0) = 0;
+    ELSE
+        UPDATE INVENTORY
+        SET unit = p_base_unit_name,
+            last_updated = SYSDATE
+        WHERE product_id = v_product_id
+          AND NVL(is_deleted, 0) = 0;
+    END IF;
+
+    MERGE INTO PRODUCT_UNITS pu
+    USING (
+        SELECT v_product_id AS product_id,
+               p_base_unit_id AS unit_id,
+               1 AS conversion_rate_to_base,
+               p_base_price AS selling_price
+        FROM dual
+    ) src
+    ON (pu.product_id = src.product_id AND pu.unit_id = src.unit_id)
+    WHEN MATCHED THEN
+        UPDATE SET
+            pu.conversion_rate_to_base = src.conversion_rate_to_base,
+            pu.selling_price = src.selling_price,
+            pu.is_base_unit = 1,
+            pu.is_deleted = 0
+    WHEN NOT MATCHED THEN
+        INSERT (product_id, unit_id, conversion_rate_to_base, selling_price, is_base_unit, is_deleted)
+        VALUES (src.product_id, src.unit_id, src.conversion_rate_to_base, src.selling_price, 1, 0);
+
+    UPDATE PRODUCT_UNITS
+    SET is_base_unit = 0
+    WHERE product_id = v_product_id
+      AND unit_id <> p_base_unit_id;
+
+    IF p_pack_unit_id IS NOT NULL THEN
+        MERGE INTO PRODUCT_UNITS pu
+        USING (
+            SELECT v_product_id AS product_id,
+                   p_pack_unit_id AS unit_id,
+                   p_pack_rate AS conversion_rate_to_base,
+                   p_pack_price AS selling_price
+            FROM dual
+        ) src
+        ON (pu.product_id = src.product_id AND pu.unit_id = src.unit_id)
+        WHEN MATCHED THEN
+            UPDATE SET
+                pu.conversion_rate_to_base = src.conversion_rate_to_base,
+                pu.selling_price = src.selling_price,
+                pu.is_base_unit = 0,
+                pu.is_deleted = 0
+        WHEN NOT MATCHED THEN
+            INSERT (product_id, unit_id, conversion_rate_to_base, selling_price, is_base_unit, is_deleted)
+            VALUES (src.product_id, src.unit_id, src.conversion_rate_to_base, src.selling_price, 0, 0);
+    END IF;
+
+    UPDATE PRODUCTS
+    SET base_unit_id = p_base_unit_id
+    WHERE product_id = v_product_id;
+
+    DBMS_OUTPUT.PUT_LINE('OK - ' || v_product_id || ' - ' || p_product_name);
 END;
 /
 
--- C. ĐỒNG BỘ DANH MỤC
-MERGE INTO CATEGORIES c
-USING (
-    SELECT 'CAT001' id, N'Thực phẩm khô' name, 8 vat, N'Gạo, mì, đường, gia vị, thực phẩm đóng gói' des FROM dual UNION ALL
-    SELECT 'CAT002', N'Đồ uống & Giải khát', 10, N'Nước suối, nước ngọt, trà, cà phê, sữa uống' FROM dual UNION ALL
-    SELECT 'CAT003', N'Hóa mỹ phẩm', 10, N'Dầu gội, sữa tắm, bột giặt, nước rửa chén' FROM dual UNION ALL
-    SELECT 'CAT004', N'Thực phẩm tươi sống', 5, N'Thịt, cá, rau củ, trái cây tươi' FROM dual UNION ALL
-    SELECT 'CAT005', N'Bánh kẹo', 8, N'Bánh quy, kẹo, socola, snack, đồ ăn vặt' FROM dual UNION ALL
-    SELECT 'CAT006', N'Sữa & Sản phẩm từ sữa', 8, N'Sữa tươi, sữa chua, phô mai, bơ sữa' FROM dual UNION ALL
-    SELECT 'CAT007', N'Đông lạnh & Chế biến sẵn', 8, N'Xúc xích, cá viên, chả giò, thực phẩm đông lạnh' FROM dual UNION ALL
-    SELECT 'CAT008', N'Gia dụng nhà bếp', 10, N'Khăn giấy, túi rác, màng bọc, hộp đựng thực phẩm' FROM dual UNION ALL
-    SELECT 'CAT009', N'Chăm sóc cá nhân', 10, N'Kem đánh răng, bàn chải, dao cạo, nước súc miệng' FROM dual UNION ALL
-    SELECT 'CAT010', N'Mẹ & Bé', 5, N'Tã, khăn ướt, sữa tắm em bé, đồ dùng trẻ em' FROM dual UNION ALL
-    SELECT 'CAT011', N'Văn phòng phẩm', 8, N'Tập, bút, giấy note, hồ sơ, dụng cụ học tập' FROM dual UNION ALL
-    SELECT 'CAT012', N'Thức ăn thú cưng', 8, N'Hạt chó mèo, pate, cát vệ sinh, đồ chăm sóc thú cưng' FROM dual
-) s
-ON (c.category_id = s.id)
-WHEN MATCHED THEN UPDATE SET
-    c.category_name = s.name,
-    c.description = s.des,
-    c.vat_rate = s.vat,
-    c.status = N'Hoạt động',
-    c.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT(category_id, category_name, description, vat_rate, status, is_deleted)
-VALUES(s.id, s.name, s.des, s.vat, N'Hoạt động', 0);
 
--- D. XÓA MỀM SẢN PHẨM CHƯA CÓ ẢNH
-UPDATE PRODUCTS p
-SET p.is_deleted = 1
-WHERE NVL(p.is_deleted, 0) = 0
-  AND (
-        p.image_path IS NULL
-     OR TRIM(p.image_path) IS NULL
-     OR LOWER(TRIM(p.image_path)) IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-  );
+-- ==========================================================
+-- IMPORTANT: Dùng CALL thay vì gọi trần procedure.
+-- Lỗi cũ ORA-00900 là do chạy dòng CFG_PRODUCT_UOM_BY_NAME(...) như SQL thường.
+-- CALL là statement hợp lệ trong Oracle/DataGrip.
+-- ==========================================================
 
--- E. IMPORT SẢN PHẨM DEMO KHÔNG TRÙNG
--- Cơ chế:
--- - Nếu product_id đã có thì update.
--- - Nếu product_id chưa có nhưng tên đã tồn tại active thì KHÔNG insert trùng.
-MERGE INTO PRODUCTS p
-USING (
-    SELECT 'SP000001' id, N'Mì Hảo Hảo tôm chua cay' name, 5000 price, 'CAT001' cat, 'mi_hao_hao_tom_chua_cay.png' img FROM dual UNION ALL
-    SELECT 'SP000002', N'Mì Omachi sườn hầm ngũ quả', 8000, 'CAT001', 'mi_omachi_suon_ham_ngu_qua.png' FROM dual UNION ALL
-    SELECT 'SP000003', N'Phở bò Vifon túi', 7500, 'CAT001', 'pho_bo_vifon_tui.png' FROM dual UNION ALL
-    SELECT 'SP000004', N'Gạo ST25 Ông Cua túi 5kg', 180000, 'CAT001', 'gao_st25_ong_cua_5kg.png' FROM dual UNION ALL
-    SELECT 'SP000005', N'Nước mắm Nam Ngư 750ml', 35000, 'CAT001', 'nuoc_mam_nam_ngu_750ml.png' FROM dual UNION ALL
-    SELECT 'SP000006', N'Nước mắm Chinsu cá hồi 750ml', 45000, 'CAT001', 'nuoc_mam_chinsu_ca_hoi_750ml.png' FROM dual UNION ALL
-    SELECT 'SP000007', N'Đường tinh luyện Biên Hòa 1kg', 28000, 'CAT001', 'duong_bien_hoa_1kg.png' FROM dual UNION ALL
-    SELECT 'SP000008', N'Dầu ăn Tường An 2L', 52000, 'CAT001', 'dau_an_tuong_an_2l.png' FROM dual UNION ALL
-
-    SELECT 'SP000101', N'Nước suối Aquafina 500ml', 5000, 'CAT002', 'aquafina_500ml.png' FROM dual UNION ALL
-    SELECT 'SP000102', N'Coca Cola lon 330ml', 10000, 'CAT002', 'coca_cola_lon_330ml.png' FROM dual UNION ALL
-    SELECT 'SP000103', N'Pepsi lon 330ml', 10000, 'CAT002', 'pepsi_lon_330ml.png' FROM dual UNION ALL
-    SELECT 'SP000104', N'Trà Ô Long Tea Plus chai 455ml', 10000, 'CAT002', 'tra_olong_tea_plus_455ml.png' FROM dual UNION ALL
-    SELECT 'SP000105', N'Sting dâu chai 330ml', 9000, 'CAT002', 'sting_dau_330ml.png' FROM dual UNION ALL
-    SELECT 'SP000106', N'Sprite chai 1.5L', 20000, 'CAT002', 'sprite_15l.png' FROM dual UNION ALL
-    SELECT 'SP000107', N'Nước tăng lực Redbull lon 250ml', 15000, 'CAT002', 'redbull_lon_250ml.png' FROM dual UNION ALL
-    SELECT 'SP000108', N'Cà phê lon Birdy xanh 170ml', 12000, 'CAT002', 'ca_phe_birdy_xanh_170ml.png' FROM dual UNION ALL
-
-    SELECT 'SP000201', N'Dầu gội Clear Men 630g', 145000, 'CAT003', 'dau_goi_clear_men_630g.png' FROM dual UNION ALL
-    SELECT 'SP000202', N'Dầu gội Sunsilk mềm mượt 650g', 135000, 'CAT003', 'dau_goi_sunsilk_mem_muot_650g.png' FROM dual UNION ALL
-    SELECT 'SP000203', N'Sữa tắm Lifebuoy 850g', 155000, 'CAT003', 'sua_tam_lifebuoy_850g.png' FROM dual UNION ALL
-    SELECT 'SP000204', N'Nước rửa chén Sunlight chanh 3.6kg', 115000, 'CAT003', 'nuoc_rua_chen_sunlight_chanh_36kg.png' FROM dual UNION ALL
-    SELECT 'SP000205', N'Bột giặt OMO đỏ 5.7kg', 230000, 'CAT003', 'bot_giat_omo_do_57kg.png' FROM dual UNION ALL
-    SELECT 'SP000206', N'Nước giặt Ariel 3.6kg', 210000, 'CAT003', 'nuoc_giat_ariel_36kg.png' FROM dual UNION ALL
-
-    SELECT 'SP000301', N'Ức gà phi lê 500g', 45000, 'CAT004', 'uc_ga_phi_le_500g.png' FROM dual UNION ALL
-    SELECT 'SP000302', N'Thịt ba chỉ heo 500g', 150000, 'CAT004', 'thit_ba_chi_heo_500g.png' FROM dual UNION ALL
-    SELECT 'SP000303', N'Cá hồi phi lê 200g', 120000, 'CAT004', 'ca_hoi_phi_le_200g.png' FROM dual UNION ALL
-    SELECT 'SP000304', N'Khoai tây vàng túi 1kg', 25000, 'CAT004', 'khoai_tay_vang_1kg.png' FROM dual UNION ALL
-    SELECT 'SP000305', N'Cà chua Đà Lạt 500g', 18000, 'CAT004', 'ca_chua_da_lat_500g.png' FROM dual UNION ALL
-    SELECT 'SP000306', N'Rau cải ngọt 500g', 16000, 'CAT004', 'rau_cai_ngot_500g.png' FROM dual UNION ALL
-
-    SELECT 'SP000401', N'Bánh Oreo Socola 133g', 22000, 'CAT005', 'banh_oreo_socola_133g.png' FROM dual UNION ALL
-    SELECT 'SP000402', N'Snack khoai tây Lay''s vị tự nhiên 95g', 25000, 'CAT005', 'snack_lays_tu_nhien_95g.png' FROM dual UNION ALL
-    SELECT 'SP000403', N'KitKat socola 4 thanh', 20000, 'CAT005', 'kitkat_4_thanh.png' FROM dual UNION ALL
-    SELECT 'SP000404', N'Kẹo dẻo Alpenliebe Jelly 90g', 18000, 'CAT005', 'keo_deo_alpenliebe_jelly_90g.png' FROM dual UNION ALL
-    SELECT 'SP000405', N'Bánh gạo One One vị bò nướng 150g', 22000, 'CAT005', 'banh_gao_one_one_bo_nuong_150g.png' FROM dual UNION ALL
-
-    SELECT 'SP000501', N'Sữa tươi TH True Milk ít đường 1L', 37000, 'CAT006', 'sua_th_true_milk_it_duong_1l.png' FROM dual UNION ALL
-    SELECT 'SP000502', N'Sữa tươi Vinamilk không đường 1L', 36000, 'CAT006', 'sua_vinamilk_khong_duong_1l.png' FROM dual UNION ALL
-    SELECT 'SP000503', N'Sữa chua Vinamilk có đường lốc 4 hộp', 32000, 'CAT006', 'sua_chua_vinamilk_co_duong_4_hop.png' FROM dual UNION ALL
-    SELECT 'SP000504', N'Phô mai Con Bò Cười hộp 8 miếng', 42000, 'CAT006', 'pho_mai_con_bo_cuoi_8_mieng.png' FROM dual UNION ALL
-    SELECT 'SP000505', N'Sữa đặc Ông Thọ đỏ lon 380g', 27000, 'CAT006', 'sua_dac_ong_tho_do_380g.png' FROM dual UNION ALL
-
-    SELECT 'SP000601', N'Xúc xích Đức Việt gói 500g', 78000, 'CAT007', 'xuc_xich_duc_viet_500g.png' FROM dual UNION ALL
-    SELECT 'SP000602', N'Cá viên CP gói 500g', 65000, 'CAT007', 'ca_vien_cp_500g.png' FROM dual UNION ALL
-    SELECT 'SP000603', N'Chả giò Cầu Tre hải sản 500g', 72000, 'CAT007', 'cha_gio_cau_tre_hai_san_500g.png' FROM dual UNION ALL
-    SELECT 'SP000604', N'Khoai tây chiên đông lạnh 1kg', 85000, 'CAT007', 'khoai_tay_chien_dong_lanh_1kg.png' FROM dual UNION ALL
-    SELECT 'SP000605', N'Pizza hải sản đông lạnh 300g', 69000, 'CAT007', 'pizza_hai_san_dong_lanh_300g.png' FROM dual UNION ALL
-
-    SELECT 'SP000701', N'Khăn giấy Pulppy 2 lớp 10 cuộn', 62000, 'CAT008', 'khan_giay_pulppy_10_cuon.png' FROM dual UNION ALL
-    SELECT 'SP000702', N'Túi rác tự hủy 3 cuộn', 35000, 'CAT008', 'tui_rac_tu_huy_3_cuon.png' FROM dual UNION ALL
-    SELECT 'SP000703', N'Màng bọc thực phẩm Ringo 30cm x 30m', 29000, 'CAT008', 'mang_boc_thuc_pham_ringo_30cm.png' FROM dual UNION ALL
-    SELECT 'SP000704', N'Hộp nhựa Lock Lock 1L', 55000, 'CAT008', 'hop_nhua_lock_lock_1l.png' FROM dual UNION ALL
-    SELECT 'SP000705', N'Nước lau sàn Sunlight hương hoa 1kg', 45000, 'CAT008', 'nuoc_lau_san_sunlight_1kg.png' FROM dual UNION ALL
-
-    SELECT 'SP000801', N'Kem đánh răng P/S trà xanh 180g', 32000, 'CAT009', 'kem_danh_rang_ps_tra_xanh_180g.png' FROM dual UNION ALL
-    SELECT 'SP000802', N'Bàn chải Oral-B mềm', 28000, 'CAT009', 'ban_chai_oral_b_mem.png' FROM dual UNION ALL
-    SELECT 'SP000803', N'Nước súc miệng Listerine 500ml', 95000, 'CAT009', 'nuoc_suc_mieng_listerine_500ml.png' FROM dual UNION ALL
-    SELECT 'SP000804', N'Dao cạo râu Gillette Blue 3', 45000, 'CAT009', 'dao_cao_rau_gillette_blue_3.png' FROM dual UNION ALL
-    SELECT 'SP000805', N'Lăn khử mùi Nivea Men 50ml', 72000, 'CAT009', 'lan_khu_mui_nivea_men_50ml.png' FROM dual UNION ALL
-
-    SELECT 'SP000901', N'Tã Bobby quần size M 68 miếng', 285000, 'CAT010', 'ta_bobby_quan_m_68.png' FROM dual UNION ALL
-    SELECT 'SP000902', N'Khăn ướt Mamamy 100 tờ', 35000, 'CAT010', 'khan_uot_mamamy_100_to.png' FROM dual UNION ALL
-    SELECT 'SP000903', N'Sữa tắm gội Johnson Baby 500ml', 89000, 'CAT010', 'sua_tam_goi_johnson_baby_500ml.png' FROM dual UNION ALL
-    SELECT 'SP000904', N'Phấn rôm Johnson Baby 200g', 55000, 'CAT010', 'phan_rom_johnson_baby_200g.png' FROM dual UNION ALL
-    SELECT 'SP000905', N'Bình sữa Pigeon 240ml', 165000, 'CAT010', 'binh_sua_pigeon_240ml.png' FROM dual UNION ALL
-
-    SELECT 'SP001001', N'Tập Campus 200 trang', 16000, 'CAT011', 'tap_campus_200_trang.png' FROM dual UNION ALL
-    SELECT 'SP001002', N'Bút bi Thiên Long TL-027', 5000, 'CAT011', 'but_bi_thien_long_tl027.png' FROM dual UNION ALL
-    SELECT 'SP001003', N'Giấy note Pronoti 3x3', 18000, 'CAT011', 'giay_note_pronoti_3x3.png' FROM dual UNION ALL
-    SELECT 'SP001004', N'Bìa hồ sơ A4 Plus', 12000, 'CAT011', 'bia_ho_so_a4_plus.png' FROM dual UNION ALL
-    SELECT 'SP001005', N'Băng keo trong 5cm', 15000, 'CAT011', 'bang_keo_trong_5cm.png' FROM dual UNION ALL
-
-    SELECT 'SP001101', N'Hạt mèo Whiskas cá ngừ 1.2kg', 145000, 'CAT012', 'hat_meo_whiskas_ca_ngu_12kg.png' FROM dual UNION ALL
-    SELECT 'SP001102', N'Hạt chó Pedigree vị bò 1.5kg', 135000, 'CAT012', 'hat_cho_pedigree_vi_bo_15kg.png' FROM dual UNION ALL
-    SELECT 'SP001103', N'Pate mèo Me-O cá ngừ 80g', 15000, 'CAT012', 'pate_meo_meo_ca_ngu_80g.png' FROM dual UNION ALL
-    SELECT 'SP001104', N'Cát vệ sinh mèo Min 5L', 79000, 'CAT012', 'cat_ve_sinh_meo_min_5l.png' FROM dual UNION ALL
-    SELECT 'SP001105', N'Sữa tắm chó mèo Joyce Dolls 400ml', 115000, 'CAT012', 'sua_tam_cho_meo_joyce_dolls_400ml.png' FROM dual
-) src
-ON (p.product_id = src.id)
-WHEN MATCHED THEN UPDATE SET
-    p.product_name = src.name,
-    p.base_price = src.price,
-    p.category_id = src.cat,
-    p.image_path = src.img,
-    p.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT(product_id, product_name, base_price, category_id, supplier_id, base_unit_id, image_path, is_deleted)
-SELECT src.id, src.name, src.price, src.cat, NULL, NULL, src.img, 0
-FROM dual
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM PRODUCTS existing
-    WHERE NVL(existing.is_deleted, 0) = 0
-      AND LOWER(TRIM(existing.product_name)) = LOWER(TRIM(src.name))
-);
-
--- F. XÓA MỀM LẦN NỮA SẢN PHẨM TRÙNG TÊN
-UPDATE PRODUCTS p
-SET p.is_deleted = 1
-WHERE p.rowid IN (
-    SELECT rid
-    FROM (
-        SELECT
-            p.rowid AS rid,
-            ROW_NUMBER() OVER (
-                PARTITION BY LOWER(TRIM(p.product_name))
-                ORDER BY
-                    CASE WHEN REGEXP_LIKE(p.product_id, '^SP0[0-9]+$') THEN 0 ELSE 1 END,
-                    CASE
-                        WHEN p.image_path IS NOT NULL
-                         AND TRIM(p.image_path) IS NOT NULL
-                         AND LOWER(TRIM(p.image_path)) NOT IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-                        THEN 0 ELSE 1
-                    END,
-                    p.product_id
-            ) AS rn
-        FROM PRODUCTS p
-        WHERE NVL(p.is_deleted, 0) = 0
-    )
-    WHERE rn > 1
-);
-
--- G. BẬT SẢN PHẨM ACTIVE CHO CHI NHÁNH + TỒN KHO DEMO
-MERGE INTO STORE_PRODUCTS sp
-USING (
-    SELECT s.store_id, p.product_id, p.base_price AS selling_price
-    FROM STORES s
-    CROSS JOIN PRODUCTS p
-    WHERE NVL(s.is_deleted, 0) = 0
-      AND NVL(p.is_deleted, 0) = 0
-      AND p.image_path IS NOT NULL
-      AND TRIM(p.image_path) IS NOT NULL
-      AND LOWER(TRIM(p.image_path)) NOT IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-) src
-ON (sp.store_id = src.store_id AND sp.product_id = src.product_id)
-WHEN MATCHED THEN UPDATE SET
-    sp.selling_price = src.selling_price,
-    sp.is_active = 1,
-    sp.is_deleted = 0,
-    sp.min_stock = NVL(sp.min_stock, 30),
-    sp.updated_at = CURRENT_TIMESTAMP
-WHEN NOT MATCHED THEN INSERT(store_id, product_id, selling_price, is_active, min_stock, max_stock, is_deleted)
-VALUES(src.store_id, src.product_id, src.selling_price, 1, 30, NULL, 0);
-
-MERGE INTO INVENTORY i
-USING (
-    SELECT s.store_id,
-           p.product_id,
-           CASE
-               WHEN p.category_id = 'CAT004' THEN 80
-               WHEN p.category_id = 'CAT007' THEN 120
-               WHEN p.category_id = 'CAT010' THEN 60
-               ELSE 200
-           END AS quantity
-    FROM STORES s
-    CROSS JOIN PRODUCTS p
-    WHERE NVL(s.is_deleted, 0) = 0
-      AND NVL(p.is_deleted, 0) = 0
-      AND p.image_path IS NOT NULL
-      AND TRIM(p.image_path) IS NOT NULL
-      AND LOWER(TRIM(p.image_path)) NOT IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-) src
-ON (i.store_id = src.store_id AND i.product_id = src.product_id)
-WHEN MATCHED THEN UPDATE SET
-    i.quantity = CASE WHEN NVL(i.quantity, 0) < src.quantity THEN src.quantity ELSE i.quantity END,
-    i.unit = N'Cái',
-    i.last_updated = SYSDATE,
-    i.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT(product_id, store_id, quantity, unit, last_updated, is_deleted)
-VALUES(src.product_id, src.store_id, src.quantity, N'Cái', SYSDATE, 0);
-
--- H. ẨN STORE_PRODUCTS / INVENTORY CỦA SẢN PHẨM ĐÃ XÓA MỀM
-UPDATE STORE_PRODUCTS sp
-SET sp.is_deleted = 1,
-    sp.is_active = 0
-WHERE sp.product_id IN (
-    SELECT product_id FROM PRODUCTS WHERE NVL(is_deleted, 0) = 1
-);
-
-UPDATE INVENTORY i
-SET i.is_deleted = 1
-WHERE i.product_id IN (
-    SELECT product_id FROM PRODUCTS WHERE NVL(is_deleted, 0) = 1
-);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Mì Hảo Hảo tôm chua cay', 'U_GOI', N'Gói', 5000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Mì Omachi sườn hầm ngũ quả', 'U_GOI', N'Gói', 8000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Phở bò Vifon túi', 'U_TUI', N'Túi', 7500, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Gạo ST25 Ông Cua túi 5kg', 'U_TUI', N'Túi', 180000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước mắm Nam Ngư 750ml', 'U_CAI', N'Cái', 35000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước mắm Chinsu cá hồi', 'U_GOI', N'Gói', 45000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu ăn Tường An 2L', 'U_CAI', N'Cái', 52000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu ăn Simply 2L', 'U_CAI', N'Cái', 60000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu ăn Happy Koki 2L', 'U_CAI', N'Cái', 60000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Đường tinh luyện Biên Hòa 1kg', 'U_TUI', N'Túi', 28000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa đặc Ông Thọ đỏ lon', 'U_LON', N'Lon', 22000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hạt nêm Knorr thịt thăn 400g', 'U_GOI', N'Gói', 38000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Tương ớt Chinsu 250g', 'U_CAI', N'Cái', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước suối Aquafina 500ml', 'U_CAI', N'Cái', 5000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước khoáng Lavie 500ml', 'U_CAI', N'Cái', 5000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Coca Cola lon 330ml', 'U_LON', N'Lon', 10000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Pepsi lon 330ml', 'U_LON', N'Lon', 10000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sprite chai 1.5L', 'U_CHAI', N'Chai', 20000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Trà Ô long Tea Plus', 'U_CAI', N'Cái', 10000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước tăng lực Redbull lon', 'U_LON', N'Lon', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cà phê lon Birdy xanh', 'U_LON', N'Lon', 12000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu gội Clear Men 630g', 'U_CHAI', N'Chai', 145000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu gội Sunsilk mềm mượt', 'U_CHAI', N'Chai', 135000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kem đánh răng PS 123', 'U_CAI', N'Cái', 35000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa tắm Lifebuoy bảo vệ', 'U_CHAI', N'Chai', 160000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa rửa mặt Hazeline', 'U_CAI', N'Cái', 55000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Giấy vệ sinh Bless You lốc 10', 'U_CAI', N'Cái', 85000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Khăn ướt Baby gói 100 tờ', 'U_TO', N'Tờ', 500, 'U_GOI', N'Gói', 100, 40000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bánh Oreo nhân socola', 'U_GOI', N'Gói', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kẹo Alpenliebe caramen', 'U_GOI', N'Gói', 12000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bánh Cosy quy sữa 240g', 'U_GOI', N'Gói', 25000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Snack khoai tây Pringles', 'U_GOI', N'Gói', 35000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Socola KitKat trà xanh', 'U_GOI', N'Gói', 20000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bánh ChocoPie Orion hộp 6', 'U_CAI', N'Cái', 5500, 'U_HOP', N'Hộp', 6, 32000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bánh gạo One One phô mai', 'U_GOI', N'Gói', 22000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kẹo dẻo Haribo gấu', 'U_GOI', N'Gói', 18000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Thịt ba chỉ bò Mỹ 500g', 'U_GOI', N'Gói', 150000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Ức gà phi lê 500g', 'U_GOI', N'Gói', 45000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cá hồi phi lê tươi 200g', 'U_GOI', N'Gói', 120000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Trứng gà ta vỉ 10 quả', 'U_QUA', N'Quả', 4500, 'U_VI', N'Vỉ', 10, 45000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Khoai tây vàng túi 1kg', 'U_TUI', N'Túi', 25000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa tươi TH True Milk ít đường 1L', 'U_TUI', N'Túi', 37000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa tươi Vinamilk không đường 1L', 'U_TUI', N'Túi', 36000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa chua Vinamilk có đường lốc 4 hộp', 'U_HOP', N'Hộp', 8000, 'U_LOC', N'Lốc', 4, 32000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Phô mai Con Bò Cười hộp 8 miếng', 'U_MIENG', N'Miếng', 5500, 'U_HOP', N'Hộp', 8, 42000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa đặc Ngôi Sao Phương Nam lon 380g', 'U_LON', N'Lon', 26000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa hạt Vinamilk óc chó 180ml lốc 4 hộp', 'U_HOP', N'Hộp', 10000, 'U_LOC', N'Lốc', 4, 39000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bơ lạt Anchor hộp 227g', 'U_HOP', N'Hộp', 89000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa chua uống Yakult lốc 5 chai', 'U_CHAI', N'Chai', 6000, 'U_LOC', N'Lốc', 5, 30000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Xúc xích Đức Việt gói 500g', 'U_GOI', N'Gói', 78000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cá viên CP gói 500g', 'U_GOI', N'Gói', 65000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Chả giò Cầu Tre hải sản 500g', 'U_CAI', N'Cái', 72000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Khoai tây chiên đông lạnh 1kg', 'U_GOI', N'Gói', 85000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Pizza hải sản đông lạnh 300g', 'U_CAI', N'Cái', 69000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Gà viên chiên CP 400g', 'U_CAI', N'Cái', 59000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bò viên Vissan gói 500g', 'U_GOI', N'Gói', 76000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Há cảo tôm đông lạnh 300g', 'U_CAI', N'Cái', 68000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Khăn giấy Pulppy 2 lớp 10 cuộn', 'U_CUON', N'Cuộn', 6500, 'U_LOC', N'Lốc', 10, 62000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Túi rác tự hủy 3 cuộn', 'U_CUON', N'Cuộn', 12000, 'U_LOC', N'Lốc', 3, 35000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Màng bọc thực phẩm Ringo 30cm x 30m', 'U_CAI', N'Cái', 29000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hộp nhựa Lock Lock 1L', 'U_HOP', N'Hộp', 55000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Giấy bạc nướng thực phẩm 30cm x 5m', 'U_CAI', N'Cái', 42000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Ly giấy dùng một lần 50 cái', 'U_CAI', N'Cái', 1000, 'U_GOI', N'Gói', 50, 36000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Ống hút giấy pack 100 cái', 'U_CAI', N'Cái', 500, 'U_PACK', N'Pack', 100, 28000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Túi zipper đựng thực phẩm 20 túi', 'U_TUI', N'Túi', 2500, 'U_GOI', N'Gói', 20, 48000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kem đánh răng P/S trà xanh 180g', 'U_CAI', N'Cái', 32000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bàn chải Oral-B mềm', 'U_CAI', N'Cái', 28000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước súc miệng Listerine 500ml', 'U_CHAI', N'Chai', 95000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dao cạo râu Gillette Blue 3', 'U_CAI', N'Cái', 45000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Lăn khử mùi Nivea Men 50ml', 'U_CAI', N'Cái', 72000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Dầu gội Dove phục hồi hư tổn 640g', 'U_CHAI', N'Chai', 145000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa rửa mặt Simple 150ml', 'U_CAI', N'Cái', 115000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bông tẩy trang Jomi 120 miếng', 'U_MIENG', N'Miếng', 500, 'U_GOI', N'Gói', 120, 39000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Tã Bobby quần size M 68 miếng', 'U_MIENG', N'Miếng', 4500, 'U_GOI', N'Gói', 68, 285000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Khăn ướt Mamamy 100 tờ', 'U_TO', N'Tờ', 500, 'U_GOI', N'Gói', 100, 35000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa tắm gội Johnson Baby 500ml', 'U_CHAI', N'Chai', 89000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Phấn rôm Johnson Baby 200g', 'U_CAI', N'Cái', 55000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bình sữa Pigeon 240ml', 'U_CAI', N'Cái', 165000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước giặt Dnee hồng 3L', 'U_CAI', N'Cái', 165000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kem chống hăm Bepanthen 30g', 'U_CAI', N'Cái', 115000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bột ăn dặm Heinz rau củ 200g', 'U_GOI', N'Gói', 89000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Tập Campus 200 trang', 'U_CAI', N'Cái', 16000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bút bi Thiên Long TL-027', 'U_CAI', N'Cái', 5000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Giấy note Pronoti 3x3', 'U_CAI', N'Cái', 18000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bìa hồ sơ A4 Plus', 'U_CAI', N'Cái', 12000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Băng keo trong 5cm', 'U_CAI', N'Cái', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Kéo học sinh Deli 17cm', 'U_CAI', N'Cái', 25000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bút highlight Stabilo vàng', 'U_CAI', N'Cái', 22000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'File lá A4 20 túi', 'U_TUI', N'Túi', 2000, 'U_GOI', N'Gói', 20, 32000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hạt mèo Whiskas cá ngừ 1.2kg', 'U_CAI', N'Cái', 145000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hạt chó Pedigree vị bò 1.5kg', 'U_CAI', N'Cái', 135000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Pate mèo Me-O cá ngừ 80g', 'U_GOI', N'Gói', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cát vệ sinh mèo Min 5L', 'U_CAI', N'Cái', 79000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Sữa tắm chó mèo Joyce Dolls 400ml', 'U_CHAI', N'Chai', 115000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Snack thưởng mèo Ciao Churu 4 thanh', 'U_THANH', N'Thanh', 14000, 'U_GOI', N'Gói', 4, 55000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Pate chó SmartHeart bò 130g', 'U_GOI', N'Gói', 22000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Vòng cổ chó mèo size M', 'U_CAI', N'Cái', 35000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Rau cải hữu cơ Vinamit 300g', 'U_GOI', N'Gói', 28000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cà rốt hữu cơ Đà Lạt 500g', 'U_GOI', N'Gói', 35000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Yến mạch Quaker nguyên chất 400g', 'U_TUI', N'Túi', 79000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hạt chia Úc Organic 250g', 'U_TUI', N'Túi', 99000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Gạo lứt hữu cơ Hoa Sữa 1kg', 'U_TUI', N'Túi', 65000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Mật ong hoa nhãn nguyên chất 500ml', 'U_CAI', N'Cái', 145000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bột cacao nguyên chất 200g', 'U_TUI', N'Túi', 85000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Hạnh nhân rang bơ 250g', 'U_TUI', N'Túi', 125000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cá hộp Ba Cô Gái sốt cà 155g', 'U_HOP', N'Hộp', 25000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Thịt hộp Spam Classic 340g', 'U_HOP', N'Hộp', 98000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Pate gan Vissan hộp 170g', 'U_HOP', N'Hộp', 32000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cháo ăn liền Gấu Đỏ thịt bằm 50g', 'U_GOI', N'Gói', 7000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Mì ly Modern lẩu Thái 65g', 'U_GOI', N'Gói', 11000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bún bò Huế Vifon tô 120g', 'U_TO', N'Tô', 18000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cơm cháy chà bông hộp 200g', 'U_HOP', N'Hộp', 55000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Súp nui ăn liền Knorr 60g', 'U_GOI', N'Gói', 15000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước lau sàn Sunlight hương hoa 1kg', 'U_CHAI', N'Chai', 45000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước tẩy Javel Gift 1L', 'U_CHAI', N'Chai', 26000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Xịt phòng Glade hương hoa 280ml', 'U_CHAI', N'Chai', 65000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước lau kính Gift 580ml', 'U_CHAI', N'Chai', 32000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Bình xịt côn trùng Raid 600ml', 'U_CHAI', N'Chai', 72000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Miếng rửa chén Scotch Brite 3 miếng', 'U_MIENG', N'Miếng', 8500, 'U_GOI', N'Gói', 3, 25000);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Cây lau nhà 360 độ bộ', 'U_BO', N'Bộ', 185000, NULL, NULL, NULL, NULL);
+CALL CFG_PRODUCT_UOM_BY_NAME(N'Nước thông cống Hando 1L', 'U_CHAI', N'Chai', 58000, NULL, NULL, NULL, NULL);
 
 COMMIT;
 
--- I. CHECK SAU KHI CHẠY
+-- Nếu muốn dọn thủ tục sau khi seed xong thì chạy dòng dưới:
+-- DROP PROCEDURE CFG_PRODUCT_UOM_BY_NAME;
 
--- 1. Còn trùng tên active không?
-SELECT LOWER(TRIM(product_name)) AS normalized_name,
-       COUNT(*) AS duplicate_count,
-       LISTAGG(product_id, ', ') WITHIN GROUP (ORDER BY product_id) AS product_ids,
-       MIN(product_name) AS product_name
-FROM PRODUCTS
-WHERE NVL(is_deleted, 0) = 0
-GROUP BY LOWER(TRIM(product_name))
-HAVING COUNT(*) > 1
-ORDER BY normalized_name;
-
--- 2. Còn sản phẩm active chưa có ảnh không?
-SELECT product_id, product_name, category_id, image_path
-FROM PRODUCTS
-WHERE NVL(is_deleted, 0) = 0
-  AND (
-        image_path IS NULL
-     OR TRIM(image_path) IS NULL
-     OR LOWER(TRIM(image_path)) IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-  )
-ORDER BY product_id;
-
--- 3. Tổng sản phẩm active theo danh mục.
-SELECT c.category_id,
-       c.category_name,
-       COUNT(p.product_id) AS total_active_products
-FROM CATEGORIES c
-LEFT JOIN PRODUCTS p
-    ON p.category_id = c.category_id
-   AND NVL(p.is_deleted, 0) = 0
-WHERE NVL(c.is_deleted, 0) = 0
-GROUP BY c.category_id, c.category_name
-ORDER BY c.category_id;
-
--- 4. Danh sách sản phẩm active cuối cùng.
-SELECT product_id, product_name, category_id, base_price, image_path, is_deleted
-FROM PRODUCTS
-WHERE NVL(is_deleted, 0) = 0
-ORDER BY category_id, product_id;
-
-
--- Còn trùng tên active không?
-SELECT LOWER(TRIM(product_name)) AS normalized_name,
-       COUNT(*) AS duplicate_count,
-       LISTAGG(product_id, ', ') WITHIN GROUP (ORDER BY product_id) AS product_ids,
-       MIN(product_name) AS product_name
-FROM PRODUCTS
-WHERE NVL(is_deleted, 0) = 0
-GROUP BY LOWER(TRIM(product_name))
-HAVING COUNT(*) > 1
-ORDER BY normalized_name;
-
--- Còn sản phẩm active chưa có ảnh không?
-SELECT product_id, product_name, category_id, image_path
-FROM PRODUCTS
-WHERE NVL(is_deleted, 0) = 0
-  AND (
-        image_path IS NULL
-     OR TRIM(image_path) IS NULL
-     OR LOWER(TRIM(image_path)) IN ('-', 'null', 'none', 'no_image', 'no-image', 'noimage', 'image_not_found')
-  )
-ORDER BY product_id;
-
-___ Chạy lại nếu lỗi ___
-
-MERGE INTO CATEGORIES c
-USING (
-    SELECT 'CAT006' AS category_id, N'Sữa & Sản phẩm từ sữa' AS category_name, N'Sữa tươi, sữa chua, phô mai, bơ sữa' AS description FROM dual UNION ALL
-    SELECT 'CAT007', N'Đông lạnh & Chế biến sẵn', N'Xúc xích, cá viên, chả giò, thực phẩm đông lạnh' FROM dual UNION ALL
-    SELECT 'CAT008', N'Gia dụng nhà bếp', N'Khăn giấy, túi rác, màng bọc, hộp đựng thực phẩm' FROM dual UNION ALL
-    SELECT 'CAT009', N'Chăm sóc cá nhân', N'Kem đánh răng, bàn chải, dao cạo, nước súc miệng' FROM dual UNION ALL
-    SELECT 'CAT010', N'Mẹ & Bé', N'Tã, khăn ướt, sữa tắm em bé, đồ dùng trẻ em' FROM dual UNION ALL
-    SELECT 'CAT011', N'Văn phòng phẩm', N'Tập, bút, giấy note, hồ sơ, dụng cụ học tập' FROM dual UNION ALL
-    SELECT 'CAT012', N'Thức ăn thú cưng', N'Hạt chó mèo, pate, cát vệ sinh, đồ chăm sóc thú cưng' FROM dual UNION ALL
-    SELECT 'CAT013', N'Thực phẩm hữu cơ', N'Rau củ, ngũ cốc, hạt dinh dưỡng, sản phẩm organic' FROM dual UNION ALL
-    SELECT 'CAT014', N'Đồ hộp & Ăn liền', N'Cá hộp, thịt hộp, cháo ăn liền, mì ly, đồ ăn nhanh' FROM dual UNION ALL
-    SELECT 'CAT015', N'Vệ sinh nhà cửa', N'Nước lau sàn, nước tẩy, xịt phòng, dụng cụ vệ sinh' FROM dual
-) src
-ON (c.category_id = src.category_id)
-WHEN MATCHED THEN UPDATE SET
-    c.category_name = src.category_name,
-    c.description = src.description,
-    c.is_deleted = 0
-WHEN NOT MATCHED THEN INSERT (
-    category_id,
-    category_name,
-    description,
-    is_deleted
-) VALUES (
-    src.category_id,
-    src.category_name,
-    src.description,
-    0
-);
-
-COMMIT;
+-- Kiểm tra nhanh:
+-- SELECT p.product_id, p.product_name, u.unit_name AS base_unit, i.quantity AS stock_base
+-- FROM PRODUCTS p
+-- LEFT JOIN UNITS u ON u.unit_id = p.base_unit_id
+-- LEFT JOIN INVENTORY i ON i.product_id = p.product_id
+-- WHERE NVL(p.is_deleted,0)=0
+-- ORDER BY p.product_id;

@@ -365,15 +365,15 @@ public class PaymentService {
             List<OrderDetail> details
     ) throws SQLException {
         String sqlCheckStock = """
-            SELECT i.quantity AS stock_quantity,
-                   p.product_name
-            FROM INVENTORY i
-            JOIN PRODUCTS p
-                ON i.product_id = p.product_id
-            WHERE i.product_id = ?
-              AND i.store_id = ?
-              AND NVL(i.is_deleted, 0) = 0
-        """;
+        SELECT i.quantity AS stock_quantity,
+               p.product_name
+        FROM INVENTORY i
+        JOIN PRODUCTS p
+            ON i.product_id = p.product_id
+        WHERE i.product_id = ?
+          AND i.store_id = ?
+          AND NVL(i.is_deleted, 0) = 0
+    """;
 
         try (PreparedStatement ps = con.prepareStatement(sqlCheckStock)) {
             for (OrderDetail ct : details) {
@@ -386,13 +386,13 @@ public class PaymentService {
                     }
 
                     int stock = rs.getInt("stock_quantity");
-
                     int requiredBaseQty = ct.getQuantityInBaseUnit();
 
                     if (stock < requiredBaseQty) {
                         throw new SQLException(
                                 "Sản phẩm [" + rs.getString("product_name")
                                 + "] không đủ hàng tại chi nhánh hiện tại. Còn: " + stock
+                                + ", cần: " + requiredBaseQty
                         );
                     }
                 }
@@ -407,26 +407,28 @@ public class PaymentService {
             String storeId
     ) throws SQLException {
         String insertDetailSql = """
-            INSERT INTO ORDER_DETAILS (
-                order_detail_id,
-                order_id,
-                product_id,
-                quantity,
-                unit_price,
-                is_deleted
-            )
-            VALUES (?, ?, ?, ?, ?, 0)
-        """;
+        INSERT INTO ORDER_DETAILS (
+            order_detail_id,
+            order_id,
+            product_id,
+            quantity,
+            unit_price,
+            unit_id,
+            quantity_base,
+            is_deleted
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    """;
 
         String updateStockSql = """
-            UPDATE INVENTORY
-            SET quantity = quantity - ?,
-                last_updated = SYSDATE
-            WHERE product_id = ?
-              AND store_id = ?
-              AND NVL(is_deleted, 0) = 0
-              AND quantity >= ?
-        """;
+        UPDATE INVENTORY
+        SET quantity = quantity - ?,
+            last_updated = SYSDATE
+        WHERE product_id = ?
+          AND store_id = ?
+          AND NVL(is_deleted, 0) = 0
+          AND quantity >= ?
+    """;
 
         try (
                 PreparedStatement psDetail = con.prepareStatement(insertDetailSql); PreparedStatement psStock = con.prepareStatement(updateStockSql)) {
