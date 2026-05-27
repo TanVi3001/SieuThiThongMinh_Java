@@ -86,12 +86,6 @@ public class InvoiceUpdateService {
             conn.setAutoCommit(false);
 
             OrderHeaderInfo orderInfo = lockOrder(orderId);
-
-            /*
-             * Lưu số lượng tồn kho cũ theo đơn vị gốc.
-             * Ví dụ cũ: 1 thùng mì = quantity_base 30.
-             * Nếu sửa thành 2 gói = quantity_base 2 thì hoàn lại 28.
-             */
             Map<String, OldDetailInfo> oldDetailMap = loadOldDetails(orderId);
 
             for (EditedOrderDetail detail : editedDetails) {
@@ -113,10 +107,7 @@ public class InvoiceUpdateService {
                 oldDetailMap.remove(detailKey);
             }
 
-            // Những dòng cũ không còn trong bảng UI thì xóa mềm và hoàn kho theo quantity_base.
-            for (Map.Entry<String, OldDetailInfo> removed : oldDetailMap.entrySet()) {
-                OldDetailInfo old = removed.getValue();
-
+            for (OldDetailInfo old : oldDetailMap.values()) {
                 softDeleteOrderDetail(old.orderDetailId);
                 restoreInventory(orderInfo.storeId, old.productId, old.quantityBase);
             }
@@ -130,9 +121,7 @@ public class InvoiceUpdateService {
 
             conn.commit();
 
-            RealtimeNotifier.ordersChanged("ORDER_DETAIL_UPDATED:" + orderId);
-            RealtimeNotifier.inventoryChanged("STOCK_UPDATED_BY_ORDER_EDIT:" + orderId);
-            RealtimeNotifier.customersChanged("CUSTOMER_SPENDING_RECALCULATED_BY_ORDER_EDIT:" + orderId);
+            notifyChangesAsync(orderId);
 
         } catch (Exception ex) {
             conn.rollback();
@@ -141,6 +130,21 @@ public class InvoiceUpdateService {
         } finally {
             conn.setAutoCommit(oldAutoCommit);
         }
+    }
+
+    private void notifyChangesAsync(String orderId) {
+        Thread notifier = new Thread(() -> {
+            try {
+                RealtimeNotifier.ordersChanged("ORDER_DETAIL_UPDATED:" + orderId);
+                RealtimeNotifier.inventoryChanged("STOCK_UPDATED_BY_ORDER_EDIT:" + orderId);
+                RealtimeNotifier.customersChanged("CUSTOMER_SPENDING_RECALCULATED_BY_ORDER_EDIT:" + orderId);
+            } catch (Exception ex) {
+                System.err.println("Realtime notify failed after invoice update: " + ex.getMessage());
+            }
+        }, "invoice-update-notifier");
+
+        notifier.setDaemon(true);
+        notifier.start();
     }
 
     private void validateDetail(EditedOrderDetail detail) {
@@ -359,8 +363,6 @@ public class InvoiceUpdateService {
     }
 
     private void updateInventoryByDiff(String storeId, String productId, int diffBaseQty) throws SQLException {
-        // diff > 0 nghĩa là tăng số lượng quy đổi, phải trừ thêm kho.
-        // diff < 0 nghĩa là giảm số lượng quy đổi, phải hoàn lại kho.
         if (diffBaseQty > 0) {
             decreaseInventory(storeId, productId, diffBaseQty);
         } else {
@@ -494,14 +496,12 @@ public class InvoiceUpdateService {
     }
 
     private static class OrderHeaderInfo {
-
         String orderId;
         String customerId;
         String storeId;
     }
 
     private static class OldDetailInfo {
-
         String orderDetailId;
         String productId;
         String unitId;
