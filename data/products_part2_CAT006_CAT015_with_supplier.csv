@@ -1,0 +1,81 @@
+product_name,base_price,quantity,category_id,image_path,supplier_id
+Sữa tươi TH True Milk ít đường 1L,37000,100,CAT006,products/sua_tuoi_th_true_milk_it_duong_1l.png,SUP_01
+Sữa tươi Vinamilk không đường 1L,36000,100,CAT006,products/sua_tuoi_vinamilk_khong_duong_1l.png,SUP_06
+Sữa chua Vinamilk có đường lốc 4 hộp,32000,100,CAT006,products/sua_chua_vinamilk_co_duong_loc_4_hop.png,SUP_06
+Phô mai Con Bò Cười hộp 8 miếng,42000,100,CAT006,products/pho_mai_con_bo_cuoi_hop_8_mieng.png,SUP_01
+Sữa đặc Ngôi Sao Phương Nam lon 380g,26000,100,CAT006,products/sua_dac_ngoi_sao_phuong_nam_lon_380g.png,SUP_06
+Sữa hạt Vinamilk óc chó 180ml lốc 4 hộp,39000,100,CAT006,products/sua_hat_vinamilk_oc_cho_180ml_loc_4_hop.png,SUP_06
+Bơ lạt Anchor hộp 227g,89000,80,CAT006,products/bo_lat_anchor_hop_227g.png,SUP_08
+Sữa chua uống Yakult lốc 5 chai,30000,100,CAT006,products/sua_chua_uong_yakult_loc_5_chai.png,SUP_01
+Xúc xích Đức Việt gói 500g,78000,100,CAT007,products/xuc_xich_duc_viet_goi_500g.png,SUP_01
+Cá viên CP gói 500g,65000,100,CAT007,products/ca_vien_cp_goi_500g.png,SUP_01
+Chả giò Cầu Tre hải sản 500g,72000,100,CAT007,products/cha_gio_cau_tre_hai_san_500g.png,SUP_01
+Khoai tây chiên đông lạnh 1kg,85000,100,CAT007,products/khoai_tay_chien_dong_lanh_1kg.png,SUP_15
+Pizza hải sản đông lạnh 300g,69000,90,CAT007,products/pizza_hai_san_dong_lanh_300g.png,SUP_01
+Gà viên chiên CP 400g,59000,100,CAT007,products/ga_vien_chien_cp_400g.png,SUP_01
+Bò viên Vissan gói 500g,76000,100,CAT007,products/bo_vien_vissan_goi_500g.png,SUP_01
+Há cảo tôm đông lạnh 300g,68000,95,CAT007,products/ha_cao_tom_dong_lanh_300g.png,SUP_01
+Khăn giấy Pulppy 2 lớp 10 cuộn,62000,100,CAT008,products/khan_giay_pulppy_2_lop_10_cuon.png,SUP_01
+Túi rác tự hủy 3 cuộn,35000,100,CAT008,products/tui_rac_tu_huy_3_cuon.png,SUP_01
+Màng bọc thực phẩm Ringo 30cm x 30m,29000,100,CAT008,products/mang_boc_thuc_pham_ringo_30cm_x_30m.png,SUP_01
+Hộp nhựa Lock Lock 1L,55000,100,CAT008,products/hop_nhua_lock_lock_1l.png,SUP_01
+Giấy bạc nướng thực phẩm 30cm x 5m,42000,120,CAT008,products/giay_bac_nuong_thuc_pham_30cm_x_5m.png,SUP_01
+Ly giấy dùng một lần 50 cái,36000,140,CAT008,products/ly_giay_dung_mot_lan_50_cai.png,SUP_01
+Ống hút giấy pack 100 cái,28000,130,CAT008,products/ong_hut_giay_pack_100_cai.png,SUP_01
+Túi zipper đựng thực phẩm 20 túi,48000,100,CAT008,products/tui_zipper_dung_thuc_pham_20_tui.png,SUP_01
+Kem đánh răng P/S trà xanh 180g,32000,100,CAT009,products/kem_danh_rang_p_s_tra_xanh_180g.png,SUP_07
+Bàn chải Oral-B mềm,28000,100,CAT009,products/ban_chai_oral_b_mem.png,SUP_01
+Nước súc miệng Listerine 500ml,95000,100,CAT009,products/nuoc_suc_mieng_listerine_500ml.png,SUP_01
+Dao cạo râu Gillette Blue 3,45000,110,CAT009,products/dao_cao_rau_gillette_blue_3.png,SUP_01
+Lăn khử mùi Nivea Men 50ml,72000,100,CAT009,products/lan_khu_mui_nivea_men_50ml.png,SUP_01
+Dầu gội Dove phục hồi hư tổn 640g,145000,90,CAT009,products/dau_goi_dove_phuc_hoi_hu_ton_640g.png,SUP_07
+Sữa rửa mặt Simple 150ml,115000,85,CAT009,products/sua_rua_mat_simple_150ml.png,SUP_07
+Bông tẩy trang Jomi 120 miếng,39000,150,CAT009,products/bong_tay_trang_jomi_120_mieng.png,SUP_01
+Tã Bobby quần size M 68 miếng,285000,70,CAT010,products/ta_bobby_quan_size_m_68_mieng.png,SUP_01
+Khăn ướt Mamamy 100 tờ,35000,150,CAT010,products/khan_uot_mamamy_100_to.png,SUP_01
+Sữa tắm gội Johnson Baby 500ml,89000,100,CAT010,products/sua_tam_goi_johnson_baby_500ml.png,SUP_01
+Phấn rôm Johnson Baby 200g,55000,100,CAT010,products/phan_rom_johnson_baby_200g.png,SUP_01
+Bình sữa Pigeon 240ml,165000,60,CAT010,products/binh_sua_pigeon_240ml.png,SUP_01
+Nước giặt Dnee hồng 3L,165000,80,CAT010,products/nuoc_giat_dnee_hong_3l.png,SUP_01
+Kem chống hăm Bepanthen 30g,115000,60,CAT010,products/kem_chong_ham_bepanthen_30g.png,SUP_01
+Bột ăn dặm Heinz rau củ 200g,89000,70,CAT010,products/bot_an_dam_heinz_rau_cu_200g.png,SUP_01
+Tập Campus 200 trang,16000,200,CAT011,products/tap_campus_200_trang.png,SUP_01
+Bút bi Thiên Long TL-027,5000,300,CAT011,products/but_bi_thien_long_tl_027.png,SUP_01
+Giấy note Pronoti 3x3,18000,100,CAT011,products/giay_note_pronoti_3x3.png,SUP_01
+Bìa hồ sơ A4 Plus,12000,200,CAT011,products/bia_ho_so_a4_plus.png,SUP_01
+Băng keo trong 5cm,15000,180,CAT011,products/bang_keo_trong_5cm.png,SUP_01
+Kéo học sinh Deli 17cm,25000,130,CAT011,products/keo_hoc_sinh_deli_17cm.png,SUP_01
+Bút highlight Stabilo vàng,22000,120,CAT011,products/but_highlight_stabilo_vang.png,SUP_01
+File lá A4 20 túi,32000,140,CAT011,products/file_la_a4_20_tui.png,SUP_01
+Hạt mèo Whiskas cá ngừ 1.2kg,145000,80,CAT012,products/hat_meo_whiskas_ca_ngu_1_2kg.png,SUP_01
+Hạt chó Pedigree vị bò 1.5kg,135000,80,CAT012,products/hat_cho_pedigree_vi_bo_1_5kg.png,SUP_01
+Pate mèo Me-O cá ngừ 80g,15000,180,CAT012,products/pate_meo_me_o_ca_ngu_80g.png,SUP_01
+Cát vệ sinh mèo Min 5L,79000,90,CAT012,products/cat_ve_sinh_meo_min_5l.png,SUP_01
+Sữa tắm chó mèo Joyce Dolls 400ml,115000,70,CAT012,products/sua_tam_cho_meo_joyce_dolls_400ml.png,SUP_01
+Snack thưởng mèo Ciao Churu 4 thanh,55000,100,CAT012,products/snack_thuong_meo_ciao_churu_4_thanh.png,SUP_01
+Pate chó SmartHeart bò 130g,22000,150,CAT012,products/pate_cho_smartheart_bo_130g.png,SUP_01
+Vòng cổ chó mèo size M,35000,80,CAT012,products/vong_co_cho_meo_size_m.png,SUP_01
+Rau cải hữu cơ Vinamit 300g,28000,90,CAT013,products/rau_cai_huu_co_vinamit_300g.png,SUP_01
+Cà rốt hữu cơ Đà Lạt 500g,35000,90,CAT013,products/ca_rot_huu_co_da_lat_500g.png,SUP_01
+Yến mạch Quaker nguyên chất 400g,79000,100,CAT013,products/yen_mach_quaker_nguyen_chat_400g.png,SUP_01
+Hạt chia Úc Organic 250g,99000,100,CAT013,products/hat_chia_uc_organic_250g.png,SUP_01
+Gạo lứt hữu cơ Hoa Sữa 1kg,65000,100,CAT013,products/gao_lut_huu_co_hoa_sua_1kg.png,SUP_01
+Mật ong hoa nhãn nguyên chất 500ml,145000,80,CAT013,products/mat_ong_hoa_nhan_nguyen_chat_500ml.png,SUP_01
+Bột cacao nguyên chất 200g,85000,90,CAT013,products/bot_cacao_nguyen_chat_200g.png,SUP_01
+Hạnh nhân rang bơ 250g,125000,80,CAT013,products/hanh_nhan_rang_bo_250g.png,SUP_01
+Cá hộp Ba Cô Gái sốt cà 155g,25000,160,CAT014,products/ca_hop_ba_co_gai_sot_ca_155g.png,SUP_01
+Thịt hộp Spam Classic 340g,98000,90,CAT014,products/thit_hop_spam_classic_340g.png,SUP_01
+Pate gan Vissan hộp 170g,32000,100,CAT014,products/pate_gan_vissan_hop_170g.png,SUP_01
+Cháo ăn liền Gấu Đỏ thịt bằm 50g,7000,220,CAT014,products/chao_an_lien_gau_do_thit_bam_50g.png,SUP_01
+Mì ly Modern lẩu Thái 65g,11000,200,CAT014,products/mi_ly_modern_lau_thai_65g.png,SUP_01
+Bún bò Huế Vifon tô 120g,18000,180,CAT014,products/bun_bo_hue_vifon_to_120g.png,SUP_03
+Cơm cháy chà bông hộp 200g,55000,100,CAT014,products/com_chay_cha_bong_hop_200g.png,SUP_01
+Súp nui ăn liền Knorr 60g,15000,100,CAT014,products/sup_nui_an_lien_knorr_60g.png,SUP_07
+Nước lau sàn Sunlight hương hoa 1kg,45000,100,CAT015,products/nuoc_lau_san_sunlight_huong_hoa_1kg.png,SUP_07
+Nước tẩy Javel Gift 1L,26000,100,CAT015,products/nuoc_tay_javel_gift_1l.png,SUP_01
+Xịt phòng Glade hương hoa 280ml,65000,110,CAT015,products/xit_phong_glade_huong_hoa_280ml.png,SUP_01
+Nước lau kính Gift 580ml,32000,100,CAT015,products/nuoc_lau_kinh_gift_580ml.png,SUP_01
+Bình xịt côn trùng Raid 600ml,72000,90,CAT015,products/binh_xit_con_trung_raid_600ml.png,SUP_01
+Miếng rửa chén Scotch Brite 3 miếng,25000,150,CAT015,products/mieng_rua_chen_scotch_brite_3_mieng.png,SUP_01
+Cây lau nhà 360 độ bộ,185000,50,CAT015,products/cay_lau_nha_360_do_bo.png,SUP_01
+Nước thông cống Hando 1L,58000,80,CAT015,products/nuoc_thong_cong_hando_1l.png,SUP_01
