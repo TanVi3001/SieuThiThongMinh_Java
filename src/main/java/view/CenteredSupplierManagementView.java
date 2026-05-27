@@ -5,6 +5,7 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.AbstractButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JTable;
@@ -15,7 +16,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 
 /**
- * Wrapper riêng cho Warehouse Portal: căn giữa + phóng to nhẹ màn nhà cung cấp.
+ * Wrapper riêng cho Warehouse Portal: bảng nhà cung cấp căn giữa, form thông tin dễ đọc.
  * Không đổi logic thêm/sửa/xóa/lọc của SupplierManagementView.
  */
 public class CenteredSupplierManagementView extends SupplierManagementView {
@@ -26,7 +27,7 @@ public class CenteredSupplierManagementView extends SupplierManagementView {
     }
 
     private void applyWarehouseSupplierStyling() {
-        enlargeFormAndButtons(this);
+        styleFormInfoControls(this);
 
         JTable table = findSupplierTable(this);
         if (table == null || table.getColumnCount() < 6) {
@@ -48,7 +49,7 @@ public class CenteredSupplierManagementView extends SupplierManagementView {
         repaint();
     }
 
-    private void enlargeFormAndButtons(Component component) {
+    private void styleFormInfoControls(Component component) {
         if (component == null) {
             return;
         }
@@ -61,17 +62,27 @@ public class CenteredSupplierManagementView extends SupplierManagementView {
             button.setHorizontalAlignment(SwingConstants.CENTER);
         } else if (component instanceof JTextField textField) {
             textField.setFont(new Font("Segoe UI", Font.BOLD, 14));
-            textField.setHorizontalAlignment(JTextField.CENTER);
+            textField.setHorizontalAlignment(JTextField.LEFT);
+            textField.setPreferredSize(new Dimension(textField.getPreferredSize().width, 42));
+            textField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        } else if (component instanceof JComboBox<?> comboBox) {
+            comboBox.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            Component editor = comboBox.isEditable() ? comboBox.getEditor().getEditorComponent() : null;
+            if (editor instanceof JTextField textField) {
+                textField.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                textField.setHorizontalAlignment(JTextField.LEFT);
+            }
         } else if (component instanceof JLabel label) {
             Font old = label.getFont();
             if (old != null && old.getSize() <= 14) {
                 label.setFont(new Font("Segoe UI", old.getStyle() | Font.BOLD, old.getSize() + 1));
             }
+            label.setHorizontalAlignment(SwingConstants.LEFT);
         }
 
         if (component instanceof Container container) {
             for (Component child : container.getComponents()) {
-                enlargeFormAndButtons(child);
+                styleFormInfoControls(child);
             }
         }
     }
@@ -134,11 +145,6 @@ public class CenteredSupplierManagementView extends SupplierManagementView {
     private void centerColumn(JTable table, int columnIndex) {
         if (columnIndex < 0 || columnIndex >= table.getColumnCount()) {
             return;
-        }
-
-        TableCellRenderer currentRenderer = table.getColumnModel().getColumn(columnIndex).getCellRenderer();
-        if (currentRenderer == null) {
-            currentRenderer = table.getDefaultRenderer(Object.class);
         }
 
         table.getColumnModel().getColumn(columnIndex).setCellRenderer(new StrongCenteredRenderer());
