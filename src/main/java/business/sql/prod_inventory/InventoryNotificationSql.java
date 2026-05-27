@@ -173,12 +173,13 @@ public class InventoryNotificationSql {
             String sql = """
                 SELECT NVL(SUM(%s), 0)
                 FROM INVENTORY_NOTIFICATIONS
-                WHERE product_id = ?
+                WHERE REGEXP_REPLACE(UPPER(TRIM(product_id)), '^SP0*', 'SP')
+                      = REGEXP_REPLACE(UPPER(TRIM(?)), '^SP0*', 'SP')
                   AND target_role = 'WAREHOUSE'
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
             """.formatted(countExpr)
-                    + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+                    + (hasStoreId && cleanStoreId != null ? " AND (store_id = ? OR store_id IS NULL) " : "");
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 int idx = 1;
@@ -267,12 +268,13 @@ public class InventoryNotificationSql {
                     updated_at,
                     FLOOR((CAST(SYSTIMESTAMP AS DATE) - CAST(updated_at AS DATE)) * 24 * 60) AS minutes_passed
                 FROM INVENTORY_NOTIFICATIONS
-                WHERE product_id = ?
+                WHERE REGEXP_REPLACE(UPPER(TRIM(product_id)), '^SP0*', 'SP')
+                      = REGEXP_REPLACE(UPPER(TRIM(?)), '^SP0*', 'SP')
                   AND target_role = 'WAREHOUSE'
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
             """.formatted(countExpr)
-                    + (hasStoreId && storeId != null ? " AND store_id = ? " : "")
+                    + (hasStoreId && storeId != null ? " AND (store_id = ? OR store_id IS NULL) " : "")
                     + """
                 ORDER BY updated_at DESC, created_at DESC
                 FETCH FIRST 1 ROWS ONLY
@@ -588,31 +590,43 @@ public class InventoryNotificationSql {
 
             String storeSelectExpr = hasStoreId ? "n.store_id" : "NULL";
 
-            String invJoin = hasStoreId
-                    ? """
-                        LEFT JOIN (
-                            SELECT
-                                product_id,
-                                store_id,
-                                SUM(NVL(quantity, 0)) AS current_quantity
-                            FROM INVENTORY
-                            WHERE NVL(is_deleted, 0) = 0
-                            GROUP BY product_id, store_id
-                        ) inv
-                            ON inv.product_id = n.product_id
-                           AND inv.store_id = n.store_id
-                    """
-                    : """
-                        LEFT JOIN (
-                            SELECT
-                                product_id,
-                                SUM(NVL(quantity, 0)) AS current_quantity
-                            FROM INVENTORY
-                            WHERE NVL(is_deleted, 0) = 0
-                            GROUP BY product_id
-                        ) inv
-                            ON inv.product_id = n.product_id
-                    """;
+            String invJoin;
+            String storeFilter = "";
+            boolean bindStoreInJoin = false;
+            boolean bindStoreInWhere = false;
+
+            if (hasStoreId && cleanStoreId != null) {
+                invJoin = """
+                    LEFT JOIN (
+                        SELECT
+                            product_id,
+                            store_id,
+                            SUM(NVL(quantity, 0)) AS current_quantity
+                        FROM INVENTORY
+                        WHERE NVL(is_deleted, 0) = 0
+                        GROUP BY product_id, store_id
+                    ) inv
+                        ON REGEXP_REPLACE(UPPER(TRIM(inv.product_id)), '^SP0*', 'SP')
+                           = REGEXP_REPLACE(UPPER(TRIM(n.product_id)), '^SP0*', 'SP')
+                       AND inv.store_id = ?
+                """;
+                storeFilter = " AND (n.store_id = ? OR n.store_id IS NULL) ";
+                bindStoreInJoin = true;
+                bindStoreInWhere = true;
+            } else {
+                invJoin = """
+                    LEFT JOIN (
+                        SELECT
+                            product_id,
+                            SUM(NVL(quantity, 0)) AS current_quantity
+                        FROM INVENTORY
+                        WHERE NVL(is_deleted, 0) = 0
+                        GROUP BY product_id
+                    ) inv
+                        ON REGEXP_REPLACE(UPPER(TRIM(inv.product_id)), '^SP0*', 'SP')
+                           = REGEXP_REPLACE(UPPER(TRIM(n.product_id)), '^SP0*', 'SP')
+                """;
+            }
 
             String sql = """
                 SELECT
@@ -631,11 +645,13 @@ public class InventoryNotificationSql {
                     n.updated_at
                 FROM INVENTORY_NOTIFICATIONS n
                 LEFT JOIN PRODUCTS p
-                    ON p.product_id = n.product_id
+                    ON REGEXP_REPLACE(UPPER(TRIM(p.product_id)), '^SP0*', 'SP')
+                       = REGEXP_REPLACE(UPPER(TRIM(n.product_id)), '^SP0*', 'SP')
                 %s
                 WHERE n.target_role = 'WAREHOUSE'
                   AND n.status = 'PENDING'
                   AND NVL(n.is_deleted, 0) = 0
+                  AND NVL(inv.current_quantity, 0) <= ?
             """.formatted(
                     storeSelectExpr,
                     productNameExpr,
@@ -644,14 +660,22 @@ public class InventoryNotificationSql {
                     countExpr,
                     createdByExpr,
                     invJoin
-            ) + (hasStoreId && cleanStoreId != null ? " AND n.store_id = ? " : "")
+            ) + storeFilter
                     + """
                 ORDER BY n.updated_at DESC, n.created_at DESC
             """;
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
-                if (hasStoreId && cleanStoreId != null) {
-                    ps.setString(1, cleanStoreId);
+                int idx = 1;
+
+                if (bindStoreInJoin) {
+                    ps.setString(idx++, cleanStoreId);
+                }
+
+                ps.setInt(idx++, 20);
+
+                if (bindStoreInWhere) {
+                    ps.setString(idx++, cleanStoreId);
                 }
 
                 try (ResultSet rs = ps.executeQuery()) {
@@ -757,10 +781,11 @@ public class InventoryNotificationSql {
                 SET status = 'RESOLVED',
                     resolved_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE product_id = ?
+                WHERE REGEXP_REPLACE(UPPER(TRIM(product_id)), '^SP0*', 'SP')
+                      = REGEXP_REPLACE(UPPER(TRIM(?)), '^SP0*', 'SP')
                   AND status = 'PENDING'
                   AND NVL(is_deleted, 0) = 0
-            """ + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+            """ + (hasStoreId && cleanStoreId != null ? " AND (store_id = ? OR store_id IS NULL) " : "");
 
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 int idx = 1;
@@ -799,10 +824,11 @@ public class InventoryNotificationSql {
             SET status = 'RESOLVED',
                 resolved_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE product_id = ?
+            WHERE REGEXP_REPLACE(UPPER(TRIM(product_id)), '^SP0*', 'SP')
+                  = REGEXP_REPLACE(UPPER(TRIM(?)), '^SP0*', 'SP')
               AND status = 'PENDING'
               AND NVL(is_deleted, 0) = 0
-        """ + (hasStoreId && cleanStoreId != null ? " AND store_id = ? " : "");
+        """ + (hasStoreId && cleanStoreId != null ? " AND (store_id = ? OR store_id IS NULL) " : "");
 
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             int idx = 1;
@@ -813,6 +839,101 @@ public class InventoryNotificationSql {
             }
 
             ps.executeUpdate();
+        }
+    }
+
+    public int resolveRecoveredPendingNotificationsByStore(String storeId, int safeQuantity) {
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
+                return 0;
+            }
+
+            boolean hasStoreId = columnExists(con, "INVENTORY_NOTIFICATIONS", "STORE_ID");
+            String cleanStoreId = normalizeStoreId(storeId);
+            if (!SessionManager.isAdmin()) {
+                cleanStoreId = currentStoreIdOrNull();
+            }
+
+            if (hasStoreId && cleanStoreId != null) {
+                String sql = """
+                    UPDATE INVENTORY_NOTIFICATIONS n
+                    SET n.status = 'RESOLVED',
+                        n.resolved_at = CURRENT_TIMESTAMP,
+                        n.updated_at = CURRENT_TIMESTAMP
+                    WHERE n.target_role = 'WAREHOUSE'
+                      AND n.status = 'PENDING'
+                      AND NVL(n.is_deleted, 0) = 0
+                      AND (n.store_id = ? OR n.store_id IS NULL)
+                      AND EXISTS (
+                          SELECT 1
+                          FROM (
+                              SELECT product_id,
+                                     store_id,
+                                     SUM(NVL(quantity, 0)) AS total_quantity
+                              FROM INVENTORY
+                              WHERE NVL(is_deleted, 0) = 0
+                              GROUP BY product_id, store_id
+                          ) inv
+                          WHERE REGEXP_REPLACE(UPPER(TRIM(inv.product_id)), '^SP0*', 'SP')
+                                = REGEXP_REPLACE(UPPER(TRIM(n.product_id)), '^SP0*', 'SP')
+                            AND inv.store_id = ?
+                            AND inv.total_quantity > ?
+                      )
+                """;
+
+                try (PreparedStatement ps = con.prepareStatement(sql)) {
+                    ps.setString(1, cleanStoreId);
+                    ps.setString(2, cleanStoreId);
+                    ps.setInt(3, safeQuantity);
+                    return ps.executeUpdate();
+                }
+            }
+
+            return resolveRecoveredPendingNotifications(safeQuantity);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public int resolveRecoveredPendingNotifications(int safeQuantity) {
+        try (Connection con = DatabaseConnection.getConnection()) {
+            if (!tableExists(con, "INVENTORY_NOTIFICATIONS")) {
+                return 0;
+            }
+
+            String sql = """
+                UPDATE INVENTORY_NOTIFICATIONS n
+                SET n.status = 'RESOLVED',
+                    n.resolved_at = CURRENT_TIMESTAMP,
+                    n.updated_at = CURRENT_TIMESTAMP
+                WHERE n.target_role = 'WAREHOUSE'
+                  AND n.status = 'PENDING'
+                  AND NVL(n.is_deleted, 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM (
+                          SELECT product_id,
+                                 SUM(NVL(quantity, 0)) AS total_quantity
+                          FROM INVENTORY
+                          WHERE NVL(is_deleted, 0) = 0
+                          GROUP BY product_id
+                      ) inv
+                      WHERE REGEXP_REPLACE(UPPER(TRIM(inv.product_id)), '^SP0*', 'SP')
+                            = REGEXP_REPLACE(UPPER(TRIM(n.product_id)), '^SP0*', 'SP')
+                        AND inv.total_quantity > ?
+                  )
+            """;
+
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                ps.setInt(1, safeQuantity);
+                return ps.executeUpdate();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
         }
     }
 
@@ -862,7 +983,8 @@ public class InventoryNotificationSql {
         String sql = """
             SELECT store_id
             FROM INVENTORY
-            WHERE product_id = ?
+            WHERE REGEXP_REPLACE(UPPER(TRIM(product_id)), '^SP0*', 'SP')
+                  = REGEXP_REPLACE(UPPER(TRIM(?)), '^SP0*', 'SP')
               AND NVL(is_deleted, 0) = 0
             ORDER BY store_id
             FETCH FIRST 1 ROWS ONLY
