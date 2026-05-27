@@ -19,6 +19,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -337,13 +338,44 @@ public class DashboardView extends JFrame {
     private void showLoadingPanel(String title) {
         JPanel loading = new JPanel(new BorderLayout());
         loading.setBackground(BACKGROUND_COLOR);
+        loading.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-        JLabel label = new JLabel("Đang tải " + title + "...", JLabel.CENTER);
+        JPanel card = new JPanel();
+        card.setLayout(new javax.swing.BoxLayout(card, javax.swing.BoxLayout.Y_AXIS));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(225, 229, 235)),
+                BorderFactory.createEmptyBorder(24, 32, 24, 32)
+        ));
+
+        JLabel label = new JLabel("Đang tải " + title + "...");
+        label.setAlignmentX(Component.CENTER_ALIGNMENT);
         label.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 16));
-        label.setForeground(new Color(80, 90, 110));
-        label.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        label.setForeground(new Color(35, 45, 75));
 
-        loading.add(label, BorderLayout.CENTER);
+        JLabel hint = new JLabel("Vui lòng chờ trong giây lát, hệ thống đang chuẩn bị dữ liệu.");
+        hint.setAlignmentX(Component.CENTER_ALIGNMENT);
+        hint.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        hint.setForeground(new Color(100, 110, 125));
+
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+        progressBar.setStringPainted(false);
+        progressBar.setPreferredSize(new Dimension(320, 10));
+        progressBar.setMaximumSize(new Dimension(320, 10));
+        progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        card.add(label);
+        card.add(javax.swing.Box.createVerticalStrut(10));
+        card.add(progressBar);
+        card.add(javax.swing.Box.createVerticalStrut(10));
+        card.add(hint);
+
+        JPanel wrapper = new JPanel(new java.awt.GridBagLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(card);
+
+        loading.add(wrapper, BorderLayout.CENTER);
         showPanel(loading, false);
     }
 
