@@ -65,31 +65,36 @@ public class HeartbeatService {
                 AccountSql accountSql = AccountSql.getInstance();
                 cleanupDeadSessionsIfNeeded(accountSql);
 
+                /*
+                 * Check trạng thái tài khoản trước.
+                 * Nếu Admin khóa tài khoản thì status sẽ là Bị khóa => đá ra.
+                 * Nếu tài khoản vẫn Hoạt động thì tuyệt đối không đá ra chỉ vì CURRENT_SESSION_ID
+                 * trong bảng ACCOUNTS chưa đồng bộ với ACCOUNT_SESSIONS.
+                 */
+                if (!isAccountLoginAllowed(currentAccountId)) {
+                    stopOnlyScheduler();
+                    common.security.SecurityGuard.forceLogoutCurrentSession(
+                            "Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động.\n"
+                            + "Vui lòng liên hệ quản trị viên nếu cần mở lại tài khoản."
+                    );
+                    return;
+                }
+
                 boolean sessionAlive = accountSql.heartbeatSession(
                         currentAccountId,
                         currentSessionId
                 );
 
-                if (!sessionAlive || !accountSql.isCurrentSessionValid(currentAccountId, currentSessionId)) {
-                    if (!isAccountLoginAllowed(currentAccountId)) {
-                        stopOnlyScheduler();
-                        common.security.SecurityGuard.forceLogoutCurrentSession(
-                                "Tài khoản của bạn đã bị khóa hoặc phiên đăng nhập đã bị thu hồi.\n"
-                                + "Vui lòng liên hệ quản trị viên nếu cần mở lại tài khoản."
-                        );
-                        return;
-                    }
-
+                if (!sessionAlive) {
                     /*
-                     * Session có thể bị expire do app đứng lâu/debug, hoặc do vừa restart DB.
-                     * Nếu tài khoản vẫn đang Hoạt động thì không đá người dùng ra ngay;
-                     * tạo lại chính session hiện tại để tránh Admin/Manager đang thao tác bị văng nhầm.
-                     * Nếu Admin thật sự khóa tài khoản, isAccountLoginAllowed() ở trên sẽ false.
+                     * Session có thể bị EXPIRED do đứng máy/debug/cleanup trước heartbeat.
+                     * Nếu account vẫn Hoạt động thì tạo lại đúng session hiện tại và tiếp tục.
+                     * Không gọi isCurrentSessionValid() ở đây nữa vì hàm đó đang dựa vào
+                     * ACCOUNTS.CURRENT_SESSION_ID, trong khi flow mới lưu session chính ở
+                     * ACCOUNT_SESSIONS. Chính điểm này làm Admin/Staff bị văng nhầm.
                      */
                     boolean recreated = accountSql.createLoginSession(currentAccountId, currentSessionId);
-                    boolean recovered = recreated
-                            && accountSql.heartbeatSession(currentAccountId, currentSessionId)
-                            && accountSql.isCurrentSessionValid(currentAccountId, currentSessionId);
+                    boolean recovered = recreated && accountSql.heartbeatSession(currentAccountId, currentSessionId);
 
                     if (!recovered) {
                         stopOnlyScheduler();
