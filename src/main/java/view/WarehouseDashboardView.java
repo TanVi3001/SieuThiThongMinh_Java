@@ -145,8 +145,7 @@ public class WarehouseDashboardView extends JFrame {
                     return;
                 }
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_SUPPLIERS);
-                showMenuPanel(WarehouseSidebar.MENU_SUPPLIERS,
-                        () -> new SupplierManagementView(SupplierManagementView.SupplierViewMode.WAREHOUSE));
+                showMenuPanel(WarehouseSidebar.MENU_SUPPLIERS, CenteredSupplierManagementView::new);
             }
 
             case WarehouseSidebar.MENU_CATEGORY_TAX -> {
@@ -156,7 +155,7 @@ public class WarehouseDashboardView extends JFrame {
                 }
 
                 warehouseSidebar.setActiveMenu(WarehouseSidebar.MENU_CATEGORY_TAX);
-                showMenuPanel(WarehouseSidebar.MENU_CATEGORY_TAX, CategoryTaxView::new);
+                showMenuPanel(WarehouseSidebar.MENU_CATEGORY_TAX, CenteredCategoryTaxView::new);
             }
 
             case WarehouseSidebar.MENU_SETTINGS -> {
